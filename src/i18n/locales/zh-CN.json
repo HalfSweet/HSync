@@ -1,0 +1,206 @@
+{
+  "app": {
+    "name": "HSync"
+  },
+  "header": {
+    "device": {
+      "options": "设备选项…",
+      "unsupported": "暂不支持",
+      "select": "选择设备"
+    },
+    "acquisition": {
+      "aria": "采集设置：采样率 {rate}，时长 {duration}，{channels} 个通道",
+      "channels": "{count} 通道"
+    },
+    "trigger": {
+      "label": "触发",
+      "none": "未设置",
+      "more": "等 {count} 个通道",
+      "tipNone": "还没有通道设置触发条件，按「采集」立即开始。触发条件在各通道所在的行里设置",
+      "tipSet": "触发条件：{conditions}。按「采集」后等它出现。在各通道所在的行里修改",
+      "tipJoin": "，同时 ",
+      "tipItem": "{channel} {condition}"
+    },
+    "capture": {
+      "start": "采集",
+      "stop": "停止",
+      "more": "其他采集方式",
+      "single": "单次",
+      "repeat": "重复",
+      "loop": "循环",
+      "instant": "即时"
+    },
+    "search": {
+      "aria": "搜索解码结果",
+      "placeholder": "搜索数值或文本，如 4F、HOST"
+    },
+    "export": "导出",
+    "settings": "设置"
+  },
+  "overview": {
+    "whole": "全程",
+    "trigger": "触发",
+    "start": "起点",
+    "viewport": "当前视口 {from} – {to}"
+  },
+  "ruler": {
+    "addDecoder": "添加协议解码",
+    "triggerColumn": "触发",
+    "triggerColumnTip": "每个通道各设各的触发条件，在通道所在的行里设置",
+    "unitTip": "相对触发点的时间，单位{unit}",
+    "dragTip": "在标尺上拖动，选出一段",
+    "outsideViewport": "延伸到视口外"
+  },
+  "group": {
+    "toggle": "展开或收起 {name}",
+    "showStream": "在数据流里看 {name} 的全部解码结果",
+    "showStreamTip": "在数据流里看全部解码结果",
+    "unnamed": "未命名通道"
+  },
+  "trigger": {
+    "menuTitle": "{channel} 的触发条件",
+    "note": "多个通道都设了条件时，同时满足才触发",
+    "slotTip": "{channel} 的触发条件：{condition}。点击{action}",
+    "slotSet": "设置",
+    "slotChange": "修改",
+    "slotDisabled": "{channel} 已禁用，不能设触发",
+    "condition": {
+      "none": "不触发",
+      "rise": "上升沿",
+      "fall": "下降沿",
+      "both": "任意沿",
+      "high": "高电平",
+      "low": "低电平"
+    }
+  },
+  "hover": {
+    "high": "高",
+    "low": "低",
+    "pulse": "{level} {width}",
+    "pulseOpen": "{level} ≥ {width}",
+    "period": "周期 {period}，{frequency}",
+    "bits": "约 {count} 位",
+    "outsideViewport": "延伸到视口外"
+  },
+  "selection": {
+    "outsideViewport": "延伸到视口外"
+  },
+  "decode": {
+    "i2c": {
+      "readRegister": "从 0x{register} 读出 {data}",
+      "writeRegister": "向 0x{register} 写入 {data}",
+      "write": "写",
+      "read": "读",
+      "slave": "从机 0x{address}",
+      "ack": "ACK",
+      "nack": "NACK：主机读完最后一个字节，不再应答",
+      "start": "起始",
+      "repeatedStart": "重复起始",
+      "stop": "停止"
+    },
+    "uart": {
+      "space": "空格"
+    },
+    "spi": {
+      "transferring": "传输中",
+      "offsets": "偏移 {from}–{to}",
+      "unchangedSince": "从偏移 {offset} 起没有变化",
+      "run": "{value} × {count}"
+    },
+    "can": {
+      "noFramesInView": "视口内没有帧",
+      "previous": "上一帧",
+      "next": "下一帧"
+    }
+  },
+  "stream": {
+    "title": "数据流",
+    "resize": "拖动调整数据流的高度",
+    "resizeTip": "拖动调整高度",
+    "decoders": "解码器",
+    "mode": {
+      "label": "显示方式",
+      "text": "文本",
+      "hex": "十六进制"
+    },
+    "scope": {
+      "label": "范围",
+      "all": "全程",
+      "segment": "选段",
+      "allTip": "列出整段采集里的全部解码结果",
+      "segmentTip": "只列出 A 和 B 之间的解码结果",
+      "segmentDisabledTip": "先在标尺上拖出一段"
+    },
+    "copy": "复制",
+    "close": "收起数据流",
+    "column": {
+      "time": "时间 ms",
+      "meaning": "含义",
+      "wireOrder": "总线上的顺序",
+      "dataLine": "数据线",
+      "offset": "偏移",
+      "content": "内容",
+      "text": "文本",
+      "bytes": "字节",
+      "characters": "字符",
+      "identifier": "标识符",
+      "data": "数据"
+    },
+    "summary": {
+      "transfers": "{count} 次传输",
+      "frames": "{count} 帧",
+      "transferBytes": "1 次传输，{count} 个字节",
+      "inSegment": "{total}，选段内 {count} {unit}",
+      "segmentOnly": "选段 {from} – {to} ms，{count} {unit}",
+      "unitBytes": "个字节",
+      "unitFrames": "帧"
+    },
+    "empty": "这一段里没有完整的{unit}。把选段拖长一些，或者切回全程。",
+    "note": {
+      "i2cHeadCut": "采集开始时这次传输已经在进行，缺少起始条件，没有解码",
+      "captureEnds": "采集在这里结束",
+      "beforeSegment": "这次传输靠前的部分在选段之外",
+      "afterSegment": "这次传输靠后的部分在选段之外",
+      "uartHeadCut": "采集开始时这一帧已经在传，没有解码",
+      "uartTailCut": "采集结束时这一帧还没传完，没有解码",
+      "canFrame": "FD，{count} 个字节，CRC 正确，已应答"
+    }
+  },
+  "status": {
+    "ready": "就绪",
+    "waitingTrigger": "等待触发",
+    "capturing": "正在采集",
+    "captured": "已采集 {percent}%",
+    "complete": "采集完成",
+    "triggerTime": "触发时间 {time}",
+    "samples": "{count} 个采样点",
+    "perDivision": "{value}/格",
+    "zoomOut": "缩小",
+    "zoomIn": "放大",
+    "zoomFit": "缩放到全程"
+  },
+  "settings": {
+    "title": "设置",
+    "theme": {
+      "label": "主题",
+      "system": "跟随系统",
+      "paper": "纸面",
+      "night": "夜间"
+    },
+    "density": {
+      "label": "密度",
+      "comfortable": "舒适",
+      "compact": "紧凑"
+    },
+    "language": {
+      "label": "语言",
+      "system": "跟随系统"
+    }
+  },
+  "units": {
+    "ns": "纳秒",
+    "µs": "微秒",
+    "ms": "毫秒",
+    "s": "秒"
+  }
+}

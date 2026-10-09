@@ -1,0 +1,206 @@
+{
+  "app": {
+    "name": "HSync"
+  },
+  "header": {
+    "device": {
+      "options": "Device options…",
+      "unsupported": "Not supported yet",
+      "select": "Select device"
+    },
+    "acquisition": {
+      "aria": "Acquisition: sample rate {rate}, duration {duration}, {channels} channels",
+      "channels": "{count} ch"
+    },
+    "trigger": {
+      "label": "Trigger",
+      "none": "Not set",
+      "more": "and {count} channels",
+      "tipNone": "No channel has a trigger condition, so Capture starts at once. Set conditions on each channel's row",
+      "tipSet": "Trigger when {conditions}. Capture waits for it. Change it on each channel's row",
+      "tipJoin": ", and ",
+      "tipItem": "{channel} {condition}"
+    },
+    "capture": {
+      "start": "Capture",
+      "stop": "Stop",
+      "more": "Other capture modes",
+      "single": "Single",
+      "repeat": "Repeat",
+      "loop": "Loop",
+      "instant": "Instant"
+    },
+    "search": {
+      "aria": "Search decoded data",
+      "placeholder": "Search values or text, e.g. 4F, HOST"
+    },
+    "export": "Export",
+    "settings": "Settings"
+  },
+  "overview": {
+    "whole": "Capture",
+    "trigger": "Trigger",
+    "start": "Start",
+    "viewport": "Viewport {from} – {to}"
+  },
+  "ruler": {
+    "addDecoder": "Add decoder",
+    "triggerColumn": "Trig",
+    "triggerColumnTip": "Each channel has its own trigger condition, set on the channel's row",
+    "unitTip": "Time from the trigger, in {unit}",
+    "dragTip": "Drag along the ruler to select a segment",
+    "outsideViewport": "Extends beyond view"
+  },
+  "group": {
+    "toggle": "Expand or collapse {name}",
+    "showStream": "Show all {name} results in the data stream",
+    "showStreamTip": "Show all decoded results in the data stream",
+    "unnamed": "Other channels"
+  },
+  "trigger": {
+    "menuTitle": "Trigger on {channel}",
+    "note": "With conditions on several channels, all must hold at once",
+    "slotTip": "Trigger on {channel}: {condition}. Click to {action}",
+    "slotSet": "set",
+    "slotChange": "change",
+    "slotDisabled": "{channel} is disabled and cannot trigger",
+    "condition": {
+      "none": "None",
+      "rise": "Rising edge",
+      "fall": "Falling edge",
+      "both": "Any edge",
+      "high": "High level",
+      "low": "Low level"
+    }
+  },
+  "hover": {
+    "high": "High",
+    "low": "Low",
+    "pulse": "{level} {width}",
+    "pulseOpen": "{level} ≥ {width}",
+    "period": "Period {period}, {frequency}",
+    "bits": "≈ {count} bits",
+    "outsideViewport": "Extends beyond view"
+  },
+  "selection": {
+    "outsideViewport": "Extends beyond view"
+  },
+  "decode": {
+    "i2c": {
+      "readRegister": "Read {data} from 0x{register}",
+      "writeRegister": "Write {data} to 0x{register}",
+      "write": "W",
+      "read": "R",
+      "slave": "Target 0x{address}",
+      "ack": "ACK",
+      "nack": "NACK: the controller read its last byte and stops acknowledging",
+      "start": "Start",
+      "repeatedStart": "Repeated start",
+      "stop": "Stop"
+    },
+    "uart": {
+      "space": "Space"
+    },
+    "spi": {
+      "transferring": "Transfer",
+      "offsets": "Offsets {from}–{to}",
+      "unchangedSince": "Unchanged from offset {offset}",
+      "run": "{value} × {count}"
+    },
+    "can": {
+      "noFramesInView": "No frames in view",
+      "previous": "Previous",
+      "next": "Next"
+    }
+  },
+  "stream": {
+    "title": "Data stream",
+    "resize": "Drag to resize the data stream",
+    "resizeTip": "Drag to resize",
+    "decoders": "Decoders",
+    "mode": {
+      "label": "Display",
+      "text": "Text",
+      "hex": "Hex"
+    },
+    "scope": {
+      "label": "Range",
+      "all": "All",
+      "segment": "Segment",
+      "allTip": "List every decoded result in the capture",
+      "segmentTip": "List only results between A and B",
+      "segmentDisabledTip": "Drag along the ruler to select a segment first"
+    },
+    "copy": "Copy",
+    "close": "Close data stream",
+    "column": {
+      "time": "Time ms",
+      "meaning": "Meaning",
+      "wireOrder": "On the wire",
+      "dataLine": "Line",
+      "offset": "Offset",
+      "content": "Content",
+      "text": "Text",
+      "bytes": "Bytes",
+      "characters": "Chars",
+      "identifier": "ID",
+      "data": "Data"
+    },
+    "summary": {
+      "transfers": "{count} transfers",
+      "frames": "{count} frames",
+      "transferBytes": "1 transfer, {count} bytes",
+      "inSegment": "{total}, {count} {unit} in segment",
+      "segmentOnly": "Segment {from} – {to} ms, {count} {unit}",
+      "unitBytes": "bytes",
+      "unitFrames": "frames"
+    },
+    "empty": "No complete {unit} in this segment. Widen the segment or switch back to All.",
+    "note": {
+      "i2cHeadCut": "This transfer was already under way when the capture began; without its start condition it is not decoded",
+      "captureEnds": "The capture ends here",
+      "beforeSegment": "The start of this transfer lies outside the segment",
+      "afterSegment": "The end of this transfer lies outside the segment",
+      "uartHeadCut": "This frame was already being sent when the capture began; it is not decoded",
+      "uartTailCut": "This frame was still being sent when the capture ended; it is not decoded",
+      "canFrame": "FD, {count} bytes, CRC OK, acknowledged"
+    }
+  },
+  "status": {
+    "ready": "Ready",
+    "waitingTrigger": "Waiting for trigger",
+    "capturing": "Capturing",
+    "captured": "Captured {percent}%",
+    "complete": "Capture complete",
+    "triggerTime": "Triggered {time}",
+    "samples": "{count} samples",
+    "perDivision": "{value}/div",
+    "zoomOut": "Zoom out",
+    "zoomIn": "Zoom in",
+    "zoomFit": "Zoom to fit"
+  },
+  "settings": {
+    "title": "Settings",
+    "theme": {
+      "label": "Theme",
+      "system": "System",
+      "paper": "Paper",
+      "night": "Night"
+    },
+    "density": {
+      "label": "Density",
+      "comfortable": "Comfortable",
+      "compact": "Compact"
+    },
+    "language": {
+      "label": "Language",
+      "system": "System"
+    }
+  },
+  "units": {
+    "ns": "nanoseconds",
+    "µs": "microseconds",
+    "ms": "milliseconds",
+    "s": "seconds"
+  }
+}
