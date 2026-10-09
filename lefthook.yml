@@ -9,6 +9,11 @@ pre-commit:
       run: pnpm exec prettier --write --ignore-unknown {staged_files}
       stage_fixed: true
 
+    - name: eslint
+      glob: '*.{js,mjs,cjs,ts,mts,cts,vue}'
+      run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
+
 commit-msg:
   jobs:
     - name: commitlint
