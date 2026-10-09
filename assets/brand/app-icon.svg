@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Flat mark from the design's top bar: a logic trace whose high level carries a 26% wash. -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#171B1F"/>
+  <g transform="translate(512 512) scale(40) translate(-10 -10)">
+    <path d="M6.5 6.5h4v7h-4zM14 6.5h3v7h-3z" fill="#FCFCFA" fill-opacity="0.26"/>
+    <path d="M3 13.5h3.5v-7h4v7h3.5v-7H17" fill="none" stroke="#FCFCFA" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
