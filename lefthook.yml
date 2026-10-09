@@ -14,6 +14,11 @@ pre-commit:
       run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
       stage_fixed: true
 
+    - name: rustfmt
+      glob: '*.rs'
+      run: rustfmt --edition 2024 {staged_files}
+      stage_fixed: true
+
 commit-msg:
   jobs:
     - name: commitlint
