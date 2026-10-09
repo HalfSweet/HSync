@@ -1,0 +1,20 @@
+[package]
+name = "hsync-capture"
+description = "Bit-packed logic capture storage with multi-level summaries"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+hsync-core.workspace = true
+serde.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

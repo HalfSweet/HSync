@@ -16,8 +16,10 @@ serde_json = "1.0.151"
 thiserror = "2.0.21"
 tracing = "0.1.44"
 ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
+proptest = "1.11.0"
 
 hsync-core = { path = "crates/hsync-core" }
+hsync-capture = { path = "crates/hsync-capture" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
