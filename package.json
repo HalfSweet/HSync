@@ -40,7 +40,7 @@
     "vue-tsc": "^3.3.12"
   },
   "dependencies": {
-    "@tauri-apps/api": "^2.12.2",
+    "@tauri-apps/api": "^2.12.1",
     "vue": "^3.5.43"
   }
 }
