@@ -41,6 +41,9 @@
     ],
     "macOS": {
       "minimumSystemVersion": "13.3"
+    },
+    "resources": {
+      "resources/demo/": "demo/"
     }
   }
 }

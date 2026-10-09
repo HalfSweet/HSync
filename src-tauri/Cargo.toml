@@ -15,6 +15,9 @@ name = "hsync_lib"
 tauri-build = { version = "2.7.1", features = [] }
 
 [dependencies]
+hsync-core.workspace = true
+hsync-session.workspace = true
+parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.12.2", features = [] }
