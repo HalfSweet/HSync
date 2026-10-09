@@ -1,0 +1,17 @@
+* text=auto eol=lf
+
+# Binary assets
+*.bin binary
+*.fw binary
+*.dsl binary
+*.demo binary
+*.png binary
+*.ico binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+
+# Generated files
+pnpm-lock.yaml linguist-generated=true -diff
+Cargo.lock linguist-generated=true -diff
+src/ipc/bindings/** linguist-generated=true
