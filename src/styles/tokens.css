@@ -1,0 +1,184 @@
+/*
+ * Design tokens, see DESIGN.md §9.3.
+ *
+ * The paper theme is the default. `.theme-night` and `.density-compact` on the root
+ * element switch the theme and the density; components only ever read these variables
+ * (through Tailwind theme utilities or var()) and never hard-code a colour or a size.
+ */
+
+:root {
+  /* Surfaces and text */
+  --canvas: #fcfcfa;
+  --chrome: #f1f2ee;
+  --raise: #ffffff;
+  --line: #dfe2db;
+  --line-2: #c5c9c1;
+  --ink: #171b1f;
+  --ink-2: #4a525a;
+  --ink-3: #5f6871;
+  --trace: #414a52;
+  --trace-2: #8a929a;
+  --grid: rgb(23 27 31 / 0.07);
+  --veil: rgb(23 27 31 / 0.05);
+  --hover: rgb(23 27 31 / 0.06);
+  --sel: rgb(23 27 31 / 0.12);
+
+  /* Bus colours: main / block wash / stronger wash */
+  --i2c: #1f55c5;
+  --i2c-wash: #e6edfc;
+  --i2c-mid: #cbdaf9;
+  --uart: #0c6b58;
+  --uart-wash: #dff1eb;
+  --uart-mid: #c2e4d9;
+  --spi: #5b38b8;
+  --spi-wash: #ece7fb;
+  --spi-mid: #d9cff7;
+  --can: #a3256e;
+
+  /* Probe wire colours (black, brown, red, orange, yellow, green, blue, violet) and the
+     opacity of each one's high-level wash, tuned so every wash reads equally bright. */
+  --w0: #171b1f;
+  --w1: #5c2600;
+  --w2: #9e1334;
+  --w3: #c3540b;
+  --w4: #a99100;
+  --w5: #259263;
+  --w6: #308eec;
+  --w7: #803197;
+  --a0: 7.5%;
+  --a1: 8.3%;
+  --a2: 8.7%;
+  --a3: 11.6%;
+  --a4: 14.9%;
+  --a5: 12.3%;
+  --a6: 13.6%;
+  --a7: 9.7%;
+  /* Byte blocks (e.g. an SPI clock burst) are this many times as opaque as the wash. */
+  --bk: 3.4;
+
+  /* Type */
+  --sans:
+    'IBM Plex Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei UI', 'Microsoft YaHei',
+    'Noto Sans SC', 'Noto Sans CJK SC', sans-serif;
+  --mono: 'IBM Plex Mono', 'SF Mono', Menlo, Consolas, 'Noto Sans Mono CJK SC', monospace;
+
+  /* Layout (comfortable density) */
+  --lab: 204px;
+  --h-lane: 26px;
+  --h-tr: 30px;
+  --h-trc: 18px;
+  --gap: 8px;
+  --h-bar: 32px;
+  --h-overview: 58px;
+  --h-ruler: 38px;
+  --h-status: 28px;
+  --w-trigger-menu: 176px;
+
+  color-scheme: light;
+}
+
+:root.theme-night {
+  --canvas: #0f1317;
+  --chrome: #161b20;
+  --raise: #1e242a;
+  --line: #262d34;
+  --line-2: #39424b;
+  --ink: #e9edf0;
+  --ink-2: #aeb7bf;
+  --ink-3: #8c959e;
+  --trace: #b9c2ca;
+  --trace-2: #6f7982;
+  --grid: rgb(233 237 240 / 0.06);
+  --veil: rgb(233 237 240 / 0.06);
+  --hover: rgb(233 237 240 / 0.08);
+  --sel: rgb(233 237 240 / 0.18);
+
+  --i2c: #8fb5ff;
+  --i2c-wash: #182844;
+  --i2c-mid: #223b69;
+  --uart: #62d3b6;
+  --uart-wash: #10302a;
+  --uart-mid: #184a40;
+  --spi: #b9a3ff;
+  --spi-wash: #261f45;
+  --spi-mid: #382d69;
+  --can: #f29bcb;
+
+  --w0: #bcc5d1;
+  --w1: #9a6b2a;
+  --w2: #df636c;
+  --w3: #fa8f00;
+  --w4: #e0ce00;
+  --w5: #65c777;
+  --w6: #3d9dff;
+  --w7: #a05fc4;
+  --a0: 12.6%;
+  --a1: 23.3%;
+  --a2: 19%;
+  --a3: 15.5%;
+  --a4: 12.7%;
+  --a5: 14.6%;
+  --a6: 16.9%;
+  --a7: 21.1%;
+  --bk: 2.4;
+
+  color-scheme: dark;
+}
+
+:root.density-compact {
+  --h-lane: 22px;
+  --h-tr: 24px;
+  --h-trc: 14px;
+  --gap: 4px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --lab: 132px;
+  }
+}
+
+/*
+ * A row picks one of the eight wire colours; `--w` is the line colour, `--a` the
+ * opacity of the high-level wash and `--b` the opacity of byte blocks.
+ */
+.wire-0 {
+  --w: var(--w0);
+  --a: var(--a0);
+  --b: calc(var(--a0) * var(--bk));
+}
+.wire-1 {
+  --w: var(--w1);
+  --a: var(--a1);
+  --b: calc(var(--a1) * var(--bk));
+}
+.wire-2 {
+  --w: var(--w2);
+  --a: var(--a2);
+  --b: calc(var(--a2) * var(--bk));
+}
+.wire-3 {
+  --w: var(--w3);
+  --a: var(--a3);
+  --b: calc(var(--a3) * var(--bk));
+}
+.wire-4 {
+  --w: var(--w4);
+  --a: var(--a4);
+  --b: calc(var(--a4) * var(--bk));
+}
+.wire-5 {
+  --w: var(--w5);
+  --a: var(--a5);
+  --b: calc(var(--a5) * var(--bk));
+}
+.wire-6 {
+  --w: var(--w6);
+  --a: var(--a6);
+  --b: calc(var(--a6) * var(--bk));
+}
+.wire-7 {
+  --w: var(--w7);
+  --a: var(--a7);
+  --b: calc(var(--a7) * var(--bk));
+}

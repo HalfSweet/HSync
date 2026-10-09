@@ -1,1 +1,98 @@
 @import 'tailwindcss';
+@import './tokens.css';
+
+/*
+ * Only design tokens exist as theme values: the default palette, type scale, radii and
+ * shadows are removed so a stray `bg-red-500` or `shadow-md` does not compile.
+ */
+@theme {
+  --color-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  --font-*: initial;
+
+  /* Type scale: captions and ticks, secondary information, base text. */
+  --text-caption: 11px;
+  --text-caption--line-height: 1.35;
+  --text-small: 12px;
+  --text-small--line-height: 1.35;
+  --text-body: 13px;
+  --text-body--line-height: 1.35;
+
+  /* Radii used by the design: ack marks, blocks, menus' inner items, small buttons, controls. */
+  --radius-2: 2px;
+  --radius-3: 3px;
+  --radius-4: 4px;
+  --radius-5: 5px;
+  --radius-6: 6px;
+  --radius-full: 9999px;
+}
+
+/* Theme-dependent tokens resolve at use time so switching the root class re-themes everything. */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-chrome: var(--chrome);
+  --color-raise: var(--raise);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-trace: var(--trace);
+  --color-trace-2: var(--trace-2);
+  --color-grid: var(--grid);
+  --color-veil: var(--veil);
+  --color-hover: var(--hover);
+  --color-sel: var(--sel);
+
+  --color-i2c: var(--i2c);
+  --color-i2c-wash: var(--i2c-wash);
+  --color-i2c-mid: var(--i2c-mid);
+  --color-uart: var(--uart);
+  --color-uart-wash: var(--uart-wash);
+  --color-uart-mid: var(--uart-mid);
+  --color-spi: var(--spi);
+  --color-spi-wash: var(--spi-wash);
+  --color-spi-mid: var(--spi-mid);
+  --color-can: var(--can);
+
+  --color-wire: var(--w);
+
+  --font-sans: var(--sans);
+  --font-mono: var(--mono);
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    overflow: hidden;
+    background: var(--chrome);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 2px;
+  }
+
+  input::placeholder {
+    color: var(--ink-3);
+    opacity: 1;
+  }
+}
