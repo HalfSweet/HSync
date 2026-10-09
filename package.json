@@ -14,6 +14,8 @@
     "format:check": "prettier --check ."
   },
   "devDependencies": {
+    "@commitlint/cli": "^21.2.3",
+    "@commitlint/config-conventional": "^21.2.3",
     "prettier": "^3.9.9"
   }
 }
