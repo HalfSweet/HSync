@@ -1,0 +1,15 @@
+# Git hooks, see AGENTS.md "提交规范" and DESIGN.md §11.3.
+# Installed by `pnpm install` (lefthook's postinstall runs `lefthook install`).
+
+pre-commit:
+  piped: true
+  jobs:
+    - name: prettier
+      glob: '*.{js,mjs,cjs,ts,mts,cts,vue,json,jsonc,md,css,html,yml,yaml}'
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: pnpm exec commitlint --edit {1}
