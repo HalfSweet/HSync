@@ -13,6 +13,7 @@
     "dev": "vite",
     "build": "vue-tsc --build && vite build",
     "preview": "vite preview",
+    "tauri": "tauri",
     "typecheck": "vue-tsc --build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -23,6 +24,7 @@
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
     "@commitlint/types": "^21.2.3",
+    "@tauri-apps/cli": "^2.12.1",
     "@types/node": "^24.19.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "@vue/eslint-config-typescript": "^14.9.0",
@@ -38,6 +40,7 @@
     "vue-tsc": "^3.3.12"
   },
   "dependencies": {
+    "@tauri-apps/api": "^2.12.2",
     "vue": "^3.5.43"
   }
 }
