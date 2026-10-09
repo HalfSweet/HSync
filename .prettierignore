@@ -1,0 +1,15 @@
+# Generated files
+pnpm-lock.yaml
+Cargo.lock
+dist/
+coverage/
+target/
+src-tauri/gen/
+src/ipc/bindings/
+
+# Vendored binary assets
+src-tauri/resources/
+src-tauri/icons/
+
+# Rust sources are formatted by rustfmt
+*.rs

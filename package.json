@@ -9,5 +9,11 @@
   "engines": {
     "node": ">=22.12"
   },
-  "scripts": {}
+  "scripts": {
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "prettier": "^3.9.9"
+  }
 }
