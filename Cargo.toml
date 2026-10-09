@@ -11,17 +11,19 @@ authors = ["HalfSweet"]
 publish = false
 
 [workspace.dependencies]
+parking_lot = "0.12.5"
+proptest = "1.11.0"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"
 tracing = "0.1.44"
 ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
-proptest = "1.11.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 hsync-core = { path = "crates/hsync-core" }
 hsync-capture = { path = "crates/hsync-capture" }
 hsync-fileio = { path = "crates/hsync-fileio" }
+hsync-session = { path = "crates/hsync-session" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
