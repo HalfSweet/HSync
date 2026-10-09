@@ -1,0 +1,33 @@
+# HSync
+
+HSync 是一个现代化的逻辑分析仪上位机，用 Tauri 2、Vue 3 与 Rust 重写 [DSView](https://github.com/DreamSourceLab/DSView)。初版的目标是与 DSView 的逻辑分析仪功能保持对齐：支持 DreamSourceLab 的全部 DSLogic 型号与 Demo 设备、Buffer/Stream 采集、触发、协议解码、测量、搜索，以及 DSView `.dsl` 文件的读写。
+
+> 项目处于早期开发阶段，尚不能用于实际采集。进度见 [DESIGN.md §13 里程碑](./DESIGN.md#13-里程碑)。
+
+## 文档
+
+- [DESIGN.md](./DESIGN.md)：总体设计——范围、架构、DSLogic USB 协议、数据模型、渲染、解码、文件格式、UI/UX 规范、国际化与工程规范。
+- [AGENTS.md](./AGENTS.md)：项目的硬性要求、构建命令、编码与提交规范。
+
+## 开发
+
+需要 Node.js ≥ 22.12、pnpm 12、Rust stable，以及 [Tauri 的系统依赖](https://tauri.app/start/prerequisites/)。
+
+```sh
+pnpm install        # 安装依赖，同时安装 lefthook 钩子
+pnpm tauri dev      # 启动桌面应用
+pnpm dev            # 只启动前端（http://localhost:1420）
+```
+
+检查与测试：
+
+```sh
+pnpm lint && pnpm typecheck && pnpm test
+cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+```
+
+提交信息遵循约定式提交，由 commitlint 校验；暂存的文件在提交前由 Prettier、ESLint 与 rustfmt 处理。
+
+## 许可
+
+GPL-3.0-or-later，见 [LICENSE](./LICENSE)。DSLogic 固件与 FPGA 位流来自 DreamSourceLab，以 MIT 许可分发；IBM Plex 字体以 SIL OFL 1.1 许可分发。
