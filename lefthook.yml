@@ -23,3 +23,18 @@ commit-msg:
   jobs:
     - name: commitlint
       run: pnpm exec commitlint --edit {1}
+
+pre-push:
+  piped: true
+  jobs:
+    - name: typecheck
+      run: pnpm typecheck
+
+    - name: vitest
+      run: pnpm test
+
+    - name: clippy
+      run: cargo clippy --workspace --all-targets -- -D warnings
+
+    - name: cargo-test
+      run: cargo test --workspace
