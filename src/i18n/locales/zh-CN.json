@@ -412,6 +412,15 @@
       "noAck": "未应答",
       "errorFrame": "帧出错",
       "separator": "，"
+    },
+    "export": {
+      "label": "导出",
+      "csv": "导出为 CSV…",
+      "text": "导出为文本…",
+      "timeColumn": "时间 (ms)",
+      "decoderColumn": "解码器",
+      "labelColumn": "含义 / 数据线",
+      "contentColumn": "内容"
     }
   },
   "status": {

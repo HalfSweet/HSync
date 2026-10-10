@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { useClipboard, useElementSize } from '@vueuse/core'
-import { computed, nextTick, shallowRef, useTemplateRef, watch } from 'vue'
+import { onClickOutside, useClipboard, useElementSize } from '@vueuse/core'
+import { computed, nextTick, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import { defaultCaptureName, withExtension } from '@/composables/useFileActions'
 import { escapePieces, hex, hexBytes, i2cMeaningText, type TextPiece } from '@/decode/text'
 import { getBackend } from '@/ipc/backend'
+import { pickSavePath } from '@/ipc/dialogs'
 import type { StreamRow } from '@/ipc/bindings/StreamRow'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
+import { csvLines } from '@/stream/csv'
 import type { BusKind } from '@/timeline/groups'
 
 /** The data stream under the timeline (DESIGN.md §9.9). */
@@ -351,23 +354,65 @@ async function scrollToSample(sample: number): Promise<void> {
   list.value?.scrollTo({ top: Math.max(0, (index - 1) * ROW) })
 }
 
+function contentOf(row: StreamRow): string {
+  return cellsOf(row)
+    .map((cell) => (cell.prefix ?? '') + cell.text)
+    .join(' ')
+}
+
+/** A row as the panel shows it, its columns separated by tabs. */
+function textLine(row: StreamRow): string {
+  if (row.type === 'gap') return ''
+  return [time(row), labelOf(row), offsetOf(row), contentOf(row), charsOf(row)]
+    .filter((part) => part !== '')
+    .join('\t')
+}
+
 async function copyRows(): Promise<void> {
   const rows = await stream.allRows()
-  const lines = rows.map((row) =>
-    row.type === 'gap'
-      ? ''
-      : [
-          time(row),
-          labelOf(row),
-          offsetOf(row),
-          cellsOf(row)
-            .map((cell) => (cell.prefix ?? '') + cell.text)
-            .join(' '),
-        ]
-          .filter((part) => part !== '')
-          .join('\t'),
+  await copy(rows.map(textLine).join('\n'))
+}
+
+// Exporting the listing (DESIGN.md §8.2): CSV with time, decoder, label, offset and content
+// columns, or text as the panel shows it.
+const exportMenu = ref(false)
+const exportRoot = useTemplateRef<HTMLElement>('exportRoot')
+onClickOutside(exportRoot, () => (exportMenu.value = false))
+
+async function exportRows(kind: 'csv' | 'text'): Promise<void> {
+  exportMenu.value = false
+  const decoderName = tabs.value.find((tab) => tab.index === stream.decoder)?.name ?? 'stream'
+  const extension = kind === 'csv' ? 'csv' : 'txt'
+  const safeName = decoderName.replace(/[\\/:*?"<>|\s]+/g, '_')
+  const suggested = defaultCaptureName(new Date(), extension).replace(
+    `.${extension}`,
+    `-${safeName}.${extension}`,
   )
-  await copy(lines.join('\n'))
+  const path = await pickSavePath(suggested, [
+    { name: t(`stream.export.${kind}`), extensions: [extension] },
+  ])
+  if (!path) return
+  const rows = (await stream.fetchAll()).filter((row) => row.type !== 'gap')
+  const text =
+    kind === 'csv'
+      ? csvLines([
+          [
+            t('stream.export.timeColumn'),
+            t('stream.export.decoderColumn'),
+            t('stream.export.labelColumn'),
+            t('stream.column.offset'),
+            t('stream.export.contentColumn'),
+          ],
+          ...rows.map((row) => [
+            time(row),
+            decoderName,
+            labelOf(row),
+            offsetOf(row),
+            [contentOf(row), charsOf(row)].filter(Boolean).join(' '),
+          ]),
+        ])
+      : rows.map(textLine).join('\n') + '\n'
+  await capture.saveText(withExtension(path, extension), text)
 }
 
 // Resizing by the top edge.
@@ -470,6 +515,33 @@ function onGripUp(): void {
           <AppIcon :name="copied ? 'check' : 'copy'" />
           <span>{{ t('stream.copy') }}</span>
         </button>
+        <div ref="exportRoot" class="relative">
+          <button
+            class="btn-ghost"
+            aria-haspopup="menu"
+            :aria-expanded="exportMenu"
+            :disabled="capture.job !== null"
+            @click="exportMenu = !exportMenu"
+          >
+            <AppIcon name="export" />
+            <span>{{ t('stream.export.label') }}</span>
+          </button>
+          <div
+            v-if="exportMenu"
+            role="menu"
+            class="absolute right-0 bottom-full z-20 mb-1 flex w-44 flex-col rounded-6 border border-ink bg-raise p-1 text-small"
+          >
+            <button
+              v-for="kind in ['csv', 'text'] as const"
+              :key="kind"
+              role="menuitem"
+              class="flex h-[30px] w-full items-center rounded-4 px-2 text-left hover:bg-hover"
+              @click="exportRows(kind)"
+            >
+              {{ t(`stream.export.${kind}`) }}
+            </button>
+          </div>
+        </div>
         <button
           class="btn-icon"
           :aria-label="t('stream.close')"

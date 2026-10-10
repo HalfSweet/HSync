@@ -412,6 +412,15 @@
       "noAck": "not acknowledged",
       "errorFrame": "frame error",
       "separator": ", "
+    },
+    "export": {
+      "label": "Export",
+      "csv": "Export as CSV…",
+      "text": "Export as text…",
+      "timeColumn": "Time (ms)",
+      "decoderColumn": "Decoder",
+      "labelColumn": "Meaning / line",
+      "contentColumn": "Content"
     }
   },
   "status": {
