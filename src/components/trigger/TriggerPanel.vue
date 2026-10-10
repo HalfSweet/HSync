@@ -48,7 +48,8 @@ const unavailable = computed(() => {
   if (trigger.caps.advanced) return null
   if (!device.state) return t('triggerPanel.unavailable.noDevice')
   if (device.isDemo) return t('triggerPanel.unavailable.demo')
-  return t('triggerPanel.unavailable.stream')
+  if (trigger.caps.advancedOtherMode) return t('triggerPanel.unavailable.stream')
+  return t('triggerPanel.unavailable.simpleOnly')
 })
 
 const summary = computed(() => summarizeTriggers(channels.armed))

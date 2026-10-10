@@ -219,7 +219,8 @@
     "unavailable": {
       "noDevice": "打开设备后可用多级与串行触发",
       "demo": "演示设备只有简单触发",
-      "stream": "Stream 模式只有简单触发，换到 Buffer 模式可用多级与串行触发"
+      "stream": "Stream 模式只有简单触发，换到 Buffer 模式可用多级与串行触发",
+      "simpleOnly": "这台设备只有简单触发"
     },
     "position": "触发位置",
     "positionTip": "触发点之前的数据占整次采集的比例",

@@ -219,7 +219,8 @@
     "unavailable": {
       "noDevice": "Stage and serial triggers need an open device",
       "demo": "The demo device has simple triggers only",
-      "stream": "Stream mode has simple triggers only; switch to Buffer mode for stage and serial triggers"
+      "stream": "Stream mode has simple triggers only; switch to Buffer mode for stage and serial triggers",
+      "simpleOnly": "This device has simple triggers only"
     },
     "position": "Position",
     "positionTip": "Share of the capture before the trigger",
