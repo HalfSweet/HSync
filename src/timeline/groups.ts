@@ -28,6 +28,8 @@ export interface ChannelGroup {
   channels: ChannelRef[]
   /** Decoder options as stored with the capture. */
   options: Record<string, unknown>
+  /** Position of the decoder in the capture's decoder list, which names its results. */
+  decoder: number | null
 }
 
 export const UNNAMED_GROUP = 'unnamed'
@@ -93,7 +95,7 @@ export function groupChannels(channels: ChannelSummary[], decoders: unknown): Ch
   const used = new Set<number>()
   const groups: ChannelGroup[] = []
 
-  for (const entry of Array.isArray(decoders) ? decoders : []) {
+  for (const [position, entry] of (Array.isArray(decoders) ? decoders : []).entries()) {
     if (!isRecord(entry) || typeof entry.id !== 'string') continue
     const kind = busKind(entry.id)
     const order = ROLE_ORDER[kind]
@@ -121,6 +123,7 @@ export function groupChannels(channels: ChannelSummary[], decoders: unknown): Ch
         }
       }),
       options: isRecord(entry.options) ? entry.options : {},
+      decoder: position,
     })
   }
 
@@ -141,6 +144,7 @@ export function groupChannels(channels: ChannelSummary[], decoders: unknown): Ch
         }
       }),
       options: {},
+      decoder: null,
     })
   }
   return groups

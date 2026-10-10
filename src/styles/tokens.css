@@ -37,6 +37,8 @@
   --spi-wash: #ece7fb;
   --spi-mid: #d9cff7;
   --can: #a3256e;
+  --can-wash: #f9e7f1;
+  --can-mid: #f0cde1;
 
   /* Probe wire colours (black, brown, red, orange, yellow, green, blue, violet) and the
      opacity of each one's high-level wash, tuned so every wash reads equally bright. */
@@ -108,6 +110,8 @@
   --spi-wash: #261f45;
   --spi-mid: #382d69;
   --can: #f29bcb;
+  --can-wash: #351a2a;
+  --can-mid: #52263f;
 
   --w0: #bcc5d1;
   --w1: #9a6b2a;

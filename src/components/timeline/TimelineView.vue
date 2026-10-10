@@ -21,6 +21,7 @@ import { readRenderTokens } from '@/render/tokens'
 import type { FrameDescriptor, RenderTokens, TraceDraw } from '@/render/types'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
+import { useDecodeStore } from '@/stores/decode'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
@@ -31,6 +32,7 @@ import { viewportEnd, xToSample } from '@/timeline/viewport'
 import { formatFrequency, formatTime } from '@/utils/units'
 
 import ChannelLabel from './ChannelLabel.vue'
+import DecodeLane from './DecodeLane.vue'
 import GroupLabel from './GroupLabel.vue'
 import PulseReadout from './PulseReadout.vue'
 import TimelineRuler from './TimelineRuler.vue'
@@ -44,6 +46,7 @@ const MENU_HEIGHT = 236
 const { t } = useI18n()
 const capture = useCaptureStore()
 const channels = useChannelsStore()
+const decode = useDecodeStore()
 const preferences = usePreferencesStore()
 const view = useViewStore()
 const metrics = useRowMetrics()
@@ -60,6 +63,28 @@ const layout = computed(() =>
 )
 
 const isTrace = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow'
+
+/** The decode lane a row shows: the group title row carries a bus's main lane. */
+function decodeLaneOf(row: Row): string | null {
+  if (row.group.decoder === null) return null
+  if (row.kind === 'header') return 'header'
+  return row.kind === 'lane' ? (row.lane ?? null) : null
+}
+
+/** Clicking a decoded block marks it as the segment; clicking it again lets go. */
+function pickBlock(block: { id: string; start: number; end: number }): void {
+  if (view.segment?.blockId === block.id) view.setSegment(null)
+  else view.setSegment({ from: block.start, to: block.end, blockId: block.id })
+}
+
+/** The I²C bytes lane names the target most transfers in view address. */
+function laneLabel(row: Row): string | null {
+  if (row.kind !== 'lane' || row.lane !== 'bytes') return null
+  const address = decode.lanesOf(row.group.decoder)?.address
+  return address == null
+    ? null
+    : t('decode.i2c.slave', { address: address.toString(16).toUpperCase().padStart(2, '0') })
+}
 
 // Size and scroll position of the visible area.
 const client = shallowRef({ width: 0, height: 0 })
@@ -380,6 +405,9 @@ function onWheel(event: WheelEvent): void {
               :collapsed="channels.isCollapsed(row.group.key, collapsedByDefault(row.group))"
               @toggle="channels.toggleGroup(row.group.key, collapsedByDefault(row.group))"
             />
+            <span v-else-if="laneLabel(row)" class="ml-6 truncate text-small text-ink-3">{{
+              laneLabel(row)
+            }}</span>
             <ChannelLabel
               v-else-if="row.labeled && row.channel"
               :channel="row.channel"
@@ -396,6 +424,19 @@ function onWheel(event: WheelEvent): void {
             @pointercancel="onTrackPointerUp"
             @pointerleave="onTrackPointerLeave"
           >
+            <DecodeLane
+              v-if="decodeLaneOf(row) !== null && row.group.decoder !== null"
+              :bus="row.group.kind"
+              :lane="decodeLaneOf(row) ?? ''"
+              :view="decode.lanesOf(row.group.decoder)"
+              :viewport="view.viewport"
+              :decoder="row.group.decoder"
+              :selected="view.segment?.blockId ?? null"
+              :time-of="capture.timeOf"
+              :samplerate="capture.samplerate"
+              @pick="pickBlock"
+              @go="view.centerOn"
+            />
             <PulseReadout
               v-if="readout && readout.rowKey === row.key"
               :left="readout.left"

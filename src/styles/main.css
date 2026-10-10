@@ -62,6 +62,8 @@
   --color-spi-wash: var(--spi-wash);
   --color-spi-mid: var(--spi-mid);
   --color-can: var(--can);
+  --color-can-wash: var(--can-wash);
+  --color-can-mid: var(--can-mid);
 
   --color-wire: var(--w);
 

@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { useElementSize } from '@vueuse/core'
-import { computed, useTemplateRef } from 'vue'
+import { computed, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { getBackend } from '@/ipc/backend'
+import type { DecoderLanes } from '@/ipc/bindings/DecoderLanes'
 import { useCaptureStore } from '@/stores/capture'
+import { useDecodeStore } from '@/stores/decode'
 import { useViewStore } from '@/stores/view'
 import { overviewTicks } from '@/timeline/ticks'
 import { formatTimeShort } from '@/utils/units'
@@ -14,7 +17,51 @@ const view = useViewStore()
 const strip = useTemplateRef<HTMLElement>('strip')
 const { width } = useElementSize(strip)
 
+const decode = useDecodeStore()
+
 const percent = (sample: number) => (capture.extent > 0 ? (sample / capture.extent) * 100 : 0)
+
+// Activity of each decoder over the whole capture: one 5 px row per decoder, in its bus colour.
+const overview = shallowRef<DecoderLanes[]>([])
+let overviewSequence = 0
+watch(
+  () => [capture.summary?.id, capture.extent, Math.round(width.value), decode.revision] as const,
+  async ([id, extent, pixels]) => {
+    const current = ++overviewSequence
+    if (id === undefined || extent <= 0 || pixels <= 0) {
+      overview.value = []
+      return
+    }
+    try {
+      const found = await (await getBackend()).decodeView(id, 0, extent, extent / pixels)
+      if (current === overviewSequence) overview.value = found
+    } catch (error) {
+      console.error('overview decode lanes failed', error)
+    }
+  },
+  { immediate: true },
+)
+
+const BAND_COLOR: Record<string, string> = {
+  i2c: 'bg-i2c',
+  uart: 'bg-uart',
+  spi: 'bg-spi',
+  can: 'bg-can',
+}
+
+const bands = computed(() =>
+  overview.value.flatMap(({ index, view }, row) => {
+    const bus = decode.statusOf(index)?.bus ?? 'other'
+    const items = view.lanes[0]?.items ?? []
+    return items.map((item) => ({
+      key: `${index}:${item.start}`,
+      top: 8 + row * 8,
+      left: percent(item.start),
+      width: Math.max(percent(item.end) - percent(item.start), 0.15),
+      color: BAND_COLOR[bus] ?? 'bg-ink-3',
+    }))
+  }),
+)
 
 const box = computed(() => ({
   left: percent(view.viewport.start),
@@ -98,6 +145,14 @@ function onWheel(event: WheelEvent): void {
         class="absolute top-[3px] bottom-[17px] rounded-4 border-[1.5px] border-ink bg-canvas"
         :title="viewportTip"
         :style="{ left: `${box.left}%`, width: `${box.width}%` }"
+      />
+      <i
+        v-for="band in bands"
+        :key="band.key"
+        class="pointer-events-none absolute h-[5px] rounded-[1.5px] opacity-62"
+        :class="band.color"
+        :style="{ top: `${band.top}px`, left: `${band.left}%`, width: `${band.width}%` }"
+        aria-hidden="true"
       />
       <span
         v-for="tick in ticks"

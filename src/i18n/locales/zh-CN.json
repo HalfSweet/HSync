@@ -159,7 +159,13 @@
       "nack": "NACK：主机读完最后一个字节，不再应答",
       "start": "起始",
       "repeatedStart": "重复起始",
-      "stop": "停止"
+      "stop": "停止",
+      "readData": "读出 {data}",
+      "writeData": "写入 {data}",
+      "probe": "只寻址 0x{address}",
+      "transferTip": "{text}，{time} 起，共 {span}",
+      "addressTip": "从机地址 0x{address}，{direction}，{time} 起",
+      "dataTip": "数据 0x{value}，{time} 起"
     },
     "uart": {
       "space": "空格"
@@ -168,12 +174,18 @@
       "transferring": "传输中",
       "offsets": "偏移 {from}–{to}",
       "unchangedSince": "从偏移 {offset} 起没有变化",
-      "run": "{value} × {count}"
+      "run": "{value} × {count}",
+      "byteTip": "0x{value}，{time} 起",
+      "textTip": "{text}，偏移 {offset} 起",
+      "transferTip": "SPI 传输，{time} 起"
     },
     "can": {
       "noFramesInView": "视口内没有帧",
       "previous": "上一帧",
-      "next": "下一帧"
+      "next": "下一帧",
+      "length": "{count} 个字节",
+      "crcError": "CRC 错误",
+      "frameTip": "ID 0x{id}，{time} 起"
     }
   },
   "stream": {

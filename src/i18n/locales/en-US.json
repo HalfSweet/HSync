@@ -159,7 +159,13 @@
       "nack": "NACK: the controller read its last byte and stops acknowledging",
       "start": "Start",
       "repeatedStart": "Repeated start",
-      "stop": "Stop"
+      "stop": "Stop",
+      "readData": "Read {data}",
+      "writeData": "Write {data}",
+      "probe": "Address 0x{address} only",
+      "transferTip": "{text}, from {time}, {span} long",
+      "addressTip": "Target 0x{address}, {direction}, from {time}",
+      "dataTip": "Data 0x{value}, from {time}"
     },
     "uart": {
       "space": "Space"
@@ -168,12 +174,18 @@
       "transferring": "Transfer",
       "offsets": "Offsets {from}–{to}",
       "unchangedSince": "Unchanged from offset {offset}",
-      "run": "{value} × {count}"
+      "run": "{value} × {count}",
+      "byteTip": "0x{value}, from {time}",
+      "textTip": "{text}, from offset {offset}",
+      "transferTip": "SPI transfer from {time}"
     },
     "can": {
       "noFramesInView": "No frames in view",
       "previous": "Previous",
-      "next": "Next"
+      "next": "Next",
+      "length": "{count} bytes",
+      "crcError": "CRC error",
+      "frameTip": "ID 0x{id}, from {time}"
     }
   },
   "stream": {
