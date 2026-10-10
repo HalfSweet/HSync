@@ -6,6 +6,7 @@ HSync 是一个现代化的逻辑分析仪上位机，用 Tauri 2、Vue 3 与 Ru
 
 ## 文档
 
+- [用户指南](./docs/user-guide.md)：界面与操作。
 - [DESIGN.md](./DESIGN.md)：总体设计——范围、架构、DSLogic USB 协议、数据模型、渲染、解码、文件格式、UI/UX 规范、国际化与工程规范。
 - [AGENTS.md](./AGENTS.md)：项目的硬性要求、构建命令、编码与提交规范。
 
