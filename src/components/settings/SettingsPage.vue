@@ -29,6 +29,7 @@ const text = useBackendText()
 const preferences = usePreferencesStore()
 const settings = useSettingsStore()
 const update = useUpdateStore()
+const dialog = useTemplateRef<HTMLElement>('dialog')
 const tablist = useTemplateRef<HTMLElement>('tablist')
 const aboutButton = useTemplateRef<HTMLElement>('aboutButton')
 
@@ -46,9 +47,9 @@ const BEHAVIOURS = [
 
 const about = shallowRef(false)
 
-// Focus goes to the section shown, and back to what opened the page when it closes.
+// Focus goes into the page without ringing a section, and back to what opened it when it closes.
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
-onMounted(() => selectedTab()?.focus())
+onMounted(() => dialog.value?.focus())
 onBeforeUnmount(() => opener?.focus({ preventScroll: true }))
 
 // Escape closes About first when it is open over the page.
@@ -110,10 +111,12 @@ async function revealLog(): Promise<void> {
     @click.self="settings.close()"
   >
     <div
+      ref="dialog"
       role="dialog"
       aria-modal="true"
       :aria-label="t('settings.title')"
-      class="flex h-[min(560px,calc(100vh-48px))] w-[min(760px,calc(100vw-48px))] flex-col overflow-hidden rounded-6 border border-ink bg-raise text-small"
+      tabindex="-1"
+      class="flex h-[min(560px,calc(100vh-48px))] w-[min(760px,calc(100vw-48px))] flex-col overflow-hidden rounded-6 border border-ink bg-raise text-small outline-none"
     >
       <header
         class="flex h-10 flex-none items-center justify-between border-b border-line pr-2 pl-4"
@@ -149,7 +152,7 @@ async function revealLog(): Promise<void> {
               :aria-selected="settings.section === one"
               :aria-controls="`settings-panel-${one}`"
               :tabindex="settings.section === one ? 0 : -1"
-              class="flex h-[30px] items-center rounded-4 px-2.5 text-left text-ink-2 hover:text-ink aria-selected:font-medium aria-selected:text-ink"
+              class="flex h-[30px] items-center rounded-4 px-2.5 text-left text-ink-2 hover:text-ink focus-visible:outline-offset-[-2px] aria-selected:font-medium aria-selected:text-ink"
               @click="settings.section = one"
             >
               {{ t(`settings.sections.${one}`) }}

@@ -40,9 +40,9 @@ describe('settings page', () => {
     document.body.innerHTML = ''
   })
 
-  it('shows the section chosen in the side bar, with focus on it', async () => {
+  it('takes focus without ringing a section, and shows the one chosen in the side bar', async () => {
     const { wrapper, settings } = await page()
-    expect(document.activeElement?.textContent?.trim()).toBe('Appearance')
+    expect(document.activeElement?.getAttribute('role')).toBe('dialog')
     expect(wrapper.find('[role="tabpanel"]').text()).toContain('Theme')
 
     await tab(wrapper, 'Behaviour')?.trigger('click')
