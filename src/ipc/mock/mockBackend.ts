@@ -320,6 +320,10 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve()
     },
 
+    async appVersion() {
+      return Promise.resolve('dev')
+    },
+
     async systemMemory() {
       // Chromium tells a rough figure in GiB; other browsers nothing.
       const gib = (navigator as Navigator & { deviceMemory?: number }).deviceMemory

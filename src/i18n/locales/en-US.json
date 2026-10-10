@@ -531,7 +531,8 @@
       },
       "file": "Write a log file",
       "reveal": "Show in folder"
-    }
+    },
+    "about": "About HSync…"
   },
   "units": {
     "ns": "nanoseconds",
@@ -587,5 +588,13 @@
       "unknown": "No decoder {id}",
       "invalid": "Decoder {id} cannot be used: {detail}"
     }
+  },
+  "about": {
+    "title": "About HSync",
+    "tagline": "A logic analyzer host",
+    "version": "Version {version}",
+    "license": "HSync is free software, released under the GPL-3.0-or-later license.",
+    "credits": "Device drivers and protocol decoders are ported from DreamSourceLab’s DSView (libsigrok4DSL, libsigrokdecode4DSL, GPL); the DSLogic firmware and FPGA bitstreams ship under the MIT license; the IBM Plex fonts under the SIL OFL 1.1.",
+    "close": "Close"
   }
 }

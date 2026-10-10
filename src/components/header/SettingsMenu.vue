@@ -3,6 +3,7 @@ import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AboutDialog from '@/components/about/AboutDialog.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useBackendText } from '@/composables/useBackendText'
 import { getBackend } from '@/ipc/backend'
@@ -43,6 +44,13 @@ watch(open, async (isOpen) => {
     console.error('log file location failed', error)
   }
 })
+
+const about = shallowRef(false)
+
+function showAbout(): void {
+  open.value = false
+  about.value = true
+}
 
 async function revealLog(): Promise<void> {
   revealError.value = null
@@ -168,6 +176,10 @@ async function revealLog(): Promise<void> {
           text.error(revealError)
         }}</span>
       </div>
+      <button class="btn-ghost h-[26px] self-start" @click="showAbout">
+        {{ t('settings.about') }}
+      </button>
     </div>
+    <AboutDialog v-if="about" @close="about = false" />
   </div>
 </template>

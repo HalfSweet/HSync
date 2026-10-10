@@ -1,3 +1,4 @@
+import { getVersion } from '@tauri-apps/api/app'
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
@@ -121,6 +122,8 @@ export interface Backend {
   setTitle(title: string): Promise<void>
   /** Physical memory in bytes, or `null` when unknown. */
   systemMemory(): Promise<number | null>
+  /** The app's version. */
+  appVersion(): Promise<string>
   /** The decoders of a capture and how far they are. */
   decodeList(captureId: number): Promise<DecoderStatus[]>
   /** Decode lanes of finished decoders over `start..end`. */
@@ -285,6 +288,10 @@ class TauriBackend implements Backend {
 
   systemMemory() {
     return invoke<number>('system_memory')
+  }
+
+  appVersion() {
+    return getVersion()
   }
 
   decodeList(captureId: number) {

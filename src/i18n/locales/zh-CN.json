@@ -531,7 +531,8 @@
       },
       "file": "写入日志文件",
       "reveal": "在文件夹中显示"
-    }
+    },
+    "about": "关于 HSync…"
   },
   "units": {
     "ns": "纳秒",
@@ -587,5 +588,13 @@
       "unknown": "没有解码器 {id}",
       "invalid": "解码器 {id} 无法使用：{detail}"
     }
+  },
+  "about": {
+    "title": "关于 HSync",
+    "tagline": "通用逻辑分析仪上位机",
+    "version": "版本 {version}",
+    "license": "HSync 是自由软件，以 GPL-3.0-or-later 许可发布。",
+    "credits": "设备驱动与协议解码移植自 DreamSourceLab 的 DSView（libsigrok4DSL、libsigrokdecode4DSL，GPL）；DSLogic 固件与 FPGA 位流以 MIT 许可随附；界面字体 IBM Plex 以 SIL OFL 1.1 许可。",
+    "close": "关闭"
   }
 }
