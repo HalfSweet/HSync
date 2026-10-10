@@ -52,3 +52,29 @@
 .dialog-leave-to > [role='dialog'] {
   transform: translateY(8px) scale(0.98);
 }
+
+/* drawer: the data stream panel slides up out of the bottom of the work area, which clips it.
+   While it moves it lies over the timeline, so the timeline resizes once rather than on every
+   frame, under the panel where it does not show. */
+.drawer-enter-active,
+.drawer-leave-active {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 10;
+}
+
+.drawer-enter-active {
+  transition: transform var(--motion-enter) var(--ease-enter);
+}
+
+.drawer-leave-active {
+  pointer-events: none;
+  transition: transform var(--motion-exit) var(--ease-exit);
+}
+
+.drawer-enter-from,
+.drawer-leave-to {
+  transform: translateY(100%);
+}

@@ -18,10 +18,12 @@ const decode = useDecodeStore()
   <div class="flex h-full min-h-[640px] flex-col overflow-hidden bg-chrome text-body text-ink">
     <AppHeader />
     <div class="flex min-h-0 flex-1">
-      <main class="flex min-w-0 flex-1 flex-col">
+      <main class="relative flex min-w-0 flex-1 flex-col overflow-clip">
         <OverviewStrip />
         <TimelineView />
-        <StreamPanel v-if="stream.open" />
+        <Transition name="drawer">
+          <StreamPanel v-if="stream.open" />
+        </Transition>
       </main>
     </div>
     <StatusBar />
