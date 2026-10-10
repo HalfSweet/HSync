@@ -6,9 +6,11 @@ mod catalog;
 mod error;
 mod host;
 mod module;
+mod run;
 
 pub use catalog::{
     AnnotationClass, AnnotationRow, ChannelSpec, DecoderInfo, OptionSpec, load_catalog,
 };
 pub use error::SrdError;
 pub use host::DecoderHost;
+pub use run::{Layer, LayerResult, Stack, run_stack};

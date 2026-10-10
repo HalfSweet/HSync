@@ -57,6 +57,10 @@ pub struct AnnotationRow {
 pub struct DecoderInfo {
     /// The id `.dsl` files store, e.g. `1:i2c`.
     pub id: String,
+    /// The Python package the decoder lives in, e.g. `1-i2c`.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub package: String,
     pub name: String,
     pub longname: String,
     pub desc: String,
@@ -230,9 +234,10 @@ fn annotation_rows(class: &Bound<'_, PyAny>) -> Result<Vec<AnnotationRow>, SrdEr
 }
 
 /// Reads a decoder class.
-pub(crate) fn describe(class: &Bound<'_, PyAny>) -> Result<DecoderInfo, SrdError> {
+pub(crate) fn describe(class: &Bound<'_, PyAny>, package: &str) -> Result<DecoderInfo, SrdError> {
     Ok(DecoderInfo {
         id: text(class, "id"),
+        package: package.to_owned(),
         name: text(class, "name"),
         longname: text(class, "longname"),
         desc: text(class, "desc"),
@@ -270,7 +275,7 @@ pub fn load_catalog(dir: &Path) -> Result<Vec<DecoderInfo>, SrdError> {
         for name in names {
             match decoder_class(py, &name)
                 .map_err(SrdError::from)
-                .and_then(|class| describe(&class))
+                .and_then(|class| describe(&class, &name))
             {
                 Ok(info) => out.push(info),
                 Err(error) => log::warn!("decoder {name} did not load: {error}"),
