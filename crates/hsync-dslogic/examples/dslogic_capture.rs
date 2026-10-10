@@ -211,6 +211,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         advanced: (!args.stages.is_empty()).then(|| AdvancedTrigger::Stages {
             stages: args.stages.clone(),
         }),
+        looping: false,
     };
     let (sink, packets) = crossbeam_channel::unbounded();
     let started = Instant::now();

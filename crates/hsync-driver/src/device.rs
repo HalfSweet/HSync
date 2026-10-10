@@ -108,6 +108,9 @@ pub struct CapturePlan {
     pub instant: bool,
     /// A multi-stage or serial trigger in place of `triggers`.
     pub advanced: Option<AdvancedTrigger>,
+    /// Capture until stopped rather than up to the sample limit (DSView's loop mode); the
+    /// host keeps only the newest samples.
+    pub looping: bool,
 }
 
 /// An open device.
@@ -126,6 +129,12 @@ pub trait Device: Send {
     /// What the trigger can do with the current options.
     fn trigger_caps(&self) -> TriggerCaps {
         TriggerCaps::default()
+    }
+
+    /// Whether a capture can run until stopped with the current options, keeping only its
+    /// newest samples ([`CapturePlan::looping`]).
+    fn can_loop(&self) -> bool {
+        false
     }
 
     /// Channels that will be captured, ascending.

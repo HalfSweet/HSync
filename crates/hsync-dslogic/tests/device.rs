@@ -297,6 +297,7 @@ fn captures_in_stream_mode() {
         trigger_position: 50,
         instant: false,
         advanced: None,
+        looping: false,
     };
     let acquisition = device.start(plan.clone(), sink).expect("start");
     let packets = collect(&packets);

@@ -337,6 +337,7 @@ impl Instrument {
             trigger_position: request.trigger_position,
             instant: request.instant,
             advanced: request.advanced,
+            looping: false,
         };
         let (sink, packets) = crossbeam_channel::unbounded();
         let acquisition = open

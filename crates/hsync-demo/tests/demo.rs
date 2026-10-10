@@ -109,6 +109,7 @@ fn trigger_lands_after_the_pre_trigger_samples() {
         trigger_position: 25,
         instant: false,
         advanced: None,
+        looping: false,
     };
     let acquisition = device.start(plan, sink).expect("start");
     let (capture, trigger, reason) = capture(&packets);
@@ -169,6 +170,7 @@ fn stops_while_waiting_for_the_trigger() {
         trigger_position: 50,
         instant: false,
         advanced: None,
+        looping: false,
     };
     let acquisition = device.start(plan, sink).expect("start");
     loop {
