@@ -11,7 +11,10 @@ use super::{CommandResult, blocking};
 use crate::state::AppState;
 
 /// Sends progress through `channel` about once a percent and says whether to go on.
-fn reporter<'a>(state: &'a AppState, channel: &'a Channel<f64>) -> impl FnMut(f64) -> bool + 'a {
+pub(super) fn reporter<'a>(
+    state: &'a AppState,
+    channel: &'a Channel<f64>,
+) -> impl FnMut(f64) -> bool + 'a {
     let mut sent = f64::NEG_INFINITY;
     move |done| {
         if done >= 1.0 || done - sent >= 0.01 {
@@ -90,7 +93,7 @@ pub async fn text_read(app: AppHandle, path: PathBuf) -> CommandResult<String> {
     blocking(app, move |_| hsync_session::read_text(&path, TEXT_LIMIT)).await
 }
 
-/// Stops the save or export under way; it fails as cancelled and leaves no file.
+/// Stops the save, export or import under way; it fails as cancelled and leaves no file.
 #[tauri::command]
 pub fn file_cancel(state: State<'_, AppState>) {
     state.file_cancel.store(true, Ordering::Relaxed);
