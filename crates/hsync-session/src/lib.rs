@@ -237,6 +237,31 @@ impl Workspace {
         }
     }
 
+    /// Replaces the decoders of capture `id` with `decoders` (DSView's `decoders` list) and
+    /// decodes again. A capture still being taken decodes once complete instead.
+    pub fn set_decoders(
+        &mut self,
+        id: u64,
+        decoders: serde_json::Value,
+        capturing: bool,
+    ) -> Result<CaptureSummary, SessionError> {
+        let events = self.events.clone();
+        let open = match &mut self.current {
+            Some(open) if open.id == id => open,
+            Some(_) => return Err(SessionError::StaleCapture),
+            None => return Err(SessionError::NoCapture),
+        };
+        if capturing {
+            return Err(SessionError::Busy);
+        }
+        let decoders = (!decoders.as_array().is_some_and(Vec::is_empty)).then_some(decoders);
+        let decoding = DecodeSet::new(decoders.as_ref());
+        decoding.run(&open.capture, decoded_events(events, id));
+        open.decoders = decoders;
+        open.decoding = decoding;
+        Ok(summarize(open))
+    }
+
     /// The decoders of capture `id`.
     pub fn decoding(&self, id: u64) -> Result<Arc<DecodeSet>, SessionError> {
         match &self.current {

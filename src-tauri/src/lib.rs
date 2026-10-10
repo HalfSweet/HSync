@@ -99,6 +99,7 @@ pub fn run() {
             commands::decode::decode_view,
             commands::decode::decode_stream,
             commands::decode::decode_row_at,
+            commands::decode::decode_set,
             commands::device::device_list,
             commands::device::device_open,
             commands::device::device_state,

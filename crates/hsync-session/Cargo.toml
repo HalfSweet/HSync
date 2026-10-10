@@ -23,6 +23,7 @@ thiserror.workspace = true
 ts-rs.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 hsync-demo.workspace = true
 
 [lints]

@@ -111,3 +111,41 @@ fn captures_keep_the_decoders_and_decode_when_complete() {
     // The demo device replays the same capture, so the same transfers decode.
     assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(6));
 }
+
+#[test]
+fn replaces_the_decoders_and_decodes_again() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let only_uart = serde_json::json!([{
+        "id": "1:uart",
+        "channel": [{"rxtx": 5}],
+        "options": {"baudrate": 115200},
+    }]);
+    let summary = workspace
+        .set_decoders(opened.id, only_uart, false)
+        .expect("set decoders");
+    assert_eq!(
+        summary
+            .decoders
+            .as_ref()
+            .and_then(|d| d.as_array())
+            .map(Vec::len),
+        Some(1)
+    );
+    decoded(&events, opened.id, 1);
+    let statuses = workspace.decoding(opened.id).expect("decoders").statuses();
+    assert_eq!(statuses.len(), 1);
+    assert_eq!(statuses[0].bus, Some(Bus::Uart));
+    assert_eq!(statuses[0].counts.map(|c| c.frames), Some(47));
+    // An empty list removes every decoder.
+    let summary = workspace
+        .set_decoders(opened.id, serde_json::json!([]), false)
+        .expect("clear");
+    assert!(summary.decoders.is_none());
+    assert!(
+        workspace
+            .set_decoders(opened.id, serde_json::json!([]), true)
+            .is_err()
+    );
+}

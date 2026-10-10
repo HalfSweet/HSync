@@ -70,3 +70,20 @@ pub fn decode_row_at(
 ) -> CommandResult<Option<u32>> {
     Ok(decoding(&state, capture_id)?.row_at(index, mode, sample))
 }
+
+/// Replaces the decoders of the open capture (DSView's `decoders` list) and decodes again.
+#[tauri::command]
+pub async fn decode_set(
+    app: tauri::AppHandle,
+    capture_id: u64,
+    decoders: serde_json::Value,
+) -> CommandResult<hsync_session::CaptureSummary> {
+    super::blocking(app, move |state| {
+        let capturing = state.instrument.lock().is_capturing();
+        state
+            .workspace
+            .lock()
+            .set_decoders(capture_id, decoders, capturing)
+    })
+    .await
+}
