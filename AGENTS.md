@@ -15,7 +15,7 @@ HSync 用现代技术栈重写 [DSView](https://github.com/DreamSourceLab/DSView
 3. **国际化**：首版支持简体中文（默认）与英文。界面上任何用户可见文字都必须走 vue-i18n，禁止硬编码；Rust 侧不输出自然语言，只输出 i18n key 与参数。
 4. **与真实硬件的一切交互都用 Rust 实现**，USB 访问只用 **nusb**。禁止引入 libusb、rusb 或任何 C/C++ 驱动代码的 FFI；DSView 的 C 代码只作为移植参考。
 5. **代码风格**：前端遵循 **ESLint + Prettier**；Rust 遵循 rustfmt + clippy。由 **lefthook** 在提交时保证代码已格式化，提交信息由 commitlint 校验。
-6. **提交**：使用**细粒度的约定式提交**（Conventional Commits），见下文「提交规范」。
+6. **提交**：使用**细粒度的约定式提交**（Conventional Commits）；**PR 与 issue 用英文书写**。见下文「提交规范」。
 
 ## 仓库地图
 
@@ -114,6 +114,7 @@ cargo test --workspace
 - 破坏性变更在 type 后加 `!`，并在正文写 `BREAKING CHANGE:`。
 - 发布说明由 git-cliff 从提交信息生成，`feat`、`fix`、`perf` 的 subject 会原样进入其中，要让用户读得懂。不要手改版本号，见「发布」。
 - 不要用 `--no-verify` 跳过钩子；钩子失败就修好再提交。不要提交 `.hsync/`、构建产物与本地配置。
+- **PR 与 issue** 的标题、正文和评论一律用英文书写；引用界面上的中文文案时可以原样保留。
 
 示例：
 
