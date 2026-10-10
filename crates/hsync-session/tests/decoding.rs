@@ -149,3 +149,34 @@ fn replaces_the_decoders_and_decodes_again() {
             .is_err()
     );
 }
+
+#[test]
+fn saves_and_reopens_a_capture_with_its_decoders() {
+    let (mut first, events) = workspace();
+    let opened = first.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let only_spi = serde_json::json!([{
+        "id": "1:spi",
+        "channel": [{"clk": 12}, {"miso": 15}, {"mosi": 14}, {"cs": 13}],
+        "options": {"cpol": 0, "cpha": 0},
+    }]);
+    first
+        .set_decoders(opened.id, only_spi, false)
+        .expect("decoders");
+    let path = std::env::temp_dir().join(format!("hsync-save-{}.dsl", std::process::id()));
+    let saved = first.save(opened.id, &path).expect("save");
+    assert!(matches!(
+        saved.source,
+        hsync_session::CaptureSource::File { .. }
+    ));
+
+    let (mut other, other_events) = workspace();
+    let reopened = other.open_file(&path).expect("reopen");
+    decoded(&other_events, reopened.id, 1);
+    assert_eq!(reopened.info.sample_count, opened.info.sample_count);
+    assert_eq!(reopened.channels, opened.channels);
+    let statuses = other.decoding(reopened.id).expect("decoders").statuses();
+    assert_eq!(statuses.len(), 1);
+    assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(4));
+    let _ = std::fs::remove_file(path);
+}
