@@ -12,6 +12,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc --build && vite build",
+    "bundle": "node scripts/bundle.mjs",
     "preview": "vite preview",
     "tauri": "tauri",
     "typecheck": "vue-tsc --build",
