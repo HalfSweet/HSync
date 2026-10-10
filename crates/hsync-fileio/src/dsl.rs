@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::fs::File;
-use std::io::{BufReader, Read, Seek, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::path::Path;
 
 use hsync_capture::{CHUNK_WORDS, ChunkView, LogicCapture};
@@ -34,6 +34,29 @@ pub struct DslDocument {
 /// Reads a `.dsl` file from disk.
 pub fn read_dsl_file(path: &Path) -> Result<DslDocument, FileError> {
     read_dsl(BufReader::new(File::open(path)?))
+}
+
+/// Writes `capture` to the `.dsl` file at `path`. The file is written next to `path` and moved
+/// over it once complete, so a failed save leaves an existing file as it was.
+pub fn write_dsl_file(
+    path: &Path,
+    capture: &LogicCapture,
+    request: &DslWriteRequest<'_>,
+) -> Result<(), FileError> {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".part");
+    let partial = path.with_file_name(name);
+    let written = (|| {
+        let writer = write_dsl(BufWriter::new(File::create(&partial)?), capture, request)?;
+        let file = writer.into_inner().map_err(|error| error.into_error())?;
+        file.sync_all()?;
+        std::fs::rename(&partial, path)?;
+        Ok(())
+    })();
+    if written.is_err() {
+        let _ = std::fs::remove_file(&partial);
+    }
+    written
 }
 
 /// Reads a `.dsl` archive.
