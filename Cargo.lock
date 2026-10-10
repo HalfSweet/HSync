@@ -1299,6 +1299,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-decode"
+version = "0.1.0"
+dependencies = [
+ "hsync-capture",
+ "hsync-core",
+ "hsync-fileio",
+ "proptest",
+]
+
+[[package]]
 name = "hsync-demo"
 version = "0.1.0"
 dependencies = [

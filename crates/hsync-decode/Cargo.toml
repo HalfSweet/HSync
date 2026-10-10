@@ -1,0 +1,20 @@
+[package]
+name = "hsync-decode"
+description = "Protocol decoders of HSync: a sigrok-style wait engine over bit-packed samples and native I2C, UART, SPI and CAN-FD decoders"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+hsync-capture.workspace = true
+hsync-core.workspace = true
+
+[dev-dependencies]
+hsync-fileio.workspace = true
+proptest.workspace = true
+
+[lints]
+workspace = true

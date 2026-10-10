@@ -26,6 +26,7 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 
 hsync-core = { path = "crates/hsync-core" }
 hsync-capture = { path = "crates/hsync-capture" }
+hsync-decode = { path = "crates/hsync-decode" }
 hsync-demo = { path = "crates/hsync-demo" }
 hsync-driver = { path = "crates/hsync-driver" }
 hsync-dslogic = { path = "crates/hsync-dslogic" }
