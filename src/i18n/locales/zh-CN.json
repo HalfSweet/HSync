@@ -397,7 +397,8 @@
       "bytes": "字节",
       "characters": "字符",
       "identifier": "标识符",
-      "data": "数据"
+      "data": "数据",
+      "row": "注解行"
     },
     "summary": {
       "transfers": "{count} 次传输",

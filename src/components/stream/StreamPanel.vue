@@ -91,7 +91,12 @@ const summary = computed(() => {
 })
 
 /** Width of the label column by bus, as the design sets it. */
-const LABEL_WIDTHS: Partial<Record<BusKind, string>> = { i2c: '132px', spi: '36px', can: '64px' }
+const LABEL_WIDTHS: Partial<Record<BusKind, string>> = {
+  i2c: '132px',
+  spi: '36px',
+  can: '64px',
+  other: '120px',
+}
 const labelWidth = computed(() => (bus.value ? (LABEL_WIDTHS[bus.value] ?? null) : null))
 
 const header = computed(() => {
@@ -115,6 +120,13 @@ const header = computed(() => {
         label: t('stream.column.identifier'),
         offset: false,
         content: t('stream.column.data'),
+        chars: false,
+      }
+    case 'other':
+      return {
+        label: t('stream.column.row'),
+        offset: false,
+        content: t('stream.column.content'),
         chars: false,
       }
     default:
@@ -260,6 +272,8 @@ function cellsOf(row: StreamRow): Cell[] {
         { text: parts.join(t('stream.can.separator')), kind: 'note' },
       ]
     }
+    case 'annotation':
+      return [{ text: row.text, kind: 'plain' }]
     default:
       return []
   }
@@ -275,6 +289,8 @@ function labelOf(row: StreamRow): string {
       return 'line' in row && row.line ? row.line.toUpperCase() : ''
     case 'can':
       return `0x${hex(row.id, row.extended ? 8 : 3)}`
+    case 'annotation':
+      return decode.statusOf(stream.decoder)?.lanes[row.row]?.desc ?? ''
     default:
       return ''
   }

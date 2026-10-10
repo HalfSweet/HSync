@@ -140,6 +140,14 @@ function blockClass(g: Geometry, on: boolean, extra = ''): string[] {
   ]
 }
 
+/** Characters of 12 px text that fit a block `width` wide, past its padding. */
+const fits = (text: string, width: number) => text.length * 7 + 16 <= width
+
+/** The longest of an annotation's texts that fits its block, or nothing. */
+function fitting(texts: readonly string[], width: number): string {
+  return texts.find((text) => fits(text, width)) ?? ''
+}
+
 function pick(item: LaneItem, id: string): void {
   emit('pick', { id, start: item.start, end: item.end })
 }
@@ -302,6 +310,16 @@ function pick(item: LaneItem, id: string): void {
           >{{ item.fd ? 'FD · ' : '' }}{{ t('decode.can.length', { count: item.length }) }}</span
         >
         <span v-if="!item.ok" class="text-alert">{{ t('decode.can.crcError') }}</span>
+      </button>
+      <button
+        v-else-if="item.type === 'annotation'"
+        :class="blockClass(g, on)"
+        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
+        :aria-pressed="on"
+        :title="`${item.texts[0] ?? ''} · ${at(item.start)}`"
+        @click="pick(item, id)"
+      >
+        <span class="min-w-0 truncate">{{ fitting(item.texts, g.width) }}</span>
       </button>
     </template>
     <span

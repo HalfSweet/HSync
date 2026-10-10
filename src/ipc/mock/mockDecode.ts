@@ -176,6 +176,8 @@ export function mockStatuses(decoders: unknown, running: boolean): DecoderStatus
     bus: presentation?.snapshot.bus ?? null,
     state: running ? 'running' : presentation ? 'done' : 'unsupported',
     counts: running || !presentation ? null : presentation.snapshot.counts,
+    lanes: [],
+    error: null,
   }))
 }
 

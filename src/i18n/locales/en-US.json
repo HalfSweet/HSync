@@ -397,7 +397,8 @@
       "bytes": "Bytes",
       "characters": "Chars",
       "identifier": "ID",
-      "data": "Data"
+      "data": "Data",
+      "row": "Row"
     },
     "summary": {
       "transfers": "{count} transfers",

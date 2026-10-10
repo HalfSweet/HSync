@@ -61,9 +61,16 @@ const scroller = useTemplateRef<HTMLElement>('scroller')
 const rowsElement = useTemplateRef<HTMLElement>('rows')
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas')
 
+/** Annotation lanes of a group's decoder, once it has decoded. */
+const annotationLanes = (group: { decoder: number | null }) =>
+  decode.statusOf(group.decoder)?.lanes ?? []
+
 const layout = computed(() =>
-  layoutRows(capture.groups, metrics.value, (group) =>
-    channels.isCollapsed(group.key, collapsedByDefault(group)),
+  layoutRows(
+    capture.groups,
+    metrics.value,
+    (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
+    annotationLanes,
   ),
 )
 
@@ -72,7 +79,9 @@ const isTrace = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow
 /** The decode lane a row shows: the group title row carries a bus's main lane. */
 function decodeLaneOf(row: Row): string | null {
   if (row.group.decoder === null) return null
-  if (row.kind === 'header') return 'header'
+  if (row.kind === 'header') {
+    return row.group.kind === 'other' ? (annotationLanes(row.group)[0]?.lane ?? null) : 'header'
+  }
   return row.kind === 'lane' ? (row.lane ?? null) : null
 }
 
@@ -112,6 +121,9 @@ const findBand = computed(() => {
 
 /** The I²C bytes lane names the target most transfers in view address. */
 function laneLabel(row: Row): string | null {
+  if (row.kind === 'lane' && row.lane?.includes('/')) {
+    return annotationLanes(row.group).find((lane) => lane.lane === row.lane)?.desc ?? null
+  }
   if (row.kind !== 'lane' || row.lane !== 'bytes') return null
   const address = decode.lanesOf(row.group.decoder)?.address
   return address == null

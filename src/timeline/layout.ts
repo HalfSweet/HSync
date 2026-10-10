@@ -42,10 +42,17 @@ export function collapsedByDefault(group: ChannelGroup): boolean {
   return group.kind === 'can'
 }
 
+/** A lane of annotations a decoder of the group puts out (`decoder id/row id`). */
+export interface AnnotationLaneRef {
+  lane: string
+  desc: string
+}
+
 export function layoutRows(
   groups: ChannelGroup[],
   metrics: RowMetrics,
   isCollapsed: (group: ChannelGroup) => boolean,
+  annotationLanes: (group: ChannelGroup) => readonly AnnotationLaneRef[] = () => [],
 ): { rows: Row[]; height: number } {
   const rows: Row[] = []
   let top = 0
@@ -72,6 +79,19 @@ export function layoutRows(
           height: metrics.lane,
           group,
           lane: 'bytes',
+        })
+      }
+      // Annotation rows: a decoder without a native presentation shows its first row on the
+      // title row, the rest (and those of stacked decoders) on rows of their own.
+      const annotations = annotationLanes(group)
+      for (const [position, lane] of annotations.entries()) {
+        if (group.kind === 'other' && position === 0) continue
+        push({
+          key: `${group.key}:lane:${lane.lane}`,
+          kind: 'lane',
+          height: metrics.lane,
+          group,
+          lane: lane.lane,
         })
       }
       for (const channel of group.channels) {
