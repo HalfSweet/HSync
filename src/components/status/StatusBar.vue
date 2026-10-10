@@ -58,6 +58,8 @@ const problem = computed(() => {
   return null
 })
 
+const savedName = computed(() => capture.savedPath?.split(/[\\/]/).pop() ?? null)
+
 const triggerTime = computed(() => {
   const ms = capture.summary?.info.triggerTimeMs
   if (ms == null) return null
@@ -86,6 +88,9 @@ const perDivision = computed(() =>
     </button>
     <span :aria-live="capture.capturing ? 'off' : 'polite'">{{ status }}</span>
     <span v-if="problem" role="alert" class="text-alert">{{ problem }}</span>
+    <span v-else-if="savedName" role="status" class="text-ink-3">{{
+      t('file.saved', { name: savedName })
+    }}</span>
     <span v-if="triggerTime" class="text-ink-3 tabular-nums">{{ triggerTime }}</span>
     <span v-if="capture.summary" class="text-ink-3 tabular-nums">
       {{ t('status.samples', { count: formatCount(capture.sampleCount, locale) }) }}

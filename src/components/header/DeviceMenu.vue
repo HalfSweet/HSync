@@ -4,9 +4,11 @@ import { computed, ref, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import { useFileActions } from '@/composables/useFileActions'
 import type { DeviceSummary } from '@/ipc/bindings/DeviceSummary'
 import { useCaptureStore } from '@/stores/capture'
 import { DEMO_DRIVER, useDeviceStore } from '@/stores/device'
+import { commandLabel } from '@/utils/keys'
 
 import DeviceOptionsDialog from './DeviceOptionsDialog.vue'
 
@@ -17,6 +19,7 @@ const capture = useCaptureStore()
 const open = ref(false)
 const showOptions = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
+const files = useFileActions()
 
 onClickOutside(root, () => (open.value = false))
 onKeyStroke('Escape', () => (open.value = false))
@@ -63,6 +66,11 @@ async function pick(entry: DeviceSummary): Promise<void> {
 function openOptions(): void {
   open.value = false
   showOptions.value = true
+}
+
+function openFile(): void {
+  open.value = false
+  void files.open()
 }
 </script>
 
@@ -111,6 +119,15 @@ function openOptions(): void {
         <AppIcon v-if="entry.id === device.state?.info.id" name="check" />
       </button>
       <div class="my-1 border-t border-line" />
+      <button
+        role="menuitem"
+        class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55"
+        :disabled="capture.busy"
+        @click="openFile"
+      >
+        <span class="flex-1 text-left">{{ t('file.open') }}</span>
+        <kbd class="font-sans text-caption text-ink-3">{{ commandLabel('o') }}</kbd>
+      </button>
       <button
         role="menuitem"
         class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55"

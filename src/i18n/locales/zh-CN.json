@@ -56,6 +56,12 @@
     "export": "导出",
     "settings": "设置"
   },
+  "file": {
+    "filter": "DSView 采集文件",
+    "open": "打开文件…",
+    "save": "保存采集…",
+    "saved": "已保存到 {name}"
+  },
   "device": {
     "demo": "演示设备",
     "dialog": {

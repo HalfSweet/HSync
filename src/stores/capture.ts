@@ -25,6 +25,8 @@ export const useCaptureStore = defineStore('capture', () => {
   const mode = shallowRef<CaptureMode>('single')
   /** A repeated capture is due. */
   const repeatPending = shallowRef(false)
+  /** Where the open capture was last saved, until another capture replaces it. */
+  const savedPath = shallowRef<string | null>(null)
   let lastRequest: CaptureRequest | null = null
   let repeatTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -79,6 +81,7 @@ export const useCaptureStore = defineStore('capture', () => {
   async function run(load: () => Promise<CaptureSummary | null>): Promise<void> {
     status.value = 'loading'
     error.value = null
+    savedPath.value = null
     try {
       const loaded = await load()
       summary.value = loaded
@@ -143,6 +146,7 @@ export const useCaptureStore = defineStore('capture', () => {
   /** Starts a capture on the open device. */
   async function start(request: CaptureRequest): Promise<void> {
     error.value = null
+    savedPath.value = null
     lastRequest = request
     try {
       const started = await (await getBackend()).captureStart(request)
@@ -179,6 +183,21 @@ export const useCaptureStore = defineStore('capture', () => {
     return run(async () => (await getBackend()).openFile(path))
   }
 
+  /** Writes the open capture to `path` as a `.dsl` file. */
+  async function saveFile(path: string): Promise<boolean> {
+    const current = summary.value
+    if (!current) return false
+    error.value = null
+    try {
+      summary.value = await (await getBackend()).saveFile(current.id, path)
+      savedPath.value = path
+      return true
+    } catch (reason) {
+      error.value = toUiError(reason)
+      return false
+    }
+  }
+
   return {
     summary,
     status,
@@ -186,6 +205,7 @@ export const useCaptureStore = defineStore('capture', () => {
     live,
     mode,
     repeatPending,
+    savedPath,
     capturing,
     busy,
     extent,
@@ -202,6 +222,7 @@ export const useCaptureStore = defineStore('capture', () => {
     init,
     openDemo,
     openFile,
+    saveFile,
     start,
     stop,
     replaceSummary,

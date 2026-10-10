@@ -5,13 +5,16 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
+import { useFileActions } from '@/composables/useFileActions'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { summarizeTriggers } from '@/timeline/triggerSummary'
+import { isCommand } from '@/utils/keys'
 
 import AcquisitionMenu from './AcquisitionMenu.vue'
 import CaptureButton from './CaptureButton.vue'
 import DeviceMenu from './DeviceMenu.vue'
+import ExportMenu from './ExportMenu.vue'
 import SettingsMenu from './SettingsMenu.vue'
 
 const { t } = useI18n()
@@ -32,6 +35,16 @@ const triggerTip = computed(() => {
     .join(t('header.trigger.tipJoin'))
   return t('header.trigger.tipSet', { conditions })
 })
+
+// ⌘/Ctrl+O opens a capture file and ⌘/Ctrl+S saves the open capture.
+const files = useFileActions()
+onKeyStroke(
+  (event) => isCommand(event, 'o') || isCommand(event, 's'),
+  (event) => {
+    event.preventDefault()
+    void (isCommand(event, 'o') ? files.open() : files.save())
+  },
+)
 
 // `/` focuses the search box from anywhere but text fields (DESIGN.md §9.8).
 onKeyStroke('/', (event) => {
@@ -97,13 +110,7 @@ onKeyStroke('/', (event) => {
       </kbd>
     </label>
 
-    <button
-      class="btn w-8 justify-center p-0"
-      :aria-label="t('header.export')"
-      :title="t('header.export')"
-    >
-      <AppIcon name="export" />
-    </button>
+    <ExportMenu />
     <SettingsMenu />
   </header>
 </template>
