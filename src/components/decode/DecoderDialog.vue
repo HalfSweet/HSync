@@ -10,6 +10,7 @@ import {
   decoderSpec,
   entryChannels,
   type DecoderSpec,
+  type OptionSpec,
 } from '@/decode/catalog'
 import { toUiError } from '@/ipc/errors'
 import { useBackendText } from '@/composables/useBackendText'
@@ -87,9 +88,9 @@ const title = computed(() =>
     : t('decoderDialog.editTitle', { name: baseDecoderId(spec.value?.label ?? specId.value) }),
 )
 
-function optionLabel(id: string): string {
-  const key = `decoderDialog.option.${id}`
-  return i18n.te(key) ? t(key as never) : id
+function optionLabel(option: OptionSpec): string {
+  const key = `decoderDialog.option.${option.id}`
+  return i18n.te(key) ? t(key as never) : option.desc || option.id
 }
 
 function valueLabel(value: string | number): string {
@@ -210,7 +211,7 @@ const locked = computed(() => capture.capturing)
         <fieldset v-if="spec && spec.options.length > 0" class="flex flex-col gap-2">
           <legend class="mb-1 text-caption text-ink-3">{{ t('decoderDialog.options') }}</legend>
           <label v-for="option in spec.options" :key="option.id" class="flex items-center gap-3">
-            <span class="w-36 flex-none text-ink-2">{{ optionLabel(option.id) }}</span>
+            <span class="w-36 flex-none text-ink-2">{{ optionLabel(option) }}</span>
             <select
               v-if="option.kind === 'choice'"
               v-model="options[option.id]"
@@ -221,6 +222,12 @@ const locked = computed(() => capture.capturing)
                 {{ valueLabel(value) }}
               </option>
             </select>
+            <input
+              v-else-if="option.kind === 'text'"
+              v-model="options[option.id]"
+              class="h-8 min-w-0 flex-1 rounded-6 border border-line-2 bg-raise px-2 text-ink"
+              :disabled="locked"
+            />
             <input
               v-else
               v-model.number="options[option.id]"

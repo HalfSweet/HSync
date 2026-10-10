@@ -1,19 +1,35 @@
 /**
- * The decoders HSync decodes natively, with DSView's ids, channel roles and options, so the
- * entries they produce are the ones DSView stores in `.dsl` files (DESIGN.md §7.2).
+ * The decoders the decoder dialog offers, with DSView's ids, channel roles and options, so the
+ * entries they produce are the ones DSView stores in `.dsl` files (DESIGN.md §7.2). The list
+ * comes from the Python decoders' catalog; the natively decoded buses below stand in when the
+ * catalog cannot be read.
  */
-import type { BusKind } from '@/timeline/groups'
+import type { DecoderInfo } from '@/ipc/bindings/DecoderInfo'
+import { busKind, type BusKind } from '@/timeline/groups'
 
 export interface RoleSpec {
   id: string
   /** Shown on the timeline, e.g. `SCL`. */
   name: string
   required: boolean
+  /** The decoder's own description, in English. */
+  desc?: string
+}
+
+interface OptionBase {
+  id: string
+  /** The decoder's own description, in English, for options without a translated label. */
+  desc?: string
 }
 
 export type OptionSpec =
-  | { id: string; kind: 'choice'; values: readonly (string | number)[]; default: string | number }
-  | { id: string; kind: 'number'; default: number; min: number; max: number; step: number }
+  | (OptionBase & {
+      kind: 'choice'
+      values: readonly (string | number)[]
+      default: string | number
+    })
+  | (OptionBase & { kind: 'number'; default: number; min?: number; max?: number; step: number })
+  | (OptionBase & { kind: 'text'; default: string })
 
 export interface DecoderSpec {
   /** DSView's decoder id. */
@@ -23,6 +39,51 @@ export interface DecoderSpec {
   bus: BusKind
   roles: readonly RoleSpec[]
   options: readonly OptionSpec[]
+  longname?: string
+  desc?: string
+  tags?: readonly string[]
+  /** What the decoder reads (`logic`, or another decoder's output such as `i2c`). */
+  inputs?: readonly string[]
+  outputs?: readonly string[]
+}
+
+/** A decoder as the catalog describes it. */
+export function specFromInfo(info: DecoderInfo): DecoderSpec {
+  const role = (required: boolean) => (channel: DecoderInfo['channels'][number]) => ({
+    id: channel.id,
+    name: channel.name || channel.id.toUpperCase(),
+    required,
+    desc: channel.desc,
+  })
+  const options = info.options.flatMap((option): OptionSpec[] => {
+    const value = option.default
+    const values = option.values.filter(
+      (one): one is string | number => typeof one === 'string' || typeof one === 'number',
+    )
+    if (values.length > 0 && (typeof value === 'string' || typeof value === 'number')) {
+      return [{ id: option.id, desc: option.desc, kind: 'choice', values, default: value }]
+    }
+    if (typeof value === 'number') {
+      const step = Number.isInteger(value) ? 1 : 0.1
+      return [{ id: option.id, desc: option.desc, kind: 'number', default: value, step }]
+    }
+    if (typeof value === 'string') {
+      return [{ id: option.id, desc: option.desc, kind: 'text', default: value }]
+    }
+    return []
+  })
+  return {
+    id: info.id,
+    label: info.name || info.id,
+    bus: busKind(info.id),
+    roles: [...info.channels.map(role(true)), ...info.optionalChannels.map(role(false))],
+    options,
+    longname: info.longname,
+    desc: info.desc,
+    tags: info.tags,
+    inputs: info.inputs,
+    outputs: info.outputs,
+  }
 }
 
 export const DECODERS: readonly DecoderSpec[] = [
@@ -122,9 +183,12 @@ export const DECODERS: readonly DecoderSpec[] = [
   },
 ]
 
-/** The catalog entry of a DSView decoder id. */
-export function decoderSpec(id: string): DecoderSpec | undefined {
-  return DECODERS.find((spec) => spec.id === id)
+/** The entry of a DSView decoder id in `catalog` (the native buses by default). */
+export function decoderSpec(
+  id: string,
+  catalog: readonly DecoderSpec[] = DECODERS,
+): DecoderSpec | undefined {
+  return catalog.find((spec) => spec.id === id)
 }
 
 /** A decoder as DSView stores it in a capture's `decoders` list. */
