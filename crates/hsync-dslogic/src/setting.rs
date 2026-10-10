@@ -7,6 +7,7 @@
 //! quirks, as DSView has it.
 
 use hsync_core::{ChannelIndex, TriggerCondition};
+use hsync_driver::{AdvancedTrigger, TriggerPattern};
 
 use crate::profiles::{ChannelMode, Profile, caps};
 
@@ -131,6 +132,72 @@ impl TriggerSetup {
             {
                 *slot = condition.to_dsl_char();
                 setup.enabled |= condition != TriggerCondition::None;
+            }
+        }
+        setup
+    }
+}
+
+/// A pattern of trigger characters, one per channel, `X` for channels left out.
+fn pattern_chars(pattern: &TriggerPattern) -> [u8; TRIGGER_CHANNELS] {
+    let mut chars = [b'X'; TRIGGER_CHANNELS];
+    for &(channel, condition) in pattern {
+        if let Some(slot) = chars.get_mut(usize::from(channel)) {
+            *slot = condition.to_dsl_char();
+        }
+    }
+    chars
+}
+
+impl TriggerSetup {
+    /// A multi-stage or serial trigger as DSView's trigger dock commits it
+    /// (`TriggerDock::commit_trigger`). Its serial tab borrows a few settings from the
+    /// multi-stage tab; they take that tab's defaults here: one stage, patterns combined with
+    /// "and", nothing inverted, and don't-care second patterns of stages 1 and 3.
+    pub fn advanced(trigger: &AdvancedTrigger, position: u8) -> Self {
+        let mut setup = Self {
+            enabled: true,
+            position: position.min(100),
+            ..Self::default()
+        };
+        match trigger {
+            AdvancedTrigger::Stages { stages } => {
+                setup.mode = TriggerMode::Advanced;
+                setup.last_stage = stages.len().clamp(1, TRIGGER_STAGES) as u8 - 1;
+                for (slot, stage) in setup.stages.iter_mut().zip(stages) {
+                    *slot = TriggerStage {
+                        pattern0: pattern_chars(&stage.pattern0),
+                        pattern1: pattern_chars(&stage.pattern1),
+                        logic: (u8::from(stage.contiguous) << 1) | u8::from(stage.both),
+                        invert0: stage.invert0,
+                        invert1: stage.invert1,
+                        count: stage.count,
+                    };
+                }
+            }
+            AdvancedTrigger::Serial(serial) => {
+                setup.mode = TriggerMode::Serial;
+                let [start, clock, data_channel, data, ..] = &mut setup.stages;
+                start.pattern0 = pattern_chars(&serial.start);
+                start.pattern1 = pattern_chars(&serial.stop);
+                clock.pattern0 = pattern_chars(&serial.clock);
+                clock.count = 1;
+                // DSView writes 16 channels of stage 2 at a time, the upper 16 into the second
+                // pattern.
+                let channel = usize::from(serial.data_channel);
+                if channel < 16 {
+                    data_channel.pattern0[channel] = b'0';
+                } else if channel < TRIGGER_CHANNELS {
+                    data_channel.pattern1[channel - 16] = b'0';
+                }
+                for (bit, slot) in data.pattern0.iter_mut().take(16).enumerate() {
+                    *slot = match (serial.mask >> bit & 1, serial.value >> bit & 1) {
+                        (0, _) => b'X',
+                        (_, 0) => b'0',
+                        _ => b'1',
+                    };
+                }
+                data.count = u32::from(serial.bits.clamp(1, 16) - 1);
             }
         }
         setup
@@ -562,5 +629,100 @@ mod tests {
         assert_eq!(config.enabled_count(), 1);
         assert_eq!(config.actual_samples(), 1024);
         assert_eq!(config.actual_bytes(), 128);
+    }
+}
+
+#[cfg(test)]
+mod advanced_tests {
+    use hsync_driver::{SerialTriggerSpec, TriggerStageSpec};
+
+    use super::*;
+
+    fn chars(text: &str) -> [u8; TRIGGER_CHANNELS] {
+        let mut out = [b'X'; TRIGGER_CHANNELS];
+        out[..text.len()].copy_from_slice(text.as_bytes());
+        out
+    }
+
+    #[test]
+    fn stages_keep_their_patterns_logic_and_counts() {
+        let trigger = AdvancedTrigger::Stages {
+            stages: vec![
+                TriggerStageSpec {
+                    pattern0: vec![(0, TriggerCondition::High), (2, TriggerCondition::Rise)],
+                    pattern1: vec![(1, TriggerCondition::Low)],
+                    both: false,
+                    invert0: false,
+                    invert1: true,
+                    count: 3,
+                    contiguous: true,
+                },
+                TriggerStageSpec {
+                    pattern0: vec![(17, TriggerCondition::Both)],
+                    pattern1: Vec::new(),
+                    both: true,
+                    invert0: false,
+                    invert1: false,
+                    count: 1,
+                    contiguous: false,
+                },
+            ],
+        };
+        let setup = TriggerSetup::advanced(&trigger, 50);
+        assert!(setup.enabled);
+        assert_eq!(setup.mode, TriggerMode::Advanced);
+        assert_eq!(setup.last_stage, 1);
+        assert_eq!(setup.position, 50);
+        assert_eq!(setup.stages[0].pattern0, chars("1XR"));
+        assert_eq!(setup.stages[0].pattern1, chars("X0"));
+        assert_eq!(setup.stages[0].logic, 2);
+        assert!(setup.stages[0].invert1);
+        assert_eq!(setup.stages[0].count, 3);
+        assert_eq!(setup.stages[1].pattern0, chars("XXXXXXXXXXXXXXXXXC"));
+        assert_eq!(setup.stages[1].logic, 1);
+        assert_eq!(setup.stages[2], TriggerStage::default());
+    }
+
+    #[test]
+    fn serial_fills_the_four_stages_as_dsview() {
+        let trigger = AdvancedTrigger::Serial(SerialTriggerSpec {
+            start: vec![(0, TriggerCondition::Fall)],
+            stop: vec![(0, TriggerCondition::Rise)],
+            clock: vec![(1, TriggerCondition::Rise)],
+            data_channel: 2,
+            bits: 8,
+            value: 0x00a5,
+            mask: 0x00f0,
+        });
+        let setup = TriggerSetup::advanced(&trigger, 10);
+        assert_eq!(setup.mode, TriggerMode::Serial);
+        assert_eq!(setup.last_stage, 0);
+        assert_eq!(setup.stages[0].pattern0, chars("F"));
+        assert_eq!(setup.stages[0].pattern1, chars("R"));
+        assert_eq!(setup.stages[1].pattern0, chars("XR"));
+        assert_eq!(setup.stages[1].count, 1);
+        assert_eq!(setup.stages[2].pattern0, chars("XX0"));
+        // Bit k of the value in position k: 0xA5 masked to its upper nibble.
+        assert_eq!(setup.stages[3].pattern0, chars("XXXX0101"));
+        assert_eq!(setup.stages[3].count, 7);
+        assert_eq!(setup.stages[0].logic, 1);
+        assert_eq!(setup.stages[0].count, 0);
+    }
+
+    #[test]
+    fn serial_data_channels_past_16_go_to_the_second_pattern() {
+        let trigger = AdvancedTrigger::Serial(SerialTriggerSpec {
+            start: Vec::new(),
+            stop: Vec::new(),
+            clock: vec![(20, TriggerCondition::Rise)],
+            data_channel: 18,
+            bits: 1,
+            value: 1,
+            mask: 1,
+        });
+        let setup = TriggerSetup::advanced(&trigger, 10);
+        assert_eq!(setup.stages[2].pattern0, [b'X'; TRIGGER_CHANNELS]);
+        assert_eq!(setup.stages[2].pattern1, chars("XX0"));
+        assert_eq!(setup.stages[3].count, 0);
     }
 }

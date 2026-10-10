@@ -8,7 +8,7 @@ use crossbeam_channel::Sender;
 use hsync_core::ChannelIndex;
 use hsync_driver::{
     Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, Label, OptionKey,
-    OptionKind, OptionState, OptionValue, Packet,
+    OptionKind, OptionState, OptionValue, Packet, TriggerCaps,
 };
 
 use crate::acquisition::{self, AcquisitionParams};
@@ -546,6 +546,30 @@ impl Device for DslogicDevice {
         self.settings.channel_mode.channels
     }
 
+    /// DSView's trigger dock limits (`TriggerDock::device_updated`): in Stream mode only simple
+    /// triggers at 1 %; in Buffer mode up to 90 % of the capture, less when the capture is longer
+    /// than the hardware holds, and multi-stage and serial triggers.
+    fn trigger_caps(&self) -> TriggerCaps {
+        if self.settings.stream {
+            return TriggerCaps {
+                max_position: 1,
+                advanced: false,
+            };
+        }
+        let depth = channel_depth(self.profile, self.settings.enabled_count());
+        let limit = self.settings.limit_samples.max(1);
+        // DSView divides in integers before its ceil(), so this rounds down.
+        let max_position = if depth >= limit {
+            90
+        } else {
+            (depth * 90 / limit).clamp(1, 90) as u8
+        };
+        TriggerCaps {
+            max_position,
+            advanced: true,
+        }
+    }
+
     fn enabled_channels(&self) -> Vec<ChannelIndex> {
         (0..self.channel_count())
             .filter(|&channel| self.settings.enabled & (1 << channel) != 0)
@@ -600,6 +624,23 @@ impl Device for DslogicDevice {
         }
         limit = limit.max(MIN_SAMPLES);
         let depth = channel_depth(self.profile, self.settings.enabled_count());
+        let caps = self.trigger_caps();
+        if let Some(advanced) = &plan.advanced {
+            if !caps.advanced {
+                return Err(DriverError::InvalidRequest(
+                    "multi-stage and serial triggers need Buffer mode".into(),
+                ));
+            }
+            advanced
+                .check(self.channel_count())
+                .map_err(DriverError::InvalidRequest)?;
+        }
+        // The trigger dock's slider keeps the position within 1 % and the limit.
+        let position = plan.trigger_position.clamp(1, caps.max_position);
+        let trigger = match &plan.advanced {
+            Some(advanced) if !plan.instant => TriggerSetup::advanced(advanced, position),
+            _ => TriggerSetup::simple(&plan.triggers, position, plan.instant),
+        };
         let params = AcquisitionParams {
             profile: self.profile,
             mode: self.settings.channel_mode,
@@ -613,7 +654,7 @@ impl Device for DslogicDevice {
             instant: plan.instant,
             looping: false,
             buffer_upload: self.settings.buffer_upload,
-            trigger: TriggerSetup::simple(&plan.triggers, plan.trigger_position, plan.instant),
+            trigger,
         };
         acquisition::start(self.ctl.clone(), params, Arc::clone(&self.running), sink)
     }

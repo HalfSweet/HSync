@@ -9,7 +9,10 @@ use crossbeam_channel::Receiver;
 use hsync_core::TriggerCondition;
 use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
-use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionKind, OptionValue, Packet};
+use hsync_driver::{
+    AdvancedTrigger, CapturePlan, Device, DriverError, EndReason, OptionKey, OptionKind,
+    OptionValue, Packet, TriggerCaps, TriggerStageSpec,
+};
 use hsync_dslogic::profiles::{CHANNEL_MODES, UsbSpeed, VENDOR_ID, find_profile};
 use hsync_dslogic::protocol::{
     CMD_CTL_RD, CMD_CTL_RD_PRE, CMD_CTL_WR, Control, ctr0, dest, reg, status,
@@ -310,7 +313,8 @@ fn captures_in_stream_mode() {
     assert_eq!(logic_bytes(&packets), data_len);
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
 
-    let trigger = TriggerSetup::simple(&plan.triggers, 50, false);
+    // Stream mode pins the trigger position to 1 %, as DSView's trigger dock does.
+    let trigger = TriggerSetup::simple(&plan.triggers, 1, false);
     let expected = setting(&ArmConfig {
         profile: find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("profile"),
         mode: &CHANNEL_MODES[0],
@@ -423,4 +427,109 @@ fn stopping_a_stream_capture_discards_and_stops_the_device() {
     device
         .set_option(OptionKey::Filter, &OptionValue::Bool(true))
         .expect("options unlock after the capture");
+}
+
+#[test]
+fn reports_what_the_trigger_can_do_in_each_mode() {
+    let (_, mut device) = open(configured(), firmware_dir(&[]));
+    assert_eq!(
+        device.trigger_caps(),
+        TriggerCaps {
+            max_position: 1,
+            advanced: false
+        }
+    );
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    device
+        .set_option(OptionKey::SampleLimit, &OptionValue::Integer(1 << 20))
+        .expect("limit");
+    assert_eq!(
+        device.trigger_caps(),
+        TriggerCaps {
+            max_position: 90,
+            advanced: true
+        }
+    );
+}
+
+#[test]
+fn refuses_multi_stage_triggers_in_stream_mode() {
+    let (_, mut device) = open(configured(), firmware_dir(&[]));
+    let (sink, _packets) = crossbeam_channel::unbounded();
+    let plan = CapturePlan {
+        advanced: Some(AdvancedTrigger::Stages {
+            stages: vec![stage()],
+        }),
+        ..CapturePlan::default()
+    };
+    assert!(matches!(
+        device.start(plan, sink),
+        Err(DriverError::InvalidRequest(_))
+    ));
+}
+
+fn stage() -> TriggerStageSpec {
+    TriggerStageSpec {
+        pattern0: vec![(0, TriggerCondition::Rise), (1, TriggerCondition::High)],
+        pattern1: Vec::new(),
+        both: true,
+        invert0: false,
+        invert1: false,
+        count: 2,
+        contiguous: false,
+    }
+}
+
+#[test]
+fn arms_multi_stage_triggers_in_buffer_mode() {
+    let mut fake = configured();
+    let limit: u64 = 1 << 20;
+    fake.progress = [0, 0, 0x08, 0];
+    fake.on_force_stop = vec![header(None, limit), Vec::new()];
+    let (transport, mut device) = open(fake, firmware_dir(&[]));
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    device
+        .set_option(OptionKey::SampleLimit, &OptionValue::Integer(limit))
+        .expect("limit");
+    let advanced = AdvancedTrigger::Stages {
+        stages: vec![stage(), stage()],
+    };
+    let plan = CapturePlan {
+        trigger_position: 30,
+        advanced: Some(advanced.clone()),
+        ..CapturePlan::default()
+    };
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let acquisition = device.start(plan, sink).expect("start");
+    acquisition.stop();
+    let _ = collect(&packets);
+    acquisition.wait();
+
+    let trigger = TriggerSetup::advanced(&advanced, 30);
+    let expected = setting(&ArmConfig {
+        profile: find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("profile"),
+        // The first Buffer mode: 16 channels up to 100 MHz.
+        mode: &CHANNEL_MODES[20],
+        samplerate: 1_000_000,
+        limit_samples: limit,
+        enabled: 0xffff,
+        filter: false,
+        external_clock: false,
+        clock_falling_edge: false,
+        rle: false,
+        instant: false,
+        looping: false,
+        trigger: &trigger,
+    });
+    assert_eq!(transport.device().settings, vec![expected.to_vec()]);
 }
