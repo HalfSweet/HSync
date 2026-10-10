@@ -41,6 +41,7 @@ jobs:
           - name: Linux
             os: ubuntu-22.04
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     permissions:
       contents: write
     steps:
