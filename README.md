@@ -2,7 +2,7 @@
 
 HSync 是一个现代化的逻辑分析仪上位机，用 Tauri 2、Vue 3 与 Rust 重写 [DSView](https://github.com/DreamSourceLab/DSView)。初版的目标是与 DSView 的逻辑分析仪功能保持对齐：支持 DreamSourceLab 的全部 DSLogic 型号与 Demo 设备、Buffer/Stream 采集、触发、协议解码、测量、搜索，以及 DSView `.dsl` 文件的读写。
 
-> 项目处于早期开发阶段，尚不能用于实际采集。进度见 [DESIGN.md §13 里程碑](./DESIGN.md#13-里程碑)。
+> 项目处于开发阶段：v1 的逻辑分析仪功能已与 DSView 基本对齐，并在 DSLogic U2Pro16 上实测过采集、触发与循环采集；还没有安装包（打包方式，包括 Python 解码器宿主随包还是首次使用时下载，尚待确认，见 DESIGN.md §15）。进度见 [DESIGN.md §13 里程碑](./DESIGN.md#13-里程碑)。
 
 ## 文档
 
@@ -11,7 +11,7 @@ HSync 是一个现代化的逻辑分析仪上位机，用 Tauri 2、Vue 3 与 Ru
 
 ## 开发
 
-需要 Node.js ≥ 22.12、pnpm 12、Rust stable，以及 [Tauri 的系统依赖](https://tauri.app/start/prerequisites/)。
+需要 Node.js ≥ 22.12、pnpm 12、Rust stable、PATH 中带共享库的 Python 3（Python 协议解码器宿主经 pyo3 嵌入 CPython），以及 [Tauri 的系统依赖](https://tauri.app/start/prerequisites/)。
 
 ```sh
 pnpm install        # 安装依赖，同时安装 lefthook 钩子
