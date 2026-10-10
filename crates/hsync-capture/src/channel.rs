@@ -130,6 +130,26 @@ impl ChannelData {
         self.words.get((index / 64) as usize) >> (index % 64) & 1 != 0
     }
 
+    /// Number of 64-sample words, counting a partly filled last one.
+    pub fn word_count(&self) -> usize {
+        self.words.len()
+    }
+
+    /// Word `index`: sample `64 · index + j` is bit `j`. Bits past the end of the channel are
+    /// unspecified.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `index` is out of range.
+    pub fn word(&self, index: usize) -> u64 {
+        assert!(
+            index < self.words.len(),
+            "word {index} out of {}",
+            self.words.len()
+        );
+        self.words.get(index)
+    }
+
     /// Mask of the valid samples in word `word`.
     fn valid_mask(&self, word: usize) -> u64 {
         let first = word as u64 * 64;
