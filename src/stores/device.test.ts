@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DeviceState } from '@/ipc/bindings/DeviceState'
 import type { DeviceSummary } from '@/ipc/bindings/DeviceSummary'
 
-import { useDeviceStore } from './device'
+import { RECONNECT_MS, useDeviceStore } from './device'
 
 const demo: DeviceSummary = {
   id: 'virtual-demo',
@@ -89,14 +89,31 @@ describe('device store', () => {
     expect(store.arrival).toBeNull()
   })
 
-  it('falls back to the demo device when the open device goes away', async () => {
+  it('reopens a device that comes back soon', async () => {
+    vi.useFakeTimers()
+    backend.list = [demo, dslogic]
+    const store = useDeviceStore()
+    await store.init()
+    backend.list = [demo]
+    backend.onDeviceState?.(null)
+    await vi.advanceTimersByTimeAsync(RECONNECT_MS / 4)
+    expect(store.state).toBeNull()
+    backend.list = [demo, { ...dslogic, id: 'DSLogic:1-3' }]
+    await vi.advanceTimersByTimeAsync(RECONNECT_MS / 4)
+    expect(store.state?.info.id).toBe('DSLogic:1-3')
+    vi.useRealTimers()
+  })
+
+  it('falls back to the demo device when the open device stays away', async () => {
+    vi.useFakeTimers()
     backend.list = [demo, dslogic]
     const store = useDeviceStore()
     await store.init()
     backend.list = [demo]
     backend.onDevices?.(backend.list)
     backend.onDeviceState?.(null)
-    await settle()
+    await vi.advanceTimersByTimeAsync(RECONNECT_MS + 500)
+    vi.useRealTimers()
     expect(store.state?.info.id).toBe(demo.id)
     // Plugged back in with nothing but the demo open: offered again.
     backend.list = [demo, dslogic]

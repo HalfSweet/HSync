@@ -12,6 +12,13 @@ import { toUiError, type UiError } from '@/ipc/errors'
 /** Driver of the demo device. */
 export const DEMO_DRIVER = 'virtual-demo'
 
+/**
+ * How long a device that went away may take to come back as itself before HSync falls back to
+ * the demo device (DESIGN.md §4.2; DSView waits 500 ms, macOS re-enumerates more slowly).
+ */
+export const RECONNECT_MS = 2000
+const RECONNECT_POLL_MS = 200
+
 /** The value of an integer option, if the device has it. */
 function integer(option: OptionState | undefined): number | null {
   return option?.value.type === 'integer' ? option.value.value : null
@@ -69,6 +76,30 @@ export const useDeviceStore = defineStore('device', () => {
     return attempt(async () => (await getBackend()).deviceSetChannel(channel, enabled))
   }
 
+  /**
+   * Reopens a device that went away when one of the same model shows up again within
+   * {@link RECONNECT_MS} (a USB hiccup, a re-enumeration); its remembered settings come back
+   * with it. Otherwise the demo device opens.
+   */
+  async function reconnect(previous: DeviceState['info'] | null): Promise<void> {
+    if (previous && previous.driver !== DEMO_DRIVER) {
+      const deadline = Date.now() + RECONNECT_MS
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, RECONNECT_POLL_MS))
+        if (state.value || opening.value) return
+        await refresh()
+        const same = devices.value.find(
+          (device) =>
+            device.driver === previous.driver &&
+            device.model === previous.model &&
+            (device.status === 'ready' || device.status === 'needsFirmware'),
+        )
+        if (same && (await open(same.id))) return
+      }
+    }
+    if (!state.value && !opening.value) await openDemo()
+  }
+
   /** Opens the demo device, so there is always something to capture with. */
   async function openDemo(): Promise<void> {
     const demo = devices.value.find(
@@ -109,10 +140,11 @@ export const useDeviceStore = defineStore('device', () => {
     await backend.onDevices((found) => {
       void receiveDevices(found)
     })
-    // The open device went away: fall back to the demo device.
+    // The open device went away: wait for it to come back, else fall back to the demo device.
     await backend.onDeviceState((changed) => {
+      const previous = state.value?.info ?? null
       state.value = changed
-      if (!changed) void openDemo()
+      if (!changed) void reconnect(previous)
     })
     await refresh()
     state.value = await backend.deviceState()
