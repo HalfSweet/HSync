@@ -501,7 +501,17 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
       lastId += 1
       device.capturing = true
       held = request.hold && summary ? { summary, keepStopped: request.keepStopped } : null
-      const names = new Map(data.channels.map(({ index, name }) => [index, name]))
+      // As the session does: the shown capture passes its names and decoders on, and a first
+      // one takes the request's preset, or those of the demo capture.
+      const preset = request.preset
+      const names = new Map<number, string>(
+        summary
+          ? summary.channels.map(({ index, name }) => [index, name])
+          : preset
+            ? Object.entries(preset.channelNames).map(([index, name]) => [Number(index), name])
+            : data.channels.map(({ index, name }) => [index, name]),
+      )
+      const decoders = summary ? summary.decoders : preset ? preset.decoders : data.decoders
       summary = {
         id: lastId,
         source: { kind: 'device', driver: 'virtual-demo', model: 'Demo' },
@@ -513,7 +523,7 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
           channels: enabled,
         },
         channels: enabled.map((index) => ({ index, name: names.get(index) ?? String(index) })),
-        decoders: data.decoders,
+        decoders,
       }
       // A capture filling behind the shown one leaves its samples alone.
       const fill = (samples: number) => {
