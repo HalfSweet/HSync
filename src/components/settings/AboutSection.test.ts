@@ -6,7 +6,7 @@ import { i18n } from '@/i18n'
 import type { AvailableUpdate, UpdateProgress } from '@/ipc/backend'
 import { useUpdateStore } from '@/stores/update'
 
-import AboutDialog from './AboutDialog.vue'
+import AboutSection from './AboutSection.vue'
 
 const backend = {
   appVersion: () => Promise.resolve('0.2.0'),
@@ -15,13 +15,13 @@ const backend = {
 }
 vi.mock('@/ipc/backend', () => ({ getBackend: () => Promise.resolve(backend) }))
 
-async function dialog() {
-  const wrapper = mount(AboutDialog, { global: { plugins: [i18n] } })
+async function section() {
+  const wrapper = mount(AboutSection, { global: { plugins: [i18n] } })
   await flushPromises()
   return wrapper
 }
 
-describe('about dialog', () => {
+describe('about section', () => {
   beforeEach(() => {
     i18n.global.locale.value = 'en-US'
     setActivePinia(createPinia())
@@ -30,7 +30,7 @@ describe('about dialog', () => {
   })
 
   it('checks for updates on request and says when this is the latest', async () => {
-    const wrapper = await dialog()
+    const wrapper = await section()
     expect(wrapper.text()).toContain('Version 0.2.0')
     backend.updateCheck.mockResolvedValueOnce(null)
     const button = wrapper.findAll('button').find((one) => one.text() === 'Check for updates')
@@ -43,7 +43,7 @@ describe('about dialog', () => {
   it('offers the release found and shows the download', async () => {
     backend.updateCheck.mockResolvedValueOnce({ version: '0.3.0' })
     await useUpdateStore().check(true)
-    const wrapper = await dialog()
+    const wrapper = await section()
     expect(wrapper.text()).toContain('Version 0.3.0 is available')
     let report: (progress: UpdateProgress) => void = () => {}
     backend.updateInstall.mockImplementationOnce(
@@ -69,7 +69,7 @@ describe('about dialog', () => {
       code: 'error.update.install',
       params: { detail: 'bad signature' },
     })
-    const wrapper = await dialog()
+    const wrapper = await section()
     const install = wrapper.findAll('button').find((one) => one.text() === 'Download and restart')
     await install?.trigger('click')
     await flushPromises()

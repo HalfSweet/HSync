@@ -503,7 +503,8 @@
     "sections": {
       "appearance": "Appearance",
       "behaviour": "Behaviour",
-      "diagnostics": "Diagnostics"
+      "diagnostics": "Diagnostics",
+      "about": "About"
     },
     "close": "Close settings",
     "theme": {
@@ -548,7 +549,6 @@
       "file": "Write a log file",
       "reveal": "Show in folder"
     },
-    "about": "About HSync…",
     "updateAvailable": "Version {version} available"
   },
   "units": {
@@ -611,7 +611,6 @@
     }
   },
   "about": {
-    "title": "About HSync",
     "tagline": "A general-purpose logic analyzer app",
     "version": "Version {version}",
     "update": {
@@ -625,7 +624,6 @@
       "restarting": "Restarting…"
     },
     "license": "HSync is free software, released under the GPL-3.0-or-later license.",
-    "credits": "Device drivers and protocol decoders are ported from DreamSourceLab’s DSView (libsigrok4DSL, libsigrokdecode4DSL, GPL); the DSLogic firmware and FPGA bitstreams ship under the MIT license; the IBM Plex fonts under the SIL OFL 1.1.",
-    "close": "Close"
+    "credits": "Device drivers and protocol decoders are ported from DreamSourceLab’s DSView (libsigrok4DSL, libsigrokdecode4DSL, GPL); the DSLogic firmware and FPGA bitstreams ship under the MIT license; the IBM Plex fonts under the SIL OFL 1.1."
   }
 }

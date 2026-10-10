@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { onKeyStroke } from '@vueuse/core'
-import { nextTick, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, shallowRef, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import AboutDialog from '@/components/about/AboutDialog.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useBackendText } from '@/composables/useBackendText'
 import { getBackend } from '@/ipc/backend'
@@ -20,6 +19,8 @@ import {
 import { SETTINGS_SECTIONS, useSettingsStore, type SettingsSection } from '@/stores/settings'
 import { useUpdateStore } from '@/stores/update'
 
+import AboutSection from './AboutSection.vue'
+
 /**
  * The settings page (DESIGN.md §11): centred over the blurred interface, with the sections in a
  * side bar and About at its foot.
@@ -31,7 +32,6 @@ const settings = useSettingsStore()
 const update = useUpdateStore()
 const dialog = useTemplateRef<HTMLElement>('dialog')
 const tablist = useTemplateRef<HTMLElement>('tablist')
-const aboutButton = useTemplateRef<HTMLElement>('aboutButton')
 
 /** Languages are named in their own language. */
 const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US': 'English' }
@@ -45,22 +45,20 @@ const BEHAVIOURS = [
   'checkUpdates',
 ] as const
 
-const about = shallowRef(false)
-
 // Focus goes into the page without ringing a section, and back to what opened it when it closes.
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
 onMounted(() => dialog.value?.focus())
 onBeforeUnmount(() => opener?.focus({ preventScroll: true }))
 
-// Escape closes About first when it is open over the page.
-onKeyStroke('Escape', () => {
-  if (!about.value) settings.close()
-})
-watch(about, async (shown) => {
-  if (shown) return
-  await nextTick()
-  aboutButton.value?.focus()
-})
+onKeyStroke('Escape', () => settings.close())
+
+/** The note About's tab carries when a newer release is out, as its tip and for screen readers. */
+function updateNote(section: SettingsSection): string | undefined {
+  const available = update.available
+  return section === 'about' && available
+    ? t('settings.updateAvailable', { version: available.version })
+    : undefined
+}
 
 function selectedTab(): HTMLElement | null {
   return tablist.value?.querySelector<HTMLElement>('[aria-selected="true"]') ?? null
@@ -132,16 +130,15 @@ async function revealLog(): Promise<void> {
         </button>
       </header>
       <div class="flex min-h-0 flex-1">
-        <nav
-          class="flex w-44 flex-none flex-col justify-between gap-4 border-r border-line bg-chrome p-2"
-        >
+        <nav class="flex w-44 flex-none flex-col border-r border-line bg-chrome p-2">
+          <!-- About sits at the foot of the side bar, with a dot when a newer release is out. -->
           <div
             ref="tablist"
             v-indicator
             role="tablist"
             aria-orientation="vertical"
             :aria-label="t('settings.title')"
-            class="flex flex-col gap-0.5"
+            class="flex min-h-0 flex-1 flex-col gap-0.5"
             @keydown="onTabKey"
           >
             <button
@@ -152,23 +149,17 @@ async function revealLog(): Promise<void> {
               :aria-selected="settings.section === one"
               :aria-controls="`settings-panel-${one}`"
               :tabindex="settings.section === one ? 0 : -1"
+              :title="updateNote(one)"
               class="flex h-[30px] items-center rounded-4 px-2.5 text-left text-ink-2 hover:text-ink focus-visible:outline-offset-[-2px] aria-selected:font-medium aria-selected:text-ink"
+              :class="one === 'about' && 'mt-auto'"
               @click="settings.section = one"
             >
               {{ t(`settings.sections.${one}`) }}
+              <template v-if="updateNote(one)">
+                <i class="ml-auto size-1.5 flex-none rounded-full bg-ink" aria-hidden="true" />
+                <span class="sr-only">{{ updateNote(one) }}</span>
+              </template>
             </button>
-          </div>
-          <div class="flex flex-col items-start gap-1.5">
-            <button ref="aboutButton" class="btn-ghost h-[26px]" @click="about = true">
-              {{ t('settings.about') }}
-            </button>
-            <span
-              v-if="update.available"
-              class="rise-in flex items-center gap-1.5 px-1 text-caption text-ink-2 tabular-nums"
-            >
-              <i class="size-1.5 flex-none rounded-full bg-ink" />
-              {{ t('settings.updateAvailable', { version: update.available.version }) }}
-            </span>
           </div>
         </nav>
 
@@ -274,7 +265,7 @@ async function revealLog(): Promise<void> {
           </div>
 
           <div
-            v-else
+            v-else-if="settings.section === 'diagnostics'"
             class="grid grid-cols-[minmax(7rem,max-content)_minmax(0,1fr)] items-start gap-x-4 gap-y-5"
           >
             <span class="leading-[26px] text-ink-2">{{ t('settings.diagnostics.level') }}</span>
@@ -319,12 +310,10 @@ async function revealLog(): Promise<void> {
               }}</span>
             </div>
           </div>
+
+          <AboutSection v-else />
         </section>
       </div>
     </div>
-
-    <Transition name="dialog">
-      <AboutDialog v-if="about" @close="about = false" />
-    </Transition>
   </div>
 </template>
