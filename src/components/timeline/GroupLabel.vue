@@ -63,7 +63,7 @@ const meta = computed<{ text: string; tip?: string } | null>(() => {
     >
       <AppIcon
         name="chevron-down"
-        class="motion-safe:transition-transform motion-safe:duration-[120ms]"
+        class="transition-transform duration-(--motion-slide) ease-(--ease-slide)"
         :class="collapsed && '-rotate-90'"
       />
     </button>
