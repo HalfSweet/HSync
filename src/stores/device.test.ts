@@ -123,4 +123,17 @@ describe('device store', () => {
     await settle()
     expect(store.arrival?.id).toBe(dslogic.id)
   })
+
+  it('tells once that a USB 3.0 device is on a USB 2.0 port', async () => {
+    backend.list = [dslogic]
+    const store = useDeviceStore()
+    await store.init()
+    expect(store.slowPort).toBe(false)
+    const state = store.state
+    if (!state) throw new Error('no device')
+    store.state = { ...state, info: { ...state.info, slowPort: true } }
+    expect(store.slowPort).toBe(true)
+    store.dismissSlowPort()
+    expect(store.slowPort).toBe(false)
+  })
 })

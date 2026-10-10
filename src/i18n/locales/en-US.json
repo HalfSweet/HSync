@@ -15,7 +15,9 @@
       "listTitle": "Devices",
       "arrived": "{device} connected",
       "switch": "Switch",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "slowPort": "On a USB 2.0 port the device is much slower; plug it into a USB 3.0 port",
+      "gotIt": "Got it"
     },
     "acquisition": {
       "aria": "Acquisition: sample rate {rate}, duration {duration}, {channels} channels",

@@ -115,6 +115,12 @@ const perDivision = computed(() =>
     </span>
     <SegmentMeasure />
     <div class="flex-1" />
+    <span v-if="device.slowPort" role="alert" class="inline-flex items-center gap-1.5">
+      <span class="text-alert">{{ t('header.device.slowPort') }}</span>
+      <button class="btn-ghost h-[22px]" @click="device.dismissSlowPort()">
+        {{ t('header.device.gotIt') }}
+      </button>
+    </span>
     <span v-if="device.arrival" role="status" class="inline-flex items-center gap-1.5">
       <span class="text-ink">{{
         t('header.device.arrived', { device: device.arrival.model })

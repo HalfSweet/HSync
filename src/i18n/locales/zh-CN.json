@@ -15,7 +15,9 @@
       "listTitle": "设备",
       "arrived": "发现 {device}",
       "switch": "切换",
-      "dismiss": "忽略"
+      "dismiss": "忽略",
+      "slowPort": "设备插在 USB 2.0 端口上，性能会严重受限，请改插 USB 3.0 端口",
+      "gotIt": "知道了"
     },
     "acquisition": {
       "aria": "采集设置：采样率 {rate}，时长 {duration}，{channels} 个通道",

@@ -39,6 +39,17 @@ export const useDeviceStore = defineStore('device', () => {
   const sampleLimit = computed(() => integer(option('sampleLimit')) ?? 0)
   const enabledChannels = computed(() => state.value?.enabledChannels ?? [])
   const isDemo = computed(() => state.value?.info.driver === DEMO_DRIVER)
+  /** Devices whose slow-port warning was dismissed in this run. */
+  const portNoticed = shallowRef<ReadonlySet<string>>(new Set())
+  /** The open device is a USB 3.0 one on a USB 2.0 port, not yet told. */
+  const slowPort = computed(
+    () => state.value?.info.slowPort === true && !portNoticed.value.has(state.value.info.id),
+  )
+
+  function dismissSlowPort(): void {
+    const id = state.value?.info.id
+    if (id) portNoticed.value = new Set([...portNoticed.value, id])
+  }
 
   async function attempt(action: () => Promise<DeviceState>): Promise<boolean> {
     error.value = null
@@ -164,6 +175,8 @@ export const useDeviceStore = defineStore('device', () => {
     sampleLimit,
     enabledChannels,
     isDemo,
+    slowPort,
+    dismissSlowPort,
     option,
     refresh,
     open,
