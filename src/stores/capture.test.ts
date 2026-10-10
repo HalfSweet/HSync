@@ -107,6 +107,26 @@ describe('capture store', () => {
     backend.next = summary.id
   })
 
+  it('starts without a capture until one is taken', async () => {
+    backend.shown = null
+    const capture = useCaptureStore()
+    await capture.init()
+    expect(capture.summary).toBeNull()
+    expect(capture.status).toBe('idle')
+    expect(capture.error).toBeNull()
+
+    useDeviceStore().state = deviceState(true)
+    await capture.start(trigger)
+    expect(capture.summary?.id).toBe(summary.id)
+  })
+
+  it('shows the capture the backend holds after a reload', async () => {
+    const capture = useCaptureStore()
+    await capture.init()
+    expect(capture.summary?.id).toBe(summary.id)
+    expect(capture.status).toBe('ready')
+  })
+
   it('loops only on a device that can', async () => {
     const device = useDeviceStore()
     const capture = useCaptureStore()

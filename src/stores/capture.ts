@@ -150,11 +150,11 @@ export const useCaptureStore = defineStore('capture', () => {
     }
   }
 
-  /** Shows the capture the backend already holds, or opens the demo capture. */
+  /** Shows the capture the backend already holds, if any: the app starts without one. */
   async function init(): Promise<void> {
     const backend = await getBackend()
     await backend.onLive(receive)
-    return run(async () => (await backend.captureSummary()) ?? (await backend.openDemo()))
+    return run(() => backend.captureSummary())
   }
 
   /** Applies a status of a running capture to its summary. */
