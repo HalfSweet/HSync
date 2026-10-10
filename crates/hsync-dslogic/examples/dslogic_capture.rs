@@ -5,10 +5,12 @@
 //! cargo run -p hsync-dslogic --example dslogic_capture -- \
 //!     [--buffer] [--mode CHANNEL_MODE] [--rate HZ] [--samples N] [--channels N] [--trigger CH:rise|fall|both|high|low]
 //!     [--stage CH:CONDITION,...]... [--position PERCENT] [--instant] [--stop-after SECONDS] [--vth VOLTS]
+//!     [--loop]
 //! ```
 //!
 //! Each `--stage` adds a stage of a multi-stage trigger (Buffer mode) whose first pattern holds
-//! the listed conditions; an empty list matches at once.
+//! the listed conditions; an empty list matches at once. `--loop` (Stream mode) runs until
+//! `--stop-after`, keeping the newest samples up to the sample limit as the app does.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -51,6 +53,7 @@ struct Args {
     instant: bool,
     stop_after: Option<f64>,
     vth: Option<f64>,
+    looping: bool,
 }
 
 fn parse() -> Result<Args, String> {
@@ -66,6 +69,7 @@ fn parse() -> Result<Args, String> {
         instant: false,
         stop_after: None,
         vth: None,
+        looping: false,
     };
     let mut words = std::env::args().skip(1);
     while let Some(word) = words.next() {
@@ -73,6 +77,7 @@ fn parse() -> Result<Args, String> {
         match word.as_str() {
             "--buffer" => args.buffer = true,
             "--instant" => args.instant = true,
+            "--loop" => args.looping = true,
             "--mode" => args.mode = Some(value()?),
             "--rate" => args.rate = Some(value()?.parse().map_err(|e| format!("{e}"))?),
             "--samples" => args.samples = Some(value()?.parse().map_err(|e| format!("{e}"))?),
@@ -211,8 +216,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         advanced: (!args.stages.is_empty()).then(|| AdvancedTrigger::Stages {
             stages: args.stages.clone(),
         }),
-        looping: false,
+        looping: args.looping,
     };
+    // A loop capture keeps this many samples, the limit rounded as the session rounds it.
+    let keep = device
+        .options()
+        .iter()
+        .find(|option| option.key == OptionKey::SampleLimit)
+        .and_then(|option| option.value.as_integer())
+        .map_or(u64::MAX, |limit| (limit + 1023) & !1023);
+    let mut dropped = 0u64;
     let (sink, packets) = crossbeam_channel::unbounded();
     let started = Instant::now();
     let acquisition = device.start(plan, sink)?;
@@ -259,6 +272,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     (capture.as_mut(), deinterleaver.as_mut())
                 {
                     capture.append_cross(deinterleaver, &data);
+                    let excess = capture.len().saturating_sub(keep) / 64 * 64;
+                    if args.looping && excess > 0 {
+                        capture.drop_front(excess);
+                        dropped += excess;
+                    }
                 }
             }
             Packet::Progress {
@@ -283,6 +301,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         capture.len(),
         capture.trigger_sample()
     );
+    if args.looping {
+        println!(
+            "loop: dropped {dropped} samples, kept the newest {}",
+            capture.len()
+        );
+    }
     for (index, data) in capture.channels() {
         let edges = data.count_edges(0, capture.len());
         println!(
