@@ -293,6 +293,7 @@ fn captures_in_stream_mode() {
         triggers: vec![(0, TriggerCondition::Rise)],
         trigger_position: 50,
         instant: false,
+        advanced: None,
     };
     let acquisition = device.start(plan.clone(), sink).expect("start");
     let packets = collect(&packets);

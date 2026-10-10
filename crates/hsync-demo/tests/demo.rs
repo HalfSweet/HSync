@@ -108,6 +108,7 @@ fn trigger_lands_after_the_pre_trigger_samples() {
         triggers: vec![(10, TriggerCondition::Rise)],
         trigger_position: 25,
         instant: false,
+        advanced: None,
     };
     let acquisition = device.start(plan, sink).expect("start");
     let (capture, trigger, reason) = capture(&packets);
@@ -167,6 +168,7 @@ fn stops_while_waiting_for_the_trigger() {
         triggers: vec![(0, TriggerCondition::Rise)],
         trigger_position: 50,
         instant: false,
+        advanced: None,
     };
     let acquisition = device.start(plan, sink).expect("start");
     loop {

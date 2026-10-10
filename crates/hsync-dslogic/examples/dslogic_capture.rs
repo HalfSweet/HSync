@@ -183,6 +183,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         triggers: args.trigger.into_iter().collect(),
         trigger_position: args.position,
         instant: args.instant,
+        advanced: None,
     };
     let (sink, packets) = crossbeam_channel::unbounded();
     let started = Instant::now();

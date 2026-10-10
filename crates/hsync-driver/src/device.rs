@@ -8,6 +8,7 @@ use ts_rs::TS;
 use crate::error::DriverError;
 use crate::options::{OptionKey, OptionState, OptionValue};
 use crate::packet::Packet;
+use crate::trigger::{AdvancedTrigger, TriggerCaps};
 
 /// Whether a device found by a scan can be used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -105,6 +106,8 @@ pub struct CapturePlan {
     pub trigger_position: u8,
     /// Start capturing at once and ignore the trigger.
     pub instant: bool,
+    /// A multi-stage or serial trigger in place of `triggers`.
+    pub advanced: Option<AdvancedTrigger>,
 }
 
 /// An open device.
@@ -119,6 +122,11 @@ pub trait Device: Send {
 
     /// Number of channels in the current mode.
     fn channel_count(&self) -> u16;
+
+    /// What the trigger can do with the current options.
+    fn trigger_caps(&self) -> TriggerCaps {
+        TriggerCaps::default()
+    }
 
     /// Channels that will be captured, ascending.
     fn enabled_channels(&self) -> Vec<ChannelIndex>;

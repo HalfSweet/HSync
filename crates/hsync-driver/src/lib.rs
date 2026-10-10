@@ -10,6 +10,7 @@ mod manager;
 pub mod mock;
 mod options;
 mod packet;
+mod trigger;
 pub mod usb;
 
 pub use device::{
@@ -19,3 +20,7 @@ pub use error::DriverError;
 pub use manager::{DeviceManager, WatchHandle};
 pub use options::{Choice, Label, OptionKey, OptionKind, OptionState, OptionValue};
 pub use packet::{EndReason, Packet};
+pub use trigger::{
+    AdvancedTrigger, MAX_SERIAL_BITS, MAX_TRIGGER_STAGES, SerialTriggerSpec, TriggerCaps,
+    TriggerPattern, TriggerStageSpec,
+};
