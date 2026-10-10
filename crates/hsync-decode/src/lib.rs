@@ -3,4 +3,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod can;
+pub mod i2c;
 pub mod sampler;
+pub mod spi;
+pub mod uart;
