@@ -1,0 +1,327 @@
+<script setup lang="ts">
+import { onKeyStroke } from '@vueuse/core'
+import { nextTick, onBeforeUnmount, onMounted, shallowRef, useTemplateRef, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import AboutDialog from '@/components/about/AboutDialog.vue'
+import AppIcon from '@/components/common/AppIcon.vue'
+import { useBackendText } from '@/composables/useBackendText'
+import { getBackend } from '@/ipc/backend'
+import { toUiError, type UiError } from '@/ipc/errors'
+import { LOG_LEVELS } from '@/ipc/logLevels'
+import { vIndicator } from '@/motion/indicator'
+import {
+  DENSITIES,
+  GRAPHICS,
+  LOCALE_PREFERENCES,
+  THEMES,
+  usePreferencesStore,
+} from '@/stores/preferences'
+import { SETTINGS_SECTIONS, useSettingsStore, type SettingsSection } from '@/stores/settings'
+import { useUpdateStore } from '@/stores/update'
+
+/**
+ * The settings page (DESIGN.md §11): centred over the blurred interface, with the sections in a
+ * side bar and About at its foot.
+ */
+const { t } = useI18n()
+const text = useBackendText()
+const preferences = usePreferencesStore()
+const settings = useSettingsStore()
+const update = useUpdateStore()
+const tablist = useTemplateRef<HTMLElement>('tablist')
+const aboutButton = useTemplateRef<HTMLElement>('aboutButton')
+
+/** Languages are named in their own language. */
+const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US': 'English' }
+
+/** DSView's display options, and whether to look for updates. */
+const BEHAVIOURS = [
+  'centerTrigger',
+  'followLatest',
+  'quickScroll',
+  'keepStopped',
+  'checkUpdates',
+] as const
+
+const about = shallowRef(false)
+
+// Focus goes to the section shown, and back to what opened the page when it closes.
+const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
+onMounted(() => selectedTab()?.focus())
+onBeforeUnmount(() => opener?.focus({ preventScroll: true }))
+
+// Escape closes About first when it is open over the page.
+onKeyStroke('Escape', () => {
+  if (!about.value) settings.close()
+})
+watch(about, async (shown) => {
+  if (shown) return
+  await nextTick()
+  aboutButton.value?.focus()
+})
+
+function selectedTab(): HTMLElement | null {
+  return tablist.value?.querySelector<HTMLElement>('[aria-selected="true"]') ?? null
+}
+
+/** Up and down, Home and End move through the sections. */
+async function onTabKey(event: KeyboardEvent): Promise<void> {
+  const at = SETTINGS_SECTIONS.indexOf(settings.section)
+  const last = SETTINGS_SECTIONS.length - 1
+  const next: Partial<Record<string, number>> = {
+    ArrowDown: Math.min(last, at + 1),
+    ArrowUp: Math.max(0, at - 1),
+    Home: 0,
+    End: last,
+  }
+  const index = next[event.key]
+  if (index === undefined) return
+  event.preventDefault()
+  settings.section = SETTINGS_SECTIONS[index] as SettingsSection
+  await nextTick()
+  selectedTab()?.focus()
+}
+
+/** Where the log file is; unknown in the browser preview, which has none. */
+const logFile = shallowRef<string | null>(null)
+const revealError = shallowRef<UiError | null>(null)
+onMounted(async () => {
+  try {
+    logFile.value = await (await getBackend()).logFile()
+  } catch (error) {
+    console.error('log file location failed', error)
+  }
+})
+
+async function revealLog(): Promise<void> {
+  revealError.value = null
+  try {
+    await (await getBackend()).revealLog()
+  } catch (error) {
+    revealError.value = toUiError(error)
+  }
+}
+</script>
+
+<template>
+  <div
+    class="fixed inset-0 z-40 flex items-center justify-center modal-veil"
+    @click.self="settings.close()"
+  >
+    <div
+      role="dialog"
+      aria-modal="true"
+      :aria-label="t('settings.title')"
+      class="flex h-[min(560px,calc(100vh-48px))] w-[min(760px,calc(100vw-48px))] flex-col overflow-hidden rounded-6 border border-ink bg-raise text-small"
+    >
+      <header
+        class="flex h-10 flex-none items-center justify-between border-b border-line pr-2 pl-4"
+      >
+        <h2 class="font-medium">{{ t('settings.title') }}</h2>
+        <button
+          class="btn-icon"
+          :aria-label="t('settings.close')"
+          :title="t('settings.close')"
+          @click="settings.close()"
+        >
+          <AppIcon name="close" />
+        </button>
+      </header>
+      <div class="flex min-h-0 flex-1">
+        <nav
+          class="flex w-44 flex-none flex-col justify-between gap-4 border-r border-line bg-chrome p-2"
+        >
+          <div
+            ref="tablist"
+            v-indicator
+            role="tablist"
+            aria-orientation="vertical"
+            :aria-label="t('settings.title')"
+            class="flex flex-col gap-0.5"
+            @keydown="onTabKey"
+          >
+            <button
+              v-for="one in SETTINGS_SECTIONS"
+              :id="`settings-tab-${one}`"
+              :key="one"
+              role="tab"
+              :aria-selected="settings.section === one"
+              :aria-controls="`settings-panel-${one}`"
+              :tabindex="settings.section === one ? 0 : -1"
+              class="flex h-[30px] items-center rounded-4 px-2.5 text-left text-ink-2 hover:text-ink aria-selected:font-medium aria-selected:text-ink"
+              @click="settings.section = one"
+            >
+              {{ t(`settings.sections.${one}`) }}
+            </button>
+          </div>
+          <div class="flex flex-col items-start gap-1.5">
+            <button ref="aboutButton" class="btn-ghost h-[26px]" @click="about = true">
+              {{ t('settings.about') }}
+            </button>
+            <span
+              v-if="update.available"
+              class="rise-in flex items-center gap-1.5 px-1 text-caption text-ink-2 tabular-nums"
+            >
+              <i class="size-1.5 flex-none rounded-full bg-ink" />
+              {{ t('settings.updateAvailable', { version: update.available.version }) }}
+            </span>
+          </div>
+        </nav>
+
+        <!-- Another section is other content, which rises in. -->
+        <section
+          :id="`settings-panel-${settings.section}`"
+          :key="settings.section"
+          role="tabpanel"
+          :aria-labelledby="`settings-tab-${settings.section}`"
+          class="rise-in min-w-0 flex-1 overflow-y-auto px-6 py-5"
+        >
+          <div
+            v-if="settings.section === 'appearance'"
+            class="grid grid-cols-[minmax(7rem,max-content)_minmax(0,1fr)] items-start gap-x-4 gap-y-5"
+          >
+            <span class="leading-[26px] text-ink-2">{{ t('settings.theme.label') }}</span>
+            <div
+              v-indicator
+              role="group"
+              :aria-label="t('settings.theme.label')"
+              class="flex gap-0.5 justify-self-start rounded-6 bg-hover p-0.5"
+            >
+              <button
+                v-for="theme in THEMES"
+                :key="theme"
+                class="seg"
+                :aria-pressed="preferences.theme === theme"
+                @click="preferences.theme = theme"
+              >
+                {{ t(`settings.theme.${theme}`) }}
+              </button>
+            </div>
+
+            <span class="leading-[26px] text-ink-2">{{ t('settings.density.label') }}</span>
+            <div
+              v-indicator
+              role="group"
+              :aria-label="t('settings.density.label')"
+              class="flex gap-0.5 justify-self-start rounded-6 bg-hover p-0.5"
+            >
+              <button
+                v-for="density in DENSITIES"
+                :key="density"
+                class="seg"
+                :aria-pressed="preferences.density === density"
+                @click="preferences.density = density"
+              >
+                {{ t(`settings.density.${density}`) }}
+              </button>
+            </div>
+
+            <span class="leading-[26px] text-ink-2">{{ t('settings.graphics.label') }}</span>
+            <div class="flex flex-col items-start gap-1.5">
+              <div
+                v-indicator
+                role="group"
+                :aria-label="t('settings.graphics.label')"
+                class="flex gap-0.5 rounded-6 bg-hover p-0.5"
+              >
+                <button
+                  v-for="option in GRAPHICS"
+                  :key="option"
+                  class="seg"
+                  :aria-pressed="preferences.graphics === option"
+                  @click="preferences.graphics = option"
+                >
+                  {{ t(`settings.graphics.${option}`) }}
+                </button>
+              </div>
+              <span v-if="preferences.activeRenderer" class="text-caption text-ink-3">{{
+                t(`settings.graphics.active.${preferences.activeRenderer}`)
+              }}</span>
+            </div>
+
+            <span class="leading-[26px] text-ink-2">{{ t('settings.language.label') }}</span>
+            <div
+              v-indicator
+              role="group"
+              :aria-label="t('settings.language.label')"
+              class="flex gap-0.5 justify-self-start rounded-6 bg-hover p-0.5"
+            >
+              <button
+                v-for="locale in LOCALE_PREFERENCES"
+                :key="locale"
+                class="seg"
+                :aria-pressed="preferences.locale === locale"
+                @click="preferences.locale = locale"
+              >
+                {{ locale === 'system' ? t('settings.language.system') : LANGUAGE_NAMES[locale] }}
+              </button>
+            </div>
+          </div>
+
+          <div v-else-if="settings.section === 'behaviour'" class="flex flex-col gap-3">
+            <label
+              v-for="behaviour in BEHAVIOURS"
+              :key="behaviour"
+              class="flex items-center gap-2.5"
+            >
+              <input v-model="preferences[behaviour]" type="checkbox" class="size-4 accent-ink" />
+              <span>{{ t(`settings.behaviour.${behaviour}`) }}</span>
+            </label>
+          </div>
+
+          <div
+            v-else
+            class="grid grid-cols-[minmax(7rem,max-content)_minmax(0,1fr)] items-start gap-x-4 gap-y-5"
+          >
+            <span class="leading-[26px] text-ink-2">{{ t('settings.diagnostics.level') }}</span>
+            <div
+              v-indicator
+              role="group"
+              :aria-label="t('settings.diagnostics.level')"
+              class="flex gap-0.5 justify-self-start rounded-6 bg-hover p-0.5"
+            >
+              <button
+                v-for="level in LOG_LEVELS"
+                :key="level"
+                class="seg"
+                :aria-pressed="preferences.logLevel === level"
+                @click="preferences.logLevel = level"
+              >
+                {{ t(`settings.diagnostics.levels.${level}`) }}
+              </button>
+            </div>
+
+            <div class="col-start-2 flex flex-col items-start gap-2">
+              <div class="flex items-center gap-3">
+                <label class="flex items-center gap-2.5">
+                  <input
+                    v-model="preferences.logToFile"
+                    type="checkbox"
+                    class="size-4 accent-ink"
+                  />
+                  <span>{{ t('settings.diagnostics.file') }}</span>
+                </label>
+                <button
+                  v-if="logFile"
+                  class="btn-ghost h-[22px]"
+                  :title="logFile"
+                  @click="revealLog"
+                >
+                  {{ t('settings.diagnostics.reveal') }}
+                </button>
+              </div>
+              <span v-if="revealError" role="alert" class="rise-in text-caption text-alert">{{
+                text.error(revealError)
+              }}</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <Transition name="dialog">
+      <AboutDialog v-if="about" @close="about = false" />
+    </Transition>
+  </div>
+</template>

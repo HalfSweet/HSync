@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { useDecodeStore } from '@/stores/decode'
+import { useSettingsStore } from '@/stores/settings'
 import { useStreamStore } from '@/stores/stream'
 
 import DecoderDialog from './decode/DecoderDialog.vue'
 
 import AppHeader from './header/AppHeader.vue'
 import OverviewStrip from './overview/OverviewStrip.vue'
+import SettingsPage from './settings/SettingsPage.vue'
 import StatusBar from './status/StatusBar.vue'
 import StreamPanel from './stream/StreamPanel.vue'
 import TimelineView from './timeline/TimelineView.vue'
 
 const stream = useStreamStore()
 const decode = useDecodeStore()
+const settings = useSettingsStore()
 </script>
 
 <template>
@@ -29,6 +32,9 @@ const decode = useDecodeStore()
     <StatusBar />
     <Transition name="dialog">
       <DecoderDialog v-if="decode.editor" />
+    </Transition>
+    <Transition name="dialog">
+      <SettingsPage v-if="settings.open" />
     </Transition>
   </div>
 </template>

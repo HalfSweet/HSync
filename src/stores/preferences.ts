@@ -23,7 +23,7 @@ function oneOf<T extends string>(allowed: readonly T[], value: string, fallback:
   return (allowed as readonly string[]).includes(value) ? (value as T) : fallback
 }
 
-/** Interface preferences, kept in the WebView's local storage (DESIGN.md §4). */
+/** Interface preferences, kept in the WebView's local storage (DESIGN.md §11). */
 export const usePreferencesStore = defineStore('preferences', () => {
   const storedTheme = useStorage<string>('hsync.theme', 'system')
   const storedDensity = useStorage<string>('hsync.density', 'comfortable')

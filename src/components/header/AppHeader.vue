@@ -15,7 +15,7 @@ import AcquisitionMenu from './AcquisitionMenu.vue'
 import CaptureButton from './CaptureButton.vue'
 import DeviceMenu from './DeviceMenu.vue'
 import ExportMenu from './ExportMenu.vue'
-import SettingsMenu from './SettingsMenu.vue'
+import SettingsButton from './SettingsButton.vue'
 
 const { t } = useI18n()
 const capture = useCaptureStore()
@@ -128,6 +128,6 @@ onKeyStroke('/', (event) => {
     </label>
 
     <ExportMenu />
-    <SettingsMenu />
+    <SettingsButton />
   </header>
 </template>
