@@ -6,6 +6,7 @@
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::search::{Found, Needle, Searchable, Sequence};
 use crate::spec::{Bus, Decoded};
 use crate::{can, i2c, spi, uart};
 
@@ -45,7 +46,7 @@ pub enum I2cCondition {
 }
 
 /// An SPI data line.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum DataLine {
@@ -372,6 +373,7 @@ pub struct Presentation {
     addresses: Vec<(u64, u64, u8)>,
     /// SPI transfers by start with their words' spans, for the offsets in view.
     transfer_words: Vec<(u64, Vec<(u64, u64)>)>,
+    search: Searchable,
 }
 
 /// Items of one lane, sorted by start, with the running maximum of their ends.
@@ -492,6 +494,9 @@ pub struct Snapshot<'a> {
     pub counts: StreamCounts,
     pub addresses: &'a [(u64, u64, u8)],
     pub transfer_words: &'a [(u64, Vec<(u64, u64)>)],
+    /// What a search looks through.
+    pub sequences: &'a [Sequence],
+    pub ids: &'a [(u32, u64, u64)],
 }
 
 impl Presentation {
@@ -510,16 +515,26 @@ impl Presentation {
             counts: self.counts,
             addresses: &self.addresses,
             transfer_words: &self.transfer_words,
+            sequences: self.search.sequences(),
+            ids: self.search.ids(),
         }
     }
 
     pub fn new(decoded: &Decoded) -> Self {
-        match decoded {
+        let mut presentation = match decoded {
             Decoded::I2c { trace, shifted } => present_i2c(trace, *shifted),
             Decoded::Uart(trace) => present_uart(trace),
             Decoded::Spi(trace) => present_spi(trace),
             Decoded::Can(trace) => present_can(trace),
-        }
+        };
+        presentation.search =
+            Searchable::new(decoded, &presentation.text_rows, &presentation.hex_rows);
+        presentation
+    }
+
+    /// What `needle` finds, in time order, with the rows listing it in `mode`.
+    pub fn search(&self, needle: &Needle, mode: StreamMode) -> Vec<Found> {
+        self.search.find(needle, mode, self.rows(mode))
     }
 
     pub fn bus(&self) -> Bus {
@@ -791,6 +806,7 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
         counts,
         addresses,
         transfer_words: Vec::new(),
+        search: Searchable::default(),
     }
 }
 
@@ -865,6 +881,7 @@ fn present_uart(trace: &uart::Trace) -> Presentation {
         },
         addresses: Vec::new(),
         transfer_words: Vec::new(),
+        search: Searchable::default(),
     }
 }
 
@@ -1088,6 +1105,7 @@ fn present_spi(trace: &spi::Trace) -> Presentation {
         },
         addresses: Vec::new(),
         transfer_words,
+        search: Searchable::default(),
     }
 }
 
@@ -1147,5 +1165,6 @@ fn present_can(trace: &can::Trace) -> Presentation {
         },
         addresses: Vec::new(),
         transfer_words: Vec::new(),
+        search: Searchable::default(),
     }
 }
