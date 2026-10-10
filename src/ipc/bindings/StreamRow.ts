@@ -15,4 +15,8 @@ bits: number, } | { "type": "spiText", start: number, end: number, line: DataLin
 /**
  * Position of the row in the decoder's annotation rows.
  */
-row: number, text: string, };
+row: number, 
+/**
+ * Its longest text, `{$}` standing for `value`.
+ */
+text: string, value: string | null, };

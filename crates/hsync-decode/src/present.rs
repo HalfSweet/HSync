@@ -136,12 +136,14 @@ pub enum LaneItem {
         ok: bool,
     },
     /// An annotation of a decoder without a native presentation: its texts from the longest to
-    /// the shortest, to fit the width it has.
+    /// the shortest, to fit the width it has, with `{$}` standing for `value` (hex digits)
+    /// shown in the user's number format.
     Annotation {
         start: u64,
         end: u64,
         class: u32,
         texts: Vec<String>,
+        value: Option<String>,
     },
 }
 
@@ -323,7 +325,9 @@ pub enum StreamRow {
         end: u64,
         /// Position of the row in the decoder's annotation rows.
         row: u32,
+        /// Its longest text, `{$}` standing for `value`.
         text: String,
+        value: Option<String>,
     },
 }
 
@@ -584,19 +588,20 @@ impl Presentation {
         let mut stream = Vec::with_capacity(annotations.len());
         let mut units = Vec::with_capacity(annotations.len());
         for annotation in &annotations {
-            let texts = annotation.shown();
             stream.push(StreamRow::Annotation {
                 start: annotation.start,
                 end: annotation.end,
                 row: annotation.row,
-                text: texts.first().cloned().unwrap_or_default(),
+                text: annotation.texts.first().cloned().unwrap_or_default(),
+                value: annotation.value.clone(),
             });
             if let Some((_, items)) = lanes.get_mut(annotation.row as usize) {
                 items.push(LaneItem::Annotation {
                     start: annotation.start,
                     end: annotation.end,
                     class: annotation.class,
-                    texts,
+                    texts: annotation.texts.clone(),
+                    value: annotation.value.clone(),
                 });
             }
             units.push((annotation.start, annotation.end));
@@ -634,7 +639,8 @@ impl Presentation {
                     start: annotation.start,
                     end: annotation.end,
                     class: annotation.class,
-                    texts: annotation.shown(),
+                    texts: annotation.texts,
+                    value: annotation.value,
                 });
             }
         }

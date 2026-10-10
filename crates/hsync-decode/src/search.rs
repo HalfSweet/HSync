@@ -192,8 +192,20 @@ impl Searchable {
             .iter()
             .filter_map(|row| match row {
                 StreamRow::Annotation {
-                    start, end, text, ..
-                } => Some((*start, *end, text.to_lowercase())),
+                    start,
+                    end,
+                    text,
+                    value,
+                    ..
+                } => {
+                    // Searched as shown by default: the value in hex where the text says {$}.
+                    let shown = match value {
+                        Some(value) if text.contains("{$}") => text.replace("{$}", value),
+                        Some(value) if text.is_empty() => value.clone(),
+                        _ => text.clone(),
+                    };
+                    Some((*start, *end, shown.to_lowercase()))
+                }
                 _ => None,
             })
             .collect();
