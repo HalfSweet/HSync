@@ -4,9 +4,11 @@
 
 mod catalog;
 mod error;
+mod host;
 mod module;
 
 pub use catalog::{
     AnnotationClass, AnnotationRow, ChannelSpec, DecoderInfo, OptionSpec, load_catalog,
 };
 pub use error::SrdError;
+pub use host::DecoderHost;
