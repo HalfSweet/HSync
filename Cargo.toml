@@ -11,6 +11,7 @@ authors = ["HalfSweet"]
 publish = false
 
 [workspace.dependencies]
+log = "0.4.34"
 parking_lot = "0.12.5"
 proptest = "1.11.0"
 serde = { version = "1.0.229", features = ["derive"] }

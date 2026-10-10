@@ -67,6 +67,13 @@ pub async fn capture_bins(
         .capture(request.capture_id)
         .map_err(|error| UiError::from(&error))?;
     let bytes = encode_bins(&capture.read(), &request).map_err(|error| UiError::from(&error))?;
+    log::debug!(
+        "bins: {} channels, samples {}..{} in {} columns",
+        request.channels.len(),
+        request.start,
+        request.end,
+        request.bins
+    );
     Ok(Response::new(bytes))
 }
 

@@ -4,6 +4,7 @@ mod commands;
 mod state;
 
 use state::AppState;
+use tauri_plugin_log::{Target, TargetKind};
 
 /// Builds and runs the Tauri application.
 ///
@@ -13,6 +14,23 @@ use state::AppState;
 #[allow(clippy::expect_used)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Info)
+                .level_for(
+                    "hsync_lib",
+                    if cfg!(debug_assertions) {
+                        log::LevelFilter::Debug
+                    } else {
+                        log::LevelFilter::Info
+                    },
+                )
+                .targets([
+                    Target::new(TargetKind::Stdout),
+                    Target::new(TargetKind::LogDir { file_name: None }),
+                ])
+                .build(),
+        )
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             commands::capture::capture_summary,
