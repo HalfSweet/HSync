@@ -467,6 +467,7 @@ const readout = computed(() => {
     secondary = t('hover.period', {
       period: formatTime(reading.period, 1),
       frequency: formatFrequency(1 / reading.period, 1),
+      duty: `${((reading.duty ?? 0) * 100).toFixed(1)}%`,
     })
   } else if (reading.bits !== null) secondary = t('hover.bits', { count: reading.bits })
   return {

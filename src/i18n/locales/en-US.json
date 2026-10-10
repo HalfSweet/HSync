@@ -268,7 +268,7 @@
     "low": "Low",
     "pulse": "{level} {width}",
     "pulseOpen": "{level} ≥ {width}",
-    "period": "Period {period}, {frequency}",
+    "period": "Period {period}, {frequency}, duty {duty}",
     "bits": "≈ {count} bits",
     "outsideViewport": "Extends beyond view"
   },

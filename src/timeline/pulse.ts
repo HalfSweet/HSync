@@ -1,6 +1,7 @@
 /**
  * The hover read-out of a pulse (DESIGN.md §9.6): its level and width within the viewport,
- * plus the period of clocks or the bit count of UART lines.
+ * plus the period, frequency and duty cycle of clocks and other periodic signals, or the bit
+ * count of UART lines.
  */
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
 
@@ -38,8 +39,10 @@ export interface PulseReading {
   seconds: number
   /** Both edges are visible, so `seconds` is the whole pulse. */
   complete: boolean
-  /** Period of a regular clock: this pulse and the next have similar widths. */
+  /** Period of a clock or another periodic signal such as PWM. */
   period: number | null
+  /** Share of the period at the high level, with `period`. */
+  duty: number | null
   /** Bits the pulse spans on a UART line. */
   bits: number | null
 }
@@ -63,13 +66,22 @@ export function readPulse(
   const seconds = samplerate > 0 ? (to - from) / samplerate : 0
 
   let period: number | null = null
+  let duty: number | null = null
   if (complete && mode === 'clock' && pulse.nextEnd !== null && samplerate > 0) {
     const own = pulse.end - pulse.start
     const next = pulse.nextEnd - pulse.end
-    if (Math.abs(own - next) / Math.max(own, next) < 0.34) period = (own + next) / samplerate
+    // A clock: neighbouring pulses of similar width. Periodic, PWM included: the pulse after
+    // the next one as wide as this one.
+    const after = pulse.afterEnd === null ? null : pulse.afterEnd - pulse.nextEnd
+    const clock = Math.abs(own - next) / Math.max(own, next) < 0.34
+    const periodic = after !== null && Math.abs(own - after) / Math.max(own, after) < 0.1
+    if (clock || periodic) {
+      period = (own + next) / samplerate
+      duty = (pulse.high ? own : next) / (own + next)
+    }
   }
   const bits =
     complete && mode === 'bits' && bitSeconds ? Math.max(1, Math.round(seconds / bitSeconds)) : null
 
-  return { high: pulse.high, left, width, center, seconds, complete, period, bits }
+  return { high: pulse.high, left, width, center, seconds, complete, period, duty, bits }
 }

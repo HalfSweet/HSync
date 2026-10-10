@@ -268,7 +268,7 @@
     "low": "低",
     "pulse": "{level} {width}",
     "pulseOpen": "{level} ≥ {width}",
-    "period": "周期 {period}，{frequency}",
+    "period": "周期 {period}，{frequency}，占空比 {duty}",
     "bits": "约 {count} 位",
     "outsideViewport": "延伸到视口外"
   },
