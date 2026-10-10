@@ -29,6 +29,7 @@ From top to bottom: top bar, overview strip, timeline (ruler plus grouped rows, 
 └───────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+- The app starts without a capture: the overview strip, ruler and timeline stay empty until something is captured or a file is opened. The demo device's data, too, appears only after **Capture**.
 - The window is at least 640 px high. As the window narrows, the top bar wraps and the timeline scrolls horizontally (rows are at least 860 px wide); the page itself never shows a horizontal scrollbar.
 - At widths ≤ 640 px, the label column shrinks to 132 px and hides the group meta information, the channel numbers, the data stream button and the "Add decoder" text.
 
@@ -146,13 +147,14 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 - The current viewport is drawn as a 1.5 px `--ink` frame with a 4 px radius.
 - Ticks are in milliseconds or an adaptive unit; the origin is labelled "Trigger", and the last tick carries the unit ("5 ms").
 - A click moves the viewport's centre there; dragging the viewport frame pans; the wheel zooms.
+- Without a capture the strip shows only its label: no duration, viewport frame or ticks.
 - A hovered data stream item is marked with a 14% `--ink` fill between 1 px `--ink` lines on both sides (at least 2 px wide); the current search match is marked in `--find-strong`.
 
 ## 6. Timeline
 
 ### 6.1 Ruler and groups
 
-- **Ruler**: sticky at the top, with the unit in the bottom-left corner ("ms", relative to the trigger point). Major ticks carry numbers, minor ticks do not; steps follow the 1-2-5 sequence. The label column stays still during horizontal scrolling.
+- **Ruler**: sticky at the top, with the unit in the bottom-left corner ("ms", relative to the trigger point). Major ticks carry numbers, minor ticks do not; steps follow the 1-2-5 sequence. The label column stays still during horizontal scrolling. Without a capture it shows no unit or ticks, and "Add decoder" is disabled.
 - **Groups**: each group has one group header row (`--h-lane` high), then its decode lanes, then its trace rows. The group header holds an expand arrow, an 8 px square in the bus colour, the group name (bold), the "Decoder settings" and "Show all decoded results in the data stream" buttons that appear only on hover, and meta information on the right ("100 kHz", "115200 8N1", with an explanatory `title`). Groups are separated by a 1 px divider plus `--gap` padding. The "Other channels" group uses a hollow square with a 1 px outline and shows the channel count on the right.
 - **Channel rows**: the label column holds, in order, a 7 px dot in the channel colour, the name, the channel number (`D0`, 11 px monospace, `--ink-3`) and the trigger slot. Narrow rows are for SPI lines, CAN and "Other channels". Channels in a decoder group show their role (SDA, RX…); a channel with a name of its own shows the name, and the role moves before the channel number (`SCL D1`).
 - **Channel settings**: clicking the dot, double-clicking the name or right-clicking opens them; they change the name and colour. The name is saved when the settings close (Enter or a click elsewhere), and Esc discards it; a colour takes effect as soon as it is clicked.

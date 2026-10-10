@@ -14,7 +14,8 @@ From top to bottom, the window has five parts:
 
 ## Devices
 
-- Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**, which plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD).
+- HSync starts with an empty timeline; waveforms appear once you capture or open a file.
+- Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**; click **Capture** and it plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD) with its decoders already set up.
 - The first time you open a DSLogic, HSync loads the firmware and FPGA bitstream onto it automatically; this takes a few seconds.
 - If you plug in a DSLogic while the demo device is open, the status bar shows "… connected"; click **Switch** to use it. If a loose USB cable makes the device drop out briefly and it reappears within two seconds, HSync reopens it automatically and restores its settings.
 - If a USB 3.0 model is plugged into a USB 2.0 port, the status bar reminds you to move it to a USB 3.0 port; otherwise Stream mode's speed is limited.
