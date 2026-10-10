@@ -6,6 +6,7 @@ mod catalog;
 mod error;
 mod host;
 mod module;
+mod python;
 mod run;
 
 pub use catalog::{
