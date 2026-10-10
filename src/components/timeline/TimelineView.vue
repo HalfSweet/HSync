@@ -33,6 +33,7 @@ import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
 import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/timeline/fling'
 import { keyTakenElsewhere, timelineAction } from '@/timeline/keys'
+import { covers, overscan, type SampleWindow } from '@/timeline/window'
 import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
@@ -174,40 +175,89 @@ const traceChannels = computed(() => [
   ),
 ])
 
-const binsRequest = computed(() => {
+/** What the waveform needs: the visible samples at a column per device pixel. */
+const binsWanted = computed(() => {
   const summary = capture.summary
   const viewport = view.viewport
   if (!summary || viewport.width <= 0 || traceChannels.value.length === 0) return null
-  const start = Math.max(0, Math.floor(viewport.start))
-  const end = Math.min(capture.extent, Math.ceil(viewportEnd(viewport)))
-  if (end <= start) return null
-  const bins = Math.max(1, Math.min(Math.round(viewport.width * pixelRatio.value), end - start))
-  // Asks again as a running capture grows or, looping, moves on; columns past its samples come
-  // back empty.
-  const received = capture.sampleCount + capture.dropped
-  return { captureId: summary.id, channels: traceChannels.value, start, end, bins, received }
+  return {
+    // Asks again as a running capture grows or, looping, moves on; columns past its samples
+    // come back empty.
+    key: `${summary.id}:${traceChannels.value.join(',')}:${capture.extent}:${capture.sampleCount + capture.dropped}`,
+    captureId: summary.id,
+    channels: traceChannels.value,
+    extent: capture.extent,
+    window: {
+      start: viewport.start,
+      end: viewportEnd(viewport),
+      samplesPerPixel: viewport.samplesPerPixel / pixelRatio.value,
+    },
+  }
 })
 
+// Columns are fetched a view's width beyond each side, so panning draws from what is at hand;
+// one request at a time, the latest wanted once it returns.
 const bins = shallowRef<BinsResult | null>(null)
-let binsSequence = 0
-watch(
-  binsRequest,
-  async (request) => {
-    const sequence = ++binsSequence
-    if (!request) {
+let binsFetched: { key: string; window: SampleWindow } | null = null
+let binsLoading = false
+let binsAgain = false
+
+async function loadBins(): Promise<void> {
+  const wanted = binsWanted.value
+  if (!wanted) {
+    bins.value = null
+    binsFetched = null
+    return
+  }
+  if (binsFetched?.key === wanted.key && covers(binsFetched.window, wanted.window, wanted.extent)) {
+    return
+  }
+  if (binsLoading) {
+    binsAgain = true
+    return
+  }
+  binsLoading = true
+  try {
+    const window = overscan(wanted.window, wanted.extent)
+    const count = Math.max(
+      1,
+      Math.min(
+        Math.round((window.end - window.start) / window.samplesPerPixel),
+        window.end - window.start,
+      ),
+    )
+    if (window.end <= window.start) {
       bins.value = null
+      binsFetched = null
       return
     }
-    try {
-      const { received: _, ...query } = request
-      const result = await (await getBackend()).bins(query)
-      if (sequence === binsSequence) bins.value = result
-    } catch (error) {
-      console.error('bins request failed', error)
+    const result = await (
+      await getBackend()
+    ).bins({
+      captureId: wanted.captureId,
+      channels: wanted.channels,
+      start: window.start,
+      end: window.end,
+      bins: count,
+    })
+    // A capture replaced meanwhile has other samples.
+    if (binsWanted.value?.captureId !== wanted.captureId) return
+    bins.value = result
+    binsFetched = {
+      key: wanted.key,
+      window: { ...window, samplesPerPixel: (window.end - window.start) / count },
     }
-  },
-  { immediate: true },
-)
+  } catch (error) {
+    console.error('bins request failed', error)
+  } finally {
+    binsLoading = false
+    if (binsAgain) {
+      binsAgain = false
+      void loadBins()
+    }
+  }
+}
+watch(binsWanted, () => void loadBins(), { immediate: true })
 
 // Canvas layer: WebGPU where it works and is wanted, else Canvas2D. A canvas holds one kind of
 // context, so changing the preference or losing the GPU makes a new canvas.
