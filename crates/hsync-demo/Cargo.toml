@@ -1,0 +1,23 @@
+[package]
+name = "hsync-demo"
+description = "Demo device of HSync: replays a bundled capture or synthesises patterns in real time"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+hsync-capture.workspace = true
+hsync-core.workspace = true
+hsync-driver.workspace = true
+hsync-fileio.workspace = true
+log.workspace = true
+
+[dev-dependencies]
+hsync-fileio.workspace = true
+
+[lints]
+workspace = true

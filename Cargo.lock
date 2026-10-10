@@ -1296,6 +1296,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-demo"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-driver",
+ "hsync-fileio",
+ "log",
+]
+
+[[package]]
 name = "hsync-driver"
 version = "0.1.0"
 dependencies = [
