@@ -1,0 +1,60 @@
+# Releases with release-please (DESIGN.md §11.5). Each push to main updates a release pull request
+# with the next version and its changelog, worked out from the commit messages. Merging it tags the
+# version and drafts the release; the installers are built into the draft, which is published once
+# all of them are in.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  release-please:
+    name: Release pull request
+    runs-on: ubuntu-24.04
+    concurrency:
+      group: release-please
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    outputs:
+      created: ${{ steps.release.outputs.release_created }}
+      id: ${{ steps.release.outputs.id }}
+      sha: ${{ steps.release.outputs.sha }}
+      notes: ${{ steps.release.outputs.body }}
+    steps:
+      # Settings come from release-please-config.json and .release-please-manifest.json.
+      - id: release
+        uses: googleapis/release-please-action@v5
+
+  bundle:
+    name: Installers
+    needs: release-please
+    if: needs.release-please.outputs.created == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/bundle.yml
+    with:
+      ref: ${{ needs.release-please.outputs.sha }}
+      release-id: ${{ needs.release-please.outputs.id }}
+      release-notes: ${{ needs.release-please.outputs.notes }}
+    secrets: inherit
+
+  publish:
+    name: Publish
+    needs: [release-please, bundle]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_ID: ${{ needs.release-please.outputs.id }}
+        run: |
+          gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
+            -F draft=false -f make_latest=true --jq '.html_url'
