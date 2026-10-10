@@ -9,6 +9,7 @@ import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
 
 import { useCaptureStore } from './capture'
 import { useDeviceStore } from './device'
+import { usePreferencesStore } from './preferences'
 import type { TriggerRequest } from './trigger'
 
 const summary: CaptureSummary = {
@@ -30,14 +31,18 @@ const summary: CaptureSummary = {
 
 const requests: CaptureRequest[] = []
 let onLive: ((status: LiveStatus) => void) | null = null
+/** What the backend shows, and the id of the next capture it starts. */
+const backend = { shown: summary as CaptureSummary | null, next: summary.id }
 
 vi.mock('@/ipc/backend', () => ({
   getBackend: () =>
     Promise.resolve({
-      captureSummary: () => Promise.resolve(summary),
+      captureSummary: () => Promise.resolve(backend.shown),
       captureStart: (request: CaptureRequest) => {
         requests.push(request)
-        return Promise.resolve(summary)
+        const started = { ...summary, id: backend.next++ }
+        if (!request.hold) backend.shown = started
+        return Promise.resolve(started)
       },
       onLive: (handler: (status: LiveStatus) => void) => {
         onLive = handler
@@ -89,10 +94,15 @@ function status(patch: Partial<LiveStatus>): LiveStatus {
   }
 }
 
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
 describe('capture store', () => {
   beforeEach(() => {
+    localStorage.clear()
     setActivePinia(createPinia())
     requests.length = 0
+    backend.shown = summary
+    backend.next = summary.id
   })
 
   it('loops only on a device that can', async () => {
@@ -131,5 +141,52 @@ describe('capture store', () => {
     expect(capture.dropped).toBe(1024)
     expect(capture.triggered).toBe(false)
     expect(capture.extent).toBe(4096)
+  })
+
+  it('fills repeats behind the shown capture until they complete', async () => {
+    const capture = useCaptureStore()
+    useDeviceStore().state = deviceState(true)
+    await capture.init()
+    capture.mode = 'repeat'
+    await capture.start(trigger)
+    const first = capture.summary?.id
+    expect(requests.at(-1)?.hold).toBe(false)
+
+    await capture.start(trigger, true)
+    const second = capture.pending?.id
+    expect(requests.at(-1)?.hold).toBe(true)
+    expect(capture.summary?.id).toBe(first)
+    onLive?.(status({ captureId: second, samples: 1000 }))
+    expect(capture.running).toBe(true)
+    expect(capture.capturing).toBe(false)
+    expect(capture.busy).toBe(true)
+    expect(capture.shownLive?.captureId).toBe(second)
+    expect(capture.summary?.info.sampleCount).toBe(0)
+
+    // Complete: the backend shows it now, and so does the store.
+    backend.shown = { ...summary, id: second ?? -1 }
+    onLive?.(status({ captureId: second, phase: 'ended', end: 'completed' }))
+    await settle()
+    expect(capture.summary?.id).toBe(second)
+    expect(capture.pending).toBeNull()
+    capture.mode = 'single'
+  })
+
+  it('keeps the shown capture when a repeat stopped early is dropped', async () => {
+    const capture = useCaptureStore()
+    useDeviceStore().state = deviceState(true)
+    await capture.init()
+    await capture.start(trigger)
+    const shown = capture.summary?.id
+    usePreferencesStore().keepStopped = false
+    await capture.start(trigger, true)
+    expect(requests.at(-1)?.keepStopped).toBe(false)
+    const dropped = capture.pending?.id
+    onLive?.(status({ captureId: dropped, phase: 'ended', end: 'stopped' }))
+    await settle()
+    expect(capture.summary?.id).toBe(shown)
+    expect(capture.pending).toBeNull()
+    // The status bar still tells it was stopped.
+    expect(capture.shownLive?.end).toBe('stopped')
   })
 })

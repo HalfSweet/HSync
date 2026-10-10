@@ -58,7 +58,7 @@ async function toggle(): Promise<void> {
 }
 
 async function pick(entry: DeviceSummary): Promise<void> {
-  if (!selectable(entry) || capture.capturing) return
+  if (!selectable(entry) || capture.running) return
   open.value = false
   if (entry.id !== device.state?.info.id) await device.open(entry.id)
 }
@@ -111,7 +111,7 @@ function loadSession(): void {
         :key="entry.id"
         role="menuitemradio"
         :aria-checked="entry.id === device.state?.info.id"
-        :aria-disabled="!selectable(entry) || capture.capturing"
+        :aria-disabled="!selectable(entry) || capture.running"
         class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left hover:bg-hover aria-disabled:cursor-default aria-disabled:opacity-55 aria-disabled:hover:bg-transparent"
         @click="pick(entry)"
       >

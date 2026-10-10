@@ -217,7 +217,7 @@ async function remove(): Promise<void> {
   await commit(decode.entries.filter((_, index) => index !== editing.value))
 }
 
-const locked = computed(() => capture.capturing)
+const locked = computed(() => capture.running)
 </script>
 
 <template>

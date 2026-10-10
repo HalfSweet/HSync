@@ -29,7 +29,7 @@ const HIDDEN: OptionKey[] = ['samplerate', 'sampleLimit']
 const options = computed(() =>
   (device.state?.options ?? []).filter((option) => !HIDDEN.includes(option.key)),
 )
-const locked = computed(() => capture.capturing)
+const locked = computed(() => capture.running)
 const title = computed(() => {
   const info = device.state?.info
   const name = info?.driver === DEMO_DRIVER ? t('device.demo') : (info?.model ?? '')

@@ -158,9 +158,13 @@ export function createMockBackend(data: Fixture = fixture): Backend {
   const liveHandlers = new Set<(status: LiveStatus) => void>()
   const decodedHandlers = new Set<(event: DecodedEvent) => void>()
   let live: { status: LiveStatus; timers: ReturnType<typeof setTimeout>[] } | null = null
+  /** The capture shown while a repeat fills behind it; both replay the same samples. */
+  let held: { summary: CaptureSummary; keepStopped: boolean } | null = null
+
+  const known = (captureId: number) => summary?.id === captureId || held?.summary.id === captureId
 
   const channel = (captureId: number, index: number): MockChannel => {
-    if (!summary || summary.id !== captureId) throw uiError('error.session.staleCapture')
+    if (!known(captureId)) throw uiError('error.session.staleCapture')
     const found = channels.get(index)
     if (!found) throw uiError('error.session.unknownChannel', { channel: index })
     return found
@@ -180,10 +184,15 @@ export function createMockBackend(data: Fixture = fixture): Backend {
   const finish = (end: 'completed' | 'stopped') => {
     if (!live) return
     for (const timer of live.timers) clearTimeout(timer)
+    // A repeat stopped early gives way to the capture it filled behind, unless kept.
+    const dropped = held !== null && end === 'stopped' && !held.keepStopped
+    if (held && dropped) summary = held.summary
+    held = null
     emit({ phase: 'ended', end })
     const captureId = live.status.captureId
     live = null
     if (device) device.capturing = false
+    if (dropped) return
     // The decoders run once the capture is complete.
     setTimeout(() => {
       for (const { index } of mockStatuses(summary?.decoders, false)) {
@@ -199,7 +208,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
 
   return {
     async captureSummary() {
-      return Promise.resolve(summary)
+      return Promise.resolve(held?.summary ?? summary)
     },
 
     async openDemo() {
@@ -307,20 +316,20 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     },
 
     async decodeList(captureId: number) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       return Promise.resolve(mockStatuses(summary.decoders, live?.status.captureId === captureId))
     },
 
     async decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       if (live?.status.captureId === captureId) return Promise.resolve([])
       return Promise.resolve(mockView(summary.decoders, start, end, samplesPerPixel))
     },
 
     async decodeStream(request: StreamRequest) {
-      if (!summary || summary.id !== request.captureId)
+      if (!summary || !known(request.captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       if (live?.status.captureId === request.captureId) return Promise.resolve(null)
       return Promise.resolve(
@@ -337,13 +346,13 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     },
 
     async decodeRowAt(captureId, index, mode, sample) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       return Promise.resolve(mockRowAt(summary.decoders, index, mode, sample))
     },
 
     async decodeSearch(captureId, query, mode) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       const result = mockSearch(summary.decoders, query, mode)
       // Decoders of a capture still being taken have found nothing yet.
@@ -352,7 +361,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     },
 
     async renameChannel(captureId, index, name) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       if (!channels.has(index))
         return Promise.reject(uiError('error.session.unknownChannel', { channel: index }))
@@ -367,7 +376,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     },
 
     async edgeCounts(captureId, from, to, indices) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       const unknown = indices.find((index) => !channels.has(index))
       if (unknown !== undefined)
@@ -385,7 +394,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     },
 
     async find(captureId, conditions: PatternCondition[], sample, direction) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       const resolved = conditions.flatMap(({ channel: index, level }) => {
         const found = channels.get(index)
@@ -397,7 +406,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     },
 
     async decodeSet(captureId: number, decoders: unknown[]) {
-      if (!summary || summary.id !== captureId)
+      if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       if (live) return Promise.reject(uiError('error.session.busy'))
       summary = { ...summary, decoders: decoders.length > 0 ? decoders : null }
@@ -453,6 +462,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
           request.triggers.some(([, condition]) => condition !== 'none'))
       lastId += 1
       device.capturing = true
+      held = request.hold && summary ? { summary, keepStopped: request.keepStopped } : null
       const names = new Map(data.channels.map(({ index, name }) => [index, name]))
       summary = {
         id: lastId,
@@ -467,7 +477,12 @@ export function createMockBackend(data: Fixture = fixture): Backend {
         channels: enabled.map((index) => ({ index, name: names.get(index) ?? String(index) })),
         decoders: data.decoders,
       }
-      setLength(0)
+      // A capture filling behind the shown one leaves its samples alone.
+      const fill = (samples: number) => {
+        if (!held) setLength(samples)
+        else if (summary) summary = { ...summary, info: { ...summary.info, sampleCount: samples } }
+      }
+      fill(0)
       live = {
         status: {
           captureId: lastId,
@@ -518,7 +533,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
           setTimeout(
             () => {
               const samples = Math.round((total * step) / LIVE_STEPS)
-              setLength(samples)
+              fill(samples)
               emit({ phase: 'capturing', samples })
               if (step < LIVE_STEPS) return
               if (request.looping) runOn(Math.round(total / LIVE_STEPS))

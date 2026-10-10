@@ -23,8 +23,8 @@ const percent = (part: number, whole: number) =>
 
 /** Where the capture is (DESIGN.md §9.10): waiting, how much arrived, or how it ended. */
 const status = computed(() => {
-  const live = capture.live
-  if (live && live.captureId === capture.summary?.id) {
+  const live = capture.shownLive
+  if (live) {
     switch (live.phase) {
       case 'waiting':
         return live.hardwareSamples === null
@@ -58,8 +58,7 @@ const status = computed(() => {
 /** The latest problem worth telling: a failed capture, lost data or a refused setting. */
 const problem = computed(() => {
   if (capture.error) return text.error(capture.error)
-  if (capture.live?.overflow && capture.live.captureId === capture.summary?.id)
-    return t('status.overflow')
+  if (capture.shownLive?.overflow) return t('status.overflow')
   if (device.error) return text.error(device.error)
   return null
 })
@@ -92,7 +91,7 @@ const perDivision = computed(() =>
       <AppIcon name="stream" />
       <span>{{ t('stream.title') }}</span>
     </button>
-    <span :aria-live="capture.capturing ? 'off' : 'polite'">{{ status }}</span>
+    <span :aria-live="capture.running ? 'off' : 'polite'">{{ status }}</span>
     <span v-if="capture.job" role="status" class="inline-flex items-center gap-2 tabular-nums">
       <span>{{
         t(capture.job.kind === 'save' ? 'file.saving' : 'file.exporting', {

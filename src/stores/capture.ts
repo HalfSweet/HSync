@@ -10,6 +10,7 @@ import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
 import { useChannelsStore } from './channels'
 import { useDeviceStore } from './device'
+import { usePreferencesStore } from './preferences'
 import type { TriggerRequest } from './trigger'
 
 export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
@@ -31,7 +32,12 @@ const REPEAT_INTERVAL_MS = 1000
 /** The open capture: what it is, and how to place its samples in time. */
 export const useCaptureStore = defineStore('capture', () => {
   const device = useDeviceStore()
+  const preferences = usePreferencesStore()
   const summary = shallowRef<CaptureSummary | null>(null)
+  /** A repeated capture filling behind the shown one, which it replaces once complete. */
+  const pending = shallowRef<CaptureSummary | null>(null)
+  /** A repeated capture stopped early and dropped in favour of the shown one. */
+  const heldOver = shallowRef<number | null>(null)
   const status = shallowRef<CaptureStatus>('idle')
   const error = shallowRef<UiError | null>(null)
   /** The latest state of a capture taken with a device, kept after it ends. */
@@ -49,13 +55,19 @@ export const useCaptureStore = defineStore('capture', () => {
 
   const samplerate = computed(() => summary.value?.info.samplerate ?? 0)
   const sampleCount = computed(() => summary.value?.info.sampleCount ?? 0)
-  /** Whether a capture of the open capture's device is still running. */
-  const capturing = computed(
-    () =>
-      live.value !== null &&
-      live.value.phase !== 'ended' &&
-      live.value.captureId === summary.value?.id,
-  )
+  /** Whether a capture is running, shown or behind the shown one; settings stay locked. */
+  const running = computed(() => live.value !== null && live.value.phase !== 'ended')
+  /** Whether the shown capture is still filling. */
+  const capturing = computed(() => running.value && live.value?.captureId === summary.value?.id)
+  /** The status that goes with what is shown: of the shown capture, of the one filling behind
+   * it, or of the one just dropped in its favour. */
+  const shownLive = computed(() => {
+    const id = live.value?.captureId
+    return id !== undefined &&
+      (id === summary.value?.id || id === pending.value?.id || id === heldOver.value)
+      ? live.value
+      : null
+  })
   /** Whether the open device can loop with its current options. */
   const canLoop = computed(() => device.state?.canLoop ?? false)
   // Like DSView, a device that can no longer loop (Buffer mode) goes back to single captures.
@@ -70,7 +82,7 @@ export const useCaptureStore = defineStore('capture', () => {
     live.value && live.value.captureId === summary.value?.id ? live.value.dropped : 0,
   )
   /** A capture runs or is about to repeat: the capture button stops it. */
-  const busy = computed(() => capturing.value || repeatPending.value)
+  const busy = computed(() => running.value || repeatPending.value)
   /** Samples the timeline spans: the capture, or all it will hold while it fills. */
   const extent = computed(() =>
     capturing.value && live.value
@@ -135,15 +147,18 @@ export const useCaptureStore = defineStore('capture', () => {
   function receive(next: LiveStatus): void {
     live.value = next
     const current = summary.value
-    if (!current || current.id !== next.captureId) return
-    summary.value = {
-      ...current,
-      info: {
-        ...current.info,
-        sampleCount: next.samples,
-        // A loop capture moves its trigger, and drops it once it falls out.
-        triggerSample: next.triggerSample,
-      },
+    if (current?.id === next.captureId) {
+      summary.value = {
+        ...current,
+        info: {
+          ...current.info,
+          sampleCount: next.samples,
+          // A loop capture moves its trigger, and drops it once it falls out.
+          triggerSample: next.triggerSample,
+        },
+      }
+    } else if (pending.value?.id !== next.captureId) {
+      return
     }
     if (next.phase === 'ended') {
       error.value = next.error
@@ -160,7 +175,7 @@ export const useCaptureStore = defineStore('capture', () => {
     repeatTimer = setTimeout(() => {
       repeatTimer = null
       repeatPending.value = false
-      void start(request)
+      void start(request, true)
     }, REPEAT_INTERVAL_MS)
   }
 
@@ -170,29 +185,40 @@ export const useCaptureStore = defineStore('capture', () => {
     repeatPending.value = false
   }
 
-  /** Takes the final summary of an ended capture, with its trigger time. */
+  /** Takes the final summary of an ended capture, with its trigger time. A capture that filled
+   * behind the shown one replaces it, unless the backend dropped it. */
   async function refreshSummary(id: number): Promise<void> {
     const latest = await (await getBackend()).captureSummary()
+    if (pending.value?.id === id) {
+      pending.value = null
+      if (!latest || latest.id === summary.value?.id) heldOver.value = id
+      else summary.value = latest
+      return
+    }
     if (latest && latest.id === id && summary.value?.id === id) summary.value = latest
   }
 
-  /** Starts a capture on the open device. */
-  async function start(request: TriggerRequest): Promise<void> {
+  /**
+   * Starts a capture on the open device. A repeat fills behind the shown capture, as DSView's
+   * back buffer, and replaces it once complete.
+   */
+  async function start(request: TriggerRequest, repeat = false): Promise<void> {
     error.value = null
     savedPath.value = null
+    heldOver.value = null
     lastRequest = request
     try {
       const looping = mode.value === 'loop' && canLoop.value
+      const hold = repeat && summary.value !== null
       const started = await (
         await getBackend()
-      ).captureStart({
-        ...request,
-        looping,
-        hold: false,
-        keepStopped: false,
-      })
-      summary.value = started
-      status.value = 'ready'
+      ).captureStart({ ...request, looping, hold, keepStopped: preferences.keepStopped })
+      if (hold) {
+        pending.value = started
+      } else {
+        summary.value = started
+        status.value = 'ready'
+      }
       // A status may have arrived before the summary did.
       if (live.value?.captureId === started.id) receive(live.value)
     } catch (reason) {
@@ -208,7 +234,7 @@ export const useCaptureStore = defineStore('capture', () => {
   /** Stops the running capture, or the next repeat; what was captured so far stays. */
   async function stop(): Promise<void> {
     cancelRepeat()
-    if (!capturing.value) return
+    if (!running.value) return
     try {
       await (await getBackend()).captureStop()
     } catch (reason) {
@@ -300,7 +326,10 @@ export const useCaptureStore = defineStore('capture', () => {
     savedPath,
     savedKind,
     job,
+    pending,
+    running,
     capturing,
+    shownLive,
     busy,
     extent,
     samplerate,
