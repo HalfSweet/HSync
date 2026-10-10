@@ -48,30 +48,30 @@ export const useViewStore = defineStore('view', () => {
   function setWidth(width: number): void {
     if (width === viewport.value.width) return
     viewport.value = autoFit
-      ? fitViewport(width, capture.sampleCount)
-      : clampViewport({ ...viewport.value, width }, capture.sampleCount)
+      ? fitViewport(width, capture.extent)
+      : clampViewport({ ...viewport.value, width }, capture.extent)
   }
 
   function fit(): void {
-    update(fitViewport(viewport.value.width, capture.sampleCount), true)
+    update(fitViewport(viewport.value.width, capture.extent), true)
   }
 
   /** Zooms by `factor` around `anchorX` (the middle of the track by default). */
   function zoom(factor: number, anchorX = viewport.value.width / 2): void {
-    update(zoomViewport(viewport.value, factor, anchorX, capture.sampleCount))
+    update(zoomViewport(viewport.value, factor, anchorX, capture.extent))
   }
 
   function pan(dx: number): void {
-    update(panViewport(viewport.value, dx, capture.sampleCount))
+    update(panViewport(viewport.value, dx, capture.extent))
   }
 
   function showRange(from: number, to: number): void {
-    update(rangeViewport(viewport.value.width, from, to, capture.sampleCount))
+    update(rangeViewport(viewport.value.width, from, to, capture.extent))
   }
 
   function centerOn(sample: number): void {
     const half = (viewport.value.width * viewport.value.samplesPerPixel) / 2
-    update(clampViewport({ ...viewport.value, start: sample - half }, capture.sampleCount))
+    update(clampViewport({ ...viewport.value, start: sample - half }, capture.extent))
   }
 
   function setSegment(next: Segment | null): void {
@@ -84,6 +84,15 @@ export const useViewStore = defineStore('view', () => {
     () => {
       segment.value = null
       fit()
+    },
+  )
+
+  // A capture that ends early shrinks; stay fitted unless the user zoomed or panned.
+  watch(
+    () => capture.extent,
+    () => {
+      if (autoFit) fit()
+      else viewport.value = clampViewport(viewport.value, capture.extent)
     },
   )
 

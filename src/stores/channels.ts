@@ -9,6 +9,8 @@ export const useChannelsStore = defineStore('channels', () => {
   const triggers = ref<Record<number, TriggerCondition>>({})
   /** Collapsed state by group key; groups not listed use their default. */
   const collapsed = ref<Record<string, boolean>>({})
+  /** Share of a triggered capture before the trigger, in percent; DSView starts at 1. */
+  const triggerPosition = ref(1)
 
   /** Channels with a condition, ascending. */
   const armed = computed(() =>
@@ -36,5 +38,14 @@ export const useChannelsStore = defineStore('channels', () => {
     collapsed.value = { ...collapsed.value, [key]: !isCollapsed(key, fallback) }
   }
 
-  return { triggers, armed, triggerOf, setTrigger, collapsed, isCollapsed, toggleGroup }
+  return {
+    triggers,
+    armed,
+    triggerPosition,
+    triggerOf,
+    setTrigger,
+    collapsed,
+    isCollapsed,
+    toggleGroup,
+  }
 })
