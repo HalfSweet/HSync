@@ -32,6 +32,7 @@ import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
 import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/timeline/fling'
+import { keyTakenElsewhere, timelineAction } from '@/timeline/keys'
 import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
@@ -479,6 +480,30 @@ const readout = computed(() => {
 })
 
 // Ctrl/⌘ + wheel zooms around the pointer; shift + wheel and horizontal swipes pan.
+// Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §9.10).
+useEventListener(document, 'keydown', (event: KeyboardEvent) => {
+  if (event.defaultPrevented || keyTakenElsewhere(event.target)) return
+  const action = timelineAction(event)
+  if (!action) return
+  stopFling()
+  switch (action.kind) {
+    case 'zoom':
+      view.zoom(action.factor)
+      break
+    case 'pan':
+      view.pan(view.viewport.width * action.share)
+      break
+    case 'fit':
+      view.fit()
+      break
+    case 'clearSegment':
+      if (!view.segment) return
+      view.setSegment(null)
+      break
+  }
+  event.preventDefault()
+})
+
 function onWheel(event: WheelEvent): void {
   stopFling()
   const rows = rowsElement.value?.getBoundingClientRect()
