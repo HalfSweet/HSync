@@ -46,6 +46,7 @@ describe('sessions', () => {
       }),
     )
     expect(session?.options).toEqual([
+      ['operationMode', { type: 'choice', value: 'stream' }],
       ['samplerate', { type: 'integer', value: 1_000_000 }],
       ['sampleLimit', { type: 'integer', value: 1_000_448 }],
     ])
@@ -55,6 +56,66 @@ describe('sessions', () => {
     expect(session?.trigger?.position).toBe(25)
     expect(parseSession('{"nothing": 1}')).toBeNull()
     expect(parseSession('not json')).toBeNull()
+  })
+
+  it('read the DSLogic options of DSView sessions by code', () => {
+    // DSView's DSLogic0.def.dsc.
+    const session = parseSession(
+      JSON.stringify({
+        'Channel Mode': 0,
+        CollectMode: 2,
+        Device: 'DSLogic',
+        DeviceMode: 0,
+        'Enable RLE Compress': 0,
+        'Filter Targets': 1,
+        'Max Height': '1X',
+        'Operation Mode': 0,
+        'Sample count': '1000448',
+        'Sample rate': '1000000',
+        'Stop Options': 1,
+        'Threshold Level': '1',
+        'Using Clock Negedge': true,
+        'Using External Clock': 0,
+        Version: 3,
+      }),
+    )
+    expect(Object.fromEntries(session?.options ?? [])).toEqual({
+      operationMode: { type: 'choice', value: 'buffer' },
+      bufferOption: { type: 'choice', value: 'upload' },
+      channelMode: { type: 'choice', value: '0' },
+      vth: { type: 'number', value: 1 },
+      filter: { type: 'bool', value: true },
+      rle: { type: 'bool', value: false },
+      externalClock: { type: 'bool', value: false },
+      clockFallingEdge: { type: 'bool', value: true },
+      samplerate: { type: 'integer', value: 1_000_000 },
+      sampleLimit: { type: 'integer', value: 1_000_448 },
+    })
+    expect(session?.captureMode).toBe('loop')
+  })
+
+  it('read the DSLogic options of older DSView sessions by name', () => {
+    // DSView's DSLogic1.def.dsc, version 2.
+    const session = parseSession(
+      JSON.stringify({
+        'Channel Mode': 'Use Channels 0~1 (Max 200MHz)',
+        Device: 'DSLogic',
+        'Enable RLE Compress': 1,
+        'Filter Targets': 'None',
+        'Operation Mode': 'Stream模式',
+        'Stop Options': '立即停止',
+        'Threshold Level': '5.0V Level',
+        Version: 2,
+      }),
+    )
+    expect(Object.fromEntries(session?.options ?? [])).toEqual({
+      operationMode: { type: 'choice', value: 'stream' },
+      bufferOption: { type: 'choice', value: 'stop' },
+      threshold: { type: 'choice', value: 'v50' },
+      filter: { type: 'bool', value: false },
+      rle: { type: 'bool', value: true },
+    })
+    expect(session?.captureMode).toBeNull()
   })
 
   it('apply modes before the settings they decide', () => {

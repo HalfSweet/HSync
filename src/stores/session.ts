@@ -77,6 +77,7 @@ export const useSessionStore = defineStore('session', () => {
         serial: trigger.serial,
       },
       decoders: decode.entries.length > 0 ? [...decode.entries] : null,
+      captureMode: capture.mode,
     }
   }
 
@@ -111,6 +112,9 @@ export const useSessionStore = defineStore('session', () => {
       }
       if (settings.serial) trigger.serial = { ...newSerial(), ...settings.serial }
     }
+    // After the options, which decide whether the device can loop.
+    const mode = session.captureMode
+    if (mode && (mode !== 'loop' || capture.canLoop)) capture.mode = mode
   }
 
   /** Applies all of `session`, its channel names and decoders to the open capture too. */

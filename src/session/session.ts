@@ -1,11 +1,13 @@
 /**
  * Session files (DESIGN.md §8.3): HSync's own JSON with the device settings, channels, triggers
- * and decoders, and DSView's `.dsc` sessions, of which HSync reads what does not depend on a
- * driver's option codes (sample rate and count, channels, triggers, decoders).
+ * and decoders, and DSView's `.dsc` sessions: their device options (by libsigrok's option
+ * names, list values as codes in version 3 and as English or Chinese text before), capture
+ * mode, channels, triggers and decoders.
  */
 import type { OptionKey } from '@/ipc/bindings/OptionKey'
 import type { OptionValue } from '@/ipc/bindings/OptionValue'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
+import type { CaptureMode } from '@/stores/capture'
 import type { SerialDraft, StageDraft, TriggerMode } from '@/trigger/advanced'
 
 export const SESSION_FORMAT = 'hsync-session'
@@ -35,7 +37,11 @@ export interface Session {
   trigger: TriggerSettings | null
   /** DSView's decoder entries. */
   decoders: unknown[] | null
+  /** Single, repeated or loop captures. */
+  captureMode: CaptureMode | null
 }
+
+const CAPTURE_MODES: readonly CaptureMode[] = ['single', 'repeat', 'loop']
 
 const KEYS: readonly OptionKey[] = [
   'operationMode',
@@ -130,6 +136,9 @@ function readHsync(data: Record<string, unknown>): Session {
     triggers: conditions(data.triggers),
     trigger: trigger as TriggerSettings | null,
     decoders: Array.isArray(data.decoders) ? data.decoders : null,
+    captureMode: CAPTURE_MODES.includes(data.captureMode as CaptureMode)
+      ? (data.captureMode as CaptureMode)
+      : null,
   }
 }
 
@@ -142,6 +151,83 @@ const DSVIEW_TRIGGERS: Record<number, TriggerCondition> = {
   5: 'both',
 }
 
+/**
+ * A list option of a DSView session: its code, or before version 3 its text in English or
+ * Chinese (`lang_text_map` of `dslogic.c`).
+ */
+function listCode(value: unknown, texts: Record<string, number>): number | null {
+  if (typeof value === 'number' && Number.isInteger(value)) return value
+  return typeof value === 'string' ? (texts[value.trim()] ?? null) : null
+}
+
+/** DSView writes booleans as JSON booleans, its default sessions as 0 and 1. */
+function flag(value: unknown): boolean | null {
+  if (typeof value === 'boolean') return value
+  if (value === 0 || value === '0') return false
+  if (value === 1 || value === '1') return true
+  return null
+}
+
+const choice = (value: string): OptionValue => ({ type: 'choice', value })
+
+/** DSLogic options by their libsigrok names, and how DSView writes their values. */
+const DSVIEW_OPTIONS: Record<string, (value: unknown) => [OptionKey, OptionValue] | null> = {
+  'Operation Mode': (value) => {
+    const code = listCode(value, {
+      'Buffer Mode': 0,
+      Buffer模式: 0,
+      'Stream Mode': 1,
+      Stream模式: 1,
+    })
+    return code === 0 || code === 1
+      ? ['operationMode', choice(code === 0 ? 'buffer' : 'stream')]
+      : null
+  },
+  'Stop Options': (value) => {
+    const code = listCode(value, {
+      'Stop immediately': 0,
+      立即停止: 0,
+      'Upload captured data': 1,
+      上传已采集的数据: 1,
+    })
+    return code === 0 || code === 1
+      ? ['bufferOption', choice(code === 0 ? 'stop' : 'upload')]
+      : null
+  },
+  // Codes are DSView's channel mode ids; older sessions name the mode in words HSync does not
+  // keep, so those leave the mode as it is.
+  'Channel Mode': (value) =>
+    typeof value === 'number' && Number.isInteger(value)
+      ? ['channelMode', choice(String(value))]
+      : null,
+  'Threshold Levels': (value) => threshold(value),
+  // Version 3 keeps the threshold voltage here; older sessions the threshold level list.
+  'Threshold Level': (value) => {
+    const volts = typeof value === 'number' ? value : Number(value)
+    if (typeof value !== 'boolean' && value !== '' && Number.isFinite(volts)) {
+      return ['vth', { type: 'number', value: volts }]
+    }
+    return threshold(value)
+  },
+  'Filter Targets': (value) => {
+    const code = listCode(value, { None: 0, 无: 0, '1 Sample Clock': 1, '1个采样周期': 1 })
+    return code === 0 || code === 1 ? ['filter', { type: 'bool', value: code === 1 }] : null
+  },
+  'Enable RLE Compress': (value) => boolOption('rle', value),
+  'Using External Clock': (value) => boolOption('externalClock', value),
+  'Using Clock Negedge': (value) => boolOption('clockFallingEdge', value),
+}
+
+function threshold(value: unknown): [OptionKey, OptionValue] | null {
+  const code = listCode(value, { '1.8/2.5/3.3V Level': 0, '5.0V Level': 1 })
+  return code === 0 || code === 1 ? ['threshold', choice(code === 0 ? 'v33' : 'v50')] : null
+}
+
+function boolOption(key: OptionKey, value: unknown): [OptionKey, OptionValue] | null {
+  const on = flag(value)
+  return on === null ? null : [key, { type: 'bool', value: on }]
+}
+
 /** Reads what HSync can use of a DSView `.dsc` session. */
 function readDsview(data: Record<string, unknown>): Session {
   const integer = (key: string): number | null => {
@@ -150,6 +236,10 @@ function readDsview(data: Record<string, unknown>): Session {
     return Number.isFinite(parsed) && parsed > 0 ? Math.round(parsed) : null
   }
   const options: [OptionKey, OptionValue][] = []
+  for (const [name, read] of Object.entries(DSVIEW_OPTIONS)) {
+    const option = name in data ? read(data[name]) : null
+    if (option) options.push(option)
+  }
   const rate = integer('Sample rate')
   if (rate !== null) options.push(['samplerate', { type: 'integer', value: rate }])
   const count = integer('Sample count')
@@ -181,6 +271,9 @@ function readDsview(data: Record<string, unknown>): Session {
     triggers,
     trigger: Number.isFinite(position) ? ({ mode: 'simple', position } as TriggerSettings) : null,
     decoders: Array.isArray(data.decoder) ? data.decoder : null,
+    // DSView's COLLECT_SINGLE, COLLECT_REPEAT, COLLECT_LOOP.
+    captureMode:
+      typeof data.CollectMode === 'number' ? (CAPTURE_MODES[data.CollectMode] ?? null) : null,
   }
 }
 
