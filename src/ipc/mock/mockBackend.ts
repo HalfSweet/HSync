@@ -294,6 +294,18 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.reject(uiError('error.app.unavailableInBrowser'))
     },
 
+    async configureLog() {
+      return Promise.resolve()
+    },
+
+    async logFile() {
+      return Promise.resolve(null)
+    },
+
+    async revealLog() {
+      return Promise.reject(uiError('error.app.unavailableInBrowser'))
+    },
+
     async decodeList(captureId: number) {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))

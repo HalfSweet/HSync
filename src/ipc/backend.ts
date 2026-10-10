@@ -21,6 +21,7 @@ import type { SearchResult } from './bindings/SearchResult'
 import type { StreamMode } from './bindings/StreamMode'
 import type { StreamPage } from './bindings/StreamPage'
 import { decodeBins, type BinsResult } from './bins'
+import type { LogLevel } from './logLevels'
 
 /** Stops a subscription. */
 export type Unsubscribe = () => void
@@ -108,6 +109,13 @@ export interface Backend {
 
   /** Every protocol decoder there is, for the decoder dialog. */
   decodeCatalog(): Promise<DecoderInfo[]>
+
+  /** Which messages the app logs, and whether to the log file as well. */
+  configureLog(level: LogLevel, file: boolean): Promise<void>
+  /** Where the log file is, or `null` without one (the browser preview). */
+  logFile(): Promise<string | null>
+  /** Shows the log file in the system's file manager. */
+  revealLog(): Promise<void>
   /** The decoders of a capture and how far they are. */
   decodeList(captureId: number): Promise<DecoderStatus[]>
   /** Decode lanes of finished decoders over `start..end`. */
@@ -252,6 +260,18 @@ class TauriBackend implements Backend {
 
   decodeCatalog() {
     return invoke<DecoderInfo[]>('decode_catalog')
+  }
+
+  configureLog(level: LogLevel, file: boolean) {
+    return invoke<void>('log_configure', { level, file })
+  }
+
+  logFile() {
+    return invoke<string>('log_file')
+  }
+
+  revealLog() {
+    return invoke<void>('log_reveal')
   }
 
   decodeList(captureId: number) {
