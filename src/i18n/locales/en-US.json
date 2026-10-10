@@ -607,7 +607,7 @@
   },
   "about": {
     "title": "About HSync",
-    "tagline": "A logic analyzer host",
+    "tagline": "A general-purpose logic analyzer app",
     "version": "Version {version}",
     "update": {
       "check": "Check for updates",
