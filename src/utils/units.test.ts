@@ -4,6 +4,7 @@ import {
   digitsFor,
   formatCount,
   formatFrequency,
+  formatFrequencyShort,
   formatSamplerate,
   formatSpan,
   formatTime,
@@ -38,6 +39,8 @@ describe('frequency formatting', () => {
     expect(formatSamplerate(1_250_000)).toBe('1.25 MHz')
     expect(formatSamplerate(1_000_000_000)).toBe('1 GHz')
     expect(formatSamplerate(500)).toBe('500 Hz')
+    expect(formatFrequencyShort(25e6 / 251)).toBe('99.6 kHz')
+    expect(formatFrequencyShort(25e6 / 19)).toBe('1.32 MHz')
   })
 })
 

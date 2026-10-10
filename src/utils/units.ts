@@ -59,6 +59,12 @@ export function formatFrequency(hz: number, digits = 1): string {
   return `${(hz / scale).toFixed(digits)} ${unit}`
 }
 
+/** Formats a measured frequency with three significant digits, e.g. `99.6 kHz`, `1.32 MHz`. */
+export function formatFrequencyShort(hz: number): string {
+  const [unit, scale] = frequencyUnit(hz)
+  return `${Number((hz / scale).toPrecision(3))} ${unit}`
+}
+
 /** Formats a sample rate without superfluous zeros, e.g. `25 MHz`, `1.25 MHz`, `500 Hz`. */
 export function formatSamplerate(hz: number): string {
   const [unit, scale] = frequencyUnit(hz)
