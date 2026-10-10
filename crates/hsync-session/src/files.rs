@@ -24,6 +24,8 @@ pub enum ExportKind {
     Dsl,
     Csv,
     Vcd,
+    /// GTKWave's FST.
+    Fst,
     /// sigrok's session archive.
     Sigrok,
     /// Interleaved sample bytes.
@@ -174,6 +176,7 @@ impl ExportSource {
                 every_sample: request.every_sample,
             },
             ExportKind::Vcd => ExportFormat::Vcd,
+            ExportKind::Fst => ExportFormat::Fst,
             ExportKind::Sigrok => ExportFormat::Sigrok,
             _ => ExportFormat::Binary,
         };
