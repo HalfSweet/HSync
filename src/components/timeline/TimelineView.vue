@@ -856,23 +856,29 @@ function onWheel(event: WheelEvent): void {
           :target="target"
         />
 
-        <ChannelMenu
-          v-if="channelMenu"
-          :key="channelMenu.channel.index"
-          :channel="channelMenu.channel"
-          :x="channelMenu.x"
-          :y="channelMenu.y"
-          @close="channelMenu = null"
-        />
-        <TriggerMenu
-          v-if="menu"
-          :channel="menu.channel.label"
-          :wire="menu.channel.wire"
-          :condition="channels.triggerOf(menu.channel.index)"
-          :top="menu.top"
-          @pick="pick"
-          @close="closeMenu(true)"
-        />
+        <Transition name="pop">
+          <ChannelMenu
+            v-if="channelMenu"
+            :key="channelMenu.channel.index"
+            :channel="channelMenu.channel"
+            :x="channelMenu.x"
+            :y="channelMenu.y"
+            @close="channelMenu = null"
+          />
+        </Transition>
+        <!-- Keyed by channel: moving to another row's menu closes one and opens the other. -->
+        <Transition name="pop">
+          <TriggerMenu
+            v-if="menu"
+            :key="menu.channel.index"
+            :channel="menu.channel.label"
+            :wire="menu.channel.wire"
+            :condition="channels.triggerOf(menu.channel.index)"
+            :top="menu.top"
+            @pick="pick"
+            @close="closeMenu(true)"
+          />
+        </Transition>
       </div>
     </div>
   </div>

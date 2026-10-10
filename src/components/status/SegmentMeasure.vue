@@ -90,55 +90,60 @@ const range = computed(() => {
     >
       {{ t('measure.segment', { duration }) }}
     </button>
-    <div
-      v-if="open"
-      role="dialog"
-      :aria-label="t('measure.title')"
-      class="absolute bottom-full left-0 z-20 mb-1 flex max-h-[60vh] w-72 flex-col rounded-6 border border-ink bg-raise text-small"
-    >
-      <div class="flex flex-none flex-col gap-0.5 border-b border-line px-3 py-2">
-        <span class="font-medium">{{ t('measure.title') }}</span>
-        <span class="text-ink-3 tabular-nums">{{ range }} · {{ duration }}</span>
+    <Transition name="pop">
+      <div
+        v-if="open"
+        role="dialog"
+        :aria-label="t('measure.title')"
+        class="absolute bottom-full left-0 z-20 mb-1 flex max-h-[60vh] w-72 origin-bottom-left flex-col rounded-6 border border-ink bg-raise text-small"
+      >
+        <div class="flex flex-none flex-col gap-0.5 border-b border-line px-3 py-2">
+          <span class="font-medium">{{ t('measure.title') }}</span>
+          <span class="text-ink-3 tabular-nums">{{ range }} · {{ duration }}</span>
+        </div>
+        <div class="min-h-0 overflow-y-auto px-3 py-1.5">
+          <table class="w-full tabular-nums">
+            <thead class="text-ink-3">
+              <tr>
+                <th class="pb-1 text-left font-normal">{{ t('measure.channel') }}</th>
+                <th class="pb-1 text-right font-normal">{{ t('measure.rising') }}</th>
+                <th class="pb-1 text-right font-normal">{{ t('measure.falling') }}</th>
+                <th class="pb-1 text-right font-normal">{{ t('measure.edges') }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="row in rows" :key="row.index" class="h-5">
+                <td class="truncate">
+                  {{ row.label }}
+                  <span
+                    v-if="row.label !== `D${row.index}`"
+                    class="font-mono text-caption text-ink-3"
+                    >D{{ row.index }}</span
+                  >
+                </td>
+                <template v-if="counts.get(row.index)">
+                  <td class="text-right">
+                    {{ formatCount(counts.get(row.index)?.rising ?? 0, locale) }}
+                  </td>
+                  <td class="text-right">
+                    {{ formatCount(counts.get(row.index)?.falling ?? 0, locale) }}
+                  </td>
+                  <td class="text-right">
+                    {{
+                      formatCount(
+                        (counts.get(row.index)?.rising ?? 0) +
+                          (counts.get(row.index)?.falling ?? 0),
+                        locale,
+                      )
+                    }}
+                  </td>
+                </template>
+                <td v-else colspan="3" class="text-right text-ink-3">…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div class="min-h-0 overflow-y-auto px-3 py-1.5">
-        <table class="w-full tabular-nums">
-          <thead class="text-ink-3">
-            <tr>
-              <th class="pb-1 text-left font-normal">{{ t('measure.channel') }}</th>
-              <th class="pb-1 text-right font-normal">{{ t('measure.rising') }}</th>
-              <th class="pb-1 text-right font-normal">{{ t('measure.falling') }}</th>
-              <th class="pb-1 text-right font-normal">{{ t('measure.edges') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="row in rows" :key="row.index" class="h-5">
-              <td class="truncate">
-                {{ row.label }}
-                <span v-if="row.label !== `D${row.index}`" class="font-mono text-caption text-ink-3"
-                  >D{{ row.index }}</span
-                >
-              </td>
-              <template v-if="counts.get(row.index)">
-                <td class="text-right">
-                  {{ formatCount(counts.get(row.index)?.rising ?? 0, locale) }}
-                </td>
-                <td class="text-right">
-                  {{ formatCount(counts.get(row.index)?.falling ?? 0, locale) }}
-                </td>
-                <td class="text-right">
-                  {{
-                    formatCount(
-                      (counts.get(row.index)?.rising ?? 0) + (counts.get(row.index)?.falling ?? 0),
-                      locale,
-                    )
-                  }}
-                </td>
-              </template>
-              <td v-else colspan="3" class="text-right text-ink-3">…</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    </Transition>
   </div>
 </template>

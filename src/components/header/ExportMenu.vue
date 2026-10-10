@@ -48,39 +48,41 @@ function saveSession(): void {
     >
       <AppIcon name="export" />
     </button>
-    <div
-      v-if="open"
-      role="menu"
-      :aria-label="t('header.export')"
-      class="absolute top-full right-0 z-20 mt-1 flex w-56 flex-col rounded-6 border border-ink bg-raise p-1 text-small"
-    >
-      <button
-        role="menuitem"
-        class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-        :disabled="!capture.summary || capture.busy || capture.job !== null"
-        @click="save"
+    <Transition name="pop">
+      <div
+        v-if="open"
+        role="menu"
+        :aria-label="t('header.export')"
+        class="absolute top-full right-0 z-20 mt-1 flex w-56 origin-top-right flex-col rounded-6 border border-ink bg-raise p-1 text-small"
       >
-        <span class="flex-1 text-left">{{ t('file.save') }}</span>
-        <kbd class="font-sans text-caption text-ink-3">{{ commandLabel('s') }}</kbd>
-      </button>
-      <button
-        role="menuitem"
-        class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-        :disabled="!capture.summary || capture.busy || capture.job !== null"
-        @click="exportAs"
-      >
-        <span class="flex-1 text-left">{{ t('file.exportItem') }}</span>
-      </button>
-      <div class="my-1 border-t border-line" />
-      <button
-        role="menuitem"
-        class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-        :disabled="capture.busy || capture.job !== null"
-        @click="saveSession"
-      >
-        <span class="flex-1 text-left">{{ t('file.saveSession') }}</span>
-      </button>
-    </div>
+        <button
+          role="menuitem"
+          class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+          :disabled="!capture.summary || capture.busy || capture.job !== null"
+          @click="save"
+        >
+          <span class="flex-1 text-left">{{ t('file.save') }}</span>
+          <kbd class="font-sans text-caption text-ink-3">{{ commandLabel('s') }}</kbd>
+        </button>
+        <button
+          role="menuitem"
+          class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+          :disabled="!capture.summary || capture.busy || capture.job !== null"
+          @click="exportAs"
+        >
+          <span class="flex-1 text-left">{{ t('file.exportItem') }}</span>
+        </button>
+        <div class="my-1 border-t border-line" />
+        <button
+          role="menuitem"
+          class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+          :disabled="capture.busy || capture.job !== null"
+          @click="saveSession"
+        >
+          <span class="flex-1 text-left">{{ t('file.saveSession') }}</span>
+        </button>
+      </div>
+    </Transition>
     <ExportDialog v-if="showDialog" @close="showDialog = false" />
   </div>
 </template>

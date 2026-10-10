@@ -50,7 +50,7 @@ function onKeydown(event: KeyboardEvent): void {
     ref="menu"
     role="menu"
     :aria-label="t('trigger.menuTitle', { channel })"
-    class="absolute z-[8] w-(--w-trigger-menu) rounded-6 border border-ink bg-raise p-1 text-small"
+    class="absolute z-[8] w-(--w-trigger-menu) origin-top-left rounded-6 border border-ink bg-raise p-1 text-small"
     :style="{ left: 'calc(var(--lab) + 4px)', top: `${top}px` }"
     @keydown="onKeydown"
   >

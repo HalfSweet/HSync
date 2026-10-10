@@ -145,245 +145,251 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
       <AppIcon name="chevron-down" />
     </button>
 
-    <div
-      v-if="open"
-      role="dialog"
-      :aria-label="t('triggerPanel.title')"
-      class="absolute top-full left-0 z-20 mt-1 flex w-[480px] max-w-[calc(100vw-32px)] flex-col gap-3 overflow-x-auto rounded-6 border border-ink bg-raise p-3 text-small"
-    >
-      <fieldset :disabled="locked" class="flex flex-col gap-3">
-        <div class="flex items-center gap-3">
-          <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.mode') }}</span>
-          <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
-            <button
-              v-for="one in MODES"
-              :key="one"
-              class="seg"
-              :aria-pressed="trigger.activeMode === one"
-              :aria-disabled="one !== 'simple' && !trigger.caps.advanced"
-              :title="one !== 'simple' && unavailable ? unavailable : undefined"
-              @click="(one === 'simple' || trigger.caps.advanced) && (trigger.mode = one)"
-            >
-              {{ t(`triggerPanel.modes.${one}`) }}
-            </button>
-          </div>
-        </div>
-
-        <label class="flex items-center gap-3">
-          <span class="w-16 flex-none text-ink-2" :title="t('triggerPanel.positionTip')">{{
-            t('triggerPanel.position')
-          }}</span>
-          <input
-            v-model.number="trigger.position"
-            type="range"
-            min="1"
-            :max="trigger.caps.maxPosition"
-            step="1"
-            class="min-w-0 flex-1 accent-ink"
-            :disabled="trigger.caps.maxPosition <= 1"
-            :aria-valuetext="`${trigger.activePosition}%`"
-          />
-          <span class="w-10 flex-none text-right tabular-nums">{{ trigger.activePosition }}%</span>
-        </label>
-        <p v-if="trigger.caps.maxPosition <= 1 && device.state" class="-mt-2 pl-19 text-ink-3">
-          {{ t('triggerPanel.positionFixed') }}
-        </p>
-        <p v-else-if="trigger.caps.maxPosition < 90" class="-mt-2 pl-19 text-ink-3">
-          {{ t('triggerPanel.positionMax', { max: trigger.caps.maxPosition }) }}
-        </p>
-
-        <div class="border-t border-line" />
-
-        <!-- Simple: the conditions set on the timeline. -->
-        <template v-if="trigger.activeMode === 'simple'">
-          <p class="text-ink-2">{{ t('triggerPanel.simple.note') }}</p>
-          <div class="flex items-center gap-2">
-            <span v-if="channels.armed.length === 0" class="flex-1 text-ink-3">{{
-              t('triggerPanel.simple.none')
-            }}</span>
-            <span v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
-              <span
-                v-for="item in channels.armed"
-                :key="item.index"
-                class="inline-flex items-center gap-0.5 font-medium"
-              >
-                {{ capture.channelLabel(item.index) }}
-                <TriggerGlyph :condition="item.condition" />
-              </span>
-            </span>
-            <button
-              class="btn-ghost"
-              :disabled="channels.armed.length === 0"
-              @click="channels.clearTriggers()"
-            >
-              {{ t('triggerPanel.simple.clear') }}
-            </button>
-          </div>
-          <p v-if="unavailable" class="text-ink-3">{{ unavailable }}</p>
-        </template>
-
-        <!-- Multi-stage. -->
-        <template v-else-if="trigger.activeMode === 'stages'">
+    <Transition name="pop">
+      <div
+        v-if="open"
+        role="dialog"
+        :aria-label="t('triggerPanel.title')"
+        class="absolute top-full left-0 z-20 mt-1 flex w-[480px] max-w-[calc(100vw-32px)] origin-top-left flex-col gap-3 overflow-x-auto rounded-6 border border-ink bg-raise p-3 text-small"
+      >
+        <fieldset :disabled="locked" class="flex flex-col gap-3">
           <div class="flex items-center gap-3">
-            <label class="flex items-center gap-2">
-              <span class="text-ink-2">{{ t('triggerPanel.stages.count') }}</span>
-              <select
-                v-model.number="trigger.stageCount"
-                class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink tabular-nums"
-              >
-                <option v-for="count in stageChoices" :key="count" :value="count">
-                  {{ count }}
-                </option>
-              </select>
-            </label>
-            <div role="tablist" class="flex min-w-0 flex-1 flex-wrap gap-0.5">
+            <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.mode') }}</span>
+            <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
               <button
-                v-for="index in trigger.stageCount"
-                :key="index"
-                role="tab"
-                class="seg px-1.5 tabular-nums"
-                :aria-selected="stageShown === index - 1"
-                :aria-pressed="stageShown === index - 1"
-                @click="stageShown = index - 1"
+                v-for="one in MODES"
+                :key="one"
+                class="seg"
+                :aria-pressed="trigger.activeMode === one"
+                :aria-disabled="one !== 'simple' && !trigger.caps.advanced"
+                :title="one !== 'simple' && unavailable ? unavailable : undefined"
+                @click="(one === 'simple' || trigger.caps.advanced) && (trigger.mode = one)"
               >
-                {{ index }}
+                {{ t(`triggerPanel.modes.${one}`) }}
               </button>
             </div>
           </div>
-          <div v-if="stage" role="tabpanel" class="flex flex-col gap-2">
-            <div class="flex items-start gap-3">
-              <span class="w-16 flex-none pt-3 text-ink-2">{{
-                t('triggerPanel.stages.pattern0')
-              }}</span>
-              <div class="flex flex-col gap-1">
-                <PatternCells
-                  v-model="stage.pattern0"
-                  :channels="trigger.channelCount"
-                  :label="t('triggerPanel.stages.pattern0')"
-                />
-                <label class="flex items-center gap-1.5 text-ink-2">
-                  <input v-model="stage.invert0" type="checkbox" class="accent-ink" />
-                  {{ t('triggerPanel.stages.invert') }}
-                </label>
-              </div>
-            </div>
-            <div class="flex items-start gap-3">
-              <span class="w-16 flex-none pt-3 text-ink-2">{{
-                t('triggerPanel.stages.pattern1')
-              }}</span>
-              <div class="flex flex-col gap-1">
-                <PatternCells
-                  v-model="stage.pattern1"
-                  :channels="trigger.channelCount"
-                  :label="t('triggerPanel.stages.pattern1')"
-                />
-                <label class="flex items-center gap-1.5 text-ink-2">
-                  <input v-model="stage.invert1" type="checkbox" class="accent-ink" />
-                  {{ t('triggerPanel.stages.invert') }}
-                </label>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.stages.combine') }}</span>
-              <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
-                <button class="seg" :aria-pressed="stage.both" @click="stage.both = true">
-                  {{ t('triggerPanel.stages.both') }}
-                </button>
-                <button class="seg" :aria-pressed="!stage.both" @click="stage.both = false">
-                  {{ t('triggerPanel.stages.either') }}
-                </button>
-              </div>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.stages.repeat') }}</span>
-              <input
-                v-model.number="stage.count"
-                type="number"
-                min="1"
-                step="1"
-                class="h-7 w-24 rounded-6 border border-line-2 bg-raise px-2 text-ink tabular-nums"
-                :aria-label="t('triggerPanel.stages.repeat')"
-              />
-              <span class="text-ink-2">{{ t('triggerPanel.stages.times') }}</span>
-              <label class="flex items-center gap-1.5 text-ink-2">
-                <input v-model="stage.contiguous" type="checkbox" class="accent-ink" />
-                {{ t('triggerPanel.stages.contiguous') }}
-              </label>
-            </div>
-          </div>
-          <p class="text-ink-3">{{ t('triggerPanel.stages.note') }}</p>
-        </template>
 
-        <!-- Serial. -->
-        <template v-else>
-          <div
-            v-for="field in ['start', 'stop', 'clock'] as const"
-            :key="field"
-            class="flex items-start gap-3"
-          >
-            <span class="w-16 flex-none pt-3 text-ink-2">{{
-              t(`triggerPanel.serial.${field}`)
-            }}</span>
-            <PatternCells
-              v-model="trigger.serial[field]"
-              :channels="trigger.channelCount"
-              :label="t(`triggerPanel.serial.${field}`)"
-            />
-          </div>
-          <div class="flex items-center gap-3">
-            <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.serial.data') }}</span>
-            <select
-              v-model.number="trigger.serial.dataChannel"
-              class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink"
-              :aria-label="t('triggerPanel.serial.data')"
-            >
-              <option v-for="channel in dataChannels" :key="channel" :value="channel">
-                {{ capture.channelLabel(channel) }}
-              </option>
-            </select>
-            <label class="flex items-center gap-2">
-              <span class="text-ink-2">{{ t('triggerPanel.serial.bits') }}</span>
-              <select
-                v-model.number="trigger.serial.bits"
-                class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink tabular-nums"
-              >
-                <option v-for="bits in bitChoices" :key="bits" :value="bits">{{ bits }}</option>
-              </select>
-            </label>
-          </div>
-          <div class="flex items-center gap-3">
-            <span class="w-16 flex-none text-ink-2" :title="t('triggerPanel.serial.valueTip')">{{
-              t('triggerPanel.serial.value')
+          <label class="flex items-center gap-3">
+            <span class="w-16 flex-none text-ink-2" :title="t('triggerPanel.positionTip')">{{
+              t('triggerPanel.position')
             }}</span>
             <input
-              v-model="valueText"
-              class="h-7 w-[20ch] flex-none rounded-6 border bg-raise px-2 font-mono text-ink"
-              :class="valueError ? 'border-alert' : 'border-line-2'"
-              :title="t('triggerPanel.serial.valueTip')"
-              :aria-label="t('triggerPanel.serial.value')"
-              :aria-invalid="valueError"
-              spellcheck="false"
+              v-model.number="trigger.position"
+              type="range"
+              min="1"
+              :max="trigger.caps.maxPosition"
+              step="1"
+              class="min-w-0 flex-1 accent-ink"
+              :disabled="trigger.caps.maxPosition <= 1"
+              :aria-valuetext="`${trigger.activePosition}%`"
             />
-            <label class="flex items-center gap-1.5">
-              <span class="text-ink-2">{{ t('triggerPanel.serial.hex') }}</span>
-              <input
-                :value="hex"
-                class="h-7 w-[7ch] flex-none rounded-6 border border-line-2 bg-raise px-2 font-mono text-ink uppercase"
-                maxlength="4"
-                spellcheck="false"
-                @change="onHex"
-              />
-            </label>
-          </div>
-          <p v-if="valueError" role="alert" class="-mt-1 pl-19 text-alert">
-            {{ t('triggerPanel.serial.invalid') }}
+            <span class="w-10 flex-none text-right tabular-nums"
+              >{{ trigger.activePosition }}%</span
+            >
+          </label>
+          <p v-if="trigger.caps.maxPosition <= 1 && device.state" class="-mt-2 pl-19 text-ink-3">
+            {{ t('triggerPanel.positionFixed') }}
           </p>
-        </template>
+          <p v-else-if="trigger.caps.maxPosition < 90" class="-mt-2 pl-19 text-ink-3">
+            {{ t('triggerPanel.positionMax', { max: trigger.caps.maxPosition }) }}
+          </p>
 
-        <p v-if="trigger.activeMode !== 'simple'" class="text-ink-3">
-          {{ t('triggerPanel.legend') }}
-        </p>
-      </fieldset>
-    </div>
+          <div class="border-t border-line" />
+
+          <!-- Simple: the conditions set on the timeline. -->
+          <template v-if="trigger.activeMode === 'simple'">
+            <p class="text-ink-2">{{ t('triggerPanel.simple.note') }}</p>
+            <div class="flex items-center gap-2">
+              <span v-if="channels.armed.length === 0" class="flex-1 text-ink-3">{{
+                t('triggerPanel.simple.none')
+              }}</span>
+              <span v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                <span
+                  v-for="item in channels.armed"
+                  :key="item.index"
+                  class="inline-flex items-center gap-0.5 font-medium"
+                >
+                  {{ capture.channelLabel(item.index) }}
+                  <TriggerGlyph :condition="item.condition" />
+                </span>
+              </span>
+              <button
+                class="btn-ghost"
+                :disabled="channels.armed.length === 0"
+                @click="channels.clearTriggers()"
+              >
+                {{ t('triggerPanel.simple.clear') }}
+              </button>
+            </div>
+            <p v-if="unavailable" class="text-ink-3">{{ unavailable }}</p>
+          </template>
+
+          <!-- Multi-stage. -->
+          <template v-else-if="trigger.activeMode === 'stages'">
+            <div class="flex items-center gap-3">
+              <label class="flex items-center gap-2">
+                <span class="text-ink-2">{{ t('triggerPanel.stages.count') }}</span>
+                <select
+                  v-model.number="trigger.stageCount"
+                  class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink tabular-nums"
+                >
+                  <option v-for="count in stageChoices" :key="count" :value="count">
+                    {{ count }}
+                  </option>
+                </select>
+              </label>
+              <div role="tablist" class="flex min-w-0 flex-1 flex-wrap gap-0.5">
+                <button
+                  v-for="index in trigger.stageCount"
+                  :key="index"
+                  role="tab"
+                  class="seg px-1.5 tabular-nums"
+                  :aria-selected="stageShown === index - 1"
+                  :aria-pressed="stageShown === index - 1"
+                  @click="stageShown = index - 1"
+                >
+                  {{ index }}
+                </button>
+              </div>
+            </div>
+            <div v-if="stage" role="tabpanel" class="flex flex-col gap-2">
+              <div class="flex items-start gap-3">
+                <span class="w-16 flex-none pt-3 text-ink-2">{{
+                  t('triggerPanel.stages.pattern0')
+                }}</span>
+                <div class="flex flex-col gap-1">
+                  <PatternCells
+                    v-model="stage.pattern0"
+                    :channels="trigger.channelCount"
+                    :label="t('triggerPanel.stages.pattern0')"
+                  />
+                  <label class="flex items-center gap-1.5 text-ink-2">
+                    <input v-model="stage.invert0" type="checkbox" class="accent-ink" />
+                    {{ t('triggerPanel.stages.invert') }}
+                  </label>
+                </div>
+              </div>
+              <div class="flex items-start gap-3">
+                <span class="w-16 flex-none pt-3 text-ink-2">{{
+                  t('triggerPanel.stages.pattern1')
+                }}</span>
+                <div class="flex flex-col gap-1">
+                  <PatternCells
+                    v-model="stage.pattern1"
+                    :channels="trigger.channelCount"
+                    :label="t('triggerPanel.stages.pattern1')"
+                  />
+                  <label class="flex items-center gap-1.5 text-ink-2">
+                    <input v-model="stage.invert1" type="checkbox" class="accent-ink" />
+                    {{ t('triggerPanel.stages.invert') }}
+                  </label>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-16 flex-none text-ink-2">{{
+                  t('triggerPanel.stages.combine')
+                }}</span>
+                <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
+                  <button class="seg" :aria-pressed="stage.both" @click="stage.both = true">
+                    {{ t('triggerPanel.stages.both') }}
+                  </button>
+                  <button class="seg" :aria-pressed="!stage.both" @click="stage.both = false">
+                    {{ t('triggerPanel.stages.either') }}
+                  </button>
+                </div>
+              </div>
+              <div class="flex items-center gap-3">
+                <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.stages.repeat') }}</span>
+                <input
+                  v-model.number="stage.count"
+                  type="number"
+                  min="1"
+                  step="1"
+                  class="h-7 w-24 rounded-6 border border-line-2 bg-raise px-2 text-ink tabular-nums"
+                  :aria-label="t('triggerPanel.stages.repeat')"
+                />
+                <span class="text-ink-2">{{ t('triggerPanel.stages.times') }}</span>
+                <label class="flex items-center gap-1.5 text-ink-2">
+                  <input v-model="stage.contiguous" type="checkbox" class="accent-ink" />
+                  {{ t('triggerPanel.stages.contiguous') }}
+                </label>
+              </div>
+            </div>
+            <p class="text-ink-3">{{ t('triggerPanel.stages.note') }}</p>
+          </template>
+
+          <!-- Serial. -->
+          <template v-else>
+            <div
+              v-for="field in ['start', 'stop', 'clock'] as const"
+              :key="field"
+              class="flex items-start gap-3"
+            >
+              <span class="w-16 flex-none pt-3 text-ink-2">{{
+                t(`triggerPanel.serial.${field}`)
+              }}</span>
+              <PatternCells
+                v-model="trigger.serial[field]"
+                :channels="trigger.channelCount"
+                :label="t(`triggerPanel.serial.${field}`)"
+              />
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.serial.data') }}</span>
+              <select
+                v-model.number="trigger.serial.dataChannel"
+                class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink"
+                :aria-label="t('triggerPanel.serial.data')"
+              >
+                <option v-for="channel in dataChannels" :key="channel" :value="channel">
+                  {{ capture.channelLabel(channel) }}
+                </option>
+              </select>
+              <label class="flex items-center gap-2">
+                <span class="text-ink-2">{{ t('triggerPanel.serial.bits') }}</span>
+                <select
+                  v-model.number="trigger.serial.bits"
+                  class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink tabular-nums"
+                >
+                  <option v-for="bits in bitChoices" :key="bits" :value="bits">{{ bits }}</option>
+                </select>
+              </label>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="w-16 flex-none text-ink-2" :title="t('triggerPanel.serial.valueTip')">{{
+                t('triggerPanel.serial.value')
+              }}</span>
+              <input
+                v-model="valueText"
+                class="h-7 w-[20ch] flex-none rounded-6 border bg-raise px-2 font-mono text-ink"
+                :class="valueError ? 'border-alert' : 'border-line-2'"
+                :title="t('triggerPanel.serial.valueTip')"
+                :aria-label="t('triggerPanel.serial.value')"
+                :aria-invalid="valueError"
+                spellcheck="false"
+              />
+              <label class="flex items-center gap-1.5">
+                <span class="text-ink-2">{{ t('triggerPanel.serial.hex') }}</span>
+                <input
+                  :value="hex"
+                  class="h-7 w-[7ch] flex-none rounded-6 border border-line-2 bg-raise px-2 font-mono text-ink uppercase"
+                  maxlength="4"
+                  spellcheck="false"
+                  @change="onHex"
+                />
+              </label>
+            </div>
+            <p v-if="valueError" role="alert" class="-mt-1 pl-19 text-alert">
+              {{ t('triggerPanel.serial.invalid') }}
+            </p>
+          </template>
+
+          <p v-if="trigger.activeMode !== 'simple'" class="text-ink-3">
+            {{ t('triggerPanel.legend') }}
+          </p>
+        </fieldset>
+      </div>
+    </Transition>
   </div>
 </template>

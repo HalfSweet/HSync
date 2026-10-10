@@ -61,60 +61,64 @@ function instant(): void {
     >
       <AppIcon name="chevron-down" />
     </button>
-    <div
-      v-if="open"
-      role="menu"
-      :aria-label="t('header.capture.more')"
-      class="absolute top-full right-0 z-20 mt-1 flex w-64 flex-col rounded-6 border border-ink bg-raise p-1 text-small"
-    >
-      <button
-        v-for="mode in MODES"
-        :key="mode"
-        role="menuitemradio"
-        :aria-checked="capture.mode === mode"
-        :aria-disabled="unavailable(mode) || undefined"
-        class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left"
-        :class="unavailable(mode) ? 'cursor-default opacity-55' : 'hover:bg-hover'"
-        @click="setMode(mode)"
+    <Transition name="pop">
+      <div
+        v-if="open"
+        role="menu"
+        :aria-label="t('header.capture.more')"
+        class="absolute top-full right-0 z-20 mt-1 flex w-64 origin-top-right flex-col rounded-6 border border-ink bg-raise p-1 text-small"
       >
-        <span class="flex min-w-0 flex-1 flex-col">
-          <span :class="capture.mode === mode && 'font-medium'">{{
-            t(`header.capture.${mode}`)
-          }}</span>
-          <span class="text-caption text-ink-3">{{
-            unavailable(mode) ? t('header.capture.loopUnavailable') : t(`header.capture.${mode}Tip`)
-          }}</span>
-        </span>
-        <AppIcon v-if="capture.mode === mode" name="check" />
-      </button>
-      <label
-        v-if="capture.mode === 'repeat'"
-        class="flex min-h-[30px] items-center gap-2 rounded-4 px-2 py-1 text-caption text-ink-3"
-      >
-        <span class="flex-1">{{ t('header.capture.interval') }}</span>
-        <input
-          v-model.lazy.number="capture.interval"
-          type="number"
-          class="h-6 w-16 rounded-4 border border-line-2 bg-raise px-1.5 text-right text-small text-ink tabular-nums"
-          :min="REPEAT_INTERVAL.min"
-          :max="REPEAT_INTERVAL.max"
-          step="0.1"
-          :aria-label="t('header.capture.interval')"
-        />
-        <span>{{ t('header.capture.seconds') }}</span>
-      </label>
-      <div class="my-1 border-t border-line" />
-      <button
-        role="menuitem"
-        class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-        :disabled="!ready || capture.busy"
-        @click="instant"
-      >
-        <span class="flex min-w-0 flex-1 flex-col">
-          <span>{{ t('header.capture.instant') }}</span>
-          <span class="text-caption text-ink-3">{{ t('header.capture.instantTip') }}</span>
-        </span>
-      </button>
-    </div>
+        <button
+          v-for="mode in MODES"
+          :key="mode"
+          role="menuitemradio"
+          :aria-checked="capture.mode === mode"
+          :aria-disabled="unavailable(mode) || undefined"
+          class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left"
+          :class="unavailable(mode) ? 'cursor-default opacity-55' : 'hover:bg-hover'"
+          @click="setMode(mode)"
+        >
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span :class="capture.mode === mode && 'font-medium'">{{
+              t(`header.capture.${mode}`)
+            }}</span>
+            <span class="text-caption text-ink-3">{{
+              unavailable(mode)
+                ? t('header.capture.loopUnavailable')
+                : t(`header.capture.${mode}Tip`)
+            }}</span>
+          </span>
+          <AppIcon v-if="capture.mode === mode" name="check" />
+        </button>
+        <label
+          v-if="capture.mode === 'repeat'"
+          class="flex min-h-[30px] items-center gap-2 rounded-4 px-2 py-1 text-caption text-ink-3"
+        >
+          <span class="flex-1">{{ t('header.capture.interval') }}</span>
+          <input
+            v-model.lazy.number="capture.interval"
+            type="number"
+            class="h-6 w-16 rounded-4 border border-line-2 bg-raise px-1.5 text-right text-small text-ink tabular-nums"
+            :min="REPEAT_INTERVAL.min"
+            :max="REPEAT_INTERVAL.max"
+            step="0.1"
+            :aria-label="t('header.capture.interval')"
+          />
+          <span>{{ t('header.capture.seconds') }}</span>
+        </label>
+        <div class="my-1 border-t border-line" />
+        <button
+          role="menuitem"
+          class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+          :disabled="!ready || capture.busy"
+          @click="instant"
+        >
+          <span class="flex min-w-0 flex-1 flex-col">
+            <span>{{ t('header.capture.instant') }}</span>
+            <span class="text-caption text-ink-3">{{ t('header.capture.instantTip') }}</span>
+          </span>
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>

@@ -552,21 +552,23 @@ function onGripUp(): void {
             <AppIcon name="export" />
             <span>{{ t('stream.export.label') }}</span>
           </button>
-          <div
-            v-if="exportMenu"
-            role="menu"
-            class="absolute right-0 bottom-full z-20 mb-1 flex w-44 flex-col rounded-6 border border-ink bg-raise p-1 text-small"
-          >
-            <button
-              v-for="kind in ['csv', 'text'] as const"
-              :key="kind"
-              role="menuitem"
-              class="flex h-[30px] w-full items-center rounded-4 px-2 text-left hover:bg-hover"
-              @click="exportRows(kind)"
+          <Transition name="pop">
+            <div
+              v-if="exportMenu"
+              role="menu"
+              class="absolute right-0 bottom-full z-20 mb-1 flex w-44 origin-bottom-right flex-col rounded-6 border border-ink bg-raise p-1 text-small"
             >
-              {{ t(`stream.export.${kind}`) }}
-            </button>
-          </div>
+              <button
+                v-for="kind in ['csv', 'text'] as const"
+                :key="kind"
+                role="menuitem"
+                class="flex h-[30px] w-full items-center rounded-4 px-2 text-left hover:bg-hover"
+                @click="exportRows(kind)"
+              >
+                {{ t(`stream.export.${kind}`) }}
+              </button>
+            </div>
+          </Transition>
         </div>
         <button
           class="btn-icon"

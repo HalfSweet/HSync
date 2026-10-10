@@ -1,0 +1,26 @@
+/*
+ * Motion (DESIGN.md §9.13). Vue's <Transition> and <TransitionGroup> put these classes on what
+ * appears and leaves; the timing comes from the motion tokens, which reduced motion zeroes.
+ * Whatever is on its way out no longer takes the pointer.
+ */
+
+/* pop: a menu or popover grows out of the control that opened it. Its `origin-*` class names
+   the corner nearest that control. */
+.pop-enter-active {
+  transition:
+    opacity var(--motion-enter) var(--ease-enter),
+    transform var(--motion-enter) var(--ease-enter);
+}
+
+.pop-leave-active {
+  pointer-events: none;
+  transition:
+    opacity var(--motion-exit) var(--ease-exit),
+    transform var(--motion-exit) var(--ease-exit);
+}
+
+.pop-enter-from,
+.pop-leave-to {
+  opacity: 0;
+  transform: scale(0.96);
+}
