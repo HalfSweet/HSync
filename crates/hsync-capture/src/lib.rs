@@ -7,10 +7,12 @@
 mod capture;
 mod channel;
 mod ingest;
+mod pattern;
 mod summary;
 mod words;
 
 pub use capture::{CaptureInfo, LogicCapture};
 pub use channel::{ChannelData, EdgeCount, Pulse, cell};
 pub use ingest::CrossDeinterleaver;
+pub use pattern::{PatternCondition, PatternLevel};
 pub use words::{CHUNK_SAMPLES, CHUNK_WORDS, ChunkView};
