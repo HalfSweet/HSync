@@ -183,8 +183,11 @@ DSView 是 DreamSourceLab 为 DSLogic（逻辑分析仪）与 DSCope（示波器
 
 ```
 HSync/
-├── AGENTS.md / DESIGN.md / README.md / LICENSE
+├── AGENTS.md / DESIGN.md / README.md / LICENSE / CHANGELOG.md（release-please 生成）
 ├── package.json · pnpm-lock.yaml · pnpm-workspace.yaml
+├── release-please-config.json · .release-please-manifest.json
+├── .github/workflows/       # CI 检查、安装包构建与发布（§11.5）
+├── scripts/                 # 布置内置 CPython（§7.3），按发行方式构建本机安装包
 ├── lefthook.yml · commitlint.config.js · eslint.config.js · prettier.config.js
 ├── tsconfig*.json · vite.config.ts · index.html
 ├── Cargo.toml（workspace）· rustfmt.toml · clippy.toml · rust-toolchain.toml
@@ -959,6 +962,8 @@ probe1 = SCL
 - 触发设置面板（触发位置、多级触发、串行触发）；
 - 导出与保存对话框；设置面板；关于。
 
+**更新**（DSView 没有）：设置面板「行为」里的「启动时检查更新」默认开启，应用启动后在后台检查一次（开发构建不检查），失败只记日志。有新版本时设置按钮右上角出现一个 `ink` 色小圆点，按钮的名称变为「设置（有新版本 x）」，面板底部「关于 HSync…」旁写「有新版本 x」。关于对话框在版本号下面：不知道有新版本时是「检查更新」按钮，旁边写「正在检查更新…」或「已是最新版本」；有新版本时写「可更新到 x」并给出「下载并重启」，下载中显示百分比（服务器没给大小时只写「正在下载…」），装好后应用自动重启。失败的原因以错误文字显示在下面，可以再试。
+
 ### 9.12 可访问性
 
 - 所有图标按钮有 `aria-label`；组标题的展开按钮有 `aria-expanded`；触发位 `aria-haspopup="menu"`；菜单项 `role="menuitemradio"` + `aria-checked`；数据流标签页 `role="tab"`；分段控件 `aria-pressed`。
@@ -1030,6 +1035,48 @@ probe1 = SCL
 - **type**：`feat`、`fix`、`perf`、`refactor`、`style`、`test`、`docs`、`build`、`ci`、`chore`、`revert`。
 - **scope**（commitlint 白名单）：`core`、`capture`、`driver`、`dslogic`、`demo`、`decode`、`fileio`、`session`、`app`（src-tauri）、`ui`、`timeline`、`stream`、`trigger`、`render`、`i18n`、`theme`、`ipc`、`store`、`deps`、`tooling`、`repo`。
 - **细粒度**：一个提交只做一件可独立回滚的事；脚手架、配置、功能、测试、文档分开提交；不要把格式化改动与逻辑改动混在一起。
+- **版本**：版本号与 `CHANGELOG.md` 由提交信息算出（§11.5）。`feat`、`fix`、`perf` 的 subject 会原样进入发布说明，要让用户读得懂。
+
+### 11.5 持续集成与发布
+
+**检查**（`.github/workflows/ci.yml`）：PR 与推送到 `main` 时在 Linux（ubuntu-24.04）上运行。macOS 与 Windows 不在每次检查中运行（私有仓库的 Actions 分钟数），它们的问题在构建安装包时暴露。
+
+| 任务     | 内容                                                                                                                                                                    |
+| -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 提交信息 | commitlint 检查新增的提交：PR 为 base..head，推送为 before..after；新分支、强推或手动运行没有起点，只查最后一个                                                         |
+| 前端     | `pnpm format:check`、`lint`、`typecheck`、`test`、`build`                                                                                                               |
+| Rust     | `cargo fmt --check`；`clippy --workspace --all-targets --locked -D warnings`；`cargo test --workspace --locked`；测试重新生成的 `src/ipc/bindings` 与提交的不一致时失败 |
+
+Rust 任务先用 `scripts/python-runtime.mjs` 布置发行版内置的 CPython（§7.3），以它的 `PYO3_CONFIG_FILE` 链接、以 `PYTHONHOME` 跑测试，精简掉了解码器要用的模块会在这里暴露；`HSYNC_TEST_PYTHON_HOME` 让 `hsync-srd` 再按应用的方式（`PyConfig` 指定 home）启动一次 Python。
+
+**版本与发布**（`.github/workflows/release.yml`，release-please）：
+
+- 全项目只有一个版本号：`package.json`（`tauri.conf.json` 从它读取）、Cargo 工作区的 `workspace.package.version` 与 `Cargo.lock` 中工作区 crate 的条目一起变；tag 为 `vX.Y.Z`。配置在 `release-please-config.json` 与 `.release-please-manifest.json`。
+- 每次推送到 `main`，release-please 按约定式提交更新「发布 PR」（标题 `chore: release X.Y.Z`）：`feat` 升次版本号，`fix`、`perf` 升修订号，1.0 之前破坏性变更也只升次版本号；`CHANGELOG.md` 分 Features、Bug Fixes、Performance Improvements、Reverts 列出 subject。只有 `docs`、`chore`、`ci` 之类的提交时不开 PR。第一个版本是 0.1.0（manifest 为 0.0.0，`initial-version` 0.1.0）。
+- 合并发布 PR 后：创建 tag 与草稿 Release → `bundle.yml` 在三个平台构建安装包并上传到草稿 → 全部成功后发布并设为 latest。某个平台失败时草稿留着，重跑失败的任务即可，不会出现缺安装包的已发布版本。
+- `CHANGELOG.md` 由 release-please 生成，Prettier 不处理（`.prettierignore`）；不要手改它与版本号。
+
+**安装包**（`.github/workflows/bundle.yml`，可在 Actions 页面手动运行，安装包作为该次运行的 artifact 保留，用来检查打包）：
+
+| 平台                | 运行器       | 产物                                      |
+| ------------------- | ------------ | ----------------------------------------- |
+| macOS（Apple 芯片） | macos-15     | `.dmg`；`.app.tar.gz`（更新用）           |
+| Windows（x64）      | windows-2025 | NSIS 安装程序（更新用）、MSI              |
+| Linux（x64）        | ubuntu-22.04 | AppImage、deb、rpm（22.04 的 glibc 较旧） |
+
+每个平台先布置内置 CPython 并对它运行 `hsync-srd` 的测试，再由 tauri-action 构建：`--config` 追加内置 Python 的 Tauri 配置与 `src-tauri/tauri.updater.conf.json`（`createUpdaterArtifacts`）。本地 `pnpm bundle` 按同样方式构建本机的安装包（不含更新用的签名产物），参数传给 `tauri build`，如 `pnpm bundle --bundles app`。升级内置 Python 时改 `scripts/python-runtime.mjs` 的 `RELEASE`、`VERSION` 与 `DIGESTS`（取自该 release 的 `SHA256SUMS`）。
+
+**应用内更新**：tauri-plugin-updater 读取 `https://github.com/HalfSweet/HSync/releases/latest/download/latest.json`（tauri-action 汇总各平台写入），用 `tauri.conf.json` 中的公钥校验安装包签名；Windows 安装程序以 passive 模式运行。界面见 §9.11。仓库私有时用户下载不到 Release 的资源，更新不可用。
+
+**签名**：macOS 目前是 ad-hoc 签名（`signingIdentity: "-"`），整个 `.app` 被封印，下载后可在「隐私与安全性」中允许打开；hardened runtime 关闭，因为在 ad-hoc 签名下它的库验证会拒绝内置的 libpython。有 Developer ID 后通过 `APPLE_SIGNING_IDENTITY` 等环境变量签名，并重新打开 hardened runtime 才能公证。Windows 安装程序未签名，SmartScreen 会提示。
+
+**仓库需要的设置**：
+
+| 设置                                                                                   | 用途                                                                                           |
+| -------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Secret `TAURI_SIGNING_PRIVATE_KEY`                                                     | 更新签名的私钥（`tauri signer generate` 生成，公钥在 `tauri.conf.json`）；发布构建缺少它时失败 |
+| Secret `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`                                            | 私钥的口令                                                                                     |
+| Settings → Actions → General：Allow GitHub Actions to create and approve pull requests | release-please 创建发布 PR                                                                     |
 
 ---
 
@@ -1073,7 +1120,7 @@ demo 信号大部分时间空闲，解码器借摘要跳过空闲段，所以样
 | M2 硬件 | `hsync-driver` 设备管理与热插拔；`hsync-dslogic` 全部型号的打开、FPGA、Buffer/Stream 采集、简单触发 | 真机采集结果与 DSView 逐位一致                      | 驱动、Demo 设备、设备与采集界面完成，U2Pro16 真机通过；重连窗口（2 s，同型号重开并恢复设置）与按驱动记住设置完成（默认值与 `*.def.dsc` 一致）；循环采集完成（Stream 模式与 Demo 设备），U2Pro16 真机验证：10 MHz 连续 3 s、约 20 MB/s，保留最新 1 Mi 样本             |
 | M3 解码 | 注解模型；原生 I²C/UART/SPI/CAN-FD；presenter；解码行；数据流面板；选段；悬停读数                   | 设计稿全部画板可复现                                | 完成：四种原生解码器与呈现、解码行、数据流（含选段与逐字节底色）、添加/修改/移除解码器                                                                                                                                                                                |
 | M4 对齐 | sigrok 兼容宿主（pyo3）；高级/串行触发与触发位置；搜索；测量；导出；保存；会话；设置                | §2 中全部 v1 项完成                                 | 已完成：sigrok 兼容宿主（150 个解码器、叠加）、搜索、触发位置与多级/串行触发、选段沿计数、打开/保存/导出（含进度与取消）、数据流导出、通道改名与颜色、会话、数值进制与注解行显隐、设置面板（行为与诊断）、重复采集的后备缓冲、`.dsc` 中的设备选项与采集方式           |
-| M5 打磨 | WebGPU 渲染；大容量（换出）；性能与内存基准；三平台打包与签名；用户文档                             | 发布 v1.0                                           | 已完成：WebGPU 渲染（实例化矩形，自动回退）、存储与解码基准（§12）、用户指南（`docs/user-guide.md`）、macOS `.app` 打包可用（解码器、固件与 demo 随包；Python 仍链接构建机上的 CPython）；待做：换出、内置 CPython 的打包（§15 第 10 条）、Windows / Linux 打包与签名 |
+| M5 打磨 | WebGPU 渲染；大容量（换出）；性能与内存基准；三平台打包与签名；用户文档                             | 发布 v1.0                                           | 已完成：WebGPU 渲染（实例化矩形，自动回退）、存储与解码基准（§12）、用户指南（`docs/user-guide.md`）、内置 CPython 的打包（§7.3）、CI 检查与 release-please 发布、三平台安装包与应用内更新（§11.5）；待做：换出、Windows / Linux 安装包实测、macOS 公证、Windows 签名 |
 
 ---
 
