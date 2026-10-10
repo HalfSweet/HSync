@@ -1,0 +1,100 @@
+# Checks every change on Linux: what the Git hooks check, plus the build, the commit messages and
+# the generated bindings (DESIGN.md §11.5).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  commits:
+    name: Commit messages
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint the new commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # A new branch, a force push or a manual run has no earlier commit to start from.
+          if [ -n "$BASE" ] && git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            pnpm exec commitlint --from "$BASE" --to "$HEAD" --verbose
+          else
+            pnpm exec commitlint --last --verbose
+          fi
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install Tauri's system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # Builds and tests use the Python release builds ship, trimmed standard library and all.
+      - name: Lay out the bundled Python
+        run: node scripts/python-runtime.mjs --github-env
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: cargo test
+        env:
+          PYTHONHOME: ${{ env.HSYNC_PYTHON_HOME }}
+          HSYNC_TEST_PYTHON_HOME: ${{ env.HSYNC_PYTHON_HOME }}
+          LD_LIBRARY_PATH: ${{ env.HSYNC_PYTHON_LIB }}
+        run: cargo test --workspace --locked
+      # The tests regenerate the TypeScript bindings of IPC types (`pnpm bindings`).
+      - name: Check the bindings are up to date
+        run: |
+          if [ -n "$(git status --porcelain -- src/ipc/bindings)" ]; then
+            git status --short -- src/ipc/bindings
+            git --no-pager diff -- src/ipc/bindings
+            echo "::error::src/ipc/bindings is out of date: run pnpm bindings and commit the result"
+            exit 1
+          fi
