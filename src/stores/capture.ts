@@ -4,6 +4,7 @@ import { computed, shallowRef } from 'vue'
 import { getBackend } from '@/ipc/backend'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import { toUiError, type UiError } from '@/ipc/errors'
+import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
 export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -22,6 +23,19 @@ export const useCaptureStore = defineStore('capture', () => {
   const channelNames = computed(
     () => new Map(summary.value?.channels.map((channel) => [channel.index, channel.name]) ?? []),
   )
+  /** Channels grouped by decoder, in timeline order. */
+  const groups = computed<ChannelGroup[]>(() =>
+    summary.value ? groupChannels(summary.value.channels, summary.value.decoders) : [],
+  )
+
+  /** How the timeline labels a channel: its decoder role (SDA, RX…) or its own name. */
+  function channelLabel(index: number): string {
+    for (const group of groups.value) {
+      const channel = group.channels.find((candidate) => candidate.index === index)
+      if (channel) return channel.label
+    }
+    return channelNames.value.get(index) ?? `D${index}`
+  }
 
   /** Seconds from the trigger to `sample`. */
   function timeOf(sample: number): number {
@@ -72,6 +86,8 @@ export const useCaptureStore = defineStore('capture', () => {
     triggered,
     duration,
     channelNames,
+    groups,
+    channelLabel,
     timeOf,
     sampleAt,
     init,
