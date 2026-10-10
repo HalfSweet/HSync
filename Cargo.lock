@@ -1348,9 +1348,13 @@ dependencies = [
 name = "hsync-session"
 version = "0.1.0"
 dependencies = [
+ "crossbeam-channel",
  "hsync-capture",
  "hsync-core",
+ "hsync-demo",
+ "hsync-driver",
  "hsync-fileio",
+ "log",
  "parking_lot",
  "serde",
  "serde_json",

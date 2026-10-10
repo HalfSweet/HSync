@@ -8,6 +8,7 @@
 
 mod bins;
 mod error;
+mod instrument;
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -21,6 +22,10 @@ use ts_rs::TS;
 
 pub use bins::{BINS_FORMAT_VERSION, BinsRequest, encode_bins};
 pub use error::SessionError;
+pub use instrument::{
+    CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,
+    SessionEvent,
+};
 
 /// Where the open capture came from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -33,6 +38,13 @@ pub enum CaptureSource {
     File {
         /// Path of the file.
         path: String,
+    },
+    /// A capture taken with a device.
+    Device {
+        /// Driver of the device.
+        driver: String,
+        /// Model of the device.
+        model: String,
     },
 }
 
@@ -144,29 +156,30 @@ impl Workspace {
         self.summary().ok_or(SessionError::NoCapture)
     }
 
+    /// Makes `capture`, which a device is about to fill, the open capture. Returns its summary
+    /// and the samples to append to.
+    pub fn begin_live(
+        &mut self,
+        source: CaptureSource,
+        capture: LogicCapture,
+    ) -> (CaptureSummary, Arc<RwLock<LogicCapture>>) {
+        self.last_id += 1;
+        let shared = Arc::new(RwLock::new(capture));
+        let open = OpenCapture {
+            id: self.last_id,
+            source,
+            capture: Arc::clone(&shared),
+            channel_names: BTreeMap::new(),
+            decoders: None,
+        };
+        let summary = summarize(&open);
+        self.current = Some(open);
+        (summary, shared)
+    }
+
     /// Summary of the open capture.
     pub fn summary(&self) -> Option<CaptureSummary> {
-        let open = self.current.as_ref()?;
-        let info = open.capture.read().info();
-        let channels = info
-            .channels
-            .iter()
-            .map(|&index| ChannelSummary {
-                index,
-                name: open
-                    .channel_names
-                    .get(&index)
-                    .cloned()
-                    .unwrap_or_else(|| index.to_string()),
-            })
-            .collect();
-        Some(CaptureSummary {
-            id: open.id,
-            source: open.source.clone(),
-            info,
-            channels,
-            decoders: open.decoders.clone(),
-        })
+        self.current.as_ref().map(summarize)
     }
 
     /// The samples of capture `id`, shared so long queries do not hold the workspace.
@@ -176,6 +189,29 @@ impl Workspace {
             Some(_) => Err(SessionError::StaleCapture),
             None => Err(SessionError::NoCapture),
         }
+    }
+}
+
+fn summarize(open: &OpenCapture) -> CaptureSummary {
+    let info = open.capture.read().info();
+    let channels = info
+        .channels
+        .iter()
+        .map(|&index| ChannelSummary {
+            index,
+            name: open
+                .channel_names
+                .get(&index)
+                .cloned()
+                .unwrap_or_else(|| index.to_string()),
+        })
+        .collect();
+    CaptureSummary {
+        id: open.id,
+        source: open.source.clone(),
+        info,
+        channels,
+        decoders: open.decoders.clone(),
     }
 }
 

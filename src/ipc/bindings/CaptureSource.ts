@@ -7,4 +7,12 @@ export type CaptureSource = { "kind": "demo" } | { "kind": "file",
 /**
  * Path of the file.
  */
-path: string, };
+path: string, } | { "kind": "device", 
+/**
+ * Driver of the device.
+ */
+driver: string, 
+/**
+ * Model of the device.
+ */
+model: string, };

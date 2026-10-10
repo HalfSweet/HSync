@@ -19,6 +19,18 @@ pub enum SessionError {
     /// Loading a capture file failed.
     #[error(transparent)]
     File(#[from] FileError),
+    /// No device is open.
+    #[error("no device is open")]
+    NoDevice,
+    /// No device has this id.
+    #[error("unknown device {0}")]
+    UnknownDevice(String),
+    /// A capture is running.
+    #[error("a capture is running")]
+    Busy,
+    /// The device or its driver failed.
+    #[error("device error {}", .0.code)]
+    Device(UiError),
 }
 
 impl From<&SessionError> for UiError {
@@ -31,6 +43,12 @@ impl From<&SessionError> for UiError {
             }
             SessionError::InvalidRange => UiError::new("error.session.invalidRange"),
             SessionError::File(file) => file.into(),
+            SessionError::NoDevice => UiError::new("error.session.noDevice"),
+            SessionError::UnknownDevice(id) => {
+                UiError::new("error.session.unknownDevice").with("id", id.as_str())
+            }
+            SessionError::Busy => UiError::new("error.session.busy"),
+            SessionError::Device(error) => error.clone(),
         }
     }
 }
