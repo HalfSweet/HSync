@@ -4,8 +4,11 @@
 //! ```sh
 //! cargo run -p hsync-dslogic --example dslogic_capture -- \
 //!     [--buffer] [--mode CHANNEL_MODE] [--rate HZ] [--samples N] [--channels N] [--trigger CH:rise|fall|both|high|low]
-//!     [--position PERCENT] [--instant] [--stop-after SECONDS] [--vth VOLTS]
+//!     [--stage CH:CONDITION,...]... [--position PERCENT] [--instant] [--stop-after SECONDS] [--vth VOLTS]
 //! ```
+//!
+//! Each `--stage` adds a stage of a multi-stage trigger (Buffer mode) whose first pattern holds
+//! the listed conditions; an empty list matches at once.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,7 +17,8 @@ use std::time::{Duration, Instant};
 use hsync_capture::LogicCapture;
 use hsync_core::TriggerCondition;
 use hsync_driver::{
-    CandidateStatus, CapturePlan, DeviceManager, DriverError, OptionKey, OptionValue, Packet,
+    AdvancedTrigger, CandidateStatus, CapturePlan, DeviceManager, DriverError, OptionKey,
+    OptionValue, Packet, TriggerStageSpec,
 };
 use hsync_dslogic::{DslogicDriver, FirmwareDir};
 
@@ -42,6 +46,7 @@ struct Args {
     samples: Option<u64>,
     channels: Option<u16>,
     trigger: Option<(u16, TriggerCondition)>,
+    stages: Vec<TriggerStageSpec>,
     position: u8,
     instant: bool,
     stop_after: Option<f64>,
@@ -56,6 +61,7 @@ fn parse() -> Result<Args, String> {
         samples: None,
         channels: None,
         trigger: None,
+        stages: Vec::new(),
         position: 50,
         instant: false,
         stop_after: None,
@@ -74,23 +80,42 @@ fn parse() -> Result<Args, String> {
             "--position" => args.position = value()?.parse().map_err(|e| format!("{e}"))?,
             "--stop-after" => args.stop_after = Some(value()?.parse().map_err(|e| format!("{e}"))?),
             "--vth" => args.vth = Some(value()?.parse().map_err(|e| format!("{e}"))?),
-            "--trigger" => {
+            "--trigger" => args.trigger = Some(channel_condition(&value()?)?),
+            "--stage" => {
                 let text = value()?;
-                let (channel, condition) = text.split_once(':').ok_or("--trigger CH:CONDITION")?;
-                let condition = match condition {
-                    "rise" => TriggerCondition::Rise,
-                    "fall" => TriggerCondition::Fall,
-                    "both" => TriggerCondition::Both,
-                    "high" => TriggerCondition::High,
-                    "low" => TriggerCondition::Low,
-                    other => return Err(format!("unknown condition {other}")),
-                };
-                args.trigger = Some((channel.parse().map_err(|e| format!("{e}"))?, condition));
+                let pattern0 = text
+                    .split(',')
+                    .filter(|part| !part.is_empty())
+                    .map(channel_condition)
+                    .collect::<Result<_, _>>()?;
+                args.stages.push(TriggerStageSpec {
+                    pattern0,
+                    pattern1: Vec::new(),
+                    both: true,
+                    invert0: false,
+                    invert1: false,
+                    count: 1,
+                    contiguous: false,
+                });
             }
             other => return Err(format!("unknown argument {other}")),
         }
     }
     Ok(args)
+}
+
+/// `CH:CONDITION`, e.g. `3:rise`.
+fn channel_condition(text: &str) -> Result<(u16, TriggerCondition), String> {
+    let (channel, condition) = text.split_once(':').ok_or("CH:CONDITION")?;
+    let condition = match condition {
+        "rise" => TriggerCondition::Rise,
+        "fall" => TriggerCondition::Fall,
+        "both" => TriggerCondition::Both,
+        "high" => TriggerCondition::High,
+        "low" => TriggerCondition::Low,
+        other => return Err(format!("unknown condition {other}")),
+    };
+    Ok((channel.parse().map_err(|e| format!("{e}"))?, condition))
 }
 
 fn set(
@@ -183,7 +208,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         triggers: args.trigger.into_iter().collect(),
         trigger_position: args.position,
         instant: args.instant,
-        advanced: None,
+        advanced: (!args.stages.is_empty()).then(|| AdvancedTrigger::Stages {
+            stages: args.stages.clone(),
+        }),
     };
     let (sink, packets) = crossbeam_channel::unbounded();
     let started = Instant::now();
