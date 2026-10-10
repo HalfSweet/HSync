@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 (2026-10-10)
+
+### Features
+
+- **atklogic:** Support ALIENTEK ATK-Logic DL16 and DL16 Plus (#17) ([f7351a7](https://github.com/HalfSweet/HSync/commit/f7351a72d89b6256260ffcbefcde74efa90d68a0))
+- Import VCD, FST and GHW waveforms and export FST (#18) ([bedd5a9](https://github.com/HalfSweet/HSync/commit/bedd5a9810650957521322c6de1d647c445a4249))
+
 ## 0.1.1 (2026-10-10)
 
 ### Features
