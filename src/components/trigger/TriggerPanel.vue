@@ -7,6 +7,7 @@ import AnimatedHeight from '@/components/common/AnimatedHeight.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
 import { vIndicator } from '@/motion/indicator'
+import { holdInPlace } from '@/motion/list'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDeviceStore } from '@/stores/device'
@@ -204,10 +205,15 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
             <div v-if="trigger.activeMode === 'simple'" class="rise-in flex flex-col gap-3">
               <p class="text-ink-2">{{ t('triggerPanel.simple.note') }}</p>
               <div class="flex items-center gap-2">
-                <span v-if="channels.armed.length === 0" class="flex-1 text-ink-3">{{
-                  t('triggerPanel.simple.none')
-                }}</span>
-                <span v-else class="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+                <TransitionGroup
+                  tag="span"
+                  name="item"
+                  class="relative flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1"
+                  @before-leave="holdInPlace"
+                >
+                  <span v-if="channels.armed.length === 0" key="none" class="text-ink-3">{{
+                    t('triggerPanel.simple.none')
+                  }}</span>
                   <span
                     v-for="item in channels.armed"
                     :key="item.index"
@@ -216,7 +222,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                     {{ capture.channelLabel(item.index) }}
                     <TriggerGlyph :condition="item.condition" />
                   </span>
-                </span>
+                </TransitionGroup>
                 <button
                   class="btn-ghost"
                   :disabled="channels.armed.length === 0"
@@ -242,7 +248,14 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                     </option>
                   </select>
                 </label>
-                <div v-indicator role="tablist" class="flex min-w-0 flex-1 flex-wrap gap-0.5">
+                <TransitionGroup
+                  v-indicator
+                  tag="div"
+                  name="item"
+                  role="tablist"
+                  class="flex min-w-0 flex-1 flex-wrap gap-0.5"
+                  @before-leave="holdInPlace"
+                >
                   <button
                     v-for="index in trigger.stageCount"
                     :key="index"
@@ -254,7 +267,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                   >
                     {{ index }}
                   </button>
-                </div>
+                </TransitionGroup>
               </div>
               <div
                 v-if="stage"

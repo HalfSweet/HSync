@@ -79,6 +79,15 @@ describe('v-indicator', () => {
     wrapper.unmount()
   })
 
+  it('leaves out an option on its way out of a list', async () => {
+    const { container, wrapper } = control()
+    const leaving = container.querySelector('button')
+    if (leaving) leaving.dataset.leaving = ''
+    await settle()
+    expect(container.dataset.marked).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('draws a line under the selected tab of a tab bar', async () => {
     const { chosen, container, wrapper } = control('line', 'aria-selected')
     expect(container.dataset.indicator).toBe('line')

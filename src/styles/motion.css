@@ -136,3 +136,29 @@
 .rise-in {
   animation: rise-in var(--motion-enter) var(--ease-enter);
 }
+
+/* item: a list's entry comes and goes in place while the others move over to make room or to
+   close the gap; `holdInPlace` (src/motion/list.ts) keeps a leaving entry where it stood. */
+.item-enter-active {
+  transition:
+    opacity var(--motion-enter) var(--ease-enter),
+    transform var(--motion-enter) var(--ease-enter);
+}
+
+.item-leave-active {
+  pointer-events: none;
+  transition:
+    opacity var(--motion-exit) var(--ease-exit),
+    transform var(--motion-exit) var(--ease-exit);
+}
+
+.item-enter-from,
+.item-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+/* An entry on its way in or out keeps its own fade, even if the list moved it meanwhile. */
+.item-move:not(.item-enter-active, .item-leave-active) {
+  transition: transform var(--motion-slide) var(--ease-enter);
+}

@@ -9,8 +9,12 @@ import type { Directive } from 'vue'
  * `data-marked` while an option is selected; motion.css draws the mark from them.
  */
 
-/** Options the mark goes under: the container's children that say they are selected. */
-const SELECTED = ':scope > [aria-pressed="true"], :scope > [aria-selected="true"]'
+/**
+ * Options the mark goes under: the container's children that say they are selected, but not
+ * one on its way out of a list (`holdInPlace`, src/motion/list.ts).
+ */
+const SELECTED =
+  ':scope > [aria-pressed="true"]:not([data-leaving]), :scope > [aria-selected="true"]:not([data-leaving])'
 
 interface Watchers {
   mutations: MutationObserver
@@ -57,7 +61,7 @@ export const vIndicator: Directive<HTMLElement> = {
       subtree: true,
       childList: true,
       attributes: true,
-      attributeFilter: ['aria-pressed', 'aria-selected'],
+      attributeFilter: ['aria-pressed', 'aria-selected', 'data-leaving'],
     })
     observeOptions()
     watched.set(container, { mutations, sizes })

@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useFileActions } from '@/composables/useFileActions'
 import type { DeviceSummary } from '@/ipc/bindings/DeviceSummary'
+import { holdInPlace } from '@/motion/list'
 import { useCaptureStore } from '@/stores/capture'
 import { DEMO_DRIVER, useDeviceStore } from '@/stores/device'
 import { commandLabel } from '@/utils/keys'
@@ -104,26 +105,34 @@ function loadSession(): void {
             {{ t('header.device.rescan') }}
           </button>
         </div>
-        <p v-if="device.devices.length === 0" class="px-2 py-1.5 text-ink-3">
-          {{ t('header.device.none') }}
-        </p>
-        <button
-          v-for="entry in device.devices"
-          :key="entry.id"
-          role="menuitemradio"
-          :aria-checked="entry.id === device.state?.info.id"
-          :aria-disabled="!selectable(entry) || capture.running"
-          class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left hover:bg-hover aria-disabled:cursor-default aria-disabled:opacity-55 aria-disabled:hover:bg-transparent"
-          @click="pick(entry)"
+        <!-- Devices come and go as they are plugged in, pulled out or found by a rescan. -->
+        <TransitionGroup
+          tag="div"
+          name="item"
+          class="relative flex flex-col"
+          @before-leave="holdInPlace"
         >
-          <span class="flex min-w-0 flex-1 flex-col">
-            <span :class="entry.id === device.state?.info.id && 'font-medium'">{{
-              nameOf(entry)
-            }}</span>
-            <span v-if="note(entry)" class="text-caption text-ink-3">{{ note(entry) }}</span>
-          </span>
-          <AppIcon v-if="entry.id === device.state?.info.id" name="check" />
-        </button>
+          <p v-if="device.devices.length === 0" key="no-devices" class="px-2 py-1.5 text-ink-3">
+            {{ t('header.device.none') }}
+          </p>
+          <button
+            v-for="entry in device.devices"
+            :key="entry.id"
+            role="menuitemradio"
+            :aria-checked="entry.id === device.state?.info.id"
+            :aria-disabled="!selectable(entry) || capture.running"
+            class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left hover:bg-hover aria-disabled:cursor-default aria-disabled:opacity-55 aria-disabled:hover:bg-transparent"
+            @click="pick(entry)"
+          >
+            <span class="flex min-w-0 flex-1 flex-col">
+              <span :class="entry.id === device.state?.info.id && 'font-medium'">{{
+                nameOf(entry)
+              }}</span>
+              <span v-if="note(entry)" class="text-caption text-ink-3">{{ note(entry) }}</span>
+            </span>
+            <AppIcon v-if="entry.id === device.state?.info.id" name="check" />
+          </button>
+        </TransitionGroup>
         <div class="my-1 border-t border-line" />
         <button
           role="menuitem"
