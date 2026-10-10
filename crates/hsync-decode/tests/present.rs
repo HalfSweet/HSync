@@ -103,10 +103,22 @@ fn spi_lanes_show_text_and_runs() {
     let all = presentations();
     let spi = find(&all, "1:spi");
     let view = spi.view(VIEW.0, VIEW.1, SPP);
-    assert!(matches!(
-        view.lanes[0].items.as_slice(),
-        [LaneItem::SpiTransfer { cut: false, .. }]
-    ));
+    let [
+        LaneItem::SpiTransfer {
+            cut: false,
+            first,
+            last,
+            ..
+        },
+    ] = view.lanes[0].items.as_slice()
+    else {
+        panic!("one transfer in view");
+    };
+    // The design's viewport shows bytes 81–160 of the transfer (it starts slightly earlier).
+    assert!(
+        (79..=81).contains(first) && (159..=161).contains(last),
+        "{first}–{last}"
+    );
     let miso: String = view.lanes[1]
         .items
         .iter()

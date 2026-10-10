@@ -101,6 +101,9 @@ pub enum LaneItem {
         start: u64,
         end: u64,
         cut: bool,
+        /// Offsets of the first and last words in view; filled in by [`Presentation::view`].
+        first: u32,
+        last: u32,
     },
     /// Characters of one text line, each centred on its word.
     SpiText {
@@ -350,6 +353,8 @@ pub struct Presentation {
     counts: StreamCounts,
     /// I²C transfers by span and target, for the lane label.
     addresses: Vec<(u64, u64, u8)>,
+    /// SPI transfers by start with their words' spans, for the offsets in view.
+    transfer_words: Vec<(u64, Vec<(u64, u64)>)>,
 }
 
 /// Items of one lane, sorted by start, with the running maximum of their ends.
@@ -457,7 +462,40 @@ const HEX_WIDTH: usize = 16;
 /// Characters per UART text row.
 const TEXT_WIDTH: usize = 80;
 
+/// Everything a presentation holds, for tools that replay it elsewhere (the UI's browser mock).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Snapshot<'a> {
+    pub bus: Bus,
+    /// Every item of every lane, by lane name.
+    pub lanes: Vec<(&'a str, &'a [LaneItem])>,
+    pub text_rows: &'a [StreamRow],
+    pub hex_rows: &'a [StreamRow],
+    pub units: &'a [(u64, u64)],
+    pub counts: StreamCounts,
+    pub addresses: &'a [(u64, u64, u8)],
+    pub transfer_words: &'a [(u64, Vec<(u64, u64)>)],
+}
+
 impl Presentation {
+    /// Everything this presentation holds.
+    pub fn snapshot(&self) -> Snapshot<'_> {
+        Snapshot {
+            bus: self.bus,
+            lanes: self
+                .lanes
+                .iter()
+                .map(|(name, lane)| (name.as_str(), lane.items.as_slice()))
+                .collect(),
+            text_rows: &self.text_rows,
+            hex_rows: &self.hex_rows,
+            units: &self.units,
+            counts: self.counts,
+            addresses: &self.addresses,
+            transfer_words: &self.transfer_words,
+        }
+    }
+
     pub fn new(decoded: &Decoded) -> Self {
         match decoded {
             Decoded::I2c { trace, shifted } => present_i2c(trace, *shifted),
@@ -475,7 +513,7 @@ impl Presentation {
     pub fn view(&self, start: u64, end: u64, samples_per_pixel: f64) -> DecoderView {
         // Narrower than 3 px is unreadable.
         let min_width = (samples_per_pixel * 3.0).ceil() as u64;
-        let lanes: Vec<LaneView> = self
+        let mut lanes: Vec<LaneView> = self
             .lanes
             .iter()
             .map(|(name, lane)| LaneView {
@@ -483,6 +521,27 @@ impl Presentation {
                 items: lane.view(start, end, min_width),
             })
             .collect();
+        // SPI transfers name the offsets of their words in view.
+        for item in lanes.iter_mut().flat_map(|lane| lane.items.iter_mut()) {
+            if let LaneItem::SpiTransfer {
+                start: transfer_start,
+                first,
+                last,
+                ..
+            } = item
+                && let Some((_, words)) = self
+                    .transfer_words
+                    .iter()
+                    .find(|(at, _)| at == transfer_start)
+            {
+                let from = words.partition_point(|&(_, word_end)| word_end <= start);
+                let to = words.partition_point(|&(word_start, _)| word_start < end);
+                if to > from {
+                    *first = from as u32;
+                    *last = (to - 1) as u32;
+                }
+            }
+        }
         let empty = lanes.iter().all(|lane| lane.items.is_empty());
         let header = self.lanes.first().map(|(_, lane)| lane);
         let address = {
@@ -696,6 +755,7 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
         units,
         counts,
         addresses,
+        transfer_words: Vec::new(),
     }
 }
 
@@ -769,6 +829,7 @@ fn present_uart(trace: &uart::Trace) -> Presentation {
             bytes: frames.len() as u32,
         },
         addresses: Vec::new(),
+        transfer_words: Vec::new(),
     }
 }
 
@@ -827,6 +888,7 @@ fn pieces(values: &[u32], text: bool) -> Vec<Piece> {
 
 fn present_spi(trace: &spi::Trace) -> Presentation {
     let mut header = Vec::new();
+    let mut transfer_words: Vec<(u64, Vec<(u64, u64)>)> = Vec::new();
     let mut lanes: [(DataLine, Vec<LaneItem>); 2] =
         [(DataLine::Miso, Vec::new()), (DataLine::Mosi, Vec::new())];
     let mut text_rows = Vec::new();
@@ -842,7 +904,13 @@ fn present_spi(trace: &spi::Trace) -> Presentation {
             start: transfer.start,
             end,
             cut: transfer.cut_head || transfer.end.is_none(),
+            first: 0,
+            last: words.len().saturating_sub(1) as u32,
         });
+        transfer_words.push((
+            transfer.start,
+            words.iter().map(|w| (w.start, w.end)).collect(),
+        ));
         for (line, lane) in &mut lanes {
             let values: Vec<u32> = words
                 .iter()
@@ -984,6 +1052,7 @@ fn present_spi(trace: &spi::Trace) -> Presentation {
             bytes: words as u32,
         },
         addresses: Vec::new(),
+        transfer_words,
     }
 }
 
@@ -1042,5 +1111,6 @@ fn present_can(trace: &can::Trace) -> Presentation {
             bytes: trace.frames.iter().map(|f| f.data.len() as u32).sum(),
         },
         addresses: Vec::new(),
+        transfer_words: Vec::new(),
     }
 }
