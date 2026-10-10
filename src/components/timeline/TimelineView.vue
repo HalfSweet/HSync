@@ -32,6 +32,8 @@ import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
 import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/timeline/fling'
+import { denseGap } from '@/render/shape'
+import { isClockRole, traceBlocks } from '@/timeline/blocks'
 import { keyTakenElsewhere, timelineAction } from '@/timeline/keys'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
 import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
@@ -310,11 +312,12 @@ const frame = computed<FrameDescriptor>(() => {
   const top = scroll.value.top
   const result = bins.value
   const traces: TraceDraw[] = []
+  const cellsOf = (index: number) => result?.channels.get(index)
   for (const row of layout.value.rows) {
     if (!isTrace(row) || !row.channel || !result) continue
     const y = ruler + row.top - top
     if (y + row.height <= ruler || y >= height) continue
-    const cells = result.channels.get(row.channel.index)
+    const cells = cellsOf(row.channel.index)
     if (!cells) continue
     traces.push({
       top: y,
@@ -322,6 +325,8 @@ const frame = computed<FrameDescriptor>(() => {
       wire: row.channel.wire,
       narrow: row.kind === 'trace-narrow',
       cells,
+      blocks: traceBlocks(row.channel, row.group, cellsOf, denseGap(pixelRatio.value)),
+      clock: isClockRole(row.channel.role),
     })
   }
   return {

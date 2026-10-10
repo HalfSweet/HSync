@@ -1,35 +1,116 @@
 /**
- * The shape of one trace from its column cells: a polyline between the high and low levels and
- * the spans of high level that get the wash. Neighbouring columns with the same level merge, so
- * the shape has as many segments as there are transitions in view.
+ * The shape of one trace from its column cells: a polyline between the high and low levels, the
+ * spans of high level that get the wash, and blocks where the trace changes too often to draw
+ * edge by edge (DESIGN.md §9.6: SPI clocks and data become byte blocks). Neighbouring columns
+ * with the same level merge, so the shape has as many segments as there are transitions in view.
  */
 import { CELL_EMPTY, CELL_FIRST_HIGH, CELL_LAST_HIGH, CELL_TRANSITION } from '@/ipc/bins'
 
 /** `M` starts a subpath, `L` continues it; `high` selects the level the point sits on. */
 export type ShapeCommand = readonly ['M' | 'L', number, boolean]
 
+/** Columns `[from, to)`. */
+export type ColumnRun = readonly [number, number]
+
 export interface TraceShape {
   path: ShapeCommand[]
   /** `[from, to]` x spans of high level. */
   washes: [number, number][]
+  /** `[from, to]` x spans drawn as blocks. */
+  blocks: [number, number][]
+}
+
+/** Whether column `column` has an edge: within it, or between it and the column before. */
+function hasEdge(cells: Uint8Array, column: number): boolean {
+  const cell = cells[column] ?? 0
+  if (cell & CELL_TRANSITION) return true
+  if (column === 0) return false
+  const before = ((cells[column - 1] ?? 0) & CELL_LAST_HIGH) !== 0
+  return before !== ((cell & CELL_FIRST_HIGH) !== 0)
+}
+
+/**
+ * Where a trace changes too often to draw edge by edge: runs of at least `minimum` columns with
+ * edges, quiet stretches of up to `gap` columns between them included. A clock whose edges are
+ * closer than the gap becomes one run per burst.
+ */
+export function busyRuns(cells: Uint8Array, gap = 1, minimum = 2): [number, number][] {
+  const runs: [number, number][] = []
+  let from = -1
+  let last = -1
+  let busy = 0
+  const close = () => {
+    if (from >= 0 && busy >= minimum) runs.push([from, last + 1])
+    from = -1
+    busy = 0
+  }
+  for (let column = 0; column < cells.length; column++) {
+    const cell = cells[column] ?? CELL_EMPTY
+    if (cell & CELL_EMPTY) break
+    if (!hasEdge(cells, column)) continue
+    if (from >= 0 && column - last - 1 > gap) close()
+    if (from < 0) from = column
+    last = column
+    busy += 1
+  }
+  close()
+  return runs
+}
+
+/** The runs of `runs` within which `cells` change at all, as a data line follows its clock. */
+export function changingIn(cells: Uint8Array, runs: readonly ColumnRun[]): [number, number][] {
+  return runs
+    .filter(([from, to]) => {
+      for (let column = from; column < to; column++) {
+        if ((cells[column] ?? 0) & CELL_TRANSITION) return true
+        if (column > from && hasEdge(cells, column)) return true
+      }
+      return false
+    })
+    .map(([from, to]) => [from, to])
+}
+
+/** Quiet columns a run of edges may span: edges closer than 2 CSS pixels cannot be told apart. */
+export function denseGap(dpr: number): number {
+  return Math.max(1, Math.round(2 * dpr) - 1)
 }
 
 /**
  * @param cells one byte per column, see `hsync_capture::cell`
  * @param x the x of a column's left edge; `x(cells.length)` is the right edge of the last column
+ * @param blocks column runs to draw as blocks, ascending and apart
+ * @param through draw the level a block starts and ends on through it, as a clock's idle line
  */
-export function traceShape(cells: Uint8Array, x: (column: number) => number): TraceShape {
+export function traceShape(
+  cells: Uint8Array,
+  x: (column: number) => number,
+  blocks: readonly ColumnRun[] = [],
+  through = false,
+): TraceShape {
   const path: ShapeCommand[] = []
   const washes: [number, number][] = []
-  if (cells.length === 0 || ((cells[0] ?? 0) & CELL_EMPTY) !== 0) return { path, washes }
+  const spans: [number, number][] = []
+  let end = cells.length
+  for (let column = 0; column < cells.length; column++) {
+    if ((cells[column] ?? CELL_EMPTY) & CELL_EMPTY) {
+      end = column
+      break
+    }
+  }
+  if (end === 0) return { path, washes, blocks: spans }
 
   let level = ((cells[0] ?? 0) & CELL_FIRST_HIGH) !== 0
   let washFrom: number | null = level ? x(0) : null
   path.push(['M', x(0), level])
 
+  const lineTo = (at: number, high: boolean) => {
+    const last = path.at(-1)
+    if (last?.[1] !== at || last[2] !== high) path.push(['L', at, high])
+  }
   const go = (at: number, high: boolean) => {
     if (high === level) return
-    path.push(['L', at, level], ['L', at, high])
+    lineTo(at, level)
+    path.push(['L', at, high])
     if (high) washFrom = at
     else if (washFrom !== null) {
       washes.push([washFrom, at])
@@ -38,13 +119,31 @@ export function traceShape(cells: Uint8Array, x: (column: number) => number): Tr
     level = high
   }
 
-  let end = cells.length
-  for (let column = 0; column < cells.length; column++) {
-    const cell = cells[column] ?? CELL_EMPTY
-    if (cell & CELL_EMPTY) {
-      end = column
-      break
+  let next = 0
+  let column = 0
+  while (column < end) {
+    const block = blocks[next]
+    if (block && block[0] <= column) {
+      next += 1
+      const to = Math.min(block[1], end)
+      if (to <= column) continue
+      const left = x(column)
+      const right = x(to)
+      const after = ((cells[to - 1] ?? 0) & CELL_LAST_HIGH) !== 0
+      lineTo(left, level)
+      if (washFrom !== null) {
+        washes.push([washFrom, left])
+        washFrom = null
+      }
+      spans.push([left, right])
+      if (through && after === level) path.push(['L', right, level])
+      else path.push(['M', right, after])
+      level = after
+      if (level) washFrom = right
+      column = to
+      continue
     }
+    const cell = cells[column] ?? CELL_EMPTY
     const at = x(column)
     go(at, (cell & CELL_FIRST_HIGH) !== 0)
     if (cell & CELL_TRANSITION) {
@@ -58,9 +157,10 @@ export function traceShape(cells: Uint8Array, x: (column: number) => number): Tr
       }
       level = last
     }
+    column += 1
   }
   const right = x(end)
-  path.push(['L', right, level])
+  lineTo(right, level)
   if (washFrom !== null) washes.push([washFrom, right])
-  return { path, washes }
+  return { path, washes, blocks: spans }
 }

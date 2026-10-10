@@ -70,6 +70,8 @@ export class Canvas2DRenderer implements WaveformRenderer {
     const shape = traceShape(
       trace.cells,
       (column) => frame.trackLeft + sampleToX(frame.view, binStart(bins, column)),
+      trace.blocks,
+      trace.clock,
     )
 
     const wash = new Path2D()
@@ -77,6 +79,12 @@ export class Canvas2DRenderer implements WaveformRenderer {
       wash.rect(from, yHigh, Math.max(to - from, 0.5), yLow - yHigh)
     context.fillStyle = tokens.washes[trace.wire] ?? tokens.grid
     context.fill(wash)
+
+    const block = new Path2D()
+    for (const [from, to] of shape.blocks)
+      block.rect(from, yHigh, Math.max(to - from, 0.5), yLow - yHigh)
+    context.fillStyle = tokens.blocks[trace.wire] ?? tokens.grid
+    context.fill(block)
 
     const line = new Path2D()
     for (const [command, at, high] of shape.path) {

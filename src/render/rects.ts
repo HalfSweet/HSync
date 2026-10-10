@@ -89,10 +89,22 @@ export function frameRects(
     const shape = traceShape(
       trace.cells,
       (column) => frame.trackLeft + sampleToX(frame.view, binStart(bins, column)),
+      trace.blocks,
+      trace.clock,
     )
     const wash = parseColor(tokens.washes[trace.wire] ?? tokens.grid)
     for (const [from, to] of shape.washes) {
       list.push(from * dpr, yHigh * dpr, Math.max(to - from, 0.5) * dpr, (yLow - yHigh) * dpr, wash)
+    }
+    const block = parseColor(tokens.blocks[trace.wire] ?? tokens.grid)
+    for (const [from, to] of shape.blocks) {
+      list.push(
+        from * dpr,
+        yHigh * dpr,
+        Math.max(to - from, 0.5) * dpr,
+        (yLow - yHigh) * dpr,
+        block,
+      )
     }
     const color = parseColor(tokens.wires[trace.wire] ?? tokens.grid)
     const half = (geometry.line * dpr) / 2

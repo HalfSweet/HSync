@@ -5,6 +5,8 @@
 import type { BinsResult } from '@/ipc/bins'
 import type { Viewport } from '@/timeline/viewport'
 
+import type { ColumnRun } from './shape'
+
 /** Colours resolved from the design tokens of the current theme. */
 export interface RenderTokens {
   grid: string
@@ -12,6 +14,8 @@ export interface RenderTokens {
   wires: string[]
   /** Fill of the high level of each wire colour (the line colour at its wash opacity). */
   washes: string[]
+  /** Fill of blocks, stretches too dense to draw edge by edge: the wash, `--bk` times as opaque. */
+  blocks: string[]
 }
 
 export interface TraceDraw {
@@ -22,6 +26,10 @@ export interface TraceDraw {
   /** Narrow rows use a thinner line and smaller margins. */
   narrow: boolean
   cells: Uint8Array
+  /** Column runs drawn as blocks, ascending and apart. */
+  blocks: readonly ColumnRun[]
+  /** A clock: its idle level runs through its blocks. */
+  clock: boolean
 }
 
 export interface FrameDescriptor {

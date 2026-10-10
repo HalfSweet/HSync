@@ -9,6 +9,7 @@ const tokens: RenderTokens = {
   grid: 'rgb(23 27 31 / 0.07)',
   wires: Array.from({ length: 8 }, () => '#000000'),
   washes: Array.from({ length: 8 }, () => 'rgb(0 0 0 / 10%)'),
+  blocks: Array.from({ length: 8 }, () => 'rgb(0 0 0 / 34%)'),
 }
 
 describe('waveform rectangles', () => {
@@ -37,6 +38,8 @@ describe('waveform rectangles', () => {
           wire: 0,
           narrow: false,
           cells: new Uint8Array([0, high, high | CELL_TRANSITION, 0]),
+          blocks: [],
+          clock: false,
         },
       ],
     }
