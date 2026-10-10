@@ -13,3 +13,6 @@ src-tauri/icons/
 
 # Rust sources are formatted by rustfmt
 *.rs
+
+# Generated fixtures
+src/ipc/mock/fixtures/
