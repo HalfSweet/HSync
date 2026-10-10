@@ -152,6 +152,51 @@ fn replays_the_protocol_capture() {
 }
 
 #[test]
+fn loops_until_stopped() {
+    let mut device = open(None);
+    set(
+        device.as_mut(),
+        OptionKey::Pattern,
+        OptionValue::Choice("counter".into()),
+    );
+    set(
+        device.as_mut(),
+        OptionKey::Samplerate,
+        OptionValue::Integer(100_000_000),
+    );
+    set(
+        device.as_mut(),
+        OptionKey::SampleLimit,
+        OptionValue::Integer(4096),
+    );
+    assert!(device.can_loop());
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let plan = CapturePlan {
+        looping: true,
+        ..CapturePlan::default()
+    };
+    let acquisition = device.start(plan, sink).expect("start");
+    let mut bytes = 0;
+    while bytes < 10 * 4096 / 8 * 16 {
+        match packets.recv_timeout(Duration::from_secs(5)).expect("data") {
+            Packet::Logic(data) => bytes += data.len(),
+            Packet::End(reason) => panic!("ended by itself: {reason:?}"),
+            _ => {}
+        }
+    }
+    acquisition.stop();
+    acquisition.wait();
+    let ended = packets
+        .try_iter()
+        .find_map(|packet| match packet {
+            Packet::End(reason) => Some(reason),
+            _ => None,
+        })
+        .expect("an end");
+    assert_eq!(ended, EndReason::Stopped);
+}
+
+#[test]
 fn stops_while_waiting_for_the_trigger() {
     let mut device = open(None);
     set(

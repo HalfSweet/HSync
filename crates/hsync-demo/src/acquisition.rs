@@ -30,6 +30,8 @@ pub(crate) struct DemoParams {
     pub triggers: Vec<(usize, TriggerCondition)>,
     /// Samples kept before the trigger, a multiple of 64.
     pub pre_trigger: u64,
+    /// Run until stopped instead of up to `samples`.
+    pub looping: bool,
 }
 
 /// Samples of one word where `condition` holds; `previous` is the sample before the word.
@@ -113,7 +115,11 @@ fn run(params: DemoParams, sink: &Sender<Packet>, stop: &AtomicBool) -> EndReaso
         }
     }
 
-    let total = params.samples / 64;
+    let total = if params.looping {
+        u64::MAX
+    } else {
+        params.samples / 64
+    };
     let begin = Instant::now();
     let mut emitted = 0u64;
     loop {

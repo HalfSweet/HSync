@@ -236,6 +236,11 @@ impl Device for DemoDevice {
         CHANNELS
     }
 
+    /// The demo streams like a device in Stream mode, so it loops with any options.
+    fn can_loop(&self) -> bool {
+        true
+    }
+
     fn enabled_channels(&self) -> Vec<ChannelIndex> {
         (0..CHANNELS)
             .filter(|&channel| self.enabled & (1 << channel) != 0)
@@ -305,6 +310,7 @@ impl Device for DemoDevice {
             samples,
             triggers,
             pre_trigger,
+            looping: plan.looping,
         };
         Ok(acquisition::start(params, Arc::clone(&self.running), sink))
     }
