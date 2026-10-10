@@ -75,6 +75,8 @@ export interface Backend {
   ): Promise<number | null>
   /** Median samples between rising edges: the period of the clock a channel carries. */
   clockPeriod(captureId: number, channel: number): Promise<number | null>
+  /** Renames a channel of a capture; an empty name gives back its number. */
+  renameChannel(captureId: number, channel: number, name: string): Promise<CaptureSummary>
   /** Rising and falling edges of channels from sample `from` to sample `to`. */
   edgeCounts(
     captureId: number,
@@ -197,6 +199,10 @@ class TauriBackend implements Backend {
 
   clockPeriod(captureId: number, channel: number) {
     return invoke<number | null>('capture_clock_period', { captureId, channel })
+  }
+
+  renameChannel(captureId: number, channel: number, name: string) {
+    return invoke<CaptureSummary>('capture_rename_channel', { captureId, channel, name })
   }
 
   edgeCounts(captureId: number, from: number, to: number, channels: number[]) {

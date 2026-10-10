@@ -330,6 +330,21 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve(result && running ? { hits: [], truncated: false } : result)
     },
 
+    async renameChannel(captureId, index, name) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      if (!channels.has(index))
+        return Promise.reject(uiError('error.session.unknownChannel', { channel: index }))
+      const trimmed = name.trim()
+      summary = {
+        ...summary,
+        channels: summary.channels.map((channel) =>
+          channel.index === index ? { index, name: trimmed || String(index) } : channel,
+        ),
+      }
+      return Promise.resolve(summary)
+    },
+
     async edgeCounts(captureId, from, to, indices) {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))
