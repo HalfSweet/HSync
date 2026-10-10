@@ -77,6 +77,12 @@
   }
 }
 
+/* Behind a dialog or the settings page: the interface, blurred and veiled. */
+@utility modal-veil {
+  background: var(--veil);
+  backdrop-filter: blur(var(--veil-blur));
+}
+
 /* la-i: 16 px stroked icon */
 @utility icon {
   width: 16px;

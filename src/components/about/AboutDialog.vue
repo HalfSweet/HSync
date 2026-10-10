@@ -39,7 +39,7 @@ onMounted(async () => {
 
 <template>
   <div
-    class="fixed inset-0 z-40 flex items-center justify-center bg-veil"
+    class="fixed inset-0 z-40 flex items-center justify-center modal-veil"
     @click.self="emit('close')"
   >
     <div
