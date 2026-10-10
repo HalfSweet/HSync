@@ -1568,7 +1568,7 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "hsync"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "hsync-atklogic",
  "hsync-core",
@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-atklogic"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "crossbeam-channel",
  "hsync-capture",
@@ -1606,7 +1606,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-capture"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "hsync-core",
  "proptest",
@@ -1616,7 +1616,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-core"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -1625,7 +1625,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-decode"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "hsync-capture",
  "hsync-core",
@@ -1638,7 +1638,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-demo"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "crossbeam-channel",
  "hsync-capture",
@@ -1650,7 +1650,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-driver"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "crossbeam-channel",
  "futures-lite",
@@ -1665,7 +1665,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-dslogic"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "crossbeam-channel",
  "hsync-capture",
@@ -1677,7 +1677,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-fileio"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "fst-writer",
  "hsync-capture",
@@ -1692,7 +1692,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-session"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "crossbeam-channel",
  "hsync-capture",
@@ -1712,7 +1712,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-srd"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "hsync-capture",
  "hsync-core",
