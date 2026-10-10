@@ -4,6 +4,7 @@ import { computed, shallowRef } from 'vue'
 import { getBackend } from '@/ipc/backend'
 import type { CaptureRequest } from '@/ipc/bindings/CaptureRequest'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
+import type { ExportRequest } from '@/ipc/bindings/ExportRequest'
 import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
 import { toUiError, type UiError } from '@/ipc/errors'
 import { groupChannels, type ChannelGroup } from '@/timeline/groups'
@@ -11,6 +12,12 @@ import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
 /** Single captures, or another one a moment after each completes (DESIGN.md §9.4). */
 export type CaptureMode = 'single' | 'repeat'
+
+/** A save or export under way and the share of it done. */
+export interface FileJob {
+  kind: 'save' | 'export'
+  progress: number
+}
 
 /** Pause between repeated captures, DSView's default interval. */
 const REPEAT_INTERVAL_MS = 1000
@@ -25,8 +32,11 @@ export const useCaptureStore = defineStore('capture', () => {
   const mode = shallowRef<CaptureMode>('single')
   /** A repeated capture is due. */
   const repeatPending = shallowRef(false)
-  /** Where the open capture was last saved, until another capture replaces it. */
+  /** Where the open capture was last saved or exported, until another capture replaces it. */
   const savedPath = shallowRef<string | null>(null)
+  const savedKind = shallowRef<FileJob['kind']>('save')
+  /** The save or export under way. */
+  const job = shallowRef<FileJob | null>(null)
   let lastRequest: CaptureRequest | null = null
   let repeatTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -183,19 +193,50 @@ export const useCaptureStore = defineStore('capture', () => {
     return run(async () => (await getBackend()).openFile(path))
   }
 
-  /** Writes the open capture to `path` as a `.dsl` file. */
-  async function saveFile(path: string): Promise<boolean> {
+  /** Runs a save or export, following its progress; a cancelled one is no error. */
+  async function fileJob(
+    kind: FileJob['kind'],
+    path: string,
+    work: (id: number, onProgress: (done: number) => void) => Promise<void>,
+  ): Promise<boolean> {
     const current = summary.value
-    if (!current) return false
+    if (!current || job.value) return false
     error.value = null
+    savedPath.value = null
+    job.value = { kind, progress: 0 }
     try {
-      summary.value = await (await getBackend()).saveFile(current.id, path)
+      await work(current.id, (done) => {
+        if (job.value) job.value = { kind, progress: done }
+      })
       savedPath.value = path
+      savedKind.value = kind
       return true
     } catch (reason) {
-      error.value = toUiError(reason)
+      const failure = toUiError(reason)
+      if (failure.code !== 'error.file.cancelled') error.value = failure
       return false
+    } finally {
+      job.value = null
     }
+  }
+
+  /** Writes the open capture to `path` as a `.dsl` file; it then counts as that file. */
+  function saveFile(path: string): Promise<boolean> {
+    return fileJob('save', path, async (id, onProgress) => {
+      summary.value = await (await getBackend()).saveFile(id, path, onProgress)
+    })
+  }
+
+  /** Writes the open capture, or part of it, to `path` in another format. */
+  function exportFile(path: string, request: ExportRequest): Promise<boolean> {
+    return fileJob('export', path, async (id, onProgress) => {
+      await (await getBackend()).exportFile(id, path, request, onProgress)
+    })
+  }
+
+  /** Stops the save or export under way. */
+  async function cancelFile(): Promise<void> {
+    if (job.value) await (await getBackend()).cancelFile()
   }
 
   return {
@@ -206,6 +247,8 @@ export const useCaptureStore = defineStore('capture', () => {
     mode,
     repeatPending,
     savedPath,
+    savedKind,
+    job,
     capturing,
     busy,
     extent,
@@ -223,6 +266,8 @@ export const useCaptureStore = defineStore('capture', () => {
     openDemo,
     openFile,
     saveFile,
+    exportFile,
+    cancelFile,
     start,
     stop,
     replaceSummary,
