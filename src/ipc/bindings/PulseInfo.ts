@@ -28,4 +28,9 @@ endIsEdge: boolean,
 /**
  * First sample after the following run, when that run ends at an edge.
  */
-nextEnd: number | null, };
+nextEnd: number | null, 
+/**
+ * First sample after the run after that, when it ends at an edge: a third run tells a
+ * periodic signal, such as PWM, from one whose neighbouring runs happen to match.
+ */
+afterEnd: number | null, };

@@ -277,13 +277,15 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       if (sample >= data.length) return Promise.resolve(null)
       const prev = data.prevChange(sample)
       const next = data.nextChange(sample)
+      const nextEnd = next === null ? null : data.nextChange(next)
       return Promise.resolve({
         high: data.sample(sample),
         start: prev === null ? 0 : prev + 1,
         end: next ?? data.length,
         startIsEdge: prev !== null,
         endIsEdge: next !== null,
-        nextEnd: next === null ? null : data.nextChange(next),
+        nextEnd,
+        afterEnd: nextEnd === null ? null : data.nextChange(nextEnd),
       })
     },
 
