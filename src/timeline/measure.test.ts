@@ -23,7 +23,6 @@ const pulse = (start: number, end: number, startIsEdge = true, endIsEdge = true)
   startIsEdge,
   endIsEdge,
   nextEnd: null,
-  afterEnd: null,
 })
 
 const edge = (sample: number, rowKey = 'd0'): MeasureEnd => ({ sample, rowKey, edge: true })

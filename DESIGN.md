@@ -183,7 +183,7 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 
 ### 6.4 Hover readout
 
-- When the pointer rests on a trace row, the readout shows the level and width of the pulse under it ("High 9.8 µs"); clocks and periodic signals (including PWM) add period, frequency and duty cycle, and UART lines add "≈ N bits". When the viewport cuts the pulse off, the readout shows "≥" and notes "Extends beyond view".
+- When the pointer rests on a trace row, the readout shows the level and width of the pulse under it ("High 9.8 µs"). It adds the period, frequency and duty cycle the pulse makes with the next one, except on decoder data lines (SDA, MOSI, MISO, CS, CAN RX), which show the pulse alone, and UART lines, which add "≈ N bits" instead. When the viewport cuts the pulse off, the readout shows "≥" and notes "Extends beyond view".
 - The bubble has an `--ink` fill, `--canvas` text and 12 px type; it is centred on the pulse and held horizontally within 9%–91% of the viewport. A 13% `--ink` layer covers the pulse.
 
 ### 6.5 Edge measurement
