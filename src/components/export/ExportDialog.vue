@@ -74,7 +74,7 @@ async function run(): Promise<void> {
       aria-modal="true"
       :aria-label="t('exportDialog.title')"
       tabindex="-1"
-      class="flex max-h-[85vh] w-[min(480px,calc(100vw-32px))] flex-col rounded-6 border border-ink bg-raise text-small outline-none"
+      class="flex max-h-[85vh] w-[min(480px,calc(100vw-32px))] flex-col rounded-6 bg-raise text-small outline-none"
     >
       <header
         class="flex h-10 flex-none items-center justify-between border-b border-line pr-2 pl-4"

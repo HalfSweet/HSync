@@ -114,7 +114,7 @@ async function revealLog(): Promise<void> {
       aria-modal="true"
       :aria-label="t('settings.title')"
       tabindex="-1"
-      class="flex h-[min(560px,calc(100vh-48px))] w-[min(760px,calc(100vw-48px))] flex-col overflow-hidden rounded-6 border border-ink bg-raise text-small outline-none"
+      class="flex h-[min(560px,calc(100vh-48px))] w-[min(760px,calc(100vw-48px))] flex-col overflow-hidden rounded-6 bg-raise text-small outline-none"
     >
       <header
         class="flex h-10 flex-none items-center justify-between border-b border-line pr-2 pl-4"
