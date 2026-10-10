@@ -6,12 +6,14 @@
 mod acquisition;
 pub mod boot;
 mod device;
+mod driver;
 pub mod profiles;
 pub mod protocol;
 pub mod setting;
 
 pub use boot::FirmwareDir;
 pub use device::{DslogicDevice, MAX_SOFTWARE_DEPTH, MIN_SAMPLES, Settings, Threshold, vth_code};
+pub use driver::DslogicDriver;
 
 /// Driver name, also recorded in capture files.
 pub const DRIVER_NAME: &str = "DSLogic";
