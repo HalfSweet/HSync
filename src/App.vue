@@ -10,6 +10,7 @@ const capture = useCaptureStore()
 
 onMounted(() => {
   void capture.init()
+  if (import.meta.env.DEV) void import('@/dev/devParams').then((dev) => dev.applyDevParams())
 })
 </script>
 
