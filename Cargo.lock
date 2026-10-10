@@ -1306,6 +1306,9 @@ dependencies = [
  "hsync-core",
  "hsync-fileio",
  "proptest",
+ "serde",
+ "serde_json",
+ "ts-rs",
 ]
 
 [[package]]

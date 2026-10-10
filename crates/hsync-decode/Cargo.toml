@@ -11,6 +11,9 @@ publish.workspace = true
 [dependencies]
 hsync-capture.workspace = true
 hsync-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ts-rs.workspace = true
 
 [dev-dependencies]
 hsync-fileio.workspace = true
