@@ -27,7 +27,7 @@ HSync 用现代技术栈重写 [DSView](https://github.com/DreamSourceLab/DSView
 | `src-tauri/`     | Tauri 应用 crate（命令、事件、资源：固件与 Demo 数据）                      |
 | `crates/hsync-*` | Rust 库：core、capture、driver、dslogic、demo、decode、srd、fileio、session |
 | `scripts/`       | 布置内置 CPython，按发行方式构建本机安装包                                  |
-| `.github/`       | CI 检查、安装包构建与 release-please 发布                                   |
+| `.github/`       | CI 检查、安装包构建与发布                                                   |
 | `.hsync/`        | 设计稿（本地参考，已在 `.gitignore` 中，不要提交）                          |
 | `../DSView`      | 参考实现（DSView 源码），只读                                               |
 
@@ -42,6 +42,7 @@ pnpm tauri dev            # 启动桌面应用（前端 + Rust）
 pnpm build                # 类型检查并构建前端
 pnpm tauri build          # 打包桌面应用
 pnpm bundle               # 按发行方式打包本机安装包（内置 CPython）
+pnpm release 0.2.0        # 请求发布：开一个设置该版本的 PR，合并即发布（见「发布」）
 
 pnpm lint                 # ESLint
 pnpm lint:fix             # ESLint 自动修复
@@ -111,7 +112,7 @@ cargo test --workspace
 - **subject**：英文祈使句，小写开头，不加句号，≤ 72 字符。
 - **细粒度**：一个提交只做一件可以独立回滚、独立审查的事。配置、脚手架、功能、测试、文档分开提交；格式化改动与逻辑改动不要混在一起；新增依赖与使用它的代码可以放在同一个提交里。
 - 破坏性变更在 type 后加 `!`，并在正文写 `BREAKING CHANGE:`。
-- 版本号与 `CHANGELOG.md` 由 release-please 从提交信息算出，`feat`、`fix`、`perf` 的 subject 会进入发布说明。不要手改版本号与 `CHANGELOG.md`；发布由负责人合并 release-please 的发布 PR 完成。
+- 发布说明由 git-cliff 从提交信息生成，`feat`、`fix`、`perf` 的 subject 会原样进入其中，要让用户读得懂。不要手改版本号，见「发布」。
 - 不要用 `--no-verify` 跳过钩子；钩子失败就修好再提交。不要提交 `.hsync/`、构建产物与本地配置。
 
 示例：
@@ -122,6 +123,16 @@ fix(timeline): keep trigger menu inside the viewport near the bottom edge
 build(tooling): run prettier on staged files in lefthook pre-commit
 docs: describe the data stream's tabs in DESIGN.md
 ```
+
+## 发布
+
+何时发布、用什么版本号由负责人决定，版本号不必按提交类型推算：
+
+1. 运行 `pnpm release <版本>`（需要 GitHub CLI），或在 GitHub Actions 的 Release 工作流点 Run workflow 填版本。工作流从 main 拉出 `release/v<版本>`，用 `scripts/version.mjs` 把 `package.json`、Cargo 工作区与 `Cargo.lock` 的版本改成它，用 git-cliff（`cliff.toml`）列出上一个 tag 以来的 `feat`、`fix`、`perf`、`revert` 提交作为说明预览，开 PR `chore: release <版本>`。
+2. 合并这个 PR 就是发布：合并后的提交打上 `v<版本>`，按 tag 实际包含的提交重新生成说明并建草稿 Release，Bundle 工作流在 macOS、Windows、Linux 构建安装包（内置 CPython 与更新签名）放进草稿，全部成功后发布。
+3. PR 开着时 main 继续前进也没关系，发布的是合并那一刻的 main；想在 PR 里看到新的说明预览，用同一个版本再运行一次。带 `-` 的版本（如 `0.2.0-beta.1`）发布为预发布，应用内更新不会推送它。
+
+`pnpm bundle` 在本机按同样方式构建安装包（不含更新签名）；Bundle 工作流也可以手动运行，安装包留作那次运行的 artifact。发布需要仓库 secrets `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（更新签名，公钥在 `src-tauri/tauri.conf.json`）。
 
 ## 测试要求
 

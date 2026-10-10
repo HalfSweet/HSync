@@ -33,7 +33,7 @@ cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 pnpm bundle
 ```
 
-提交信息遵循约定式提交，由 commitlint 校验，版本号与 CHANGELOG 由 release-please 据此生成；暂存的文件在提交前由 Prettier、ESLint 与 rustfmt 处理。GitHub Actions 在每个 PR 与 `main` 的推送上运行同样的检查。
+提交信息遵循约定式提交，由 commitlint 校验，发布说明据此生成（发布方式见 [AGENTS.md](./AGENTS.md)）；暂存的文件在提交前由 Prettier、ESLint 与 rustfmt 处理。GitHub Actions 在每个 PR 与 `main` 的推送上运行同样的检查。
 
 ## 许可
 
