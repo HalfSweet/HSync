@@ -4,6 +4,7 @@ mod commands;
 mod state;
 
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use hsync_demo::DemoDriver;
@@ -13,22 +14,32 @@ use hsync_session::{EventSink, Instrument, SessionEvent, Workspace};
 use state::AppState;
 use tauri::path::BaseDirectory;
 use tauri::{App, Emitter, Manager};
-use tauri_plugin_log::{Target, TargetKind};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
 
-/// Crates whose debug messages development builds keep.
-const OWN_LOG_TARGETS: [&str; 5] = [
+/// Crates whose messages follow the log level of the settings; others log warnings and up.
+const OWN_LOG_TARGETS: [&str; 6] = [
     "hsync_lib",
     "hsync_session",
     "hsync_driver",
     "hsync_dslogic",
     "hsync_demo",
+    "hsync_srd",
 ];
+
+/// Size at which the log file starts over, keeping the previous ones.
+const LOG_FILE_BYTES: u128 = 4 << 20;
 
 /// Quiet time after a USB change before rescanning; devices re-enumerate in bursts.
 const HOTPLUG_SETTLE: Duration = Duration::from_millis(300);
 
 /// Registers the drivers, the shared state and the USB hotplug watch.
 fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
+    // Until the settings say otherwise (`log_configure`): information, debugging in development.
+    log::set_max_level(if cfg!(debug_assertions) {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    });
     let resolver = app.path();
     let demo = resolver
         .resolve("demo/protocol.dsl", BaseDirectory::Resource)
@@ -79,27 +90,29 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
 /// Panics when the Tauri runtime fails to start, which leaves nothing to recover.
 #[allow(clippy::expect_used)]
 pub fn run() {
-    let detail = if cfg!(debug_assertions) {
-        log::LevelFilter::Debug
-    } else {
-        log::LevelFilter::Info
-    };
-    let mut logger = tauri_plugin_log::Builder::new().level(log::LevelFilter::Info);
+    // Everything of our own passes here; the level set at run time decides what is logged.
+    let mut logger = tauri_plugin_log::Builder::new().level(log::LevelFilter::Warn);
     for target in OWN_LOG_TARGETS {
-        logger = logger.level_for(target, detail);
+        logger = logger.level_for(target, log::LevelFilter::Trace);
     }
     tauri::Builder::default()
         .plugin(
             logger
+                .max_file_size(LOG_FILE_BYTES)
+                .rotation_strategy(RotationStrategy::KeepSome(2))
                 .targets([
                     Target::new(TargetKind::Stdout),
-                    Target::new(TargetKind::LogDir { file_name: None }),
+                    Target::new(TargetKind::LogDir { file_name: None })
+                        .filter(|_| commands::app::LOG_FILE.load(Ordering::Relaxed)),
                 ])
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
+            commands::app::log_configure,
+            commands::app::log_file,
+            commands::app::log_reveal,
             commands::capture::capture_summary,
             commands::capture::capture_open_demo,
             commands::capture::capture_open_file,
