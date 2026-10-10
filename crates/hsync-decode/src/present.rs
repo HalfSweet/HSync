@@ -600,6 +600,29 @@ impl Presentation {
         }
     }
 
+    /// Adds lanes named `rows` for `annotations` of decoders stacked on this one (their `row`
+    /// counts within `rows`); the data stream keeps listing this decoder.
+    pub fn append_lanes(&mut self, rows: &[String], mut annotations: Vec<Annotation>) {
+        annotations.sort_by_key(|annotation| annotation.start);
+        let mut lanes: Vec<Vec<LaneItem>> = rows.iter().map(|_| Vec::new()).collect();
+        for annotation in annotations {
+            if let Some(items) = lanes.get_mut(annotation.row as usize) {
+                items.push(LaneItem::Annotation {
+                    start: annotation.start,
+                    end: annotation.end,
+                    class: annotation.class,
+                    texts: annotation.texts,
+                });
+            }
+        }
+        self.lanes.extend(
+            rows.iter()
+                .cloned()
+                .zip(lanes)
+                .map(|(name, items)| (name, Lane::new(items))),
+        );
+    }
+
     pub fn new(decoded: &Decoded) -> Self {
         let mut presentation = match decoded {
             Decoded::I2c { trace, shifted } => present_i2c(trace, *shifted),
