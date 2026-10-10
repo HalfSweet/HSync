@@ -114,4 +114,13 @@
     color: var(--ink-3);
     opacity: 1;
   }
+
+  /* Chromium on Windows and Linux draws a select's list itself, blending its translucent
+     `--control` fill onto white while the options keep the select's text colour; an opaque
+     fill keeps them legible in the dark theme. */
+  option,
+  optgroup {
+    background-color: var(--raise);
+    color: var(--ink);
+  }
 }
