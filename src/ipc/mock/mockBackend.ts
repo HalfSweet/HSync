@@ -145,7 +145,12 @@ interface Fixture {
   decoders: unknown
 }
 
-export function createMockBackend(data: Fixture = fixture): Backend {
+/** The mock backend, which can also open its fixture as a capture of its own, for tests. */
+export interface MockBackend extends Backend {
+  openDemo(): Promise<CaptureSummary>
+}
+
+export function createMockBackend(data: Fixture = fixture): MockBackend {
   const channels = new Map(
     data.channels.map((channel) => [
       channel.index,

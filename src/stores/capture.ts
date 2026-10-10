@@ -256,10 +256,6 @@ export const useCaptureStore = defineStore('capture', () => {
     }
   }
 
-  function openDemo(): Promise<void> {
-    return run(async () => (await getBackend()).openDemo())
-  }
-
   function openFile(path: string): Promise<void> {
     return run(async () => (await getBackend()).openFile(path))
   }
@@ -358,7 +354,6 @@ export const useCaptureStore = defineStore('capture', () => {
     timeOf,
     sampleAt,
     init,
-    openDemo,
     openFile,
     saveFile,
     exportFile,

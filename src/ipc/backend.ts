@@ -64,7 +64,6 @@ export interface UpdateProgress {
 /** Everything the UI asks of the Rust side. Components reach it only through stores. */
 export interface Backend {
   captureSummary(): Promise<CaptureSummary | null>
-  openDemo(): Promise<CaptureSummary>
   openFile(path: string): Promise<CaptureSummary>
   /** Saves a capture as a `.dsl` file; it then counts as that file. */
   saveFile(
@@ -196,10 +195,6 @@ class TauriBackend implements Backend {
 
   captureSummary() {
     return invoke<CaptureSummary | null>('capture_summary')
-  }
-
-  openDemo() {
-    return invoke<CaptureSummary>('capture_open_demo')
   }
 
   openFile(path: string) {
