@@ -5,8 +5,10 @@
 //! - a wait takes conditions that are OR-ed; each condition AND-s its terms;
 //! - the first wait starts at sample 0, whose "previous" levels are its own, so no edge matches
 //!   there; after a match at `m` the next wait starts at `m + 1`;
-//! - a `skip` of `n` matches `n + 1` samples after the previous match (`n` samples after the
-//!   start of the wait); `skip: 0` right after a match matches that same sample again.
+//! - a `skip` of `n` matches `n` samples after the previous match (a skip counter that starts at
+//!   one after a match, `instance.c`), or sample `n` on the first wait; `skip: 0` right after a
+//!   match matches that same sample again;
+//! - a wait without conditions matches the sample it starts at.
 //!
 //! Scanning works a 64-sample word at a time instead of sample by sample.
 
@@ -30,6 +32,9 @@ pub enum Term {
     Pin(usize, Pin),
     /// `{'skip': n}`.
     Skip(u64),
+    /// Holds at every sample, or at none: a term on a channel the decoder was not given, which
+    /// reads as constant low, or one with an unknown condition.
+    Const(bool),
 }
 
 /// Terms that must all hold at one sample.
@@ -148,11 +153,19 @@ impl<'a> Sampler<'a> {
             }
         }
         if conditions.iter().all(Vec::is_empty) {
-            // sigrok: an empty condition list matches at once.
-            let sample = start.min(self.end.saturating_sub(1));
-            self.current = Some(sample);
-            return Some(Match { sample, matched: 0 });
+            // sigrok: an empty condition list matches at once, until the samples run out.
+            if start >= self.end {
+                self.current = Some(self.end.saturating_sub(1));
+                return None;
+            }
+            self.current = Some(start);
+            return Some(Match {
+                sample: start,
+                matched: 0,
+            });
         }
+        // A skip counts from the previous match, or from the first sample.
+        let skip_origin = self.current.unwrap_or(0);
 
         let mut word = (start / 64) as usize;
         while (word as u64) * 64 < self.end {
@@ -168,9 +181,16 @@ impl<'a> Sampler<'a> {
                 for term in condition {
                     mask &= match *term {
                         Term::Skip(count) => {
-                            let target = start + count;
+                            let target = skip_origin.saturating_add(count);
                             if target >= base && target < base + 64 {
                                 1u64 << (target - base)
+                            } else {
+                                0
+                            }
+                        }
+                        Term::Const(holds) => {
+                            if holds {
+                                !0
                             } else {
                                 0
                             }
@@ -280,8 +300,10 @@ mod tests {
                     if condition.is_empty() {
                         continue;
                     }
+                    let origin = self.current.unwrap_or(0) as u64;
                     let holds = condition.iter().all(|term| match *term {
-                        Term::Skip(count) => sample as u64 == start as u64 + count,
+                        Term::Skip(count) => sample as u64 == origin + count,
+                        Term::Const(holds) => holds,
                         Term::Pin(slot, pin) => {
                             let now = self.levels[slot][sample];
                             let before = self.levels[slot][sample.saturating_sub(1)];
@@ -322,7 +344,8 @@ mod tests {
     fn term() -> impl Strategy<Value = Term> {
         prop_oneof![
             4 => (0..2usize, pin()).prop_map(|(slot, pin)| Term::Pin(slot, pin)),
-            1 => (0..200u64).prop_map(Term::Skip),
+            1 => (1..200u64).prop_map(Term::Skip),
+            1 => any::<bool>().prop_map(Term::Const),
         ]
     }
 
@@ -361,20 +384,36 @@ mod tests {
     }
 
     #[test]
-    fn skips_count_from_the_sample_after_the_match() {
+    fn skips_count_from_the_previous_match() {
         let capture = capture(&[vec![false; 100]]);
         let channels = vec![capture.channel(0).expect("channel")];
         let mut sampler = Sampler::new(channels, 100);
-        let low = vec![vec![Term::Pin(0, Pin::Low)]];
-        assert_eq!(sampler.wait(&low).map(|m| m.sample), Some(0));
+        // The first wait counts from sample 0.
+        assert_eq!(
+            sampler.wait(&[vec![Term::Skip(5)]]).map(|m| m.sample),
+            Some(5)
+        );
+        // After a match at 5, DSView's counter starts at one: skip 10 lands on 15.
         assert_eq!(
             sampler.wait(&[vec![Term::Skip(10)]]).map(|m| m.sample),
-            Some(11)
+            Some(15)
         );
         assert_eq!(
             sampler.wait(&[vec![Term::Skip(0)]]).map(|m| m.sample),
-            Some(11)
+            Some(15)
         );
+    }
+
+    #[test]
+    fn waits_without_conditions_step_and_end() {
+        let capture = capture(&[vec![false; 3]]);
+        let channels = vec![capture.channel(0).expect("channel")];
+        let mut sampler = Sampler::new(channels, 3);
+        let none: Vec<Condition> = Vec::new();
+        assert_eq!(sampler.wait(&none).map(|m| m.sample), Some(0));
+        assert_eq!(sampler.wait(&none).map(|m| m.sample), Some(1));
+        assert_eq!(sampler.wait(&none).map(|m| m.sample), Some(2));
+        assert_eq!(sampler.wait(&none), None);
     }
 
     #[test]
