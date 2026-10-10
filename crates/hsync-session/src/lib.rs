@@ -335,7 +335,12 @@ impl Workspace {
         let (channel_names, decoders) = match &shown {
             Some(open) => (open.channel_names.clone(), open.decoders.clone()),
             None => preset
-                .map(|preset| (preset.channel_names, preset.decoders))
+                .map(|preset| {
+                    let decoders = preset
+                        .decoders
+                        .filter(|decoders| !decoders.as_array().is_some_and(Vec::is_empty));
+                    (preset.channel_names, decoders)
+                })
                 .unwrap_or_default(),
         };
         let verdict = (hold && shown.is_some()).then(Verdict::default);

@@ -226,7 +226,13 @@ export const useCaptureStore = defineStore('capture', () => {
       const hold = repeat && summary.value !== null
       const started = await (
         await getBackend()
-      ).captureStart({ ...request, looping, hold, keepStopped: preferences.keepStopped })
+      ).captureStart({
+        ...request,
+        looping,
+        hold,
+        keepStopped: preferences.keepStopped,
+        preset: null,
+      })
       if (hold) {
         pending.value = started
       } else {
