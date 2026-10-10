@@ -1,0 +1,425 @@
+//! The DSLogic driver against a simulated device: opening, FPGA configuration, options and
+//! acquisitions end to end.
+
+use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
+use std::time::Duration;
+
+use crossbeam_channel::Receiver;
+use hsync_core::TriggerCondition;
+use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
+use hsync_driver::usb::UsbError;
+use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionKind, OptionValue, Packet};
+use hsync_dslogic::profiles::{CHANNEL_MODES, UsbSpeed, VENDOR_ID, find_profile};
+use hsync_dslogic::protocol::{
+    CMD_CTL_RD, CMD_CTL_RD_PRE, CMD_CTL_WR, Control, ctr0, dest, reg, status,
+};
+use hsync_dslogic::setting::{ArmConfig, TriggerSetup, setting};
+use hsync_dslogic::{DslogicDevice, FirmwareDir};
+
+const HEADER_LEN: usize = 512;
+
+/// A DSLogic Plus as its firmware behaves on the control and bulk endpoints.
+#[derive(Default)]
+struct FakeDslogic {
+    fpga_configured: bool,
+    registers: HashMap<u16, u8>,
+    announced: Option<(u8, u16, u8)>,
+    progress: [u8; 4],
+    outgoing: VecDeque<Vec<u8>>,
+    on_start: Vec<Vec<u8>>,
+    on_force_stop: Vec<Vec<u8>>,
+    settings: Vec<Vec<u8>>,
+    bitstream: Option<Vec<u8>>,
+}
+
+impl MockDevice for FakeDslogic {
+    fn control_out(
+        &mut self,
+        request: u8,
+        _value: u16,
+        _index: u16,
+        data: &[u8],
+    ) -> Result<(), UsbError> {
+        let target = data[0];
+        let offset = u16::from_le_bytes([data[1], data[2]]);
+        match request {
+            CMD_CTL_WR => match target {
+                dest::I2C_REG => {
+                    self.registers.insert(offset, data[4]);
+                    if offset == reg::CTR0 && data[4] == ctr0::FORCE_STOP {
+                        self.outgoing.extend(self.on_force_stop.drain(..));
+                    }
+                }
+                dest::START => self.outgoing.extend(self.on_start.drain(..)),
+                _ => {}
+            },
+            CMD_CTL_RD_PRE => self.announced = Some((target, offset, data[3])),
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn control_in(
+        &mut self,
+        request: u8,
+        _value: u16,
+        _index: u16,
+        length: u16,
+    ) -> Result<Vec<u8>, UsbError> {
+        assert_eq!(request, CMD_CTL_RD);
+        let (target, offset, size) = self.announced.take().expect("a read was announced");
+        assert_eq!(u16::from(size), length);
+        Ok(match (target, offset, size) {
+            (dest::FW_VERSION, _, 2) => vec![2, 0],
+            (dest::HW_STATUS, _, 1) => {
+                let done = if self.fpga_configured {
+                    status::FPGA_DONE
+                } else {
+                    0
+                };
+                vec![status::FPGA_INIT_B | status::SYS_CLR | status::GPIF_DONE | done]
+            }
+            (dest::I2C_STATUS, 0, 5) => vec![0, 0, 0, 0, 0x0e],
+            (dest::I2C_STATUS, 0, 4) => self.progress.to_vec(),
+            (dest::I2C_STATUS, register, 1) => {
+                vec![self.registers.get(&register).copied().unwrap_or(0)]
+            }
+            (dest::NVM, _, size) => vec![0; usize::from(size)],
+            other => panic!("unexpected read {other:?}"),
+        })
+    }
+
+    fn bulk_out(&mut self, endpoint: u8, data: &[u8]) -> Result<(), UsbError> {
+        assert_eq!(endpoint, 0x02);
+        if data.len() == 372 || data.len() == 204 {
+            self.settings.push(data.to_vec());
+        } else {
+            self.bitstream = Some(data.to_vec());
+            self.fpga_configured = true;
+        }
+        Ok(())
+    }
+
+    fn bulk_in(&mut self, endpoint: u8, length: usize) -> Option<Result<Vec<u8>, UsbError>> {
+        assert_eq!(endpoint, 0x86);
+        let mut chunk = self.outgoing.pop_front()?;
+        if chunk.len() > length {
+            let rest = chunk.split_off(length);
+            self.outgoing.push_front(rest);
+        }
+        Some(Ok(chunk))
+    }
+}
+
+fn header(trigger: Option<u32>, remain: u64) -> Vec<u8> {
+    let mut data = vec![0u8; HEADER_LEN];
+    data[0..4].copy_from_slice(&0x5555_5555u32.to_le_bytes());
+    data[4..8].copy_from_slice(&trigger.unwrap_or(0).to_le_bytes());
+    data[12..16].copy_from_slice(&(remain as u32).to_le_bytes());
+    data[16..20].copy_from_slice(&((remain >> 32) as u32).to_le_bytes());
+    data[20..24].copy_from_slice(&u32::from(trigger.is_some()).to_le_bytes());
+    data
+}
+
+fn firmware_dir(files: &[(&str, &[u8])]) -> FirmwareDir {
+    let dir = std::env::temp_dir().join(format!(
+        "hsync-dslogic-test-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    for (name, contents) in files {
+        std::fs::write(dir.join(name), contents).expect("firmware file");
+    }
+    FirmwareDir(dir)
+}
+
+fn open(fake: FakeDslogic, firmware: FirmwareDir) -> (MockTransport<FakeDslogic>, DslogicDevice) {
+    let transport = MockTransport::new(fake);
+    let ctl = Control::new(Arc::new(transport.clone())).without_read_delay();
+    let profile = find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("DSLogic Plus");
+    let device = DslogicDevice::open(ctl, profile, firmware, "test".into()).expect("open");
+    (transport, device)
+}
+
+fn configured() -> FakeDslogic {
+    FakeDslogic {
+        fpga_configured: true,
+        ..FakeDslogic::default()
+    }
+}
+
+fn wrote(transport: &MockTransport<FakeDslogic>, target: u8, offset: u16, value: &[u8]) -> bool {
+    transport.calls().iter().any(|call| {
+        matches!(call, UsbCall::ControlOut { request: CMD_CTL_WR, data, .. }
+            if data[0] == target && u16::from_le_bytes([data[1], data[2]]) == offset && &data[4..] == value)
+    })
+}
+
+fn collect(packets: &Receiver<Packet>) -> Vec<Packet> {
+    let mut all = Vec::new();
+    loop {
+        let packet = packets
+            .recv_timeout(Duration::from_secs(5))
+            .expect("the acquisition ends");
+        let end = matches!(packet, Packet::End(_));
+        all.push(packet);
+        if end {
+            return all;
+        }
+    }
+}
+
+fn logic_bytes(packets: &[Packet]) -> usize {
+    packets
+        .iter()
+        .map(|packet| match packet {
+            Packet::Logic(data) => data.len(),
+            _ => 0,
+        })
+        .sum()
+}
+
+#[test]
+fn opens_a_configured_device() {
+    let (transport, device) = open(configured(), firmware_dir(&[]));
+    let info = device.info();
+    assert_eq!(info.model, "DSLogic Plus");
+    assert_eq!(info.firmware.as_deref(), Some("2.0"));
+    // 1.0 V threshold: 1.0 / 3.3 × 1.5 / 2.5 × 255.
+    assert!(wrote(&transport, dest::I2C_REG, reg::VTH, &[46]));
+    assert!(wrote(&transport, dest::I2C_REG, reg::CTR0, &[0]));
+    assert_eq!(device.channel_count(), 16);
+    assert_eq!(device.enabled_channels().len(), 16);
+}
+
+#[test]
+fn configures_a_blank_fpga() {
+    let bitstream: Vec<u8> = (0..1000u32).map(|i| i as u8).collect();
+    let (transport, _device) = open(
+        FakeDslogic::default(),
+        firmware_dir(&[("DSLogicPlus.bin", &bitstream)]),
+    );
+    assert_eq!(
+        transport.device().bitstream.as_deref(),
+        Some(bitstream.as_slice())
+    );
+    assert!(wrote(&transport, dest::BULK_WR, 0, &[0xe8, 0x03, 0x00]));
+    assert!(wrote(&transport, dest::PROG_B, 0, &[0xfb]));
+    assert!(wrote(&transport, dest::LED, 0, &[0x01]));
+}
+
+#[test]
+fn reports_a_missing_bitstream() {
+    let transport = MockTransport::new(FakeDslogic::default());
+    let ctl = Control::new(Arc::new(transport)).without_read_delay();
+    let profile = find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("DSLogic Plus");
+    let error = DslogicDevice::open(ctl, profile, firmware_dir(&[]), "test".into())
+        .expect_err("no bitstream");
+    assert!(
+        matches!(error, hsync_driver::DriverError::FirmwareMissing(name) if name == "DSLogicPlus.bin")
+    );
+}
+
+#[test]
+fn lists_options_for_the_current_mode() {
+    let (_transport, mut device) = open(configured(), firmware_dir(&[]));
+    let options = device.options();
+    let rates = options
+        .iter()
+        .find(|option| option.key == OptionKey::Samplerate)
+        .expect("sample rate");
+    let OptionKind::Integers { values } = &rates.kind else {
+        panic!("sample rates are integers");
+    };
+    assert_eq!(values.last(), Some(&20_000_000));
+    assert!(options.iter().any(|option| option.key == OptionKey::Vth));
+    assert!(
+        !options
+            .iter()
+            .any(|option| option.key == OptionKey::Threshold)
+    );
+
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    let options = device.options();
+    let mode = options
+        .iter()
+        .find(|option| option.key == OptionKey::ChannelMode)
+        .expect("channel mode");
+    assert_eq!(mode.value, OptionValue::Choice("20".into()));
+    device
+        .set_option(OptionKey::Samplerate, &OptionValue::Integer(100_000_000))
+        .expect("100 MHz in buffer mode");
+    assert!(
+        device
+            .set_option(OptionKey::Samplerate, &OptionValue::Integer(400_000_000))
+            .is_err()
+    );
+}
+
+#[test]
+fn limits_channels_to_the_mode() {
+    let (_transport, mut device) = open(configured(), firmware_dir(&[]));
+    device
+        .set_option(OptionKey::ChannelMode, &OptionValue::Choice("1".into()))
+        .expect("12 channels at 25 MHz");
+    assert_eq!(device.enabled_channels(), (0..12).collect::<Vec<_>>());
+    assert!(device.set_channel_enabled(12, true).is_err());
+    device.set_channel_enabled(0, false).expect("disable");
+    device
+        .set_channel_enabled(12, true)
+        .expect("enable another");
+    assert_eq!(device.enabled_channels().len(), 12);
+}
+
+#[test]
+fn captures_in_stream_mode() {
+    let mut fake = configured();
+    let limit: u64 = 4096;
+    let data_len = (limit / 64 * 16 * 8) as usize;
+    fake.on_start = vec![header(Some(1234), 0), vec![0xa5; data_len + 1000]];
+    let (transport, mut device) = open(fake, firmware_dir(&[]));
+    device
+        .set_option(OptionKey::SampleLimit, &OptionValue::Integer(limit))
+        .expect("limit");
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let plan = CapturePlan {
+        triggers: vec![(0, TriggerCondition::Rise)],
+        trigger_position: 50,
+        instant: false,
+    };
+    let acquisition = device.start(plan.clone(), sink).expect("start");
+    let packets = collect(&packets);
+    acquisition.wait();
+
+    assert_eq!(
+        packets[0],
+        Packet::Start {
+            channels: (0..16).collect(),
+            samplerate: 1_000_000
+        }
+    );
+    assert_eq!(packets[1], Packet::Trigger { sample: 1234 });
+    assert_eq!(logic_bytes(&packets), data_len);
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+
+    let trigger = TriggerSetup::simple(&plan.triggers, 50, false);
+    let expected = setting(&ArmConfig {
+        profile: find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("profile"),
+        mode: &CHANNEL_MODES[0],
+        samplerate: 1_000_000,
+        limit_samples: limit,
+        enabled: 0xffff,
+        filter: false,
+        external_clock: false,
+        clock_falling_edge: false,
+        rle: false,
+        instant: false,
+        looping: false,
+        trigger: &trigger,
+    });
+    assert_eq!(transport.device().settings, vec![expected.to_vec()]);
+    // A capture that ends by itself is left with FORCE_RDY, as DSView does.
+    assert!(wrote(
+        &transport,
+        dest::I2C_REG,
+        reg::CTR0,
+        &[ctr0::FORCE_RDY]
+    ));
+    assert!(wrote(&transport, dest::WORDWIDE, 0, &[1]));
+}
+
+#[test]
+fn stopping_a_buffer_capture_uploads_what_it_holds() {
+    let mut fake = configured();
+    let limit: u64 = 1 << 20;
+    let captured: u64 = 2048;
+    fake.progress = [0, 0, 0x08, 0];
+    fake.on_force_stop = vec![
+        header(None, limit - captured),
+        vec![0x5a; (captured / 64 * 16 * 8) as usize],
+    ];
+    let (transport, mut device) = open(fake, firmware_dir(&[]));
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    device
+        .set_option(OptionKey::SampleLimit, &OptionValue::Integer(limit))
+        .expect("limit");
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let acquisition = device.start(CapturePlan::default(), sink).expect("start");
+    // Wait for a progress report, then stop.
+    loop {
+        match packets
+            .recv_timeout(Duration::from_secs(5))
+            .expect("progress")
+        {
+            Packet::Progress {
+                triggered,
+                captured,
+            } => {
+                assert!(!triggered);
+                assert_eq!(captured, 0x08 << 16);
+                break;
+            }
+            Packet::Start { .. } => {}
+            other => panic!("unexpected {other:?}"),
+        }
+    }
+    acquisition.stop();
+    let rest = collect(&packets);
+    acquisition.wait();
+    assert_eq!(logic_bytes(&rest), (captured / 64 * 16 * 8) as usize);
+    assert_eq!(rest.last(), Some(&Packet::End(EndReason::Stopped)));
+    assert!(wrote(
+        &transport,
+        dest::I2C_REG,
+        reg::CTR0,
+        &[ctr0::FORCE_STOP]
+    ));
+}
+
+#[test]
+fn stopping_a_stream_capture_discards_and_stops_the_device() {
+    let (transport, mut device) = open(configured(), firmware_dir(&[]));
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let acquisition = device.start(CapturePlan::default(), sink).expect("start");
+    assert!(matches!(
+        packets.recv_timeout(Duration::from_secs(5)),
+        Ok(Packet::Start { .. })
+    ));
+    assert!(
+        device
+            .set_option(OptionKey::Filter, &OptionValue::Bool(true))
+            .is_err(),
+        "options are locked while capturing"
+    );
+    acquisition.stop();
+    let rest = collect(&packets);
+    acquisition.wait();
+    assert_eq!(rest.last(), Some(&Packet::End(EndReason::Stopped)));
+    assert!(wrote(
+        &transport,
+        dest::I2C_REG,
+        reg::CTR0,
+        &[ctr0::FORCE_RDY]
+    ));
+    let stops = transport
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, UsbCall::ControlOut { request: CMD_CTL_WR, data, .. } if data[0] == dest::STOP))
+        .count();
+    assert_eq!(stops, 2, "STOP before arming and after the stopped capture");
+    device
+        .set_option(OptionKey::Filter, &OptionValue::Bool(true))
+        .expect("options unlock after the capture");
+}
