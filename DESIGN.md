@@ -588,6 +588,8 @@ pub struct Annotation {
 | 原生 Rust 解码器          | I²C、UART、SPI、CAN、CAN-FD（v1）；1-Wire、I²S、JTAG、SWD、USB PD 等（v1.x） | 性能关键、与设计稿深度集成；输出与对应 sigrok 解码器的注解类/行保持一致，便于两者互换与对照测试 |
 | sigrok 兼容 Python 解码器 | DSView 自带的其余 151 个解码器（含叠加）                                     | 通过 **pyo3** 嵌入 CPython，Rust 实现 `sigrokdecode` 模块                                       |
 
+**解码范围**（DSView 的解码起止光标）：解码器对话框里选「全程」或「选段」；选段时把首末样本以 HSync 自己的键 `"decode range": [first, last]` 存进 DSView 格式的解码器条目（DSView 读取时忽略这个键，改动它会重新解码）。原生解码器与 Python 宿主都从 `first` 开始：第一次 `wait()` 从这里开始，这一点的「前一个电平」取它自己（libsigrokdecode 的初始引脚 `SAME_AS_SAMPLE0`），所以这里不会匹配到边沿，`skip` 也从这里数起；`end()` 时 `last_samplenum` 是范围的末端。UART、CAN 把范围起点处正忙的线路当作采集开头就在帧中间来处理。
+
 ### 7.3 sigrok 兼容宿主（`hsync-decode::srd`）
 
 - **API 面**：`Decoder` 基类的 `wait()`、`put()`、`register()`、`has_channel()`、`printlog()`；类属性 `api_version = 3`、`id`、`name`、`longname`、`desc`、`license`、`inputs`、`outputs`、`tags`、`channels`、`optional_channels`、`options`、`annotations`、`annotation_rows`、`binary`；常量 `OUTPUT_ANN / OUTPUT_PYTHON / OUTPUT_BINARY / OUTPUT_META`、`SRD_CONF_SAMPLERATE`；生命周期 `metadata()`、`start()`、`reset()`、`decode()`；实例属性 `samplenum`、`matched`。
