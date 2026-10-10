@@ -26,6 +26,8 @@ HSync 用现代技术栈重写 [DSView](https://github.com/DreamSourceLab/DSView
 | `src/`           | Vue 前端（组件、Pinia store、渲染器、IPC 封装、i18n）                   |
 | `src-tauri/`     | Tauri 应用 crate（命令、事件、资源：固件与 Demo 数据）                  |
 | `crates/hsync-*` | Rust 库：core、capture、driver、dslogic、demo、decode、fileio、session  |
+| `scripts/`       | 布置内置 CPython（DESIGN.md §7.3），按发行方式构建本机安装包            |
+| `.github/`       | CI 检查、安装包构建与 release-please 发布（DESIGN.md §11.5）            |
 | `.hsync/`        | 设计稿（本地参考，已在 `.gitignore` 中，不要提交）                      |
 | `../DSView`      | 参考实现（DSView 源码），只读                                           |
 
@@ -39,6 +41,7 @@ pnpm dev                  # 只启动前端（Vite，http://localhost:1420）
 pnpm tauri dev            # 启动桌面应用（前端 + Rust）
 pnpm build                # 类型检查并构建前端
 pnpm tauri build          # 打包桌面应用
+pnpm bundle               # 按发行方式打包本机安装包（内置 CPython）
 
 pnpm lint                 # ESLint
 pnpm lint:fix             # ESLint 自动修复
@@ -54,7 +57,7 @@ cargo test --workspace
 
 完成一项改动前，至少运行与改动相关的：`pnpm lint`、`pnpm typecheck`、`pnpm test`、`cargo clippy`、`cargo test`。
 
-编译 `crates/hsync-srd`（Python 解码器宿主，经 pyo3 嵌入 CPython）需要 PATH 中有带共享库的 Python 3；`src-tauri/resources/decoders/` 是从 DSView 复制的解码器，不要改动其内容。
+编译 `crates/hsync-srd`（Python 解码器宿主，经 pyo3 嵌入 CPython）需要 PATH 中有带共享库的 Python 3（发行构建与 CI 改用内置的 CPython，见 DESIGN.md §7.3）；`src-tauri/resources/decoders/` 是从 DSView 复制的解码器，不要改动其内容。
 
 ## 编码规范
 
@@ -109,6 +112,7 @@ cargo test --workspace
 - **subject**：英文祈使句，小写开头，不加句号，≤ 72 字符。
 - **细粒度**：一个提交只做一件可以独立回滚、独立审查的事。配置、脚手架、功能、测试、文档分开提交；格式化改动与逻辑改动不要混在一起；新增依赖与使用它的代码可以放在同一个提交里。
 - 破坏性变更在 type 后加 `!`，并在正文写 `BREAKING CHANGE:`。
+- 版本号与 `CHANGELOG.md` 由 release-please 从提交信息算出（DESIGN.md §11.5），`feat`、`fix`、`perf` 的 subject 会进入发布说明。不要手改版本号与 `CHANGELOG.md`；发布由负责人合并 release-please 的发布 PR 完成。
 - 不要用 `--no-verify` 跳过钩子；钩子失败就修好再提交。不要提交 `.hsync/`、构建产物与本地配置。
 
 示例：

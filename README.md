@@ -2,7 +2,7 @@
 
 HSync 是一个现代化的逻辑分析仪上位机，用 Tauri 2、Vue 3 与 Rust 重写 [DSView](https://github.com/DreamSourceLab/DSView)。初版的目标是与 DSView 的逻辑分析仪功能保持对齐：支持 DreamSourceLab 的全部 DSLogic 型号与 Demo 设备、Buffer/Stream 采集、触发、协议解码、测量、搜索，以及 DSView `.dsl` 文件的读写。
 
-> 项目处于开发阶段：v1 的逻辑分析仪功能已与 DSView 基本对齐，并在 DSLogic U2Pro16 上实测过采集、触发与循环采集；还没有安装包（打包方式，包括 Python 解码器宿主随包还是首次使用时下载，尚待确认，见 DESIGN.md §15）。进度见 [DESIGN.md §13 里程碑](./DESIGN.md#13-里程碑)。
+> 项目处于开发阶段：v1 的逻辑分析仪功能已与 DSView 基本对齐，并在 DSLogic U2Pro16 上实测过采集、触发与循环采集；安装包由 GitHub Actions 构建（macOS Apple 芯片、Windows x64、Linux x64，内置 Python 解码器宿主），随版本发布在 GitHub Releases，应用内可以检查并安装更新，流程见 [DESIGN.md §11.5](./DESIGN.md#115-持续集成与发布)。进度见 [DESIGN.md §13 里程碑](./DESIGN.md#13-里程碑)。
 
 ## 文档
 
@@ -27,7 +27,13 @@ pnpm lint && pnpm typecheck && pnpm test
 cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 ```
 
-提交信息遵循约定式提交，由 commitlint 校验；暂存的文件在提交前由 Prettier、ESLint 与 rustfmt 处理。
+按发行方式构建本机的安装包（下载并内置 CPython，参数传给 `tauri build`）：
+
+```sh
+pnpm bundle
+```
+
+提交信息遵循约定式提交，由 commitlint 校验，版本号与 CHANGELOG 由 release-please 据此生成；暂存的文件在提交前由 Prettier、ESLint 与 rustfmt 处理。GitHub Actions 在每个 PR 与 `main` 的推送上运行同样的检查。
 
 ## 许可
 
