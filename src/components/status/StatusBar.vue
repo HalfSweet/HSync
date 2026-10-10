@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import SegmentMeasure from '@/components/status/SegmentMeasure.vue'
+import TimelineReadout from '@/components/status/TimelineReadout.vue'
 import { useBackendText } from '@/composables/useBackendText'
 import { useCaptureStore } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
@@ -119,7 +120,7 @@ const perDivision = computed(() =>
       {{ t('status.samples', { count: formatCount(capture.sampleCount, locale) }) }}
     </span>
     <SegmentMeasure />
-    <div class="flex-1" />
+    <TimelineReadout />
     <span v-if="device.slowPort" role="alert" class="rise-in inline-flex items-center gap-1.5">
       <span class="text-alert">{{ t('header.device.slowPort') }}</span>
       <button class="btn-ghost h-[22px]" @click="device.dismissSlowPort()">

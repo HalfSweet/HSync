@@ -183,15 +183,15 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 
 ### 6.4 Hover readout
 
-- When the pointer rests on a trace row, the readout shows the level and width of the pulse under it ("High 9.8 µs"). It adds the period, frequency and duty cycle the pulse makes with the next one, except on decoder data lines (SDA, MOSI, MISO, CS, CAN RX), which show the pulse alone, and UART lines, which add "≈ N bits" instead. When the viewport cuts the pulse off, the readout shows "≥" and notes "Extends beyond view".
-- The bubble has an `--ink` fill, `--canvas` text and 12 px type; it is centred on the pulse and held horizontally within 9%–91% of the viewport. A 13% `--ink` layer covers the pulse.
+- When the pointer rests on a trace row, a 13% `--ink` layer covers the pulse under it, and the status bar reads it out (§10): the channel's colour dot and name, then the level and width of the pulse ("High 9.8 µs"). It adds the period, frequency and duty cycle the pulse makes with the next one, except on decoder data lines (SDA, MOSI, MISO, CS, CAN RX), which show the pulse alone, and UART lines, which add "≈ N bits" instead. When the viewport cuts the pulse off, the readout shows "≥" and notes "Extends beyond view".
+- Nothing but that layer is drawn over the rows, so the readout never hides another channel's waveform.
 
 ### 6.5 Edge measurement
 
 - Clicking an edge on a trace row starts a measurement: it takes the nearest edge within 10 px of the pointer, exact to the sample. The end point follows the pointer and snaps to an edge within 10 px on the pointer's row (which may be another channel).
 - Clicking another edge completes the measurement, and the result stays on the chart; clicking a further edge starts a new measurement, and clicking empty space or pressing Esc clears it. While measuring, clicking empty space, clicking the start point again or pressing Esc cancels it.
 - Each end has a 10 px dot (`--ink` fill, 1.5 px `--canvas` outline), and a 1 px `--ink` horizontal line joins them along the centre line of the end row; when the ends are on different rows, a dashed line drops from the start point to the end row. An end point that has not snapped is drawn as a vertical line the height of the row.
-- The readout bubble is styled like the hover readout and sits above the end row, centred between the ends: "Δt 9.80 µs" plus "245 samples · 1/Δt 102.0 kHz", with the time exact to one sample (at most 3 decimals). Until the end point lands on another edge, it prompts "Click another edge to finish, Esc to cancel".
+- The status bar reads out the measurement (§10): "Δt 9.80 µs" plus "245 samples · 1/Δt 102.0 kHz", with the time exact to one sample (at most 3 decimals). Until the end point lands on another edge, it prompts "Click another edge to finish, Esc to cancel".
 - When not measuring, an 11 px hollow ring appears as the pointer nears an edge, showing that a measurement can start there; while measuring, the cursor is a crosshair and the hover readout pauses.
 - Dragging, the wheel and the keyboard pan and zoom as usual, and the measurement stays in place; a drag of more than 3 px is not a click. A new capture clears the measurement.
 
@@ -259,7 +259,7 @@ The top bar's "Trigger" button opens a 480 px wide panel:
 
 ## 10. Status bar and navigation
 
-- From the left: the "Data stream" toggle (`--hover` fill when pressed), the status ("Capture complete", "Waiting for trigger", "Captured 37%"…), save or export progress (cancellable), an error or "Saved to …", the trigger time, the sample count ("131,072 samples") and the segment duration (§6.6).
+- From the left: the "Data stream" toggle (`--hover` fill when pressed), the status ("Capture complete", "Waiting for trigger", "Captured 37%"…), save or export progress (cancellable), an error or "Saved to …", the trigger time, the sample count ("131,072 samples") and the segment duration (§6.6), then the edge measurement (§6.5) and the pulse under the pointer (§6.4). The two readouts take the room left before the right-hand items and end in an ellipsis rather than wrap the bar, so the timeline keeps its height; their values are `--ink` at medium weight and the details `--ink-3`.
 - On the right: the warning about a too-slow port, and "Switch / Dismiss" for a newly plugged-in device; Zoom out, the current time base ("50 µs/div", at least 64 px wide, centred), Zoom in and Zoom to fit.
 - **Pointer**: Ctrl/⌘ + wheel zooms around the pointer; Shift + wheel or a horizontal trackpad swipe pans; dragging in the trace area pans, and clicking an edge starts an edge measurement (§6.5).
 - **Keyboard**: `+` / `-` zoom, `←` / `→` pan, `Home` zooms to fit, `/` searches, ⌘/Ctrl+O opens, ⌘/Ctrl+S saves, ⌘/Ctrl+, opens the settings, and `Esc` closes a menu, cancels an edge measurement and cancels the segment, in that order.

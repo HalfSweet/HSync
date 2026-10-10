@@ -4,16 +4,11 @@ import type { MeasureGeometry } from '@/timeline/measure'
 /**
  * The edge measurement over the rows (DESIGN.md §6.5): a dot on each edge (a cursor line for an
  * end that follows the pointer between edges), a line between the ends across the second end's
- * row, a dashed drop from the first end when it is on another row, and the read-out above. A
- * ring marks the edge a click would start from.
+ * row and a dashed drop from the first end when it is on another row; the status bar reads it
+ * out. A ring marks the edge a click would start from.
  */
 defineProps<{
   geometry: MeasureGeometry | null
-  /** The time between the ends, or `null` while there is only the hint. */
-  primary: string | null
-  secondary: string | null
-  /** Both edges are chosen, so the read-out is announced. */
-  done: boolean
   /** The edge under the pointer that a click picks, in track pixels and rows' y. */
   target: { x: number; y: number } | null
 }>()
@@ -58,15 +53,6 @@ defineProps<{
           aria-hidden="true"
         />
       </template>
-      <div
-        v-if="geometry.label && (primary || secondary)"
-        :role="done ? 'status' : undefined"
-        class="absolute flex -translate-x-1/2 -translate-y-full items-baseline gap-2 rounded-4 bg-ink px-2 py-1 text-small whitespace-nowrap text-canvas tabular-nums shadow-[0_0_0_1px_var(--canvas)]"
-        :style="{ left: `${geometry.label.center}px`, top: `${geometry.label.bottom}px` }"
-      >
-        <b v-if="primary" class="font-semibold">{{ primary }}</b>
-        <span v-if="secondary" :class="primary && 'opacity-75'">{{ secondary }}</span>
-      </div>
     </template>
     <i
       v-if="target"

@@ -54,12 +54,7 @@ describe('readPulse', () => {
     expect(reading.left).toBe(0)
     expect(reading.width).toBe(200)
     expect(reading.complete).toBe(false)
-    expect(reading.center).toBe(100)
     expect(readPulse(pulse(1100, 1200, null, false), view, RATE, 'data').complete).toBe(false)
-  })
-
-  it('keeps the read-out away from the edges', () => {
-    expect(readPulse(pulse(1990, 2000), view, RATE, 'data').center).toBe(910)
   })
 })
 
