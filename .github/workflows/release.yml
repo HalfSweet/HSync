@@ -1,53 +1,148 @@
-# Releases with release-please. Each push to main updates a release pull request
-# with the next version and its changelog, worked out from the commit messages. Merging it tags the
-# version and drafts the release; the installers are built into the draft, which is published once
-# all of them are in.
+# Releases when the owner asks (AGENTS.md「发布」). Run with a version (`pnpm release 0.2.0`, or
+# "Run workflow" here), it opens a pull request that sets that version. Merging the pull request is
+# the release: the merge commit is tagged, the installers are built into a draft release, and the
+# release is published once all of them are in.
 name: Release
 
 on:
-  push:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: The version to release, such as 0.2.0
+        required: true
+        type: string
+  pull_request:
+    types: [closed]
     branches: [main]
 
 permissions: {}
 
 jobs:
-  release-please:
+  prepare:
     name: Release pull request
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     concurrency:
-      group: release-please
-      cancel-in-progress: false
+      group: release-prepare
     permissions:
       contents: write
       pull-requests: write
-      issues: write
-    outputs:
-      created: ${{ steps.release.outputs.release_created }}
-      id: ${{ steps.release.outputs.id }}
-      sha: ${{ steps.release.outputs.sha }}
-      notes: ${{ steps.release.outputs.body }}
+    env:
+      VERSION: ${{ inputs.version }}
     steps:
-      # Settings come from release-please-config.json and .release-please-manifest.json.
-      - id: release
-        uses: googleapis/release-please-action@v5
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Cargo writes the new version into Cargo.lock.
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Set the version
+        run: node scripts/version.mjs "$VERSION"
+      - name: Write the release notes
+        run: pnpm exec git-cliff --unreleased --tag "v$VERSION" --strip all --output "$RUNNER_TEMP/notes.md"
+      - name: Open the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="release/v$VERSION"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --create "$branch"
+          # The first release keeps the version already set, so its commit may change nothing.
+          git commit --all --allow-empty --message "chore: release $VERSION"
+          git push --force origin "$branch"
+          {
+            echo "Merging this pull request releases HSync $VERSION: it tags the merge, builds the"
+            echo "installers into a draft release and publishes it once all of them are in. The notes"
+            echo "below are a preview; the release lists what the tag holds when it is merged."
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } > "$RUNNER_TEMP/body.md"
+          if [ "$(gh pr view "$branch" --json state --jq .state 2>/dev/null)" = OPEN ]; then
+            gh pr edit "$branch" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base main --head "$branch" --title "chore: release $VERSION" \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+  tag:
+    name: Tag and draft
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.merged &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release/v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.draft.outputs.id }}
+      sha: ${{ github.event.pull_request.merge_commit_sha }}
+      notes: ${{ steps.draft.outputs.notes }}
+    env:
+      SHA: ${{ github.event.pull_request.merge_commit_sha }}
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Tag the merge
+        id: tag
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$BRANCH" != "release/v$version" ]; then
+            echo "::error::$BRANCH was merged, but package.json says $version"
+            exit 1
+          fi
+          git tag "v$version" "$SHA"
+          git push origin "v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Draft the release
+        id: draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.tag.outputs.version }}
+        run: |
+          pnpm exec git-cliff --latest --strip all --output "$RUNNER_TEMP/notes.md"
+          # Versions such as 0.2.0-beta.1 are pre-releases, which updates never offer.
+          prerelease=false
+          case "$VERSION" in *-*) prerelease=true ;; esac
+          id=$(gh api "repos/$GITHUB_REPOSITORY/releases" -f tag_name="v$VERSION" \
+            -f name="HSync $VERSION" -F body=@"$RUNNER_TEMP/notes.md" -F draft=true \
+            -F prerelease="$prerelease" --jq .id)
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          delimiter="notes-$(openssl rand -hex 8)"
+          { echo "notes<<$delimiter"; cat "$RUNNER_TEMP/notes.md"; echo "$delimiter"; } >> "$GITHUB_OUTPUT"
 
   bundle:
     name: Installers
-    needs: release-please
-    if: needs.release-please.outputs.created == 'true'
+    needs: tag
     permissions:
       contents: write
     uses: ./.github/workflows/bundle.yml
     with:
-      ref: ${{ needs.release-please.outputs.sha }}
-      release-id: ${{ needs.release-please.outputs.id }}
-      release-notes: ${{ needs.release-please.outputs.notes }}
+      ref: ${{ needs.tag.outputs.sha }}
+      release-id: ${{ needs.tag.outputs.id }}
+      release-notes: ${{ needs.tag.outputs.notes }}
     secrets: inherit
 
   publish:
     name: Publish
-    needs: [release-please, bundle]
+    needs: [tag, bundle]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -56,7 +151,7 @@ jobs:
       - name: Publish the draft release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ needs.release-please.outputs.id }}
+          RELEASE_ID: ${{ needs.tag.outputs.id }}
         run: |
           gh api --method PATCH "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" \
-            -F draft=false -f make_latest=true --jq '.html_url'
+            -F draft=false --jq .html_url
