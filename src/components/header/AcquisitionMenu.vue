@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
-import { computed, nextTick, ref, useTemplateRef, watch } from 'vue'
+import { computed, nextTick, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { closestDuration, durationChoices, samplesFor } from '@/acquisition/durations'
 import AppIcon from '@/components/common/AppIcon.vue'
+import { getBackend } from '@/ipc/backend'
 import { useCaptureStore } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
-import { formatCount, formatSamplerate, formatTimeShort } from '@/utils/units'
+import { formatBytes, formatCount, formatSamplerate, formatTimeShort } from '@/utils/units'
 
 /**
  * `rate │ duration │ N channels` and its menu (DESIGN.md §9.4): sample rates, the durations
@@ -51,6 +52,25 @@ const channelCount = computed(() =>
 )
 const durations = computed(() => durationChoices(rate.value, maxSamples.value))
 const currentDuration = computed(() => closestDuration(durations.value, seconds.value))
+
+/** Durations beyond the device's memory need RLE compression, which DSView marks. */
+const needsRle = (duration: number) => {
+  const depth = device.state?.hardwareDepth
+  return depth != null && samplesFor(duration, rate.value) > depth
+}
+
+// A capture is kept bit-packed in memory; past half of the machine's, warn (DESIGN.md §5.2).
+const memory = shallowRef<number | null>(null)
+watch(open, async (shown) => {
+  if (!shown || memory.value !== null) return
+  try {
+    memory.value = await (await getBackend()).systemMemory()
+  } catch (error) {
+    console.error('memory size failed', error)
+  }
+})
+const needed = computed(() => (device.sampleLimit * channelCount.value) / 8)
+const tooLarge = computed(() => memory.value !== null && needed.value > memory.value / 2)
 const locked = computed(() => capture.busy || !device.state)
 
 const label = computed(() =>
@@ -135,7 +155,12 @@ function toggleChannel(channel: number): void {
                 :disabled="locked"
                 @click="pickDuration(duration)"
               >
-                <span>{{ formatTimeShort(duration) }}</span>
+                <span class="inline-flex items-baseline gap-1.5"
+                  >{{ formatTimeShort(duration) }}
+                  <span v-if="needsRle(duration)" class="text-caption text-ink-3">{{
+                    t('header.acquisition.rle')
+                  }}</span></span
+                >
                 <AppIcon v-if="duration === currentDuration" name="check" />
               </button>
             </div>
@@ -147,6 +172,9 @@ function toggleChannel(channel: number): void {
               count: formatCount(device.sampleLimit, locale),
             })
           }}
+        </p>
+        <p v-if="tooLarge" role="alert" class="text-caption text-alert tabular-nums">
+          {{ t('header.acquisition.tooLarge', { size: formatBytes(needed) }) }}
         </p>
         <div class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('header.acquisition.channelsTitle') }}</span>

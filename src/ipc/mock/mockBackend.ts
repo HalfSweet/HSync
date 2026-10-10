@@ -320,6 +320,12 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve()
     },
 
+    async systemMemory() {
+      // Chromium tells a rough figure in GiB; other browsers nothing.
+      const gib = (navigator as Navigator & { deviceMemory?: number }).deviceMemory
+      return Promise.resolve(gib ? gib * 2 ** 30 : null)
+    },
+
     async decodeList(captureId: number) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))

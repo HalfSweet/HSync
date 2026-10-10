@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   digitsFor,
+  formatBytes,
   formatCount,
   formatFrequency,
   formatFrequencyShort,
@@ -71,5 +72,14 @@ describe('steps', () => {
     expect(digitsFor(0.2)).toBe(1)
     expect(digitsFor(1)).toBe(0)
     expect(digitsFor(50)).toBe(0)
+  })
+})
+
+describe('size formatting', () => {
+  it('uses binary units', () => {
+    expect(formatBytes(512)).toBe('512 B')
+    expect(formatBytes(1536)).toBe('1.5 KiB')
+    expect(formatBytes(16 * 2 ** 30)).toBe('16 GiB')
+    expect(formatBytes(1.25 * 2 ** 40)).toBe('1.25 TiB')
   })
 })

@@ -119,6 +119,8 @@ export interface Backend {
   revealLog(): Promise<void>
   /** Titles the window. */
   setTitle(title: string): Promise<void>
+  /** Physical memory in bytes, or `null` when unknown. */
+  systemMemory(): Promise<number | null>
   /** The decoders of a capture and how far they are. */
   decodeList(captureId: number): Promise<DecoderStatus[]>
   /** Decode lanes of finished decoders over `start..end`. */
@@ -279,6 +281,10 @@ class TauriBackend implements Backend {
 
   setTitle(title: string) {
     return getCurrentWindow().setTitle(title)
+  }
+
+  systemMemory() {
+    return invoke<number>('system_memory')
   }
 
   decodeList(captureId: number) {
