@@ -5,13 +5,14 @@ import type { ChannelRef } from '@/timeline/groups'
 import TriggerSlot from './TriggerSlot.vue'
 
 defineProps<{ channel: ChannelRef; condition: TriggerCondition; menuOpen: boolean }>()
-const emit = defineEmits<{ trigger: [slot: HTMLElement] }>()
+const emit = defineEmits<{ trigger: [slot: HTMLElement]; menu: [event: MouseEvent] }>()
 </script>
 
 <template>
   <div
     class="flex min-w-0 flex-1 items-center gap-2 pl-6 text-small text-ink-2"
     :class="`wire-${channel.wire}`"
+    @contextmenu.prevent="emit('menu', $event)"
   >
     <i class="size-[7px] flex-none rounded-full bg-wire" />
     <span class="truncate" :class="channel.numeric && 'font-mono'">{{ channel.label }}</span>

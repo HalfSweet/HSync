@@ -184,6 +184,23 @@
       "low": "Low level"
     }
   },
+  "channelMenu": {
+    "title": "{channel} settings",
+    "name": "Name",
+    "colour": "Colour",
+    "auto": "By number",
+    "wires": {
+      "0": "Black",
+      "1": "Brown",
+      "2": "Red",
+      "3": "Orange",
+      "4": "Yellow",
+      "5": "Green",
+      "6": "Blue",
+      "7": "Violet"
+    },
+    "tip": "Right-click to rename or recolour"
+  },
   "triggerPanel": {
     "title": "Trigger settings",
     "mode": "Type",

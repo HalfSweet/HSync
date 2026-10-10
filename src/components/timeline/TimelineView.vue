@@ -38,6 +38,7 @@ import DecodeLane from './DecodeLane.vue'
 import GroupLabel from './GroupLabel.vue'
 import PulseReadout from './PulseReadout.vue'
 import TimelineRuler from './TimelineRuler.vue'
+import ChannelMenu from './ChannelMenu.vue'
 import TriggerMenu from './TriggerMenu.vue'
 
 /** Rows are never narrower than this, label column included; narrower windows scroll. */
@@ -259,6 +260,8 @@ interface OpenMenu {
   slot: HTMLElement
 }
 const menu = shallowRef<OpenMenu | null>(null)
+/** The channel whose context menu is open, and where. */
+const channelMenu = shallowRef<{ channel: ChannelRef; x: number; y: number } | null>(null)
 
 function toggleMenu(channel: ChannelRef, slot: HTMLElement): void {
   if (menu.value?.slot === slot) {
@@ -446,6 +449,11 @@ function onWheel(event: WheelEvent): void {
               :condition="channels.triggerOf(row.channel.index)"
               :menu-open="menu?.channel.index === row.channel.index"
               @trigger="(slot) => row.channel && toggleMenu(row.channel, slot)"
+              @menu="
+                (event) =>
+                  row.channel &&
+                  (channelMenu = { channel: row.channel, x: event.clientX, y: event.clientY })
+              "
             />
           </div>
           <div
@@ -531,6 +539,14 @@ function onWheel(event: WheelEvent): void {
           />
         </div>
 
+        <ChannelMenu
+          v-if="channelMenu"
+          :key="channelMenu.channel.index"
+          :channel="channelMenu.channel"
+          :x="channelMenu.x"
+          :y="channelMenu.y"
+          @close="channelMenu = null"
+        />
         <TriggerMenu
           v-if="menu"
           :channel="menu.channel.label"
