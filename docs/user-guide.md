@@ -64,7 +64,7 @@ Click the sample rate │ duration │ channels button in the top bar:
 - Click **Add decoder** at the top left of the timeline and search for a protocol: the native I²C, UART, SPI, CAN and CAN-FD decoders, or one of the 150 Python decoders that come with DSView. Protocols that need a lower-level decoder are stacked on it automatically; EEPROM24xx, for example, stacks on I²C. Choose a channel for each role and set each layer's options.
 - **Decode range**: choose **Whole capture** or **Segment**. With **Segment**, only the samples between A and B are decoded; this corresponds to DSView's decode start/end cursors.
 - Click the settings button on a group header (**Decoder settings**) to change or remove its decoder. Under **Display** you can choose the number base (**Numbers**: **Hex**, **Dec**, **Oct**, **Bin** or **ASCII**) and which **Annotation rows** to show.
-- **Data stream**: click **Data stream** at the left end of the status bar, or the data stream button on a group header (**Show all decoded results in the data stream**). It lists one decoder at a time; you can switch between **All** and **Segment**, and for UART and SPI between **Text** and **Hex**. Click a row to jump to that place on the waveform. You can **Copy** the list or **Export** it as CSV or text.
+- **Data stream**: click **Data stream** at the left end of the status bar, or the data stream button on a group header (**Show all decoded results in the data stream**). It lists one decoder at a time; you can switch between **All** and **Segment**, and for UART between **Text** and **Hex**. Click a row to jump to that place on the waveform. You can **Copy** the list or **Export** it as CSV or text.
 
 ## Search
 

@@ -6,10 +6,6 @@ import type { LaneView } from "./LaneView";
  */
 export type DecoderView = { lanes: Array<LaneView>, 
 /**
- * I²C: the target most transfers in view address.
- */
-address: number | null, 
-/**
  * Nothing in view: where the nearest items before and after are.
  */
 previous: number | null, next: number | null, };

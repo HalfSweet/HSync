@@ -138,16 +138,10 @@ const findBand = computed(() => {
     : { ...band, line: false }
 })
 
-/** The I²C bytes lane names the target most transfers in view address. */
+/** Annotation rows are named after the decoder's row. */
 function laneLabel(row: Row): string | null {
-  if (row.kind === 'lane' && row.lane?.includes('/')) {
-    return annotationLanes(row.group).find((lane) => lane.lane === row.lane)?.desc ?? null
-  }
-  if (row.kind !== 'lane' || row.lane !== 'bytes') return null
-  const address = decode.lanesOf(row.group.decoder)?.address
-  return address == null
-    ? null
-    : t('decode.i2c.slave', { address: address.toString(16).toUpperCase().padStart(2, '0') })
+  if (row.kind !== 'lane' || !row.lane?.includes('/')) return null
+  return annotationLanes(row.group).find((lane) => lane.lane === row.lane)?.desc ?? null
 }
 
 // Size and scroll position of the visible area.
@@ -780,7 +774,6 @@ function onWheel(event: WheelEvent): void {
               :decoder="row.group.decoder"
               :selected="view.segment?.blockId ?? null"
               :time-of="capture.timeOf"
-              :samplerate="capture.samplerate"
               :format="entryFormat(decode.entries[row.group.decoder])"
               @pick="(block) => row.group.decoder !== null && pickBlock(block, row.group.decoder)"
               @go="view.centerOn"

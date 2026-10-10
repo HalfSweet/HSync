@@ -6,6 +6,6 @@ import type { LaneItem } from "./LaneItem";
  */
 export type LaneView = { 
 /**
- * `header` (the group title row), `bytes`, `miso` or `mosi`.
+ * `header` (the group title row), `miso` or `mosi`.
  */
 lane: string, items: Array<LaneItem>, };

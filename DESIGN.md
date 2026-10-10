@@ -21,8 +21,7 @@ From top to bottom: top bar, overview strip, timeline (ruler plus grouped rows, 
 │ ⎍ [Device ▾] [25 MHz | 5.24 ms | 16 ch ▾] [⎍ Trigger Not set ▾] [▶ Capture|▾] … [🔍 Search /] [⤓] [⚙] │
 ├ Overview strip (58px) ────────────────────────────────────────────────────────────────────────────────┤
 ├ Label column 204px ─┬ Ruler (38px, sticky) ───────────────────────────────────────────────────────────┤
-│ I²C group header    │ Decode blocks (meaning lane)                                                    │
-│   Target 0x62       │ Decode blocks (byte lane)                                                       │
+│ I²C group header    │ Decode blocks (bytes)                                                           │
 │   SDA  D0        ▢  │ Trace                                                                           │
 │ …                   │ …                                                                               │
 ├ Data stream panel (closed by default, drag to resize, timeline keeps at least 180px) ─────────────────┤
@@ -170,9 +169,10 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 - Absolutely positioned within the lane, inset 2 px at top and bottom, 3 px radius, padding 0 8 px, 12 px text; bus fill with a border in the darker fill, which turns `--ink-3` on hover.
 - Blocks narrower than 3.2% of the viewport carry no text; a side cut off by the viewport edge loses its rounded corners and border.
 - A selected block is inverted (`--ink` fill, `--canvas` text). Clicking a block makes it the segment and switches the data stream to its decoder; a second click cancels.
-- **I²C** has two lanes: the upper one shows the meaning of the whole transfer ("Read 4F from 0x04"); the lower one shows the bytes, and address bytes are prefixed with "W" or "R" (11 px, bus colour) and use the darker fill. An acknowledge is a single letter: `A` plain, `N` with a thin 1 px frame; start, repeated start and stop are small `S`, `Sr` and `P` marks.
+- Decode blocks show only what the bus carried and never guess what it meant: no register reads or writes, no bytes taken for text, no folded runs of a repeated word. For protocol-level meaning, stack the matching decoder (such as EEPROM24xx).
+- **I²C**: the bytes sit on the group header row; address bytes are prefixed with "W" or "R" (11 px, bus colour) and use the darker fill. An acknowledge is a single letter: `A` plain, `N` with a thin 1 px frame; start, repeated start and stop are small `S`, `Sr` and `P` marks.
 - **UART**: one block per frame: the character (13 px monospace bold) plus its hex value (caption colour); a space reads "Space".
-- **SPI**: the group header row shows the whole transfer, "Transfer · Offsets 81–160"; the MISO lane places printable characters one by one on their own bytes, draws control characters as `·` and merges the bytes of one text line into one block; the MOSI lane folds long runs of identical bytes into "FF × 224 · Unchanged from offset 16".
+- **SPI**: the MISO and MOSI lanes draw each word as its own block in hex; the group header row stays empty.
 - **CAN-FD**: when the viewport holds no frame, the lane reads "No frames in view" and offers "Previous" / "Next".
 
 ### 6.4 Hover readout
@@ -240,14 +240,13 @@ The top bar's "Trigger" button opens a 480 px wide panel:
 ## 9. Data stream panel
 
 - **Opening and closing**: the panel sits below the timeline and is closed by default; it slides in from, and out to, the bottom edge of the workspace. It opens from the "Data stream" button at the left end of the status bar, and from the button that appears on hover in a group header (which opens that decoder; a second click closes it). A segment does not open it automatically. Its top edge can be dragged to change its height (minimum 80 px), and the timeline keeps at least 180 px.
-- **Header** (33 px): on the left, the decoder tabs; the current tab has `--ink` text and a 2 px `--ink` line beneath, which slides under the new tab on switching; then a one-line summary ("9 transfers, 4 bytes in segment"). On the right, in order: "Text / Hex" (UART and SPI only), "All / Segment", Copy, Export (CSV / text) and Close. Segmented controls are 22 px high; the selected option has a `--raise` fill and a 1 px `--line-2` outline.
+- **Header** (33 px): on the left, the decoder tabs; the current tab has `--ink` text and a 2 px `--ink` line beneath, which slides under the new tab on switching; then a one-line summary ("9 transfers, 4 bytes in segment"). On the right, in order: "Text / Hex" (UART only), "All / Segment", Copy, Export (CSV / text) and Close. Segmented controls are 22 px high; the selected option has a `--raise` fill and a 1 px `--line-2` outline.
 - **List**: 12 px monospace, 20 px rows, fixed header; the first column is the time (ms, four decimals, relative to the trigger point).
-  - **I²C**: one row per transfer: "Meaning" plus "On the wire" (`S`, `W62`, data bytes, `Sr`, `R62`, data bytes, `N`, `P`; acknowledged bytes are not marked, and only `N` is written).
+  - **I²C**: one row per transfer, listing what was "On the wire" (`S`, `W62`, data bytes, `Sr`, `R62`, data bytes, `N`, `P`; acknowledged bytes are not marked, and only `N` is written).
   - **UART**: in Text mode, rows break at line feeds, at most 80 columns per row, and `\r` `\n` `\t` are written as escapes in the caption colour; in Hex mode, each row holds 16 bytes, with the matching characters on the right.
-  - **SPI**: MISO first, then MOSI, each with byte offsets. In Text mode, runs of 4 or more printable characters are shown as text, and the rest as 16 hex bytes per row.
+  - **SPI**: hex only: for each transfer MISO first, then MOSI, 16 bytes per row, with byte offsets within the transfer.
   - **CAN-FD**: one row per frame: identifier, data, frame type and check results.
   - **Other decoders**: one row per annotation: time, annotation row name, text.
-  - Runs of 8 or more identical bytes fold into one item (`FF × 224`); in Text mode, only non-printable values fold.
 - **Capture boundaries**: an I²C transfer at the start that lacks its start condition is not decoded and gets a one-line note; one unfinished at the end is listed up to its last complete byte, followed by "…" and a note; UART text uses one "…" at each end for truncated frames.
 - **With a segment**: with the range at "All", items lying wholly inside the segment get a `--sel` fill, and the list scrolls to the first of them (leaving one row above it; not while dragging, only on release). With the range at "Segment", only those items are listed, and a transfer partly inside the segment shows "…" on its missing side; without a segment this option is unavailable, with the hint "Drag along the ruler to select a segment first". Clicking a decode block on the timeline switches the list to its decoder and marks its entry.
 - **With the traces**: hovering a list item marks its position on the overview strip; when it lies in the viewport, an 8% `--ink` band (1 px `--ink-3` on both sides) covers it on the timeline, and its decode block gets a 2 px `--ink` frame. Clicking a list item pans the traces there and selects it.

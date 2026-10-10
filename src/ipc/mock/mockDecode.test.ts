@@ -13,21 +13,16 @@ const SPP = (END - START) / 1236
 describe('mock decoders', () => {
   it('answers lanes like hsync-decode', () => {
     const [i2c, uart, spi, can] = mockView(DECODERS, START, END, SPP)
-    const meanings = i2c?.view.lanes[0]?.items.flatMap((item) =>
-      item.type === 'i2cTransfer' ? [item.meaning] : [],
+    const bytes = i2c?.view.lanes[0]?.items.flatMap((item) =>
+      item.type === 'i2cAddress' ? [item.address] : item.type === 'i2cData' ? [item.value] : [],
     )
-    expect(meanings).toEqual([
-      { type: 'readRegister', register: 0x04, data: [0x4f] },
-      { type: 'readRegister', register: 0x02, data: [0x32, 0xbb] },
-    ])
-    expect(i2c?.view.address).toBe(0x62)
+    expect(bytes).toEqual([0x62, 0x04, 0x62, 0x4f, 0x62, 0x02, 0x62, 0x32])
     const text = uart?.view.lanes[0]?.items
       .flatMap((item) => (item.type === 'uartFrame' ? [String.fromCharCode(item.value)] : []))
       .join('')
     expect(text).toBe('USB-based ')
-    const transfer = spi?.view.lanes[0]?.items[0]
-    expect(transfer?.type).toBe('spiTransfer')
-    if (transfer?.type === 'spiTransfer') expect(transfer.last).toBeGreaterThan(transfer.first)
+    expect(spi?.view.lanes.map((lane) => lane.lane)).toEqual(['miso', 'mosi'])
+    expect(spi?.view.lanes[1]?.items.every((item) => item.type === 'spiWord')).toBe(true)
     expect(can?.view.lanes.every((lane) => lane.items.length === 0)).toBe(true)
     expect(can?.view.next).not.toBeNull()
   })

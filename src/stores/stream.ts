@@ -41,8 +41,8 @@ export const useStreamStore = defineStore('stream', () => {
   /** Decoders with a native presentation, in timeline order. */
   const decoders = computed(() => decode.statuses.filter((status) => status.bus !== null))
   const bus = computed(() => decode.statusOf(decoder.value)?.bus ?? null)
-  /** Text and hex only differ for UART and SPI. */
-  const hasModes = computed(() => bus.value === 'uart' || bus.value === 'spi')
+  /** Text and hex only differ for UART; SPI lists hex only. */
+  const hasModes = computed(() => bus.value === 'uart')
   const effectiveMode = computed<StreamMode>(() => (hasModes.value ? mode.value : 'text'))
 
   /** The marked segment in ascending order, when it spans samples. */
