@@ -1,6 +1,8 @@
 //! I²C, ported from DSView's `1:i2c` decoder (`libsigrokdecode4DSL/decoders/1-i2c/pd.py`):
 //! the same conditions, states and annotation spans.
 
+use std::ops::Range;
+
 use hsync_capture::ChannelData;
 
 use crate::sampler::{Pin, Sampler, Term};
@@ -57,9 +59,9 @@ enum State {
     Ack,
 }
 
-/// Decodes `scl` and `sda` over their first `end` samples.
-pub fn decode(scl: &ChannelData, sda: &ChannelData, end: u64) -> Trace {
-    let mut sampler = Sampler::new(vec![scl, sda], end);
+/// Decodes `scl` and `sda` over `samples`.
+pub fn decode(scl: &ChannelData, sda: &ChannelData, samples: Range<u64>) -> Trace {
+    let mut sampler = Sampler::new(vec![scl, sda], samples.end).from(samples.start);
     let start_condition = vec![Term::Pin(SCL, Pin::High), Term::Pin(SDA, Pin::Falling)];
     let stop_condition = vec![Term::Pin(SCL, Pin::High), Term::Pin(SDA, Pin::Rising)];
     let clock = vec![Term::Pin(SCL, Pin::Rising)];
@@ -172,7 +174,9 @@ pub fn decode(scl: &ChannelData, sda: &ChannelData, end: u64) -> Trace {
         .items
         .iter()
         .find(|item| matches!(item.kind, Kind::Start))
-        .map_or(end, |item| item.start);
-    trace.cut_head = scl.next_change(0).filter(|&edge| edge < first_start);
+        .map_or(samples.end, |item| item.start);
+    trace.cut_head = scl
+        .next_change(samples.start)
+        .filter(|&edge| edge < first_start);
     trace
 }

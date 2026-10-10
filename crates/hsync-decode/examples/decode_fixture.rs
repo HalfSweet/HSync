@@ -26,7 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         let Some(spec) = Spec::from_dsview(entry) else {
             continue;
         };
-        let Some(decoded) = spec.run(capture, capture.len()) else {
+        let Some(decoded) = spec.run(capture, 0..capture.len()) else {
             continue;
         };
         let presentation = Presentation::new(&decoded);

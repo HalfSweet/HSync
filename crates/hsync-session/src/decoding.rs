@@ -222,7 +222,7 @@ impl DecodeSet {
     ) -> State {
         let native = |spec: &Spec| {
             let capture = capture.read();
-            spec.run(&capture, capture.len())
+            spec.run(&capture, 0..capture.len())
         };
         let python = |stack: &Stack| -> Result<StackOutcome, String> {
             let host = host.ok_or("no decoder host")?;

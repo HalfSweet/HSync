@@ -22,7 +22,7 @@ fn presentations() -> Vec<(String, Presentation)> {
         .filter_map(Spec::from_dsview)
         .map(|spec| {
             let decoded = spec
-                .run(&document.capture, document.capture.len())
+                .run(&document.capture, 0..document.capture.len())
                 .expect("channels");
             (spec.id.clone(), Presentation::new(&decoded))
         })

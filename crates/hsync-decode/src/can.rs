@@ -6,6 +6,8 @@
 //! the sample points of BRS and the CRC delimiter, CRC-15/17/21 are checked, frames wait for
 //! bus integration (11 recessive bits), and six equal bits are a stuff error.
 
+use std::ops::Range;
+
 use hsync_capture::ChannelData;
 
 /// Bit timing.
@@ -134,9 +136,15 @@ struct Layout {
     crc_delimiter: usize,
 }
 
-/// Decodes the bus line over its first `end` samples at `samplerate`.
-pub fn decode(line: &ChannelData, end: u64, samplerate: u64, options: &Options) -> Trace {
-    let end = end.min(line.len());
+/// Decodes the bus line over `samples` at `samplerate`.
+pub fn decode(
+    line: &ChannelData,
+    samples: Range<u64>,
+    samplerate: u64,
+    options: &Options,
+) -> Trace {
+    let first = samples.start;
+    let end = samples.end.min(line.len());
     let mut trace = Trace::default();
     let timing = |bitrate: f64| {
         let width = samplerate as f64 / bitrate;
@@ -147,7 +155,7 @@ pub fn decode(line: &ChannelData, end: u64, samplerate: u64, options: &Options) 
     };
     let nominal = timing(options.nominal_bitrate);
     let fast = timing(options.fast_bitrate);
-    if end == 0 || !nominal.width.is_finite() || nominal.width < 3.0 {
+    if end <= first || !nominal.width.is_finite() || nominal.width < 3.0 {
         return trace;
     }
     let level = |sample: u64| line.sample(sample);
@@ -155,8 +163,9 @@ pub fn decode(line: &ChannelData, end: u64, samplerate: u64, options: &Options) 
     let falling = |from: u64| -> Option<u64> {
         let mut at = from;
         loop {
-            let edge = if at == 0 {
-                line.next_change(0)
+            // The first sample decoded has no edge.
+            let edge = if at <= first {
+                line.next_change(first)
             } else {
                 line.next_change(at - 1)
             }?;
@@ -173,8 +182,8 @@ pub fn decode(line: &ChannelData, end: u64, samplerate: u64, options: &Options) 
 
     // Bus integration: a frame counts only after 11 recessive bits, or right after the
     // intermission of a clean frame.
-    let mut from = 0u64;
-    let mut idle_since = level(0).then_some(0u64);
+    let mut from = first;
+    let mut idle_since = level(first).then_some(first);
     let mut integrated = false;
     loop {
         let since = match idle_since {
@@ -192,7 +201,9 @@ pub fn decode(line: &ChannelData, end: u64, samplerate: u64, options: &Options) 
         };
         if !integrated && sof - since < integration {
             // Part of a frame that started before we could see it.
-            trace.cut_head.get_or_insert(if level(0) { sof } else { 0 });
+            trace
+                .cut_head
+                .get_or_insert(if level(first) { sof } else { first });
             idle_since = None;
             from = sof;
             continue;

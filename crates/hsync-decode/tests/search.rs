@@ -16,7 +16,7 @@ fn presentations() -> Vec<(String, Presentation)> {
         .filter_map(Spec::from_dsview)
         .map(|spec| {
             let decoded = spec
-                .run(&document.capture, document.capture.len())
+                .run(&document.capture, 0..document.capture.len())
                 .expect("channels");
             (spec.id.clone(), Presentation::new(&decoded))
         })
@@ -95,7 +95,7 @@ fn level_patterns_find_the_i2c_start_conditions() {
         .filter_map(Spec::from_dsview)
         .find(|spec| spec.id == "1:i2c")
         .expect("i2c");
-    let Some(Decoded::I2c { trace, .. }) = spec.run(&document.capture, document.capture.len())
+    let Some(Decoded::I2c { trace, .. }) = spec.run(&document.capture, 0..document.capture.len())
     else {
         panic!("an I2C trace");
     };

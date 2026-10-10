@@ -3,11 +3,12 @@
 //! §7.3):
 //!
 //! - a wait takes conditions that are OR-ed; each condition AND-s its terms;
-//! - the first wait starts at sample 0, whose "previous" levels are its own, so no edge matches
-//!   there; after a match at `m` the next wait starts at `m + 1`;
+//! - the first wait starts at the first sample decoded (0, or the start of a decode range),
+//!   whose "previous" levels are its own, so no edge matches there; after a match at `m` the
+//!   next wait starts at `m + 1`;
 //! - a `skip` of `n` matches `n` samples after the previous match (a skip counter that starts at
-//!   one after a match, `instance.c`), or sample `n` on the first wait; `skip: 0` right after a
-//!   match matches that same sample again;
+//!   one after a match, `instance.c`), or `n` samples after the first sample on the first wait;
+//!   `skip: 0` right after a match matches that same sample again;
 //! - a wait without conditions matches the sample it starts at.
 //!
 //! Scanning works a 64-sample word at a time instead of sample by sample.
@@ -60,6 +61,8 @@ impl Match {
 #[derive(Debug)]
 pub struct Sampler<'a> {
     channels: Vec<&'a ChannelData>,
+    /// The first sample decoded.
+    first: u64,
     end: u64,
     /// The last match, if any.
     current: Option<u64>,
@@ -84,9 +87,21 @@ impl<'a> Sampler<'a> {
             .fold(end, u64::min);
         Self {
             channels,
+            first: 0,
             end,
             current: None,
         }
+    }
+
+    /// Starts at `first` instead of sample 0, as DSView decodes from its start cursor.
+    pub fn from(mut self, first: u64) -> Self {
+        self.first = first;
+        self
+    }
+
+    /// The first sample decoded.
+    pub fn first(&self) -> u64 {
+        self.first
     }
 
     /// Continues from a previous sampler's last match, as `samplenum` was after it.
@@ -102,7 +117,7 @@ impl<'a> Sampler<'a> {
 
     /// Whether there are no samples.
     pub fn is_empty(&self) -> bool {
-        self.end == 0
+        self.end <= self.first
     }
 
     /// The sample of the last match (`self.samplenum`), 0 before the first.
@@ -136,7 +151,7 @@ impl<'a> Sampler<'a> {
     /// Waits until one of `conditions` holds; `None` when the samples run out first.
     pub fn wait(&mut self, conditions: &[Condition]) -> Option<Match> {
         debug_assert!(conditions.len() <= 32);
-        let start = self.current.map_or(0, |previous| previous + 1);
+        let start = self.current.map_or(self.first, |previous| previous + 1);
         // `skip: 0` after a match answers the matched sample at once.
         if let Some(previous) = self.current {
             let mut matched = 0;
@@ -165,7 +180,8 @@ impl<'a> Sampler<'a> {
             });
         }
         // A skip counts from the previous match, or from the first sample.
-        let skip_origin = self.current.unwrap_or(0);
+        let skip_origin = self.current.unwrap_or(self.first);
+        let first_word = (self.first / 64) as usize;
 
         let mut word = (start / 64) as usize;
         while (word as u64) * 64 < self.end {
@@ -197,7 +213,12 @@ impl<'a> Sampler<'a> {
                         }
                         Term::Pin(slot, pin) => {
                             let (value, previous) = self.word_and_previous(slot, word);
-                            let before = (value << 1) | u64::from(previous);
+                            let mut before = (value << 1) | u64::from(previous);
+                            if word == first_word {
+                                // The first sample is its own predecessor.
+                                let bit = 1u64 << (self.first % 64);
+                                before = (before & !bit) | (value & bit);
+                            }
                             match pin {
                                 Pin::Low => !value,
                                 Pin::High => value,
@@ -240,8 +261,8 @@ impl<'a> Sampler<'a> {
             return None;
         }
         let channel = self.channels[slot];
-        let edge = if from == 0 {
-            channel.next_change(0)
+        let edge = if from <= self.first {
+            channel.next_change(self.first)
         } else {
             channel.next_change(from - 1)
         }?;
@@ -273,16 +294,17 @@ mod tests {
         capture
     }
 
-    /// The per-sample loop of libsigrokdecode4DSL's `find_match()`.
+    /// The per-sample loop of libsigrokdecode4DSL's `find_match()`, from sample `first`.
     struct Naive<'a> {
         levels: &'a [Vec<bool>],
+        first: usize,
         current: Option<usize>,
     }
 
     impl Naive<'_> {
         fn wait(&mut self, conditions: &[Condition]) -> Option<(usize, u32)> {
             let len = self.levels[0].len();
-            let start = self.current.map_or(0, |previous| previous + 1);
+            let start = self.current.map_or(self.first, |previous| previous + 1);
             if let Some(previous) = self.current {
                 let mut matched = 0;
                 for (index, condition) in conditions.iter().enumerate() {
@@ -300,13 +322,18 @@ mod tests {
                     if condition.is_empty() {
                         continue;
                     }
-                    let origin = self.current.unwrap_or(0) as u64;
+                    let origin = self.current.unwrap_or(self.first) as u64;
                     let holds = condition.iter().all(|term| match *term {
                         Term::Skip(count) => sample as u64 == origin + count,
                         Term::Const(holds) => holds,
                         Term::Pin(slot, pin) => {
                             let now = self.levels[slot][sample];
-                            let before = self.levels[slot][sample.saturating_sub(1)];
+                            // `old_pins` start as the first sample's own levels.
+                            let before = if sample == self.first {
+                                now
+                            } else {
+                                self.levels[slot][sample - 1]
+                            };
                             match pin {
                                 Pin::Low => !now,
                                 Pin::High => now,
@@ -357,11 +384,12 @@ mod tests {
                 prop::collection::vec(prop::collection::vec(term(), 1..3), 1..4),
                 1..12,
             ),
+            first in prop_oneof![3 => Just(0usize), 2 => 0usize..300],
         ) {
             let capture = capture(&levels);
             let channels = (0..2).map(|i| capture.channel(i).expect("channel")).collect();
-            let mut fast = Sampler::new(channels, 300);
-            let mut naive = Naive { levels: &levels, current: None };
+            let mut fast = Sampler::new(channels, 300).from(first as u64);
+            let mut naive = Naive { levels: &levels, first, current: None };
             for conditions in &waits {
                 let expected = naive.wait(conditions);
                 let got = fast.wait(conditions).map(|m| (m.sample as usize, m.matched));

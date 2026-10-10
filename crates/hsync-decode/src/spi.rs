@@ -1,6 +1,8 @@
 //! SPI, ported from DSView's `1:spi` decoder (`decoders/1-spi/pd.py`): words are shifted in on
 //! the sampling clock edge while chip select is active, and a chip select period is a transfer.
 
+use std::ops::Range;
+
 use hsync_capture::ChannelData;
 
 use crate::sampler::{Pin, Sampler, Term};
@@ -69,8 +71,8 @@ const MISO: usize = 1;
 const MOSI: usize = 2;
 const CS: usize = 3;
 
-/// Decodes the bus over its first `end` samples.
-pub fn decode(lines: &Lines<'_>, end: u64, options: &Options) -> Trace {
+/// Decodes the bus over `samples`.
+pub fn decode(lines: &Lines<'_>, samples: Range<u64>, options: &Options) -> Trace {
     let mut trace = Trace::default();
     // Missing lines are stood in for by the clock; their values are never read.
     let channels = vec![
@@ -79,9 +81,9 @@ pub fn decode(lines: &Lines<'_>, end: u64, options: &Options) -> Trace {
         lines.mosi.unwrap_or(lines.clk),
         lines.cs.unwrap_or(lines.clk),
     ];
-    let mut sampler = Sampler::new(channels, end);
+    let mut sampler = Sampler::new(channels, samples.end).from(samples.start);
     let end = sampler.len();
-    if end == 0 || (lines.miso.is_none() && lines.mosi.is_none()) {
+    if end <= sampler.first() || (lines.miso.is_none() && lines.mosi.is_none()) {
         return trace;
     }
     let sample_on_rising = options.cpol == options.cpha;
@@ -108,7 +110,7 @@ pub fn decode(lines: &Lines<'_>, end: u64, options: &Options) -> Trace {
     let mut mosi = 0u32;
 
     // What sigrok's first `wait({})` sees: the levels at sample 0.
-    if !have_cs || asserted(sampler.level(CS, 0)) {
+    if !have_cs || asserted(sampler.level(CS, sampler.first())) {
         transfer = Some((0, true, 0));
     }
     let close = |trace: &mut Trace, transfer: (u64, bool, usize), at: Option<u64>| {

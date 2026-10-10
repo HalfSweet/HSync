@@ -4,6 +4,8 @@
 //! Unlike DSView, a frame already under way when the capture began is not decoded but
 //! reported, and so is a frame the capture ends in.
 
+use std::ops::Range;
+
 use hsync_capture::ChannelData;
 
 /// Parity of a frame.
@@ -65,19 +67,26 @@ pub struct Trace {
     pub cut_tail: Option<u64>,
 }
 
-/// Decodes `line` over its first `end` samples at `samplerate`.
-pub fn decode(line: &ChannelData, end: u64, samplerate: u64, options: &Options) -> Trace {
-    let end = end.min(line.len());
+/// Decodes `line` over `samples` at `samplerate`.
+pub fn decode(
+    line: &ChannelData,
+    samples: Range<u64>,
+    samplerate: u64,
+    options: &Options,
+) -> Trace {
+    let first = samples.start;
+    let end = samples.end.min(line.len());
     let width = samplerate as f64 / options.baudrate;
     let mut trace = Trace::default();
-    if end == 0 || !width.is_finite() || width < 2.0 {
+    if end <= first || !width.is_finite() || width < 2.0 {
         return trace;
     }
     let idle = !options.invert;
     let level = |sample: u64| line.sample(sample) != options.invert;
+    // The first sample decoded has no edge.
     let next_edge = |from: u64| -> Option<u64> {
-        let edge = if from == 0 {
-            line.next_change(0)
+        let edge = if from <= first {
+            line.next_change(first)
         } else {
             line.next_change(from - 1)
         }?;
@@ -88,11 +97,11 @@ pub fn decode(line: &ChannelData, end: u64, samplerate: u64, options: &Options) 
 
     // A line not idle at the start is in the middle of a frame: wait for a full frame of idle
     // level before trusting falling edges again.
-    let mut from = 0;
-    if level(0) != idle {
-        trace.cut_head = Some(0);
+    let mut from = first;
+    if level(first) != idle {
+        trace.cut_head = Some(first);
         let quiet = ((1 + data_bits + parity_bits) as f64 * width).ceil() as u64;
-        let mut at = 0;
+        let mut at = first;
         loop {
             let Some(rise) = next_edge(at + 1) else {
                 return trace;

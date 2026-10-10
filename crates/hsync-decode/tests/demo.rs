@@ -42,7 +42,7 @@ fn decodes_i2c_register_reads() {
     let trace = i2c::decode(
         capture.channel(1).expect("SCL"),
         capture.channel(0).expect("SDA"),
-        capture.len(),
+        0..capture.len(),
     );
     assert_eq!(trace.cut_head, None);
     let words = i2c_words(&trace.items).join(" ");
@@ -64,7 +64,7 @@ fn decodes_uart_text() {
     let capture = demo();
     let trace = uart::decode(
         capture.channel(5).expect("RX"),
-        capture.len(),
+        0..capture.len(),
         SAMPLERATE,
         &uart::Options::default(),
     );
@@ -94,7 +94,7 @@ fn decodes_spi_transfers() {
         mosi: capture.channel(14),
         cs: capture.channel(13),
     };
-    let trace = spi::decode(&lines, capture.len(), &spi::Options::default());
+    let trace = spi::decode(&lines, 0..capture.len(), &spi::Options::default());
     let sizes: Vec<usize> = trace.transfers.iter().map(|t| t.words.len()).collect();
     assert_eq!(sizes, vec![16, 240, 16, 16]);
     let long = &trace.transfers[1];
@@ -125,7 +125,7 @@ fn decodes_can_fd_frames_with_valid_crcs() {
     };
     let trace = can::decode(
         capture.channel(9).expect("CAN"),
-        capture.len(),
+        0..capture.len(),
         SAMPLERATE,
         &options,
     );
@@ -155,4 +155,52 @@ fn decodes_can_fd_frames_with_valid_crcs() {
             .iter()
             .all(|f| ms(f.end) < 1.86 || ms(f.start) > 2.6)
     );
+}
+
+#[test]
+fn decodes_only_the_range_asked_for() {
+    let capture = demo();
+    let (scl, sda) = (
+        capture.channel(1).expect("SCL"),
+        capture.channel(0).expect("SDA"),
+    );
+    let whole = i2c::decode(scl, sda, 0..capture.len());
+    // From just after the second transfer's stop to the end: the last four transfers, at the
+    // same samples.
+    let stops: Vec<u64> = whole
+        .items
+        .iter()
+        .filter(|item| matches!(item.kind, i2c::Kind::Stop))
+        .map(|item| item.end)
+        .collect();
+    let from = stops[1] + 1;
+    let part = i2c::decode(scl, sda, from..capture.len());
+    let tail: Vec<_> = whole
+        .items
+        .iter()
+        .filter(|item| item.start >= from)
+        .cloned()
+        .collect();
+    assert_eq!(part.items, tail);
+    assert_eq!(i2c_words(&part.items).join(" ").matches(" P").count(), 4);
+    assert_eq!(part.cut_head, None);
+
+    // UART from the idle line before the text: the same frames, up to the end asked for.
+    let rx = capture.channel(5).expect("RX");
+    let options = uart::Options::default();
+    let frames = uart::decode(rx, 0..capture.len(), SAMPLERATE, &options).frames;
+    let part = uart::decode(
+        rx,
+        frames[0].start - 50..frames[20].start,
+        SAMPLERATE,
+        &options,
+    );
+    assert_eq!(part.cut_head, None);
+    assert_eq!(part.frames[..], frames[..20]);
+    assert_eq!(part.cut_tail, None);
+    // Starting inside a frame counts as a line already busy, as a capture starting there does.
+    let inside = frames[10].start + 3;
+    let part = uart::decode(rx, inside..capture.len(), SAMPLERATE, &options);
+    assert_eq!(part.cut_head, Some(inside));
+    assert!(part.frames.iter().all(|frame| frame.start > inside));
 }

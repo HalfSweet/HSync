@@ -2,6 +2,7 @@
 //! (`.dsl` files and sessions) and run over a capture.
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 
 use hsync_capture::LogicCapture;
 use hsync_core::ChannelIndex;
@@ -148,16 +149,16 @@ impl Spec {
         capture.channel(*self.channels.get(role)?)
     }
 
-    /// Runs the decoder over the first `end` samples of `capture`; `None` when a required
-    /// channel is missing.
-    pub fn run(&self, capture: &LogicCapture, end: u64) -> Option<Decoded> {
+    /// Runs the decoder over `samples` of `capture` (DSView's decode start and end); `None`
+    /// when a required channel is missing.
+    pub fn run(&self, capture: &LogicCapture, samples: Range<u64>) -> Option<Decoded> {
         let samplerate = capture.samplerate();
         Some(match &self.settings {
             Settings::I2c { shifted } => Decoded::I2c {
                 trace: i2c::decode(
                     self.channel(capture, "scl")?,
                     self.channel(capture, "sda")?,
-                    end,
+                    samples,
                 ),
                 shifted: *shifted,
             },
@@ -166,7 +167,7 @@ impl Spec {
                     .channel(capture, "rxtx")
                     .or_else(|| self.channel(capture, "rx"))
                     .or_else(|| self.channel(capture, "tx"))?;
-                Decoded::Uart(uart::decode(line, end, samplerate, options))
+                Decoded::Uart(uart::decode(line, samples, samplerate, options))
             }
             Settings::Spi(options) => {
                 let lines = spi::Lines {
@@ -178,13 +179,13 @@ impl Spec {
                 if lines.miso.is_none() && lines.mosi.is_none() {
                     return None;
                 }
-                Decoded::Spi(spi::decode(&lines, end, options))
+                Decoded::Spi(spi::decode(&lines, samples, options))
             }
             Settings::Can(options) => {
                 let line = self
                     .channel(capture, "can_rx")
                     .or_else(|| self.channel(capture, "rx"))?;
-                Decoded::Can(can::decode(line, end, samplerate, options))
+                Decoded::Can(can::decode(line, samples, samplerate, options))
             }
         })
     }
