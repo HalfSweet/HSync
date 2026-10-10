@@ -296,6 +296,11 @@ impl Workspace {
             return Err(SessionError::Busy);
         }
         let decoders = (!decoders.as_array().is_some_and(Vec::is_empty)).then_some(decoders);
+        // Only how results are shown changed (rows hidden, labels): keep the results.
+        if decoding_part(decoders.as_ref()) == decoding_part(open.decoders.as_ref()) {
+            open.decoders = decoders;
+            return Ok(summarize(open));
+        }
         let decoding = DecodeSet::new(decoders.as_ref(), host);
         decoding.run(&open.capture, decoded_events(events, id));
         open.decoding.cancel();
@@ -393,6 +398,26 @@ impl Workspace {
             None => Err(SessionError::NoCapture),
         }
     }
+}
+
+/// What of a decoder list decides the results: each entry without the keys that only say how
+/// they are shown (DSView's `show`, `label`, `view_index`, HSync's number format).
+fn decoding_part(decoders: Option<&serde_json::Value>) -> Vec<serde_json::Value> {
+    const DISPLAY: [&str; 4] = ["show", "label", "view_index", "number format"];
+    decoders
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|entry| {
+            let mut entry = entry.clone();
+            if let Some(fields) = entry.as_object_mut() {
+                for key in DISPLAY {
+                    fields.remove(key);
+                }
+            }
+            entry
+        })
+        .collect()
 }
 
 fn summarize(open: &OpenCapture) -> CaptureSummary {

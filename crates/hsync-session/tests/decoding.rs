@@ -292,3 +292,20 @@ fn python_decoders_stack_on_native_ones_and_run_alone() {
         .expect("rows");
     assert!(matches!(&page.rows[0], StreamRow::Annotation { text, .. } if !text.is_empty()));
 }
+
+#[test]
+fn display_changes_keep_the_results() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let before = workspace.decoding(opened.id).expect("decoders");
+    let mut decoders = opened.decoders.clone().expect("decoders");
+    decoders[0]["show"] = serde_json::json!({ "1:i2c: Bits": false });
+    decoders[0]["number format"] = serde_json::json!("dec");
+    let summary = workspace
+        .set_decoders(opened.id, decoders.clone(), false)
+        .expect("decoders");
+    assert_eq!(summary.decoders, Some(decoders));
+    let after = workspace.decoding(opened.id).expect("decoders");
+    assert!(Arc::ptr_eq(&before, &after), "decoded again");
+}
