@@ -89,6 +89,8 @@ pub(crate) struct Searchable {
 pub struct Found {
     pub start: u64,
     pub end: u64,
+    /// The SPI line it was found on.
+    pub line: Option<DataLine>,
     /// The data stream row listing it.
     pub row: Option<u32>,
 }
@@ -212,6 +214,7 @@ impl Searchable {
             .map(|(start, end, line)| Found {
                 start,
                 end,
+                line,
                 row: row_of(index, rows, line, start),
             })
             .collect()

@@ -321,7 +321,7 @@ export function mockSearch(
       const row = rows.findIndex(
         (one) => rowLine(one) === line && one.start <= start && start < one.end,
       )
-      hits.push({ decoder: index, start, end, row: row < 0 ? null : row })
+      hits.push({ decoder: index, start, end, line, row: row < 0 ? null : row })
     })
   }
   hits.sort((a, b) => a.start - b.start || a.decoder - b.decoder)

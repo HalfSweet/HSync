@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use hsync_capture::LogicCapture;
 use hsync_decode::{
-    Bus, DecoderView, Needle, Presentation, Spec, StreamCounts, StreamMode, StreamRow,
+    Bus, DataLine, DecoderView, Needle, Presentation, Spec, StreamCounts, StreamMode, StreamRow,
 };
 use parking_lot::RwLock;
 use serde::Serialize;
@@ -69,6 +69,8 @@ pub struct SearchHit {
     pub decoder: u32,
     pub start: u64,
     pub end: u64,
+    /// The SPI line it was found on.
+    pub line: Option<DataLine>,
     /// The row of the decoder's data stream that lists it.
     pub row: Option<u32>,
 }
@@ -292,6 +294,7 @@ impl DecodeSet {
                         decoder: *index,
                         start: found.start,
                         end: found.end,
+                        line: found.line,
                         row: found.row,
                     })
             })
