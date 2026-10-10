@@ -5,8 +5,8 @@ use std::sync::Arc;
 
 use hsync_core::{ChannelIndex, UiError};
 use hsync_session::{
-    BinsRequest, CaptureRequest, CaptureSummary, Direction, EventSink, PulseInfo, SessionEvent,
-    encode_bins,
+    BinsRequest, CaptureRequest, CaptureSummary, Direction, EventSink, PatternCondition, PulseInfo,
+    SessionEvent, encode_bins,
 };
 use tauri::ipc::Response;
 use tauri::path::BaseDirectory;
@@ -161,6 +161,26 @@ pub fn capture_edge(
         .map_err(|error| UiError::from(&error))?;
     let edge = hsync_session::edge(&capture.read(), channel, sample, direction);
     edge.map_err(|error| UiError::from(&error))
+}
+
+/// The nearest sample from `sample` on, or back from it, where the channels show a level
+/// pattern (DSView's search dock).
+#[tauri::command]
+pub async fn capture_find(
+    state: State<'_, AppState>,
+    capture_id: u64,
+    conditions: Vec<PatternCondition>,
+    sample: u64,
+    direction: Direction,
+) -> CommandResult<Option<u64>> {
+    let capture = state
+        .workspace
+        .lock()
+        .capture(capture_id)
+        .map_err(|error| UiError::from(&error))?;
+    let forward = matches!(direction, Direction::Next);
+    let found = capture.read().find_pattern(&conditions, sample, forward);
+    Ok(found)
 }
 
 /// The median period of a clock channel in samples, for the group meta of I2C and SPI.

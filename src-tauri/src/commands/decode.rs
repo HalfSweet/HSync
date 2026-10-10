@@ -1,7 +1,7 @@
 //! Decoded data: decoder states, lanes for the timeline and the data stream.
 
 use hsync_decode::StreamMode;
-use hsync_session::{DecoderLanes, DecoderStatus, StreamPage};
+use hsync_session::{DecoderLanes, DecoderStatus, SearchResult, StreamPage};
 use tauri::State;
 
 use super::CommandResult;
@@ -69,6 +69,18 @@ pub fn decode_row_at(
     sample: u64,
 ) -> CommandResult<Option<u32>> {
     Ok(decoding(&state, capture_id)?.row_at(index, mode, sample))
+}
+
+/// Values or text matching `query` in every decoder's results, with their rows in `mode`
+/// listings; nothing for a blank query.
+#[tauri::command]
+pub async fn decode_search(
+    state: State<'_, AppState>,
+    capture_id: u64,
+    query: String,
+    mode: StreamMode,
+) -> CommandResult<Option<SearchResult>> {
+    Ok(decoding(&state, capture_id)?.search(&query, mode))
 }
 
 /// Replaces the decoders of the open capture (DSView's `decoders` list) and decodes again.
