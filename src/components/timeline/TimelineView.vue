@@ -53,7 +53,6 @@ import ChannelLabel from './ChannelLabel.vue'
 import DecodeLane from './DecodeLane.vue'
 import GroupLabel from './GroupLabel.vue'
 import MeasureOverlay from './MeasureOverlay.vue'
-import PulseReadout from './PulseReadout.vue'
 import TimelineRuler from './TimelineRuler.vue'
 import ChannelMenu from './ChannelMenu.vue'
 import TriggerMenu from './TriggerMenu.vue'
@@ -641,13 +640,26 @@ const readout = computed(() => {
   } else if (reading.bits !== null) secondary = t('hover.bits', { count: reading.bits })
   return {
     rowKey: current.row.key,
+    channel,
     left: reading.left,
     width: reading.width,
-    center: reading.center,
     primary: t(reading.complete ? 'hover.pulse' : 'hover.pulseOpen', { level, width }),
     secondary,
   }
 })
+
+// The read-outs go to the status bar, where they cover no waveform (DESIGN.md §10).
+watch([readout, measured], ([pulse, measure]) =>
+  view.setReadouts({
+    pulse: pulse && { channel: pulse.channel, primary: pulse.primary, secondary: pulse.secondary },
+    measure: measure && {
+      primary: measure.primary,
+      secondary: measure.secondary,
+      done: measure.done,
+    },
+  }),
+)
+onBeforeUnmount(() => view.setReadouts({ pulse: null, measure: null }))
 
 // Ctrl/⌘ + wheel zooms around the pointer; shift + wheel and horizontal swipes pan.
 // Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §10).
@@ -778,13 +790,11 @@ function onWheel(event: WheelEvent): void {
               @pick="(block) => row.group.decoder !== null && pickBlock(block, row.group.decoder)"
               @go="view.centerOn"
             />
-            <PulseReadout
+            <i
               v-if="readout && readout.rowKey === row.key"
-              :left="readout.left"
-              :width="readout.width"
-              :center="readout.center"
-              :primary="readout.primary"
-              :secondary="readout.secondary"
+              class="pointer-events-none absolute top-[3px] bottom-[3px] rounded-2 bg-[color-mix(in_srgb,var(--ink)_13%,transparent)]"
+              :style="{ left: `${readout.left}px`, width: `${Math.max(readout.width, 1)}px` }"
+              aria-hidden="true"
             />
           </div>
         </div>
@@ -843,9 +853,6 @@ function onWheel(event: WheelEvent): void {
         <MeasureOverlay
           v-if="measured || target"
           :geometry="measured?.geometry ?? null"
-          :primary="measured?.primary ?? null"
-          :secondary="measured?.secondary ?? null"
-          :done="measured?.done ?? false"
           :target="target"
         />
 
