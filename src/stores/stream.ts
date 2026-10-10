@@ -12,6 +12,8 @@ import { useViewStore } from './view'
 
 /** Rows fetched at once. */
 const PAGE = 200
+/** Rows fetched at once for an export. */
+const EXPORT_PAGE = 5000
 
 export type StreamScope = 'all' | 'segment'
 
@@ -130,6 +132,26 @@ export const useStreamStore = defineStore('stream', () => {
     )
   }
 
+  /** Every row of the scope, fetched in large pages for exporting. */
+  async function fetchAll(): Promise<StreamRow[]> {
+    const current = request.value
+    if (!current) return []
+    const { revision: _, ...query } = current
+    const backend = await getBackend()
+    const rows: StreamRow[] = []
+    for (;;) {
+      const page = await backend.decodeStream({
+        ...query,
+        offset: rows.length,
+        count: EXPORT_PAGE,
+      })
+      if (!page || page.rows.length === 0) break
+      rows.push(...page.rows)
+      if (rows.length >= page.total) break
+    }
+    return rows
+  }
+
   /** Opens the panel on `index`, or closes it when it already shows that decoder. */
   function show(index: number): void {
     if (open.value && decoder.value === index) {
@@ -169,6 +191,7 @@ export const useStreamStore = defineStore('stream', () => {
     onlySegment,
     row,
     allRows,
+    fetchAll,
     show,
     toggle,
     select,

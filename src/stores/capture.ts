@@ -234,6 +234,13 @@ export const useCaptureStore = defineStore('capture', () => {
     })
   }
 
+  /** Writes text the UI composed to `path`, as an export. */
+  function saveText(path: string, text: string): Promise<boolean> {
+    return fileJob('export', path, async () => {
+      await (await getBackend()).saveText(path, text)
+    })
+  }
+
   /** Stops the save or export under way. */
   async function cancelFile(): Promise<void> {
     if (job.value) await (await getBackend()).cancelFile()
@@ -267,6 +274,7 @@ export const useCaptureStore = defineStore('capture', () => {
     openFile,
     saveFile,
     exportFile,
+    saveText,
     cancelFile,
     start,
     stop,
