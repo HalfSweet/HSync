@@ -85,8 +85,8 @@ pub struct CaptureSummary {
     pub decoders: Option<serde_json::Value>,
 }
 
-/// The run of equal samples around a position, plus the end of the run after it, which tells
-/// whether the signal looks like a clock.
+/// The run of equal samples around a position, plus where the run after it ends: the two make
+/// the period the hover read-out shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -103,9 +103,6 @@ pub struct PulseInfo {
     pub end_is_edge: bool,
     /// First sample after the following run, when that run ends at an edge.
     pub next_end: Option<SampleIndex>,
-    /// First sample after the run after that, when it ends at an edge: a third run tells a
-    /// periodic signal, such as PWM, from one whose neighbouring runs happen to match.
-    pub after_end: Option<SampleIndex>,
 }
 
 /// Edges of a channel within a segment, as DSView's cursor measurement counts them.
@@ -536,7 +533,6 @@ pub fn pulse(
     } else {
         None
     };
-    let after_end = next_end.and_then(|end| data.next_change(end));
     Ok(Some(PulseInfo {
         high: pulse.high,
         start: pulse.start,
@@ -544,7 +540,6 @@ pub fn pulse(
         start_is_edge: pulse.start_is_edge,
         end_is_edge: pulse.end_is_edge,
         next_end,
-        after_end,
     }))
 }
 

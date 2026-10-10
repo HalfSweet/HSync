@@ -6,7 +6,7 @@ const view = { start: 1000, samplesPerPixel: 1, width: 1000 }
 const RATE = 25_000_000
 
 function pulse(start: number, end: number, nextEnd: number | null = null, edges = true) {
-  return { high: true, start, end, startIsEdge: edges, endIsEdge: edges, nextEnd, afterEnd: null }
+  return { high: true, start, end, startIsEdge: edges, endIsEdge: edges, nextEnd }
 }
 
 describe('readPulse', () => {

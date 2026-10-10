@@ -59,9 +59,6 @@ fn reads_pulses_and_edges_of_the_i2c_clock() {
     assert!(!low.high);
     let period = low.next_end.expect("clock continues") - low.start;
     assert!((240..=260).contains(&period), "period {period}");
-    // The next low run repeats this one, as a periodic signal's does.
-    let next_low = low.after_end.expect("clock goes on") - low.next_end.expect("clock continues");
-    assert!((next_low as i64 - (low.end - low.start) as i64).abs() <= 2);
     assert_eq!(
         edge(&capture, 1, first_fall + 10, Direction::Previous).expect("SCL exists"),
         Some(first_fall)
