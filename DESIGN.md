@@ -1,304 +1,304 @@
-# HSync 界面设计规范
+# HSync interface design
 
-本文规定 HSync 界面的外观与交互：布局、设计令牌、各区域的样子和行为、可访问性与动效。界面以本文为准，`.hsync/` 设计稿只作参考；改界面时同步更新本文。
+This document specifies how the HSync interface looks and behaves: layout, design tokens, the appearance and behaviour of each area, accessibility and motion. The interface follows this document; the `.hsync/` mockups are only a reference. Update this document whenever the interface changes.
 
-## 1. 原则
+## 1. Principles
 
-- **按解码器分组**：通道归在绑定它的解码器下，没绑定的归入可整组收起的「未命名通道」。
-- **颜色各管一件事**：解码块用总线色，波形用通道线色；红色与琥珀色只用于错误和警告。
-- **解码对齐时间**：解码块与波形在同一条时间轴上；完整的结果放进数据流面板，一次看一个解码器。
-- **知道自己在哪**：全程概览，加上以触发点为零点的刻度。
-- **触发按通道设**：每个通道一个触发位，条件画在自己的行上。
-- **单窗口**：没有侧边面板，没有要先切换的模式。
-- **扁平**：不用渐变、投影、发光；层次只靠底色深浅与 1 px 线。
+- **Grouped by decoder**: a channel sits under the decoder it is bound to; unbound channels go into "Other channels", which collapses as a whole.
+- **One job per colour**: decode blocks use the bus colour, traces use the channel colour; red and amber are only for errors and warnings.
+- **Decoding lines up with time**: decode blocks and traces share one timeline; the complete results go into the data stream panel, one decoder at a time.
+- **Know where you are**: an overview strip, plus a scale with the trigger point at zero.
+- **Triggers set per channel**: each channel has one trigger slot, and its condition is drawn on its own row.
+- **Single window**: no side panels, no modes to switch into first.
+- **Flat**: no gradients, shadows or glows; hierarchy comes only from fill shades and 1 px lines.
 
-## 2. 布局
+## 2. Layout
 
-自上而下：顶栏、全程概览、时间轴（标尺加分组行，纵向滚动）、数据流面板（可开合）、状态栏。
+From top to bottom: top bar, overview strip, timeline (ruler plus grouped rows, scrolling vertically), data stream panel (opens and closes), status bar.
 
 ```
-┌ 顶栏 ──────────────────────────────────────────────────────────────────────┐
-│ ⎍ [设备 ▾] [25 MHz | 5.24 ms | 16 通道 ▾] [⎍ 触发 未设置 ▾] [▶ 采集|▾] … [🔍 搜索 /] [⤓] [⚙] │
-├ 全程概览（58px）─────────────────────────────────────────────────────────────┤
-├ 标签列 204px ─┬ 标尺（38px，sticky）─────────────────────────────────────────┤
-│ I²C 组标题     │ 解码块（含义行）                                              │
-│   从机 0x62    │ 解码块（字节行）                                              │
-│   SDA  D0  ▢  │ 波形                                                          │
-│ …              │ …                                                             │
-├ 数据流面板（默认关闭，可拖高，时间轴至少保留 180px）─────────────────────────┤
-├ 状态栏（28px）：[≡ 数据流] 采集完成 · 触发时间 · 采样点数 …… [− 50 µs/格 + ↔] ┤
-└──────────────────────────────────────────────────────────────────────────────┘
+┌ Top bar ──────────────────────────────────────────────────────────────────────────────────────────────┐
+│ ⎍ [Device ▾] [25 MHz | 5.24 ms | 16 ch ▾] [⎍ Trigger Not set ▾] [▶ Capture|▾] … [🔍 Search /] [⤓] [⚙] │
+├ Overview strip (58px) ────────────────────────────────────────────────────────────────────────────────┤
+├ Label column 204px ─┬ Ruler (38px, sticky) ───────────────────────────────────────────────────────────┤
+│ I²C group header    │ Decode blocks (meaning lane)                                                    │
+│   Target 0x62       │ Decode blocks (byte lane)                                                       │
+│   SDA  D0        ▢  │ Trace                                                                           │
+│ …                   │ …                                                                               │
+├ Data stream panel (closed by default, drag to resize, timeline keeps at least 180px) ─────────────────┤
+├ Status bar (28px): [≡ Data stream] Capture complete · trigger time · sample count … [− 50 µs/div + ↔] ┤
+└───────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- 窗口最小高 640 px。窗口变窄时顶栏换行、时间轴横向滚动（行最小宽 860 px），页面本身不出现横向滚动条。
-- 宽度 ≤ 640 px 时标签列缩到 132 px，隐藏组的元信息、通道号、数据流按钮与「添加协议解码」的文字。
+- The window is at least 640 px high. As the window narrows, the top bar wraps and the timeline scrolls horizontally (rows are at least 860 px wide); the page itself never shows a horizontal scrollbar.
+- At widths ≤ 640 px, the label column shrinks to 132 px and hides the group meta information, the channel numbers, the data stream button and the "Add decoder" text.
 
-## 3. 设计令牌
+## 3. Design tokens
 
-令牌是 `src/styles/tokens.css` 里的 CSS 自定义属性，在 Tailwind 主题中映射成工具类（`bg-canvas`、`text-ink-2`、`border-line`…）；根元素上的 `.theme-dark` 与 `.density-compact` 切换主题与密度。组件只用令牌，不写死颜色、尺寸与时长。
+Tokens are CSS custom properties in `src/styles/tokens.css`, mapped to utility classes in the Tailwind theme (`bg-canvas`, `text-ink-2`, `border-line`…); `.theme-dark` and `.density-compact` on the root element switch theme and density. Components use only tokens and never hard-code colours, sizes or durations.
 
-### 3.1 底色与文字
+### 3.1 Fills and text
 
-配色克制：底色与文字是带一丝冷调的近无彩灰阶，彩色只留给总线与通道，并且压低彩度、统一明度，不让任何一种颜色跳出来。
+The palette is restrained: fills and text are near-neutral greys with a hint of cool; colour is kept for buses and channels, with lowered chroma and matched lightness, so that no single colour jumps out.
 
-| 令牌                       | 用途                                    | 亮色                  | 暗色                  |
-| -------------------------- | --------------------------------------- | --------------------- | --------------------- |
-| `--canvas`                 | 波形区底色                              | `#FCFDFE`             | `#0F1112`             |
-| `--chrome`                 | 顶栏、标签列、状态栏底色                | `#F3F5F6`             | `#161718`             |
-| `--raise`                  | 按钮、菜单、对话框底色                  | `#FFFFFF`             | `#1E1F21`             |
-| `--line`                   | 分隔线                                  | `#E0E1E3`             | `#242527`             |
-| `--line-2`                 | 控件边框                                | `#C8CBCD`             | `#37393C`             |
-| `--ink`                    | 主要文字、选中态底色                    | `#191B1D`             | `#EAEBEC`             |
-| `--ink-2`                  | 次要文字                                | `#4D5054`             | `#B9BBBD`             |
-| `--ink-3`                  | 说明文字                                | `#63666B`             | `#96989B`             |
-| `--trace`                  | 默认波形线                              | `#3B3D40`             | `#BCBEC0`             |
-| `--trace-2`                | 窄行波形线、空触发位                    | `#95999C`             | `#67696C`             |
-| `--grid`                   | 网格线                                  | ink 7%                | ink 6%                |
-| `--veil`                   | 选段底色带、对话框遮罩                  | ink 5%                | ink 6%                |
-| `--hover`                  | 悬停底色                                | ink 6%                | ink 8%                |
-| `--sel`                    | 数据流中被选中的内容                    | ink 12%               | ink 18%               |
-| `--find`                   | 含搜索命中的行                          | `#FBF4DA`             | `#332E19`             |
-| `--find-strong`            | 当前命中；时间轴上以 45% 不透明度画带子 | `#EBD696`             | `#5E5225`             |
-| `--alert` / `--alert-wash` | 错误与警告的文字 / 底色                 | `#AC312C` / `#FEF0EE` | `#F28881` / `#381E1C` |
+| Token                      | Use                                                            | Light                 | Dark                  |
+| -------------------------- | -------------------------------------------------------------- | --------------------- | --------------------- |
+| `--canvas`                 | Trace area fill                                                | `#FCFDFE`             | `#0F1112`             |
+| `--chrome`                 | Top bar, label column and status bar fill                      | `#F3F5F6`             | `#161718`             |
+| `--raise`                  | Button, menu and dialog fill                                   | `#FFFFFF`             | `#1E1F21`             |
+| `--line`                   | Dividers                                                       | `#E0E1E3`             | `#242527`             |
+| `--line-2`                 | Control borders                                                | `#C8CBCD`             | `#37393C`             |
+| `--ink`                    | Primary text, selected-state fill                              | `#191B1D`             | `#EAEBEC`             |
+| `--ink-2`                  | Secondary text                                                 | `#4D5054`             | `#B9BBBD`             |
+| `--ink-3`                  | Caption text                                                   | `#63666B`             | `#96989B`             |
+| `--trace`                  | Default trace line                                             | `#3B3D40`             | `#BCBEC0`             |
+| `--trace-2`                | Narrow-row trace line, empty trigger slot                      | `#95999C`             | `#67696C`             |
+| `--grid`                   | Grid lines                                                     | ink 7%                | ink 6%                |
+| `--veil`                   | Segment band, dialog backdrop                                  | ink 5%                | ink 6%                |
+| `--hover`                  | Hover fill                                                     | ink 6%                | ink 8%                |
+| `--sel`                    | Selected content in the data stream                            | ink 12%               | ink 18%               |
+| `--find`                   | Rows containing search matches                                 | `#FBF4DA`             | `#332E19`             |
+| `--find-strong`            | Current match; on the timeline, drawn as a band at 45% opacity | `#EBD696`             | `#5E5225`             |
+| `--alert` / `--alert-wash` | Error and warning text / fill                                  | `#AC312C` / `#FEF0EE` | `#F28881` / `#381E1C` |
 
-### 3.2 总线色
+### 3.2 Bus colours
 
-主色 / 解码块底色 / 较深底色。四种总线在同一主题下明度与彩度相同，只有色相不同：
+Main colour / decode block fill / darker fill. Within a theme the four buses share lightness and chroma and differ only in hue:
 
-| 总线 | 亮色                              | 暗色                              |
+| Bus  | Light                             | Dark                              |
 | ---- | --------------------------------- | --------------------------------- |
 | I²C  | `#45658D` / `#EFF5FD` / `#DCE7F6` | `#A0C0EB` / `#1C232D` / `#283649` |
 | UART | `#277165` / `#ECF7F5` / `#D6ECE7` | `#8BCDBF` / `#172623` / `#1E3C36` |
 | SPI  | `#665A8A` / `#F5F3FC` / `#E7E3F5` | `#C0B5E7` / `#23212C` / `#373247` |
 | CAN  | `#845169` / `#FBF1F5` / `#F4E0E8` | `#E1ACC4` / `#2B1F24` / `#452D38` |
 
-其他解码器用中性的通用总线色：主色 `--ink-2`，底色 `--hover`。
+Other decoders use a neutral generic bus colour: main colour `--ink-2`, fill `--hover`.
 
-### 3.3 通道线色
+### 3.3 Channel colours
 
-按探头线色环循环：黑、棕、红、橙、黄、绿、蓝、紫，默认序号是通道号 mod 8。
+Channel colours cycle through the probe wire colours: black, brown, red, orange, yellow, green, blue, violet; the default index is the channel number mod 8.
 
-| 序号 | 亮色线色  | 底色不透明度 | 暗色线色  | 底色不透明度 |
-| ---- | --------- | ------------ | --------- | ------------ |
-| 0    | `#1F2224` | 7%           | `#C8CBCE` | 10.9%        |
-| 1    | `#674832` | 8.8%         | `#A88467` | 16.6%        |
-| 2    | `#A34949` | 9.8%         | `#DF7F7C` | 14.8%        |
-| 3    | `#B76935` | 11.6%        | `#E4A067` | 12.9%        |
-| 4    | `#A79139` | 13.9%        | `#DDCC79` | 11%          |
-| 5    | `#4B8A67` | 11.5%        | `#7FC39B` | 12.7%        |
-| 6    | `#467BB0` | 11.1%        | `#73A9E1` | 13.8%        |
-| 7    | `#79508A` | 9.8%         | `#B085C3` | 15.1%        |
+| Index | Light colour | Wash opacity | Dark colour | Wash opacity |
+| ----- | ------------ | ------------ | ----------- | ------------ |
+| 0     | `#1F2224`    | 7%           | `#C8CBCE`   | 10.9%        |
+| 1     | `#674832`    | 8.8%         | `#A88467`   | 16.6%        |
+| 2     | `#A34949`    | 9.8%         | `#DF7F7C`   | 14.8%        |
+| 3     | `#B76935`    | 11.6%        | `#E4A067`   | 12.9%        |
+| 4     | `#A79139`    | 13.9%        | `#DDCC79`   | 11%          |
+| 5     | `#4B8A67`    | 11.5%        | `#7FC39B`   | 12.7%        |
+| 6     | `#467BB0`    | 11.1%        | `#73A9E1`   | 13.8%        |
+| 7     | `#79508A`    | 9.8%         | `#B085C3`   | 15.1%        |
 
-- 线色保留探头线的色相，彩度压低；亮色下每种线色对画布的对比度至少 3:1。
-- 不透明度各不相同，使每种颜色的高电平底色叠在画布上后明度一致（OKLab 明度差：亮色 0.046，暗色 0.088）；字节块的不透明度是高电平底色的 `--bk` 倍（亮色 2.6，暗色 2）。
-- 线色里的红与橙是通道标识，不是状态色。
+- Channel colours keep the hues of the probe wires at lowered chroma; in Light, each has a contrast of at least 3:1 against the canvas.
+- The opacities differ so that every colour's high-level wash, laid over the canvas, has the same lightness (OKLab lightness difference: Light 0.046, Dark 0.088); a byte block's opacity is `--bk` times the high-level wash's (Light 2.6, Dark 2).
+- Red and orange among the channel colours identify channels; they are not status colours.
 
-### 3.4 字体
+### 3.4 Fonts
 
-- 界面文字用 IBM Plex Sans，数值与解码内容用 IBM Plex Mono，都随应用打包。中文回退 `"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC"`；等宽回退 `"SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC"`。
-- 基准 13 px，次要信息 12 px，说明与刻度 11 px，行高 1.35。数值一律用等宽数字（`tabular-nums`）。
+- Interface text uses IBM Plex Sans; values and decoded content use IBM Plex Mono. Both ship with the app. Chinese fallback: `"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "Noto Sans CJK SC"`; monospace fallback: `"SF Mono", Menlo, Consolas, "Noto Sans Mono CJK SC"`.
+- Base size 13 px, secondary information 12 px, captions and tick labels 11 px, line height 1.35. All numbers use tabular figures (`tabular-nums`).
 
-### 3.5 尺寸
+### 3.5 Sizes
 
-| 项目                                              | 舒适   | 紧凑   |
-| ------------------------------------------------- | ------ | ------ |
-| 标签列宽 `--lab`                                  | 204 px | 204 px |
-| 解码行高 `--h-lane`                               | 26 px  | 22 px  |
-| 波形行高 `--h-tr`（I²C、UART 原始波形）           | 30 px  | 24 px  |
-| 窄波形行高 `--h-trc`（SPI 各线、CAN、未命名通道） | 18 px  | 14 px  |
-| 组内上下留白 `--gap`                              | 8 px   | 4 px   |
+| Item                                                                 | Comfortable | Compact |
+| -------------------------------------------------------------------- | ----------- | ------- |
+| Label column width `--lab`                                           | 204 px      | 204 px  |
+| Decode lane height `--h-lane`                                        | 26 px       | 22 px   |
+| Trace row height `--h-tr` (I²C and UART raw traces)                  | 30 px       | 24 px   |
+| Narrow trace row height `--h-trc` (SPI lines, CAN, "Other channels") | 18 px       | 14 px   |
+| Vertical padding inside a group `--gap`                              | 8 px        | 4 px    |
 
-其他：顶栏控件高 32 px、圆角 6 px；全程概览高 58 px；标尺高 38 px；状态栏高 28 px；解码块上下各留 2 px、圆角 3 px。
+Other sizes: top bar controls are 32 px high with a 6 px radius; the overview strip is 58 px high; the ruler 38 px; the status bar 28 px; decode blocks are inset 2 px at top and bottom, with a 3 px radius.
 
-### 3.6 动效
+### 3.6 Motion
 
-| 令牌                              | 值                                         | 用途                     |
-| --------------------------------- | ------------------------------------------ | ------------------------ |
-| `--motion-enter` / `--ease-enter` | 200 ms，`cubic-bezier(0.16, 1, 0.3, 1)`    | 出现：起步快、收尾缓     |
-| `--motion-exit` / `--ease-exit`   | 120 ms，`cubic-bezier(0.4, 0, 1, 1)`       | 离开：比出现快，越走越快 |
-| `--motion-slide` / `--ease-slide` | 260 ms，`cubic-bezier(0.34, 1.3, 0.64, 1)` | 滑动：冲过约 3% 再落回   |
+| Token                             | Value                                      | Use                                              |
+| --------------------------------- | ------------------------------------------ | ------------------------------------------------ |
+| `--motion-enter` / `--ease-enter` | 200 ms, `cubic-bezier(0.16, 1, 0.3, 1)`    | Enter: starts fast, ends gently                  |
+| `--motion-exit` / `--ease-exit`   | 120 ms, `cubic-bezier(0.4, 0, 1, 1)`       | Exit: quicker than enter, speeding up            |
+| `--motion-slide` / `--ease-slide` | 260 ms, `cubic-bezier(0.34, 1.3, 0.64, 1)` | Slide: overshoots by about 3%, then settles back |
 
-系统开启减少动态效果时三个时长都为 0。Tailwind 自带的缓动曲线已移除，`transition-*` 工具类默认用出现的时长与曲线。
+When the system asks for reduced motion, all three durations are 0. Tailwind's built-in easing curves are removed; `transition-*` utilities default to the enter duration and curve.
 
-## 4. 顶栏
+## 4. Top bar
 
-| 控件     | 外观                                                             | 行为                                                                                                                           |
-| -------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| 设备     | 按钮写当前设备名，右侧下拉箭头                                   | 列出设备（含 Demo、灰显的不支持设备）与「重新扫描」；下面是打开文件、载入会话、设备选项                                        |
-| 采集设置 | `采样率 │ 时长 │ N 通道`，1×14 px 竖线分隔                       | 弹出层：采样率、时长、启用的通道                                                                                               |
-| 触发     | 图标 +「触发」+ 汇总                                             | 没有条件写「未设置」；有条件写「SDA ⟨图形⟩ + SCL ⟨图形⟩」，最多三个，更多时列前两个加「等 N 个通道」。单击打开触发面板（§7.2） |
-| 采集     | 主按钮（`--ink` 底、`--canvas` 字）+ 右侧 28 px 下拉             | 采集 / 停止；下拉：单次、重复、循环，以及即时采集                                                                              |
-| 搜索框   | 220–340 px，占位「搜索数值或文本，如 4F、HOST」，右侧 `/` 键提示 | 见 §8                                                                                                                          |
-| 导出     | 32×32 图标按钮                                                   | 保存、导出…、保存会话                                                                                                          |
-| 设置     | 32×32 图标按钮；有新版本时右上角一个 6 px `--ink` 圆点           | 设置面板；有新版本时按钮名称为「设置（有新版本 x）」                                                                           |
+| Control              | Appearance                                                                                | Behaviour                                                                                                                                                                                |
+| -------------------- | ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Device               | Button showing the current device name, with a drop-down arrow on the right               | Lists the devices (including Demo, and unsupported devices greyed out) and "Scan again"; below them, "Open file…", "Load session…" and "Device options…"                                 |
+| Acquisition settings | `sample rate │ duration │ N ch`, separated by 1×14 px vertical rules                      | Popover: sample rate, duration, enabled channels                                                                                                                                         |
+| Trigger              | Icon + "Trigger" + summary                                                                | Without conditions it reads "Not set"; with conditions, "SDA ⟨glyph⟩ + SCL ⟨glyph⟩", up to three; with more, the first two plus "and N channels". A click opens the trigger panel (§7.2) |
+| Capture              | Primary button (`--ink` fill, `--canvas` text) + 28 px drop-down on the right             | Capture / Stop; drop-down: Single, Repeat, Loop, plus Instant                                                                                                                            |
+| Search box           | 220–340 px; placeholder "Search values or text, e.g. 4F, HOST"; `/` key hint on the right | See §8                                                                                                                                                                                   |
+| Export               | 32×32 icon button                                                                         | "Save capture…", "Export…", "Save session…"                                                                                                                                              |
+| Settings             | 32×32 icon button; when an update is available, a 6 px `--ink` dot at the top right       | Settings panel; when an update is available, the button is named "Settings (version x available)"                                                                                        |
 
-**采集设置**：时长从最长可用值起按 1-2-5 序列递减，直到不足 1024 个样本；超出设备内存的时长标「RLE」，选中即启用 RLE 压缩。打开时两个列表滚到当前值。所选采集要占用本机一半以上的内存时，弹出层底部用告警色写出需要多少，但不阻止采集。
+**Acquisition settings**: durations step down the 1-2-5 sequence from the longest available value until fewer than 1024 samples remain; durations beyond the device memory are marked "RLE", and choosing one turns on RLE compression. On opening, both lists scroll to the current values. When the chosen capture would take more than half of this machine's memory, the bottom of the popover states in the alert colour how much it needs; the capture is not blocked.
 
-**采集方式**：
+**Capture modes**:
 
-- **重复**：间隔 0.1–10 s，步长 0.1 s，默认 1 s，在下拉菜单里设；等待下一次时状态栏写「N 秒后再次采集」。之后的每一次都在后台采集：屏幕保持上一次的完整结果，状态栏显示进度，完成后整体替换；中途停止时丢弃这一次，除非打开了「重复模式下停止后显示最新数据」。
-- **循环**：只在设备支持时可选，否则灰显并说明原因。
-- 同一设备的下一次采集保持缩放与位置；打开文件或 Demo 时缩放到全程。
+- **Repeat**: interval 0.1–10 s in steps of 0.1 s, default 1 s, set in the drop-down menu; while waiting for the next capture, the status bar reads "Capturing again in N s". Every later capture runs in the background: the screen keeps the previous complete result, the status bar shows progress, and the new result replaces it whole when done; stopping midway discards that capture unless "Show the latest data when a repeat stops" is on.
+- **Loop**: selectable only when the device supports it; otherwise greyed out, with the reason given.
+- The next capture on the same device keeps the zoom and position; opening a file or Demo zooms to fit.
 
-**设置面板**：
+**Settings panel**:
 
-- 主题（跟随系统 / 亮色 / 暗色）、密度（舒适 / 紧凑）、图形加速（自动 / 关闭，下面写出正在用的渲染器）、语言（跟随系统 / 简体中文 / English），都是分段控件。
-- 行为：触发位置自动居中（开）、采集时自动滚动到最新数据（开）、快速拖动后继续滚动（开：松手速度超过 0.5 px/ms 时按指数衰减继续平移，按下或滚轮即停）、重复模式下停止后显示最新数据（关）、启动时检查更新（开：启动后在后台查一次，失败不打扰）。前三项在缩放到全程时不起作用。
-- 诊断：日志级别、写入日志文件、在文件夹中显示。
-- 关于 HSync…；有新版本时旁边写「有新版本 x」。
+- Theme (System / Light / Dark), Density (Comfortable / Compact), Graphics acceleration (Auto / Off, with the renderer in use named below) and Language (System / `简体中文` / `English`), all segmented controls.
+- Behaviour: "Centre the view on the trigger" (on), "Follow the latest data while capturing" (on), "Keep scrolling after a quick drag" (on: when a drag is released faster than 0.5 px/ms, panning continues with exponential decay until a press or the wheel stops it), "Show the latest data when a repeat stops" (off), "Check for updates at startup" (on: checks once in the background after startup, and a failure stays silent). The first three have no effect while zoomed to fit.
+- Diagnostics: log level, "Write a log file", "Show in folder".
+- "About HSync…"; when an update is available, "Version x available" beside it.
 
-## 5. 全程概览
+## 5. Overview strip
 
-- 58 px 高，画出整段采集；每个解码器一条 5 px 细带标出有数据的区间，总线色，不透明度 0.62。
-- 当前视口画成 `--ink` 色 1.5 px 框，圆角 4 px。
-- 刻度按毫秒或自适应单位，起点标「触发」，末刻度带单位（「5 ms」）。
-- 单击把视口中心移到该处；拖动视口框平移；滚轮缩放。
-- 悬停的数据流项用 14% `--ink` 底加两侧 1 px `--ink` 线标出位置（至少 2 px 宽），搜索的当前命中用 `--find-strong` 标出。
+- 58 px high, showing the whole capture; each decoder has a 5 px band marking the stretches where it has data, in its bus colour at opacity 0.62.
+- The current viewport is drawn as a 1.5 px `--ink` frame with a 4 px radius.
+- Ticks are in milliseconds or an adaptive unit; the origin is labelled "Trigger", and the last tick carries the unit ("5 ms").
+- A click moves the viewport's centre there; dragging the viewport frame pans; the wheel zooms.
+- A hovered data stream item is marked with a 14% `--ink` fill between 1 px `--ink` lines on both sides (at least 2 px wide); the current search match is marked in `--find-strong`.
 
-## 6. 时间轴
+## 6. Timeline
 
-### 6.1 标尺与分组
+### 6.1 Ruler and groups
 
-- **标尺**：sticky 置顶，左下角标单位（「ms」，相对触发点）。主刻度带数字，小刻度不带，步长按 1-2-5 序列。横向滚动时标签列不动。
-- **分组**：每组一行组标题（`--h-lane` 高），下面是解码行，再下面是波形行。组标题有展开箭头、8 px 总线色方块、组名（加粗）、悬停才出现的「编辑解码器」与「在数据流里看」按钮、右侧的元信息（「100 kHz」「115200 8N1」，带解释性 `title`）。组间是 1 px 分隔线加 `--gap` 留白。未命名通道组用 1 px 描边的空心方块，右侧写通道数。
-- **通道行**：标签列里依次是 7 px 线色圆点、名称、通道号（`D0`，11 px 等宽，`--ink-3`）、触发位。窄行用于 SPI 各线、CAN 与未命名通道。解码器组里的通道显示角色（SDA、RX…）；通道另有名字时显示名字，角色挪到通道号前（`SCL D1`）。
-- **通道设置**：点色点、双击名称或右键打开，可改名称与颜色。名称在设置关闭时保存（回车或点别处），Esc 放弃；颜色点选即生效。
+- **Ruler**: sticky at the top, with the unit in the bottom-left corner ("ms", relative to the trigger point). Major ticks carry numbers, minor ticks do not; steps follow the 1-2-5 sequence. The label column stays still during horizontal scrolling.
+- **Groups**: each group has one group header row (`--h-lane` high), then its decode lanes, then its trace rows. The group header holds an expand arrow, an 8 px square in the bus colour, the group name (bold), the "Decoder settings" and "Show all decoded results in the data stream" buttons that appear only on hover, and meta information on the right ("100 kHz", "115200 8N1", with an explanatory `title`). Groups are separated by a 1 px divider plus `--gap` padding. The "Other channels" group uses a hollow square with a 1 px outline and shows the channel count on the right.
+- **Channel rows**: the label column holds, in order, a 7 px dot in the channel colour, the name, the channel number (`D0`, 11 px monospace, `--ink-3`) and the trigger slot. Narrow rows are for SPI lines, CAN and "Other channels". Channels in a decoder group show their role (SDA, RX…); a channel with a name of its own shows the name, and the role moves before the channel number (`SCL D1`).
+- **Channel settings**: clicking the dot, double-clicking the name or right-clicking opens them; they change the name and colour. The name is saved when the settings close (Enter or a click elsewhere), and Esc discards it; a colour takes effect as soon as it is clicked.
 
-### 6.2 波形
+### 6.2 Traces
 
-- 线宽 1 CSS 像素，位置取整到设备像素，线条不发虚。
-- 高电平下方铺通道线色的底色（§3.3），从高电平线的上沿铺到低电平线的下沿。
-- 跳变密到分不清时（如缩小后的 SPI 时钟），这一段画成字节块：画出高低两条电平线和两端，内部铺块色；相距不到 3 CSS 像素的边沿连成一块。SPI 的数据线沿用同组时钟线的分块，只在字节内有变化时画块。
-- 视口内块累计宽度达到 8 CSS 像素的线算「忙」，只画线和块、不铺高电平底色，免得空闲为高的总线缩小后糊成一条底色带。
+- Lines are 1 CSS pixel wide, with positions rounded to device pixels so they stay sharp.
+- Below a high level lies a wash in the channel colour (§3.3), from the top edge of the high line to the bottom edge of the low line.
+- Where transitions are too dense to tell apart (such as a zoomed-out SPI clock), the stretch is drawn as a byte block: the high and low level lines and both ends are drawn, and the inside is filled with the block colour; edges less than 3 CSS pixels apart join into one block. SPI data lines reuse the blocks of the clock line in the same group and draw a block only where they change within a byte.
+- A line whose blocks in the viewport add up to 8 CSS pixels or more counts as "busy": it draws only lines and blocks, without the high-level wash, so that a bus that idles high does not blur into one band of wash when zoomed out.
 
-### 6.3 解码块
+### 6.3 Decode blocks
 
-- 绝对定位在行内，上下各留 2 px，圆角 3 px，内边距 0 8 px，12 px 字；总线底色，较深底色的边线，悬停时边线 `--ink-3`。
-- 宽度不到视口 3.2% 的块不写字；被视口边缘切断的一侧去掉圆角和边线。
-- 选中的块反白（`--ink` 底、`--canvas` 字）。单击块把它设为选段，并把数据流切到它的解码器；再点一次取消。
-- **I²C** 两行：上行是整次传输的含义（「从 0x04 读出 4F」）；下行是字节，地址字节前标「写 / 读」（11 px，总线色）并用较深底色。应答只写一个字母：`A` 普通，`N` 加 1 px 细框；起始、重复起始、停止是 `S`、`Sr`、`P` 小标记。
-- **UART**：每帧一块，字符（13 px 等宽加粗）加十六进制（说明色）；空格写「空格」。
-- **SPI**：组标题行写整次传输「传输中 · 偏移 81–160」；MISO 行把可打印字符逐个排在各自的字节上，控制字符画成 `·`，同一文本行的字节合成一块；MOSI 行把长串相同字节折成「FF × 224 · 从偏移 16 起没有变化」。
-- **CAN-FD**：视口内没有帧时，行内写「视口内没有帧」并给出「上一帧 / 下一帧」。
+- Absolutely positioned within the lane, inset 2 px at top and bottom, 3 px radius, padding 0 8 px, 12 px text; bus fill with a border in the darker fill, which turns `--ink-3` on hover.
+- Blocks narrower than 3.2% of the viewport carry no text; a side cut off by the viewport edge loses its rounded corners and border.
+- A selected block is inverted (`--ink` fill, `--canvas` text). Clicking a block makes it the segment and switches the data stream to its decoder; a second click cancels.
+- **I²C** has two lanes: the upper one shows the meaning of the whole transfer ("Read 4F from 0x04"); the lower one shows the bytes, and address bytes are prefixed with "W" or "R" (11 px, bus colour) and use the darker fill. An acknowledge is a single letter: `A` plain, `N` with a thin 1 px frame; start, repeated start and stop are small `S`, `Sr` and `P` marks.
+- **UART**: one block per frame: the character (13 px monospace bold) plus its hex value (caption colour); a space reads "Space".
+- **SPI**: the group header row shows the whole transfer, "Transfer · Offsets 81–160"; the MISO lane places printable characters one by one on their own bytes, draws control characters as `·` and merges the bytes of one text line into one block; the MOSI lane folds long runs of identical bytes into "FF × 224 · Unchanged from offset 16".
+- **CAN-FD**: when the viewport holds no frame, the lane reads "No frames in view" and offers "Previous" / "Next".
 
-### 6.4 悬停读数
+### 6.4 Hover readout
 
-- 指针停在波形行上时，显示脚下这个脉冲的电平与宽度（「高 9.8 µs」）；时钟与周期信号（含 PWM）再给周期、频率与占空比，UART 线再给「约 N 位」。脉冲被视口切断时写「≥」并注明延伸到视口外。
-- 气泡 `--ink` 底、`--canvas` 字、12 px，居中于脉冲，左右夹在视口的 9%–91% 之间；脉冲上盖一层 13% `--ink`。
+- When the pointer rests on a trace row, the readout shows the level and width of the pulse under it ("High 9.8 µs"); clocks and periodic signals (including PWM) add period, frequency and duty cycle, and UART lines add "≈ N bits". When the viewport cuts the pulse off, the readout shows "≥" and notes "Extends beyond view".
+- The bubble has an `--ink` fill, `--canvas` text and 12 px type; it is centred on the pulse and held horizontally within 9%–91% of the viewport. A 13% `--ink` layer covers the pulse.
 
-### 6.5 边沿测量
+### 6.5 Edge measurement
 
-- 在波形行上单击一个边沿开始测量：取指针 10 px 内最近的边沿，精确到采样点。终点跟着指针，指针所在行（可以是别的通道）10 px 内有边沿时吸附过去。
-- 再单击另一个边沿完成测量，结果留在图上；单击别的边沿开始新的测量，单击空白处或按 Esc 清除。测量中单击空白处、再点起点或按 Esc 取消。
-- 两端各一个 10 px 圆点（`--ink` 填充、1.5 px `--canvas` 描边），在终点行的中线上用 1 px `--ink` 横线相连；两端不在同一行时，从起点画一条虚线落到终点行。没吸附的终点画成跨行高的竖线。
-- 读数气泡样式同悬停读数，在终点行上方、居中于两端：「Δt 9.80 µs」加「245 个采样点 · 1/Δt 102.0 kHz」，时间精确到一个采样点（最多 3 位小数）。终点还没落到另一个边沿上时提示「单击另一个边沿完成测量，Esc 取消」。
-- 不在测量时，指针靠近边沿会出现一个 11 px 空心圆环，提示可以从这里开始；测量中光标为十字，悬停读数暂停。
-- 拖动、滚轮与键盘照常平移缩放，测量留在原处；拖动超过 3 px 不算单击。新的采集清除测量。
+- Clicking an edge on a trace row starts a measurement: it takes the nearest edge within 10 px of the pointer, exact to the sample. The end point follows the pointer and snaps to an edge within 10 px on the pointer's row (which may be another channel).
+- Clicking another edge completes the measurement, and the result stays on the chart; clicking a further edge starts a new measurement, and clicking empty space or pressing Esc clears it. While measuring, clicking empty space, clicking the start point again or pressing Esc cancels it.
+- Each end has a 10 px dot (`--ink` fill, 1.5 px `--canvas` outline), and a 1 px `--ink` horizontal line joins them along the centre line of the end row; when the ends are on different rows, a dashed line drops from the start point to the end row. An end point that has not snapped is drawn as a vertical line the height of the row.
+- The readout bubble is styled like the hover readout and sits above the end row, centred between the ends: "Δt 9.80 µs" plus "245 samples · 1/Δt 102.0 kHz", with the time exact to one sample (at most 3 decimals). Until the end point lands on another edge, it prompts "Click another edge to finish, Esc to cancel".
+- When not measuring, an 11 px hollow ring appears as the pointer nears an edge, showing that a measurement can start there; while measuring, the cursor is a crosshair and the hover readout pauses.
+- Dragging, the wheel and the keyboard pan and zoom as usual, and the measurement stays in place; a drag of more than 3 px is not a click. A new capture clears the measurement.
 
-### 6.6 选段
+### 6.6 Segment
 
-- 在标尺上拖出一段：两端是 A、B 两个 14 px 小旗（`--ink` 底），中间用带箭头的横线标时长；整段在所有行上盖 `--veil`。
-- 小旗在段外，靠近视口边缘时转向段内；段宽不足视口 9% 时，时长标在 B 旁（B 靠右缘时标在 A 旁）；段的一端在视口外时，时长写「延伸到视口外」。
-- 拖动不到 2 µs 算单击；在标尺上单击取消选段。
-- 有选段时状态栏写出它的时长，点开列出各通道在段内的上升沿、下降沿与边沿数。
+- Drag on the ruler to mark a segment: its ends carry two 14 px flags, A and B (`--ink` fill), with an arrowed horizontal line between them labelled with the duration; `--veil` covers the whole segment on every row.
+- The flags sit outside the segment and turn inwards near the viewport edges; when the segment is narrower than 9% of the viewport, the duration sits beside B (beside A when B is near the right edge); when one end of the segment lies outside the viewport, the duration reads "Extends beyond view".
+- A drag shorter than 2 µs counts as a click; a click on the ruler cancels the segment.
+- While a segment exists, the status bar shows its duration; clicking it lists each channel's rising edges, falling edges and edge count within the segment.
 
-## 7. 触发
+## 7. Trigger
 
-### 7.1 按通道设置
+### 7.1 Per channel
 
-- 标签列最右边是「触发」列（标尺行写「触发」，带说明）。每个通道行一个 20 × 16 px 的触发位（窄行高 `min(16px, --h-trc − 2px)`），组标题行没有。
-- 没设条件时是一道短横（`--trace-2`）；设了条件是 `--ink` 底的小块，里面是 `--canvas` 色的条件图形。悬停底色 `--hover`，菜单打开时加 1.5 px `--ink` 外框。
-- 单击触发位，在标签列右侧、与该行平齐处弹出 176 px 宽的菜单：标题「XX 的触发条件」（带线色圆点），六项依次是不触发、上升沿、下降沿、任意沿、高电平、低电平，当前项打勾，底部说明「多个通道都设了条件时，同时满足才触发」。靠近底部的行，菜单上移到能完整显示。
-- 选了一项、按 Esc、在菜单外按下、时间轴滚动或再点同一个触发位时，菜单关闭。用键盘打开时焦点落在当前项，上下键移动，关闭后焦点回到触发位。
-- 禁用的通道不能设触发，触发位灰显。
-- 条件图形画在 16 × 16 的格子里，线宽 1.5 px、圆头，高电平一侧铺 26% 平涂：
+- At the far right of the label column is the "Trig" column (the ruler row reads "Trig", with a tooltip). Each channel row has a 20 × 16 px trigger slot (`min(16px, --h-trc − 2px)` high on narrow rows); group header rows have none.
+- Without a condition, the slot is a short dash (`--trace-2`); with one, it is a small `--ink` tile holding the condition glyph in `--canvas`. The hover fill is `--hover`; while the menu is open, a 1.5 px `--ink` outer frame is added.
+- Clicking a trigger slot opens a 176 px wide menu to the right of the label column, level with the row. Its title is "Trigger on XX" (with the channel-colour dot); its six items are, in order, None, Rising edge, Falling edge, Any edge, High level and Low level, with a check mark on the current one; at the bottom is the note "With conditions on several channels, all must hold at once". For rows near the bottom, the menu moves up until it fits.
+- The menu closes when an item is chosen, on Esc, on a press outside the menu, when the timeline scrolls, or when the same trigger slot is clicked again. When it is opened from the keyboard, focus lands on the current item and the up and down arrow keys move it; on closing, focus returns to the trigger slot.
+- Disabled channels cannot have a trigger; their trigger slots are greyed out.
+- Condition glyphs are drawn in a 16 × 16 box, with 1.5 px lines and round caps; the high side gets a flat 26% fill:
 
-| 条件   | 线                                  | 底色块               |
-| ------ | ----------------------------------- | -------------------- |
-| 不触发 | `M6 8h4`                            | 无                   |
-| 上升沿 | `M2.5 11.5H8v-7h5.5`                | `M8 4.5h5.5v7H8z`    |
-| 下降沿 | `M2.5 4.5H8v7h5.5`                  | `M2.5 4.5H8v7H2.5z`  |
-| 任意沿 | `M2.5 4.5h3l5 7h3M2.5 11.5h3l5-7h3` | 无                   |
-| 高电平 | `M2.5 4.5h11`                       | `M2.5 4.5h11v7h-11z` |
-| 低电平 | `M2.5 11.5h11`                      | 无                   |
+| Condition    | Line                                | Fill                 |
+| ------------ | ----------------------------------- | -------------------- |
+| None         | `M6 8h4`                            | none                 |
+| Rising edge  | `M2.5 11.5H8v-7h5.5`                | `M8 4.5h5.5v7H8z`    |
+| Falling edge | `M2.5 4.5H8v7h5.5`                  | `M2.5 4.5H8v7H2.5z`  |
+| Any edge     | `M2.5 4.5h3l5 7h3M2.5 11.5h3l5-7h3` | none                 |
+| High level   | `M2.5 4.5h11`                       | `M2.5 4.5h11v7h-11z` |
+| Low level    | `M2.5 11.5h11`                      | none                 |
 
-### 7.2 触发面板
+### 7.2 Trigger panel
 
-顶栏「触发」打开 480 px 宽的面板：
+The top bar's "Trigger" button opens a 480 px wide panel:
 
-- **方式**：简单 / 多级 / 串行。多级与串行只在设备支持时可选，否则灰显，`title` 说明原因。
-- **触发位置**：滑块，1% 到设备允许的最大值；最大值低于 90% 时注明，只能是 1% 时禁用并说明。
-- **简单**：说明「在各通道所在的行里设条件，同时满足才触发」，列出已设的条件，「清除全部条件」。
-- **多级**：级数 1–16 与级标签；每级两个条件 A、B，各一排通道格子与「取反」；组合「A 与 B 同时满足 / A 或 B 满足」；次数（≥ 1）与「连续」。
-- **串行**：起始、停止、时钟三排格子；数据通道；位数 1–16（默认 8）；数据值（高位在左，0 / 1 / X）与十六进制换算。
-- **通道格子**：每个通道一格，上方是通道号，格内是 §7.1 的条件图形；单击按菜单顺序切换，右键反向，键入 X 0 1 R F C 直接设定，左右键移动。
-- 多级或串行生效时，按钮上的汇总改写为「多级 · N 级」「串行 · SDA · 8 位」，时间轴上的触发位降到 40% 不透明度，`title` 说明行上的条件暂不生效。
+- **Type**: Simple / Stages / Serial. Stages and Serial are selectable only when the device supports them; otherwise they are greyed out, and a `title` gives the reason.
+- **Position**: a slider from 1% to the maximum the device allows; a maximum below 90% is noted, and when only 1% is possible the slider is disabled with an explanation.
+- **Simple**: the note "Set conditions in each channel row; all must hold at once", the list of conditions set, and "Clear all conditions".
+- **Stages**: a stage count of 1–16 and stage tabs; each stage has two patterns, A and B, each a row of channel cells plus "Invert"; the combination "A and B / A or B"; a count (≥ 1) and "In a row".
+- **Serial**: three rows of cells for Start, Stop and Clock; the data channel; a bit count of 1–16 (default 8); the data value (high bit on the left, 0 / 1 / X) with its hex conversion.
+- **Channel cells**: one cell per channel, with the channel number above and the condition glyph from §7.1 inside; a click steps through the conditions in menu order, a right-click steps backwards, typing X 0 1 R F C sets one directly, and the left and right arrow keys move between cells.
+- While a stage or serial trigger is in effect, the summary on the button changes to "N stages" or "serial · SDA · 8 bits", the trigger slots on the timeline drop to 40% opacity, and their `title` explains that the row conditions do not apply for now.
 
-## 8. 搜索
+## 8. Search
 
-- 顶栏搜索框：`/` 聚焦（在输入框里时除外），Esc 清空并失焦。
-- **解码结果**：输入十六进制（`4F`、`0x4F`、`4F 32`）或文本（`HOST`，ASCII 字母不区分大小写），在一次 I²C 传输、一条 UART 线、一次 SPI 传输的一条线、一个 CAN 帧里查找前后相继的字。
-- **电平模式**：每个词都是 `通道=代码` 时（如 `D3=R D5=1`）按电平查找。通道写 `D3`、`3`、通道名或角色名（`SDA`），代码是 X 0 1 R F C；不存在的通道在框内用 `--alert` 提示。
-- 输入后 150 ms 开始搜索，框内右侧写「N 处」（太多时写「10000+ 处」）。回车从视口起点向后、Shift+回车从视口终点向前跳到第一处，之后在命中间循环，写「3/17」。
-- 每跳一处：命中不在视口内时平移到居中，比视口 80% 还宽时缩放到两侧各留 10%；时间轴上盖一条 `--find-strong` 带子，全程概览标出位置；数据流切到该解码器（不自动打开），在「全程」范围下滚到该行；含命中的行用 `--find` 底，当前行用 `--find-strong` 底。
-- 电平模式每次找一处：时间轴在该样本画 2 px `--ink` 竖线，框内写它的时间，找不到时写「没有更多」。只有电平条件时，一段连续满足的区间只算一处。
+- Top bar search box: `/` focuses it (except from inside a text field); Esc clears it and removes focus.
+- **Decoded data**: enter hex (`4F`, `0x4F`, `4F 32`) or text (`HOST`; ASCII letters ignore case) to find consecutive words within one I²C transfer, one UART line, one line of one SPI transfer, or one CAN frame.
+- **Level pattern**: when every word has the form `channel=code` (such as `D3=R D5=1`), the search matches levels. A channel is written as `D3`, `3`, the channel name or the role name (`SDA`); the codes are X 0 1 R F C. A channel that does not exist is flagged inside the box in `--alert`.
+- The search starts 150 ms after input, and the right end of the box shows "N found" ("10000+ found" when there are too many). Enter jumps forwards from the start of the viewport, and Shift+Enter backwards from its end, to the first match; after that, they cycle through the matches, showing "3 of 17".
+- On each jump: a match outside the viewport is panned to the centre, and one wider than 80% of the viewport is zoomed to leave 10% on each side; a `--find-strong` band covers it on the timeline, and the overview strip marks its position; the data stream switches to its decoder (without opening automatically) and, with the range at "All", scrolls to its row; rows containing matches get a `--find` fill, and the current row a `--find-strong` fill.
+- A level pattern finds one match at a time: the timeline draws a 2 px `--ink` vertical line at that sample and the box shows its time, or "No more" when there is none. With only level conditions, a continuous stretch that satisfies them counts as one match.
 
-## 9. 数据流面板
+## 9. Data stream panel
 
-- **开合**：在时间轴下方，默认关闭，开合时从工作区底边滑入、滑出。入口是状态栏左端的「数据流」按钮，以及组标题上悬停出现的按钮（打开该解码器，再点一次关闭）。选段不会自动打开它。上边缘可拖动调高（最小 80 px），时间轴至少留 180 px。
-- **头部**（33 px）：左边是解码器标签页，当前项文字 `--ink`、下面一条 2 px `--ink` 线，切换时线滑到新的标签下；接着一句汇总（「9 次传输，选段内 4 个字节」）。右边依次是「文本 / 十六进制」（只在 UART 与 SPI 出现）、「全程 / 选段」、复制、导出（CSV / 文本）、关闭。分段控件 22 px 高，选中项 `--raise` 底加 1 px `--line-2` 描边。
-- **列表**：12 px 等宽，行高 20 px，表头固定；第一列是时间（ms，四位小数，相对触发点）。
-  - **I²C**：一行一次传输，「含义」加「总线上的顺序」（`S`、`写62`、数据字节、`Sr`、`读62`、数据字节、`N`、`P`；应答了的字节不标，只写出 `N`）。
-  - **UART**：文本方式按换行分行，一行最多 80 列，`\r` `\n` `\t` 写成转义并用说明色；十六进制方式每行 16 字节，右边是对应字符。
-  - **SPI**：先 MISO 后 MOSI，各带字节偏移。文本方式下连续 4 个以上可打印字符当作文本，其余每行 16 个十六进制字节。
-  - **CAN-FD**：一行一帧：标识符、数据、帧类型与校验结果。
-  - **其他解码器**：一行一个注解：时间、注解行名、文本。
-  - 连续 8 个以上相同字节折成一项（`FF × 224`），文本方式下只折不可打印的值。
-- **采集边界**：开头缺起始条件的 I²C 传输不解码，列一行说明；结尾没传完的列到最后一个完整字节，后面加「…」与说明；UART 文本两端各用一个「…」表示被截断的帧。
-- **与选段**：范围为「全程」时，完整落在选段里的内容加 `--sel` 底，列表滚到第一处（上面留一行；拖动中不滚，松手再滚）。范围为「选段」时只列这些内容，部分在段内的传输用「…」表示缺的一侧；没有选段时该项不可用，提示「先在标尺上拖出一段」。单击时间轴上的解码块，列表切到它的解码器并标出它。
-- **与波形**：悬停列表项时，全程概览标出它的位置；它在视口内时，时间轴上盖一条 8% `--ink` 的带子（两侧 1 px `--ink-3`），对应解码块加 2 px `--ink` 框。单击列表项，波形平移到该处并选中它。
+- **Opening and closing**: the panel sits below the timeline and is closed by default; it slides in from, and out to, the bottom edge of the workspace. It opens from the "Data stream" button at the left end of the status bar, and from the button that appears on hover in a group header (which opens that decoder; a second click closes it). A segment does not open it automatically. Its top edge can be dragged to change its height (minimum 80 px), and the timeline keeps at least 180 px.
+- **Header** (33 px): on the left, the decoder tabs; the current tab has `--ink` text and a 2 px `--ink` line beneath, which slides under the new tab on switching; then a one-line summary ("9 transfers, 4 bytes in segment"). On the right, in order: "Text / Hex" (UART and SPI only), "All / Segment", Copy, Export (CSV / text) and Close. Segmented controls are 22 px high; the selected option has a `--raise` fill and a 1 px `--line-2` outline.
+- **List**: 12 px monospace, 20 px rows, fixed header; the first column is the time (ms, four decimals, relative to the trigger point).
+  - **I²C**: one row per transfer: "Meaning" plus "On the wire" (`S`, `W62`, data bytes, `Sr`, `R62`, data bytes, `N`, `P`; acknowledged bytes are not marked, and only `N` is written).
+  - **UART**: in Text mode, rows break at line feeds, at most 80 columns per row, and `\r` `\n` `\t` are written as escapes in the caption colour; in Hex mode, each row holds 16 bytes, with the matching characters on the right.
+  - **SPI**: MISO first, then MOSI, each with byte offsets. In Text mode, runs of 4 or more printable characters are shown as text, and the rest as 16 hex bytes per row.
+  - **CAN-FD**: one row per frame: identifier, data, frame type and check results.
+  - **Other decoders**: one row per annotation: time, annotation row name, text.
+  - Runs of 8 or more identical bytes fold into one item (`FF × 224`); in Text mode, only non-printable values fold.
+- **Capture boundaries**: an I²C transfer at the start that lacks its start condition is not decoded and gets a one-line note; one unfinished at the end is listed up to its last complete byte, followed by "…" and a note; UART text uses one "…" at each end for truncated frames.
+- **With a segment**: with the range at "All", items lying wholly inside the segment get a `--sel` fill, and the list scrolls to the first of them (leaving one row above it; not while dragging, only on release). With the range at "Segment", only those items are listed, and a transfer partly inside the segment shows "…" on its missing side; without a segment this option is unavailable, with the hint "Drag along the ruler to select a segment first". Clicking a decode block on the timeline switches the list to its decoder and marks its entry.
+- **With the traces**: hovering a list item marks its position on the overview strip; when it lies in the viewport, an 8% `--ink` band (1 px `--ink-3` on both sides) covers it on the timeline, and its decode block gets a 2 px `--ink` frame. Clicking a list item pans the traces there and selects it.
 
-## 10. 状态栏与导航
+## 10. Status bar and navigation
 
-- 左起：「数据流」开关（按下态 `--hover` 底）、状态（「采集完成」「等待触发」「已采集 37%」…）、保存或导出的进度（可取消）、错误或「已保存」、触发时间、采样点数（「131 072 个采样点」）、选段时长（§6.6）。
-- 右侧：端口速度过低的告警、新插入设备的「切换 / 忽略」；缩小、当前时基（「50 µs/格」，最小宽 64 px 居中）、放大、缩放到全程。
-- **指针**：Ctrl/⌘ + 滚轮以指针为中心缩放；Shift + 滚轮或触控板横滑平移；在波形区按住拖动平移，单击边沿做边沿测量（§6.5）。
-- **键盘**：`+` / `-` 缩放，`←` / `→` 平移，`Home` 缩放到全程，`/` 搜索，⌘/Ctrl+O 打开，⌘/Ctrl+S 保存，`Esc` 依次关闭菜单、取消边沿测量、取消选段。
+- From the left: the "Data stream" toggle (`--hover` fill when pressed), the status ("Capture complete", "Waiting for trigger", "Captured 37%"…), save or export progress (cancellable), an error or "Saved to …", the trigger time, the sample count ("131,072 samples") and the segment duration (§6.6).
+- On the right: the warning about a too-slow port, and "Switch / Dismiss" for a newly plugged-in device; Zoom out, the current time base ("50 µs/div", at least 64 px wide, centred), Zoom in and Zoom to fit.
+- **Pointer**: Ctrl/⌘ + wheel zooms around the pointer; Shift + wheel or a horizontal trackpad swipe pans; dragging in the trace area pans, and clicking an edge starts an edge measurement (§6.5).
+- **Keyboard**: `+` / `-` zoom, `←` / `→` pan, `Home` zooms to fit, `/` searches, ⌘/Ctrl+O opens, ⌘/Ctrl+S saves, and `Esc` closes a menu, cancels an edge measurement and cancels the segment, in that order.
 
-## 11. 对话框
+## 11. Dialogs
 
-- 共同样式：全窗口 `--veil` 遮罩上居中一块面板（`--raise` 底、1 px `--ink` 框、圆角 6 px），40 px 标题栏，右侧是关闭按钮。打开时焦点进入对话框，Esc 或单击遮罩关闭。
-- **设备选项**：按设备提供的选项生成表单（开关、下拉、数值）；采样率与时长在顶栏的采集设置里。采集中只读并说明。
-- **添加 / 编辑协议解码**：可搜索的解码器列表、通道对应、选项（叠加的解码器各一组）、解码范围（全程 / 选段）、显示（数值进制、注解行显隐）；编辑时可以移除。
-- **导出**：格式（DSView 采集文件、CSV 表格、VCD 波形、sigrok 会话、原始二进制，各带一句说明；CSV 可选每个采样点一行）、范围（全程 / 选段）、通道（全选 / 全不选）；确认后再选保存位置。
-- **关于**：版本、许可与组件来源。版本号下面是更新：不知道有新版本时是「检查更新」，旁边写「正在检查更新…」或「已是最新版本」；有新版本时写「可更新到 x」并给出「下载并重启」，下载中显示百分比（不知道大小时写「正在下载…」），装好后应用自动重启。失败时原因写在下面，可以再试。
+- Shared style: a panel centred on a full-window `--veil` backdrop (`--raise` fill, 1 px `--ink` border, 6 px radius), with a 40 px title bar and a close button on the right. Focus moves into the dialog when it opens; Esc or a click on the backdrop closes it.
+- **Device options**: a form generated from the options the device provides (switches, drop-downs, numbers); sample rate and duration live in the top bar's acquisition settings. During a capture the form is read-only, with an explanation.
+- **Add / edit decoder**: a searchable decoder list, channel mapping, options (one group per stacked decoder), decode range (Whole capture / Segment) and display (number base, showing or hiding annotation rows); when editing, the decoder can be removed.
+- **Export**: format (DSView capture, CSV table, VCD waveform, sigrok session, Raw binary, each with a one-line description; CSV can write one row per sample), range (Whole capture / Segment) and channels (All / None); the save location is chosen after confirming.
+- **About**: version, license and component credits. Below the version number is the update area: when no update is known, it offers "Check for updates", with "Checking for updates…" or "HSync is up to date" beside it; with an update, it reads "Version x is available" and offers "Download and restart"; while downloading, it shows a percentage ("Downloading…" when the size is unknown), and once installed the app restarts by itself. On failure, the reason appears below, and the user can try again.
 
-## 12. 可访问性
+## 12. Accessibility
 
-- 图标按钮都有 `aria-label`；组标题的展开按钮有 `aria-expanded`；触发位 `aria-haspopup="menu"`；菜单项 `role="menuitemradio"` 加 `aria-checked`；数据流标签页 `role="tab"`；分段控件 `aria-pressed`。
-- 焦点环：2 px `--ink` 实线，偏移 2 px（标签页内偏移 −2 px）。
-- 开启减少动态效果时，动效时长为 0，过渡的起止状态也不生效，一切变化立即完成（§13）。
+- Every icon button has an `aria-label`; the group header's expand button has `aria-expanded`; trigger slots have `aria-haspopup="menu"`; menu items have `role="menuitemradio"` plus `aria-checked`; data stream tabs have `role="tab"`; segmented controls use `aria-pressed`.
+- Focus ring: 2 px solid `--ink`, offset 2 px (offset −2 px inside tabs).
+- With reduced motion on, motion durations are 0, and the start and end states of transitions do not apply either, so every change completes at once (§13).
 
-## 13. 动效
+## 13. Motion
 
-界面状态切换时用简短的动效交代东西从哪里来、到哪里去，节奏取自 §3.6 的令牌。动效只改透明度与位移缩放（面板高度除外），不与波形渲染争主线程。
+When the interface changes state, brief motion shows where things come from and where they go, timed by the tokens in §3.6. Motion changes only opacity, translation and scale (except panel height), so it does not compete with waveform rendering for the main thread.
 
-| 场景                                                                                | 动效                                                                           |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| 菜单与弹出层                                                                        | 从打开它的控件那一角长出：透明度 0→1，缩放 0.96→1；关闭时反向                  |
-| 对话框                                                                              | 遮罩淡入，对话框上浮 8 px 并从 98% 放大                                        |
-| 数据流面板                                                                          | 从工作区底边滑入、滑出；移动时盖在时间轴上，时间轴只在开始或结束时调整一次尺寸 |
-| 分段控件、标签页                                                                    | 选中项的底色（数据流标签为下划线）滑到新选项，略带回弹                         |
-| 面板换内容（触发方式、多级触发的级、导出的 CSV 选项、数据流换解码器 / 方式 / 范围） | 新内容上浮 4 px 并淡入，旧内容立即消失；外框高度平滑过渡到新内容的高度         |
-| 列表增删（设备、多级触发的级标签、已设条件的通道）                                  | 条目原地缩放淡入淡出，其余条目滑过去补位                                       |
-| 出现的提示（状态栏消息、告警、搜索结果数、触发汇总）                                | 上浮淡入                                                                       |
-| 组标题的展开箭头                                                                    | 旋转，用滑动的节奏                                                             |
+| Situation                                                                                                               | Motion                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Menus and popovers                                                                                                      | Grow from the corner of the control that opened them: opacity 0→1, scale 0.96→1; reversed on close                                                  |
+| Dialogs                                                                                                                 | The backdrop fades in; the dialog rises 8 px and scales up from 98%                                                                                 |
+| Data stream panel                                                                                                       | Slides in from, and out to, the bottom edge of the workspace; while moving it covers the timeline, which resizes only once, at the start or the end |
+| Segmented controls, tabs                                                                                                | The selected option's fill (the underline for data stream tabs) slides to the new option with a slight bounce                                       |
+| Panel content changes (trigger type, stage of a stage trigger, export's CSV option, data stream decoder / mode / range) | New content rises 4 px and fades in, and old content disappears at once; the frame's height eases to the new content's height                       |
+| List additions and removals (devices, stage tabs of a stage trigger, channels with conditions)                          | Items scale and fade in or out in place; the other items slide over to close the gap                                                                |
+| Appearing notices (status bar messages, warnings, search match count, trigger summary)                                  | Rise and fade in                                                                                                                                    |
+| Group header expand arrow                                                                                               | Rotates with the slide timing                                                                                                                       |
 
-- 正在离开的元素不再响应指针。
-- 不加动效：跟着指针走的东西（悬停读数、边沿测量、选段拖动、平移与缩放）；视口跳转；主题、密度与语言切换（画布一帧就重绘完，界面颜色如果慢慢过渡，两边会对不上）；通道组展开收起（行画在画布上）。
+- Elements that are leaving no longer respond to the pointer.
+- No motion for: anything that follows the pointer (hover readout, edge measurement, segment dragging, panning and zooming); viewport jumps; theme, density and language switches (the canvas redraws in a single frame, so interface colours that transition slowly would fall out of step with it); expanding and collapsing channel groups (the rows are drawn on the canvas).
 
-## 14. 文案与数值
+## 14. Copy and numbers
 
-- 界面支持简体中文（默认）与英文，跟随系统或在设置里选。中文以清楚为准；英文与中文同义、长度相近，免得撑破布局。
-- 句子用带参数的消息整句翻译，不拼接字符串。解码器自带的英文注解按原文显示。
-- 数字与日期按当前语言格式化，中文的采样点数用窄空格分组（`131 072`）。时间与频率单位（ns、µs、ms、s、Hz、kHz、MHz）两种语言相同，数值与单位之间空一格（`5.24 ms`）。
+- The interface supports Simplified Chinese (default) and English, following the system or chosen in Settings. Chinese copy puts clarity first; English copy means the same as the Chinese and has a similar length, so it does not break the layout.
+- Sentences are translated whole, as messages with parameters; strings are never concatenated. Decoders' own English annotations are shown as they are.
+- Numbers and dates are formatted for the current language: Chinese groups sample counts with narrow spaces (`131 072`), English with commas (`131,072`). Time and frequency units (ns, µs, ms, s, Hz, kHz, MHz) are the same in both languages, with one space between value and unit (`5.24 ms`).
