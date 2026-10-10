@@ -152,6 +152,29 @@ fn replays_the_protocol_capture() {
 }
 
 #[test]
+fn the_protocol_pattern_brings_the_names_and_decoders_of_the_capture() {
+    let source = hsync_fileio::read_dsl_file(&protocol_demo()).expect("demo capture");
+    let mut device = open(Some(protocol_demo()));
+    let preset = device.preset().expect("preset");
+    assert_eq!(
+        preset.channel_names.get(&1).map(String::as_str),
+        Some("SCL")
+    );
+    assert_eq!(preset.channel_names.len(), source.header.probes.len());
+    assert_eq!(preset.decoders, source.decoders);
+    assert!(preset.decoders.is_some());
+
+    set(
+        device.as_mut(),
+        OptionKey::Pattern,
+        OptionValue::Choice("random".into()),
+    );
+    assert_eq!(device.preset(), None);
+    // Without the capture there is nothing to bring.
+    assert_eq!(open(None).preset(), None);
+}
+
+#[test]
 fn loops_until_stopped() {
     let mut device = open(None);
     set(

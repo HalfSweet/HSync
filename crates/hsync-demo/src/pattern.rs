@@ -5,17 +5,20 @@ use std::sync::Arc;
 
 use hsync_capture::{CHUNK_WORDS, ChunkView, LogicCapture};
 use hsync_core::ChannelIndex;
+use hsync_driver::CapturePreset;
 
 /// Channels the demo device offers.
 pub const CHANNELS: u16 = 16;
 
-/// The samples of a capture to replay, as words per channel.
+/// The samples of a capture to replay, as words per channel, and the channel names and
+/// decoders that go with them.
 #[derive(Debug)]
 pub struct ReplaySource {
     samplerate: u64,
     /// `words[channel]`; channels the capture lacks stay low.
     words: Vec<Vec<u64>>,
     len: usize,
+    preset: CapturePreset,
 }
 
 impl ReplaySource {
@@ -55,7 +58,18 @@ impl ReplaySource {
             samplerate: capture.samplerate(),
             words,
             len,
+            preset: CapturePreset::default(),
         })
+    }
+
+    /// Gives captures of the replay these channel names and decoders.
+    pub fn with_preset(self, preset: CapturePreset) -> Self {
+        Self { preset, ..self }
+    }
+
+    /// The channel names and decoders captures of the replay start with.
+    pub fn preset(&self) -> &CapturePreset {
+        &self.preset
     }
 
     /// The rate the capture was taken at.

@@ -7,8 +7,9 @@ use std::sync::{Arc, OnceLock};
 use crossbeam_channel::Sender;
 use hsync_core::ChannelIndex;
 use hsync_driver::{
-    Acquisition, Candidate, CandidateStatus, CapturePlan, Choice, Device, DeviceInfo, Driver,
-    DriverError, Label, OptionKey, OptionKind, OptionState, OptionValue, Packet,
+    Acquisition, Candidate, CandidateStatus, CapturePlan, CapturePreset, Choice, Device,
+    DeviceInfo, Driver, DriverError, Label, OptionKey, OptionKind, OptionState, OptionValue,
+    Packet,
 };
 
 use crate::acquisition::{self, DemoParams};
@@ -62,7 +63,13 @@ impl DemoDriver {
             .get_or_init(|| {
                 let path = self.protocol.as_ref()?;
                 match hsync_fileio::read_dsl_file(path) {
-                    Ok(document) => ReplaySource::from_capture(&document.capture).map(Arc::new),
+                    Ok(document) => {
+                        let source = ReplaySource::from_capture(&document.capture)?;
+                        Some(Arc::new(source.with_preset(CapturePreset {
+                            channel_names: document.header.probes.into_iter().collect(),
+                            decoders: document.decoders,
+                        })))
+                    }
                     Err(error) => {
                         log::warn!("reading the demo capture {}: {error}", path.display());
                         None
@@ -240,6 +247,13 @@ impl Device for DemoDevice {
     /// The demo streams like a device in Stream mode, so it loops with any options.
     fn can_loop(&self) -> bool {
         true
+    }
+
+    /// The protocol pattern brings the channel names and decoders of the replayed capture, as
+    /// DSView loads the decoders of its demo patterns.
+    fn preset(&self) -> Option<CapturePreset> {
+        let source = self.source.as_ref()?;
+        (self.pattern == PatternKind::Protocol).then(|| source.preset().clone())
     }
 
     fn enabled_channels(&self) -> Vec<ChannelIndex> {
