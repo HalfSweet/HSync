@@ -3,8 +3,16 @@
 
 #![forbid(unsafe_code)]
 
+mod acquisition;
+mod assemble;
+mod device;
 pub mod models;
 pub mod protocol;
+
+pub use device::{
+    APP_VERSION, AtkLogicDevice, MAX_SOFTWARE_DEPTH, MIN_FPGA_VERSION, MIN_SAMPLES, Settings,
+    UPDATE_TOOL,
+};
 
 /// Driver name, also recorded in capture files; devices are listed under it until opened.
 pub const DRIVER_NAME: &str = "ATK-Logic";
