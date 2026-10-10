@@ -135,32 +135,59 @@ class Presentation {
   }
 }
 
-const entries = (decoded as unknown as Entry[]).map((entry) => ({
-  index: entry.index,
+const fixtures = (decoded as unknown as Entry[]).map((entry) => ({
   id: entry.id,
   presentation: new Presentation(entry.presentation),
 }))
 
-/** Decoder states of a capture: all finished, or all still running while it is captured. */
-export function mockStatuses(running: boolean): DecoderStatus[] {
-  return entries.map(({ index, id, presentation }) => ({
+interface Matched {
+  index: number
+  id: string
+  presentation: Presentation | null
+}
+
+/**
+ * The mock's results for a decoder list: each entry gets the demo's presentation of the same
+ * decoder id, the way the demo capture would decode it; others decode to nothing.
+ */
+function match(decoders: unknown): Matched[] {
+  const list = Array.isArray(decoders) ? (decoders as unknown[]) : []
+  return list.map((entry, index) => {
+    const id =
+      typeof entry === 'object' &&
+      entry !== null &&
+      typeof (entry as { id?: unknown }).id === 'string'
+        ? (entry as { id: string }).id
+        : ''
+    return { index, id, presentation: fixtures.find((one) => one.id === id)?.presentation ?? null }
+  })
+}
+
+/** Decoder states of a capture: finished, or still running while it is captured. */
+export function mockStatuses(decoders: unknown, running: boolean): DecoderStatus[] {
+  return match(decoders).map(({ index, id, presentation }) => ({
     index,
     id,
-    bus: presentation.snapshot.bus,
-    state: running ? 'running' : 'done',
-    counts: running ? null : presentation.snapshot.counts,
+    bus: presentation?.snapshot.bus ?? null,
+    state: running ? 'running' : presentation ? 'done' : 'unsupported',
+    counts: running || !presentation ? null : presentation.snapshot.counts,
   }))
 }
 
-/** Lanes of the decoded demo over `start..end`, limited to samples actually captured. */
-export function mockView(start: number, end: number, samplesPerPixel: number): DecoderLanes[] {
-  return entries.map(({ index, presentation }) => ({
-    index,
-    view: presentation.view(start, end, samplesPerPixel),
-  }))
+/** Lanes of the decoded demo over `start..end`. */
+export function mockView(
+  decoders: unknown,
+  start: number,
+  end: number,
+  samplesPerPixel: number,
+): DecoderLanes[] {
+  return match(decoders).flatMap(({ index, presentation }) =>
+    presentation ? [{ index, view: presentation.view(start, end, samplesPerPixel) }] : [],
+  )
 }
 
 export function mockStream(
+  decoders: unknown,
   index: number,
   mode: StreamMode,
   segment: [number, number] | null,
@@ -168,7 +195,7 @@ export function mockStream(
   offset: number,
   count: number,
 ): StreamPage | null {
-  const presentation = entries.find((entry) => entry.index === index)?.presentation
+  const presentation = match(decoders)[index]?.presentation
   if (!presentation) return null
   const rows = presentation.rows(mode)
   const scoped =
@@ -185,8 +212,13 @@ export function mockStream(
   }
 }
 
-export function mockRowAt(index: number, mode: StreamMode, sample: number): number | null {
-  const presentation = entries.find((entry) => entry.index === index)?.presentation
+export function mockRowAt(
+  decoders: unknown,
+  index: number,
+  mode: StreamMode,
+  sample: number,
+): number | null {
+  const presentation = match(decoders)[index]?.presentation
   if (!presentation) return null
   const rows = presentation.rows(mode)
   const at = rows.findIndex((row) => row.end >= sample)

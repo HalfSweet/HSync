@@ -147,7 +147,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     if (device) device.capturing = false
     // The decoders run once the capture is complete.
     setTimeout(() => {
-      for (const { index } of mockStatuses(false)) {
+      for (const { index } of mockStatuses(summary?.decoders, false)) {
         for (const handler of decodedHandlers) handler({ captureId, index })
       }
     }, 150)
@@ -233,14 +233,14 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     async decodeList(captureId: number) {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))
-      return Promise.resolve(mockStatuses(live?.status.captureId === captureId))
+      return Promise.resolve(mockStatuses(summary.decoders, live?.status.captureId === captureId))
     },
 
     async decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))
       if (live?.status.captureId === captureId) return Promise.resolve([])
-      return Promise.resolve(mockView(start, end, samplesPerPixel))
+      return Promise.resolve(mockView(summary.decoders, start, end, samplesPerPixel))
     },
 
     async decodeStream(request: StreamRequest) {
@@ -249,6 +249,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       if (live?.status.captureId === request.captureId) return Promise.resolve(null)
       return Promise.resolve(
         mockStream(
+          summary.decoders,
           request.index,
           request.mode,
           request.segment,
@@ -262,7 +263,21 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     async decodeRowAt(captureId, index, mode, sample) {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))
-      return Promise.resolve(mockRowAt(index, mode, sample))
+      return Promise.resolve(mockRowAt(summary.decoders, index, mode, sample))
+    },
+
+    async decodeSet(captureId: number, decoders: unknown[]) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      if (live) return Promise.reject(uiError('error.session.busy'))
+      summary = { ...summary, decoders: decoders.length > 0 ? decoders : null }
+      const id = summary.id
+      setTimeout(() => {
+        for (const { index } of mockStatuses(summary?.decoders, false)) {
+          for (const handler of decodedHandlers) handler({ captureId: id, index })
+        }
+      }, 50)
+      return Promise.resolve(summary)
     },
 
     async deviceList(): Promise<DeviceSummary[]> {

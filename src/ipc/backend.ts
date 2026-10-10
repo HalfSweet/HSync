@@ -76,6 +76,8 @@ export interface Backend {
     samplesPerPixel: number,
   ): Promise<DecoderLanes[]>
   decodeStream(request: StreamRequest): Promise<StreamPage | null>
+  /** Replaces the capture's decoders (DSView's `decoders` list) and decodes again. */
+  decodeSet(captureId: number, decoders: unknown[]): Promise<CaptureSummary>
   /** Position in a decoder's data stream of the first row ending after `sample`. */
   decodeRowAt(
     captureId: number,
@@ -161,6 +163,10 @@ class TauriBackend implements Backend {
 
   decodeStream(request: StreamRequest) {
     return invoke<StreamPage | null>('decode_stream', { ...request })
+  }
+
+  decodeSet(captureId: number, decoders: unknown[]) {
+    return invoke<CaptureSummary>('decode_set', { captureId, decoders })
   }
 
   decodeRowAt(captureId: number, index: number, mode: StreamMode, sample: number) {
