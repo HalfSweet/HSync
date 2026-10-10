@@ -180,8 +180,9 @@ const binsRequest = computed(() => {
   const end = Math.min(capture.extent, Math.ceil(viewportEnd(viewport)))
   if (end <= start) return null
   const bins = Math.max(1, Math.min(Math.round(viewport.width * pixelRatio.value), end - start))
-  // Asks again as a running capture grows; columns past its samples come back empty.
-  const received = capture.sampleCount
+  // Asks again as a running capture grows or, looping, moves on; columns past its samples come
+  // back empty.
+  const received = capture.sampleCount + capture.dropped
   return { captureId: summary.id, channels: traceChannels.value, start, end, bins, received }
 })
 

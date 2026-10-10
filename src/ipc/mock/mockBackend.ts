@@ -492,6 +492,15 @@ export function createMockBackend(data: Fixture = fixture): Backend {
           }, TRIGGER_WAIT_MS),
         )
       }
+      // A loop capture runs on once full, dropping as many samples as arrive.
+      const runOn = (dropped: number) => {
+        timers.push(
+          setTimeout(() => {
+            emit({ dropped })
+            runOn(dropped + Math.round(total / LIVE_STEPS))
+          }, LIVE_STEP_MS),
+        )
+      }
       for (let step = 1; step <= LIVE_STEPS; step++) {
         timers.push(
           setTimeout(
@@ -499,7 +508,9 @@ export function createMockBackend(data: Fixture = fixture): Backend {
               const samples = Math.round((total * step) / LIVE_STEPS)
               setLength(samples)
               emit({ phase: 'capturing', samples })
-              if (step === LIVE_STEPS) finish('completed')
+              if (step < LIVE_STEPS) return
+              if (request.looping) runOn(Math.round(total / LIVE_STEPS))
+              else finish('completed')
             },
             begin + step * LIVE_STEP_MS,
           ),

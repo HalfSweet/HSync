@@ -33,7 +33,12 @@ const status = computed(() => {
               percent: percent(live.hardwareSamples, live.limit),
             })}`
       case 'capturing':
-        return t('status.captured', { percent: percent(live.samples, live.limit) })
+        // A loop capture that is full runs on: tell how long it has been running.
+        return live.dropped > 0
+          ? t('status.looping', {
+              time: formatTimeShort((live.dropped + live.samples) / capture.samplerate),
+            })
+          : t('status.captured', { percent: percent(live.samples, live.limit) })
       default:
         if (live.end === 'stopped') return t('status.stopped')
         if (live.end === 'completed') return t('status.complete')

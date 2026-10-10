@@ -19,7 +19,7 @@ const root = useTemplateRef<HTMLElement>('root')
 onClickOutside(root, () => (open.value = false))
 onKeyStroke('Escape', () => (open.value = false))
 
-const MODES: CaptureMode[] = ['single', 'repeat']
+const MODES: CaptureMode[] = ['single', 'repeat', 'loop']
 const ready = computed(() => device.state !== null && device.opening === null)
 
 function run(): void {
@@ -27,7 +27,11 @@ function run(): void {
   else void capture.start(trigger.request(false))
 }
 
+/** Loop captures need a device that can run on, such as a DSLogic in Stream mode. */
+const unavailable = (mode: CaptureMode) => mode === 'loop' && !capture.canLoop
+
 function setMode(mode: CaptureMode): void {
+  if (unavailable(mode)) return
   capture.mode = mode
   open.value = false
 }
@@ -68,27 +72,20 @@ function instant(): void {
         :key="mode"
         role="menuitemradio"
         :aria-checked="capture.mode === mode"
-        class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left hover:bg-hover"
+        :aria-disabled="unavailable(mode) || undefined"
+        class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left"
+        :class="unavailable(mode) ? 'cursor-default opacity-55' : 'hover:bg-hover'"
         @click="setMode(mode)"
       >
         <span class="flex min-w-0 flex-1 flex-col">
           <span :class="capture.mode === mode && 'font-medium'">{{
             t(`header.capture.${mode}`)
           }}</span>
-          <span class="text-caption text-ink-3">{{ t(`header.capture.${mode}Tip`) }}</span>
+          <span class="text-caption text-ink-3">{{
+            unavailable(mode) ? t('header.capture.loopUnavailable') : t(`header.capture.${mode}Tip`)
+          }}</span>
         </span>
         <AppIcon v-if="capture.mode === mode" name="check" />
-      </button>
-      <button
-        role="menuitemradio"
-        aria-checked="false"
-        aria-disabled="true"
-        class="flex min-h-[30px] w-full cursor-default items-center gap-2 rounded-4 px-2 py-1 text-left opacity-55"
-      >
-        <span class="flex min-w-0 flex-1 flex-col">
-          <span>{{ t('header.capture.loop') }}</span>
-          <span class="text-caption text-ink-3">{{ t('header.capture.notYet') }}</span>
-        </span>
       </button>
       <div class="my-1 border-t border-line" />
       <button

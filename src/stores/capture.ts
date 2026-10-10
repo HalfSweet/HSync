@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, shallowRef } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
@@ -9,11 +9,15 @@ import { toUiError, type UiError } from '@/ipc/errors'
 import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
 import { useChannelsStore } from './channels'
+import { useDeviceStore } from './device'
 import type { TriggerRequest } from './trigger'
 
 export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
-/** Single captures, or another one a moment after each completes (DESIGN.md §9.4). */
-export type CaptureMode = 'single' | 'repeat'
+/**
+ * Single captures, another one a moment after each completes, or one that runs until stopped
+ * and keeps its newest samples (DESIGN.md §9.4).
+ */
+export type CaptureMode = 'single' | 'repeat' | 'loop'
 
 /** A save or export under way and the share of it done. */
 export interface FileJob {
@@ -26,6 +30,7 @@ const REPEAT_INTERVAL_MS = 1000
 
 /** The open capture: what it is, and how to place its samples in time. */
 export const useCaptureStore = defineStore('capture', () => {
+  const device = useDeviceStore()
   const summary = shallowRef<CaptureSummary | null>(null)
   const status = shallowRef<CaptureStatus>('idle')
   const error = shallowRef<UiError | null>(null)
@@ -50,6 +55,19 @@ export const useCaptureStore = defineStore('capture', () => {
       live.value !== null &&
       live.value.phase !== 'ended' &&
       live.value.captureId === summary.value?.id,
+  )
+  /** Whether the open device can loop with its current options. */
+  const canLoop = computed(() => device.state?.canLoop ?? false)
+  // Like DSView, a device that can no longer loop (Buffer mode) goes back to single captures.
+  watch(
+    () => device.state?.canLoop,
+    (can) => {
+      if (can === false && mode.value === 'loop') mode.value = 'single'
+    },
+  )
+  /** Samples a loop capture of the open capture has dropped from its start so far. */
+  const dropped = computed(() =>
+    live.value && live.value.captureId === summary.value?.id ? live.value.dropped : 0,
   )
   /** A capture runs or is about to repeat: the capture button stops it. */
   const busy = computed(() => capturing.value || repeatPending.value)
@@ -123,7 +141,8 @@ export const useCaptureStore = defineStore('capture', () => {
       info: {
         ...current.info,
         sampleCount: next.samples,
-        triggerSample: next.triggerSample ?? current.info.triggerSample,
+        // A loop capture moves its trigger, and drops it once it falls out.
+        triggerSample: next.triggerSample,
       },
     }
     if (next.phase === 'ended') {
@@ -163,7 +182,8 @@ export const useCaptureStore = defineStore('capture', () => {
     savedPath.value = null
     lastRequest = request
     try {
-      const started = await (await getBackend()).captureStart({ ...request, looping: false })
+      const looping = mode.value === 'loop' && canLoop.value
+      const started = await (await getBackend()).captureStart({ ...request, looping })
       summary.value = started
       status.value = 'ready'
       // A status may have arrived before the summary did.
@@ -263,6 +283,8 @@ export const useCaptureStore = defineStore('capture', () => {
 
   return {
     summary,
+    canLoop,
+    dropped,
     status,
     error,
     live,
