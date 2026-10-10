@@ -17,6 +17,8 @@ These come from the project owner; no change may break them:
 5. **Code style**: the frontend follows **ESLint + Prettier**; Rust follows rustfmt + clippy. **lefthook** makes sure code is formatted when it is committed, and commitlint checks the commit messages.
 6. **Commits**: use **fine-grained Conventional Commits**; **write pull requests and issues in English**. See [Commit conventions](#commit-conventions) below.
 7. **Language**: everything in the repository is written in English (documentation, DESIGN.md, this file, code comments, commit messages), except the Chinese README `README.zh-CN.md` and the Chinese interface strings `src/i18n/locales/zh-CN.json`. Chinese that is data stays as it is (such as the values DSView writes into `.dsc` sessions, which `src/session/session.ts` reads). `README.md` and `README.zh-CN.md` say the same thing; change them together.
+8. **Tests at the end**: run the tests only when you wrap up a task, not after each step on the way; [Common commands](#common-commands) says which ones.
+9. **Don't watch CI**: after a push, don't wait for the CI runs or keep checking their results (`gh run watch`, `gh run list` …).
 
 ## Repository map
 
@@ -59,7 +61,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-Before you finish a change, run at least the ones that concern it: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `cargo clippy`, `cargo test`.
+When you wrap up a change, run at least the ones that concern it: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `cargo clippy`, `cargo test`.
 
 Building `crates/hsync-srd` (the Python decoder host, which embeds CPython through pyo3) needs a Python 3 with a shared library on the PATH; release builds and CI use the bundled CPython that `scripts/python-runtime.mjs` lays out instead. `src-tauri/resources/decoders/` holds the decoders copied from DSView; do not change their contents.
 
