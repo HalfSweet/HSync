@@ -1,108 +1,108 @@
-# HSync 用户指南
+# HSync user guide
 
-HSync 是逻辑分析仪上位机，支持 DreamSourceLab 的 DSLogic 系列与内置的演示设备，功能与 DSView 的逻辑分析仪模式对齐。本指南按使用顺序介绍界面与操作；设计细节见 [DESIGN.md](../DESIGN.md)。
+HSync is a logic analyzer app for DreamSourceLab DSLogic devices and a built-in demo device, covering the logic analyzer features of DSView. This guide walks through the interface in the order you use it. Installing HSync is described in the [README](../README.md#download).
 
-## 界面
+## Interface
 
-窗口自上而下分为五块：
+From top to bottom, the window has five parts:
 
-- **顶栏**：设备、采集设置（采样率 │ 时长 │ 通道数）、触发、采集按钮，右侧是搜索框、导出与设置。
-- **全程概览**：整段采集的缩略图，每个解码器一条细带标出有数据的地方，黑框是当前视口。
-- **时间轴**：标尺、按解码器分组的通道与解码行。没有绑定解码器的通道归入「未命名通道」组。
-- **数据流**（可选）：一个解码器的全部解码结果列表。
-- **状态栏**：数据流开关、采集状态、触发时间、样本数、选段测量与缩放按钮。
+- **Top bar**: the device, the acquisition settings (sample rate │ duration │ channels), the trigger and the capture button; on the right, the search box, export and settings.
+- **Overview strip**: a thumbnail of the whole capture. A thin band for each decoder marks where it has data, and the outlined box is the current view.
+- **Timeline**: the ruler, and the channel and decode rows grouped by decoder. Channels not assigned to a decoder go into the **Other channels** group.
+- **Data stream** (optional): a list of all the decoded results of one decoder.
+- **Status bar**: the data stream toggle, capture status, trigger time, sample count, segment measurement and zoom buttons.
 
-## 设备
+## Devices
 
-- 点顶栏最左边的设备按钮选择设备。没有硬件时打开演示设备，它回放随包的协议演示数据（I²C、UART、SPI、CAN-FD）。
-- 第一次打开 DSLogic 会自动下载固件和 FPGA 位流，需要几秒钟。
-- 打开演示设备时插入 DSLogic，状态栏会提示「发现 …」，点「切换」即可。USB 线松动导致设备短暂消失时，两秒内重新出现会自动重新打开并恢复设置。
-- USB 3.0 的型号插在 USB 2.0 端口上时，状态栏会提醒改插 USB 3.0 端口，否则 Stream 模式的速率受限。
-- 设备菜单底部的「设备选项…」：运行模式（Buffer / Stream）、通道模式、阈值电压、输入滤波、RLE 压缩、外部时钟与时钟边沿、Buffer 模式的停止方式。每种设备的设置会被记住，下次打开时恢复。
+- Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**, which plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD).
+- The first time you open a DSLogic, HSync loads the firmware and FPGA bitstream onto it automatically; this takes a few seconds.
+- If you plug in a DSLogic while the demo device is open, the status bar shows "… connected"; click **Switch** to use it. If a loose USB cable makes the device drop out briefly and it reappears within two seconds, HSync reopens it automatically and restores its settings.
+- If a USB 3.0 model is plugged into a USB 2.0 port, the status bar reminds you to move it to a USB 3.0 port; otherwise Stream mode's speed is limited.
+- **Device options…** at the bottom of the device menu covers the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**) and, for Buffer mode, what happens **When stopped**. HSync remembers the settings of each kind of device and restores them the next time you open it.
 
-## 采集设置
+## Acquisition settings
 
-点顶栏的「采样率 │ 时长 │ 通道数」：
+Click the sample rate │ duration │ channels button in the top bar:
 
-- **采样率**与**时长**：时长按 1-2-5 序列列出；改采样率时时长尽量保持不变。
-- Buffer 模式下，超过设备内存的时长后面标「RLE」：选中它们时自动启用 RLE 压缩（需在设备选项里允许 RLE）。
-- 所选采集需要的内存超过本机内存一半时，弹出层底部会提醒缩短时长或减少通道。
-- **通道**：点通道号启用或禁用。
+- **Sample rate** and **Duration**: durations are listed in a 1-2-5 sequence. When you change the sample rate, the duration stays as close as possible to what it was.
+- In Buffer mode, durations longer than the device memory can hold are marked **RLE**. Choosing one turns on RLE compression automatically (RLE must be allowed in **Device options…**).
+- If the selected capture needs more than half of this computer's memory, the pop-up warns you to shorten the duration or use fewer channels.
+- **Channels**: click a channel number to enable or disable it.
 
-## 采集
+## Capturing
 
-- 点「采集」开始，再点一次（此时显示「停止」）结束。状态栏显示等待触发、已采集的百分比等。
-- 采集按钮右边的下拉选择采集方式：
-  - **单次**：采一次。
-  - **重复**：每次完成后隔一段时间再采一次，间隔在选中「重复」后的下拉菜单里设置（0.1–10 秒，默认 1 秒）。从第二次起，屏幕保持上一次的完整结果，新的一次在后台采集，完成后整体替换。中途停止时默认丢弃这一次、保留上一次；设置里可以改为显示最新数据。
-  - **循环**：持续采集，只保留最新的一段（长度等于所选时长），停止时显示最后这一段。只在能循环的设备上可用（Stream 模式的 DSLogic、演示设备）。
-  - **即时**：忽略触发条件立即开始。
-- 同一设备连续采集时保持当前的缩放与位置，便于在重复采集中盯住同一处细节。
-- 主机来不及接收数据时，状态栏会提示数据丢失。
+- Click **Capture** to start, and click it again (it now reads **Stop**) to end. The status bar shows the progress, such as "Waiting for trigger" and the percentage captured.
+- Use the arrow to the right of **Capture** to choose how to capture:
+  - **Single**: capture once.
+  - **Repeat**: capture again a set time after each capture completes. With **Repeat** selected, set the interval under **Repeat every** in the same menu (0.1–10 s, default 1 s). From the second capture on, the screen keeps the previous complete result while the new one is captured in the background, and the new one replaces it in one go once complete. By default, stopping midway discards the new capture and keeps the previous one; to show the latest data instead, turn on **Show the latest data when a repeat stops** in the settings.
+  - **Loop**: capture continuously, keeping only the latest stretch (as long as the selected duration); when you stop, that last stretch is shown. Available only on devices that can loop (a DSLogic in Stream mode, the demo device).
+  - **Instant**: ignore the trigger conditions and start at once.
+- Successive captures with the same device keep the current zoom and position, so you can keep your eye on the same detail across repeated captures.
+- When the computer cannot take in the data fast enough, the status bar reports that data was lost ("USB bandwidth exceeded; some data was lost").
 
-## 触发
+## Triggers
 
-- **简单触发**：每个通道行右侧有一个触发位，点它选择不触发、上升沿、下降沿、任意沿、高电平或低电平。多个通道都设了条件时，同时满足才触发。顶栏的「触发」按钮汇总当前条件。
-- 点顶栏「触发」打开触发设置：
-  - **触发位置**：触发点之前的数据占整次采集的比例（Stream 模式固定为 1%）。
-  - **多级触发**（Buffer 模式）：最多 16 级，每级两组条件 A、B，可取反，按「与 / 或」组合，满足指定次数（可要求连续）后进入下一级。
-  - **串行触发**（Buffer 模式）：起始、停止、时钟条件，数据通道与最多 16 位的数据值（每位 0、1 或 X）。
+- **Simple trigger**: each channel row has a trigger slot at the right end of its label. Click it to choose **None**, **Rising edge**, **Falling edge**, **Any edge**, **High level** or **Low level**. When several channels have conditions, the trigger fires only when all of them hold at once. The **Trigger** button in the top bar sums up the current conditions.
+- Click **Trigger** in the top bar to open the trigger settings:
+  - **Position**: the share of the whole capture that comes before the trigger point (fixed at 1% in Stream mode).
+  - **Stages** (Buffer mode): up to 16 stages. Each stage has two patterns, **Pattern A** and **Pattern B**; you can **Invert** each one and **Combine** them as **A and B** or **A or B**. Once a stage has held the set number of times (**Count**; tick **In a row** to require consecutive matches), the trigger moves on to the next stage.
+  - **Serial** (Buffer mode): **Start**, **Stop** and **Clock** conditions, the **Data** channel, and a data **Value** of up to 16 bits (each bit 0, 1 or X).
 
-## 查看波形
+## Viewing waveforms
 
-- **缩放**：Ctrl（macOS 上是 ⌘）+ 滚轮以指针为中心缩放；状态栏的 −、+ 和「缩放到全程」按钮；键盘 `+`、`-`、`Home`。
-- **平移**：在波形区按住拖动；Shift + 滚轮或触控板横向滑动；键盘 `←`、`→`（加 Shift 一次移半屏）。快速拖动后松手，波形会继续滑动一段（设置里可关闭）。
-- **全程概览**：点击把视口中心移到该处，拖动移动视口，滚轮缩放。
-- **悬停读数**：指针停在波形上显示所在脉冲的宽度；时钟、PWM 等周期信号还显示周期、频率与占空比，UART 线显示约合几位。
-- **边沿测量**：单击波形上的一个边沿开始测量，指针靠近另一个边沿（同一通道或别的通道）时会吸附上去，气泡里实时显示两个边沿的间隔、采样点数与 1/Δt；再单击一次完成，结果留在图上。单击别的边沿开始新的测量，单击空白处或按 `Esc` 清除。测量时照样可以拖动、滚轮平移和缩放，终点在屏幕外也能先移过去再单击。
-- **选段**：在标尺上拖出 A、B 两点，或点一个解码块把它的起止设为选段。状态栏显示选段时长，点开可看选段内每个通道的上升沿、下降沿与边沿数。`Esc` 取消选段。
-- **通道**：右键通道名可以改名、换颜色。
-- 组标题前的箭头展开或收起一组。
+- **Zoom**: Ctrl (⌘ on macOS) + wheel zooms around the pointer. You can also use the −, + and **Zoom to fit** buttons in the status bar, or the `+`, `-` and `Home` keys.
+- **Pan**: drag in the waveform area; use Shift + wheel or swipe sideways on a trackpad; or press `←` and `→` (with Shift, half a screen at a time). If you let go after a quick drag, the waveform keeps gliding for a moment (you can turn this off in the settings).
+- **Overview strip**: click to centre the view there, drag to move the view, and use the wheel to zoom.
+- **Hover readout**: rest the pointer on a waveform to see the width of the pulse under it. Periodic signals such as clocks and PWM also show the period, frequency and duty cycle, and UART lines show roughly how many bits the pulse spans.
+- **Edge measurement**: click an edge on a waveform to start measuring. When the pointer comes near another edge, on the same channel or another, it snaps to it, and a bubble shows the time between the two edges, the number of samples and 1/Δt as you move. Click again to finish; the result stays on the waveform. Click another edge to start a new measurement, or click an empty spot or press `Esc` to clear it. While measuring you can still drag, pan with the wheel and zoom, so if the end point is off screen, move there first and then click.
+- **Segment**: drag along the ruler to set points A and B, or click a decode block to make its start and end the segment. The status bar shows the segment's duration; click it to see each channel's rising edges, falling edges and edge count within the segment. Press `Esc` to clear the segment.
+- **Channels**: click a channel's colour dot, double-click its name or right-click it to rename it or change its colour.
+- The arrow at the start of a group header expands or collapses the group.
 
-## 协议解码
+## Protocol decoding
 
-- 点时间轴左上角「添加协议解码」：搜索协议（原生的 I²C、UART、SPI、CAN-FD，以及 DSView 自带的 150 个 Python 解码器），需要下层解码器的协议会自动叠加，例如 EEPROM24xx 叠加在 I²C 上。为每个角色选通道，设置各层选项。
-- **解码范围**：选「全程」或「选段」。选段时只解码 A、B 之间的样本，相当于 DSView 的解码起止光标。
-- 点组标题上的设置按钮修改或移除解码器，「显示」一栏可选数值进制（十六进制、十进制、八进制、二进制、ASCII）与要显示的注解行。
-- **数据流**：点状态栏左端的「数据流」或组标题上的「在数据流里看」。一次列一个解码器，可在「全程」与「选段」之间切换，UART、SPI 可切换文本或十六进制显示；点一行跳到波形上对应的位置。列表可以复制或导出为 CSV、文本。
+- Click **Add decoder** at the top left of the timeline and search for a protocol: the native I²C, UART, SPI, CAN and CAN-FD decoders, or one of the 150 Python decoders that come with DSView. Protocols that need a lower-level decoder are stacked on it automatically; EEPROM24xx, for example, stacks on I²C. Choose a channel for each role and set each layer's options.
+- **Decode range**: choose **Whole capture** or **Segment**. With **Segment**, only the samples between A and B are decoded; this corresponds to DSView's decode start/end cursors.
+- Click the settings button on a group header (**Decoder settings**) to change or remove its decoder. Under **Display** you can choose the number base (**Numbers**: **Hex**, **Dec**, **Oct**, **Bin** or **ASCII**) and which **Annotation rows** to show.
+- **Data stream**: click **Data stream** at the left end of the status bar, or the data stream button on a group header (**Show all decoded results in the data stream**). It lists one decoder at a time; you can switch between **All** and **Segment**, and for UART and SPI between **Text** and **Hex**. Click a row to jump to that place on the waveform. You can **Copy** the list or **Export** it as CSV or text.
 
-## 搜索
+## Search
 
-按 `/` 聚焦顶栏的搜索框：
+Press `/` to focus the search box in the top bar:
 
-- **解码结果**：输入十六进制（`4F`、`0x4F`、`4F 32`）或文本（`HOST`），在全部解码器里查找。回车跳到下一处，Shift + 回车上一处，`Esc` 清空。
-- **电平模式**：输入 `D3=R D5=1` 这样的条件（0 低、1 高、R 上升沿、F 下降沿、C 任意沿、X 不关心），回车查找下一处同时满足的位置。
+- **Decoded data**: type hex (`4F`, `0x4F`, `4F 32`) or text (`HOST`) to search all decoders. Press Enter for the next match, Shift + Enter for the previous one, and `Esc` to clear the box.
+- **Level pattern**: type conditions such as `D3=R D5=1` (0 low, 1 high, R rising, F falling, C either edge, X any), then press Enter to find the next place where they all hold.
 
-## 文件
+## Files
 
-- **打开**：设备菜单里的「打开文件…」或 ⌘O / Ctrl+O，读取 DSView 的 `.dsl` 文件（各版本）。
-- **保存**：导出菜单（顶栏的下载图标）里的「保存采集…」或 ⌘S / Ctrl+S，保存为 DSView 能打开的 `.dsl`，包括通道名与解码器。
-- **导出**：导出菜单里的「导出…」：`.dsl`、CSV、VCD、sigrok `.sr` 或原始二进制，可以只导出选段、只导出部分通道。保存与导出过程中可以取消。
-- **会话**：「保存会话…」把设备设置、通道、触发、解码器与采集方式存成 `.hsync-session.json`；设备菜单里的「加载会话…」也能读取 DSView 的 `.dsc` 会话。
+- **Open**: **Open file…** in the device menu, or ⌘O / Ctrl+O, reads DSView `.dsl` files (all versions).
+- **Save**: **Save capture…** in the export menu (the download icon in the top bar), or ⌘S / Ctrl+S, saves a `.dsl` file that DSView can open, including channel names and decoders.
+- **Export**: **Export…** in the export menu writes `.dsl`, CSV, VCD, sigrok `.sr` or raw binary. You can export just the segment, or only some of the channels. You can cancel a save or an export while it runs.
+- **Sessions**: **Save session…** in the export menu stores the device settings, channels, triggers, decoders and capture mode as `.hsync-session.json`; **Load session…** in the device menu also reads DSView `.dsc` sessions.
 
-## 设置
+## Settings
 
-顶栏最右边的设置按钮：
+The **Settings** button at the right end of the top bar opens:
 
-- **主题**：跟随系统、亮色、暗色。**密度**：舒适、紧凑。**语言**：跟随系统、简体中文、English。
-- **图形加速**：自动时用 WebGPU 绘制波形，不可用时自动退回 Canvas2D；面板里显示当前用的是哪一种。
-- **行为**：触发位置自动居中显示、采集时自动滚动到最新数据、快速拖动后波形继续滚动、重复模式下停止后显示最新数据、启动时检查更新。前三项在缩放到全程时不起作用。
-- **诊断**：日志级别、是否写入日志文件，「在文件夹中显示」打开日志所在的文件夹。
-- **关于 HSync…**：版本与许可，以及更新：「检查更新」；有新版本时点「下载并重启」，下载完后应用自动重启到新版本。开启「启动时检查更新」时，发现新版本后设置按钮上会出现一个小圆点，面板底部也会写出新版本号。
+- **Theme**: **System**, **Light** or **Dark**. **Density**: **Comfortable** or **Compact**. **Language**: **System**, **简体中文** or **English**.
+- **Graphics acceleration**: with **Auto (WebGPU)**, waveforms are drawn with WebGPU, falling back to Canvas2D automatically where WebGPU is unavailable; the panel shows which one is in use.
+- **Behaviour**: **Centre the view on the trigger**, **Follow the latest data while capturing**, **Keep scrolling after a quick drag**, **Show the latest data when a repeat stops** and **Check for updates at startup**. The first three have no effect while the view is zoomed to fit.
+- **Diagnostics**: the **Log level**, whether to **Write a log file**, and **Show in folder**, which opens the folder that holds the log.
+- **About HSync…**: the version and license, and updates. Click **Check for updates**; when a new version is available, click **Download and restart**, and once the download finishes the app restarts into the new version. With **Check for updates at startup** on, a small dot appears on the settings button when a new version is found, and the bottom of the panel shows the new version number.
 
-打开菜单与面板、切换选项、列表增删时都有简短的动画；在系统的辅助功能设置里开启减少动态效果后，界面不再播放动画。
+Opening menus and panels, switching options, and adding or removing list items all come with short animations. If you turn on reduced motion in your system's accessibility settings, the interface stops playing them.
 
-## 快捷键
+## Keyboard shortcuts
 
-| 按键                    | 作用                             |
-| ----------------------- | -------------------------------- |
-| `/`                     | 聚焦搜索框                       |
-| 回车 / Shift + 回车     | 搜索的下一处 / 上一处            |
-| `+` / `-`               | 放大 / 缩小                      |
-| `←` / `→`（Shift 加速） | 平移                             |
-| `Home`                  | 缩放到全程                       |
-| `Esc`                   | 关闭菜单或对话框、取消测量或选段 |
-| ⌘O / Ctrl+O             | 打开文件                         |
-| ⌘S / Ctrl+S             | 保存采集                         |
-| Ctrl / ⌘ + 滚轮         | 以指针为中心缩放                 |
-| Shift + 滚轮            | 平移                             |
+| Key                           | Action                                                   |
+| ----------------------------- | -------------------------------------------------------- |
+| `/`                           | Focus the search box                                     |
+| Enter / Shift + Enter         | Next / previous search match                             |
+| `+` / `-`                     | Zoom in / out                                            |
+| `←` / `→` (faster with Shift) | Pan                                                      |
+| `Home`                        | Zoom to fit                                              |
+| `Esc`                         | Close a menu or dialog; clear the measurement or segment |
+| ⌘O / Ctrl+O                   | Open a file                                              |
+| ⌘S / Ctrl+S                   | Save the capture                                         |
+| Ctrl / ⌘ + wheel              | Zoom around the pointer                                  |
+| Shift + wheel                 | Pan                                                      |
