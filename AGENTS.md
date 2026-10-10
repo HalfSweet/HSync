@@ -22,6 +22,7 @@ HSync 用现代技术栈重写 [DSView](https://github.com/DreamSourceLab/DSView
 | 路径             | 内容                                                                    |
 | ---------------- | ----------------------------------------------------------------------- |
 | `DESIGN.md`      | 总体设计：范围、架构、硬件协议、数据模型、渲染、解码、文件格式、UI 规格 |
+| `docs/`          | 用户文档（`user-guide.md`），界面或操作变化时同步更新                   |
 | `src/`           | Vue 前端（组件、Pinia store、渲染器、IPC 封装、i18n）                   |
 | `src-tauri/`     | Tauri 应用 crate（命令、事件、资源：固件与 Demo 数据）                  |
 | `crates/hsync-*` | Rust 库：core、capture、driver、dslogic、demo、decode、fileio、session  |
