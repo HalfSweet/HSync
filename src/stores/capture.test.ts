@@ -67,6 +67,7 @@ function deviceState(canLoop: boolean): DeviceState {
       model: 'Demo',
       firmware: null,
       usbSpeed: null,
+      slowPort: false,
     },
     options: [],
     channelCount: 16,

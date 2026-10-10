@@ -11,4 +11,8 @@ firmware: string | null,
 /**
  * USB link speed: `high` or `super`.
  */
-usbSpeed: string | null, };
+usbSpeed: string | null, 
+/**
+ * A USB 3.0 device on a USB 2.0 port, where it streams far slower; DSView warns about it.
+ */
+slowPort: boolean, };

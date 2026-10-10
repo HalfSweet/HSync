@@ -157,6 +157,7 @@ impl Device for DemoDevice {
             model: "Demo".to_owned(),
             firmware: None,
             usb_speed: None,
+            slow_port: false,
         }
     }
 

@@ -90,6 +90,7 @@ export class MockDemoDevice {
         model: 'Demo',
         firmware: null,
         usbSpeed: null,
+        slowPort: false,
       },
       options: this.options(),
       channelCount: 16,

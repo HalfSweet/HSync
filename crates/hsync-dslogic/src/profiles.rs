@@ -247,6 +247,11 @@ impl Profile {
         self.caps & feature != 0
     }
 
+    /// A USB 3.0 model connected at USB 2.0 speed (`MainWindow::check_usb_device_speed`).
+    pub fn on_slow_port(&self) -> bool {
+        self.has(caps::USB30) && self.speed == UsbSpeed::High
+    }
+
     /// Channel modes available in buffer (`stream == false`) or stream mode, in table order.
     pub fn channel_modes(&self, stream: bool) -> impl Iterator<Item = &'static ChannelMode> + '_ {
         CHANNEL_MODES
@@ -588,6 +593,9 @@ mod tests {
         let fast = find_profile(VENDOR_ID, 0x002A, UsbSpeed::Super).expect("U3Pro16 on USB 3");
         assert_eq!(high.default_channel_mode, 4);
         assert_eq!(fast.default_channel_mode, 16);
+        assert!(high.on_slow_port() && !fast.on_slow_port());
+        let plus = find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("a USB 2.0 model");
+        assert!(!plus.on_slow_port());
         assert!(find_profile(VENDOR_ID, 0x0002, UsbSpeed::High).is_none());
     }
 

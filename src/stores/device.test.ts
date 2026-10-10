@@ -23,7 +23,7 @@ const dslogic: DeviceSummary = {
 
 function stateOf(device: DeviceSummary): DeviceState {
   return {
-    info: { ...device, firmware: null, usbSpeed: null },
+    info: { ...device, firmware: null, usbSpeed: null, slowPort: false },
     options: [],
     channelCount: 16,
     enabledChannels: [],

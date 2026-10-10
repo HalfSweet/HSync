@@ -224,6 +224,7 @@ impl DslogicDevice {
                 }
                 .to_owned(),
             ),
+            slow_port: profile.on_slow_port(),
         };
         log::info!("opened {} with firmware {major}.{minor}", profile.model);
         Ok(Self {
