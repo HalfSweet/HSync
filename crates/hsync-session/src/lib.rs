@@ -9,6 +9,7 @@
 mod bins;
 mod decoding;
 mod error;
+mod files;
 mod instrument;
 
 use std::collections::BTreeMap;
@@ -27,6 +28,7 @@ pub use decoding::{
     StreamPage,
 };
 pub use error::SessionError;
+pub use files::{ExportKind, ExportRequest, ExportSource};
 pub use hsync_capture::{PatternCondition, PatternLevel};
 pub use instrument::{
     CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,
@@ -287,52 +289,47 @@ impl Workspace {
         Ok(summarize(open))
     }
 
-    /// Writes capture `id` to `path` as a DSView `.dsl` file with its channel names and
-    /// decoders; the capture then counts as that file.
-    pub fn save(&mut self, id: u64, path: &Path) -> Result<CaptureSummary, SessionError> {
+    /// What saving or exporting capture `id` needs, taken so the writing can go on without
+    /// holding the workspace.
+    pub fn export_source(&self, id: u64) -> Result<ExportSource, SessionError> {
+        let open = match &self.current {
+            Some(open) if open.id == id => open,
+            Some(_) => return Err(SessionError::StaleCapture),
+            None => return Err(SessionError::NoCapture),
+        };
+        Ok(ExportSource {
+            capture: Arc::clone(&open.capture),
+            channel_names: open.channel_names.clone(),
+            decoders: open.decoders.clone(),
+            driver: open.driver.clone(),
+            session: open.session.clone(),
+        })
+    }
+
+    /// Notes that capture `id` was saved to `path` with `session`: it then counts as that file.
+    pub fn finish_save(
+        &mut self,
+        id: u64,
+        path: &Path,
+        session: serde_json::Value,
+    ) -> Result<CaptureSummary, SessionError> {
         let open = match &mut self.current {
             Some(open) if open.id == id => open,
             Some(_) => return Err(SessionError::StaleCapture),
             None => return Err(SessionError::NoCapture),
         };
-        {
-            let capture = open.capture.read();
-            let info = capture.info();
-            let names: BTreeMap<ChannelIndex, String> = info
-                .channels
-                .iter()
-                .map(|&index| {
-                    let name = open
-                        .channel_names
-                        .get(&index)
-                        .cloned()
-                        .unwrap_or_else(|| index.to_string());
-                    (index, name)
-                })
-                .collect();
-            let decoders = open
-                .decoders
-                .clone()
-                .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
-            let driver = if open.driver.is_empty() {
-                "HSync"
-            } else {
-                open.driver.as_str()
-            };
-            let session = session_document(open.session.as_ref(), driver, &info, &names, &decoders);
-            let request = hsync_fileio::DslWriteRequest {
-                driver,
-                channel_names: &names,
-                session: &session,
-                decoders: &decoders,
-            };
-            hsync_fileio::write_dsl_file(path, &capture, &request, &mut |_| true)?;
-            open.session = Some(session);
-        }
+        open.session = Some(session);
         open.source = CaptureSource::File {
             path: path.to_string_lossy().into_owned(),
         };
         Ok(summarize(open))
+    }
+
+    /// Writes capture `id` to `path` as a DSView `.dsl` file with its channel names and
+    /// decoders; the capture then counts as that file.
+    pub fn save(&mut self, id: u64, path: &Path) -> Result<CaptureSummary, SessionError> {
+        let session = self.export_source(id)?.save(path, &mut |_| true)?;
+        self.finish_save(id, path, session)
     }
 
     /// The decoders of capture `id`.
@@ -357,62 +354,6 @@ impl Workspace {
             None => Err(SessionError::NoCapture),
         }
     }
-}
-
-/// DSView's channel type of logic channels (`SR_CHANNEL_LOGIC`).
-const LOGIC_CHANNEL: u32 = 10000;
-
-/// DSView's `session` document for a capture: the one it was read with, brought up to date, or
-/// a new one with the fields DSView needs to open the file.
-fn session_document(
-    previous: Option<&serde_json::Value>,
-    driver: &str,
-    info: &hsync_capture::CaptureInfo,
-    names: &BTreeMap<ChannelIndex, String>,
-    decoders: &serde_json::Value,
-) -> serde_json::Value {
-    let mut session = previous.cloned().unwrap_or_else(|| {
-        serde_json::json!({
-            "Version": 3,
-            "Title": "HSync",
-            "DeviceMode": 0,
-            "Max Height": "1X",
-        })
-    });
-    let Some(fields) = session.as_object_mut() else {
-        return session;
-    };
-    // DSView disables every channel of the file that `channel` does not list.
-    let listed = fields
-        .get("channel")
-        .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
-    let channels = names
-        .iter()
-        .enumerate()
-        .map(|(position, (&index, name))| {
-            let previous = listed.iter().find(|entry| {
-                entry.get("index").and_then(serde_json::Value::as_u64) == Some(u64::from(index))
-            });
-            let mut entry = previous.cloned().unwrap_or_else(|| {
-                serde_json::json!({ "colour": "default", "strigger": 0, "view_index": position })
-            });
-            if let Some(entry) = entry.as_object_mut() {
-                entry.insert("index".into(), index.into());
-                entry.insert("name".into(), name.as_str().into());
-                entry.insert("enabled".into(), true.into());
-                entry.insert("type".into(), LOGIC_CHANNEL.into());
-            }
-            entry
-        })
-        .collect();
-    fields.insert("Device".into(), driver.into());
-    fields.insert("Sample rate".into(), info.samplerate.to_string().into());
-    fields.insert("Sample count".into(), info.sample_count.to_string().into());
-    fields.insert("channel".into(), serde_json::Value::Array(channels));
-    fields.insert("decoder".into(), decoders.clone());
-    session
 }
 
 fn summarize(open: &OpenCapture) -> CaptureSummary {

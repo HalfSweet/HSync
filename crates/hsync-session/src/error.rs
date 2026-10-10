@@ -31,6 +31,9 @@ pub enum SessionError {
     /// The device or its driver failed.
     #[error("device error {} {:?}", .0.code, .0.params)]
     Device(UiError),
+    /// An export would hold no channel.
+    #[error("nothing to export")]
+    NothingToExport,
 }
 
 impl From<&SessionError> for UiError {
@@ -49,6 +52,7 @@ impl From<&SessionError> for UiError {
             }
             SessionError::Busy => UiError::new("error.session.busy"),
             SessionError::Device(error) => error.clone(),
+            SessionError::NothingToExport => UiError::new("error.session.nothingToExport"),
         }
     }
 }
