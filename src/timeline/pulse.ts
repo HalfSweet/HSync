@@ -1,7 +1,7 @@
 /**
  * The hover read-out of a pulse (DESIGN.md §6.4): its level and width within the viewport,
  * plus the period, frequency and duty cycle it makes with the next pulse, or the bit count of
- * UART lines.
+ * UART lines, and where to mark the pulse on its track.
  */
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
 
@@ -33,8 +33,6 @@ export interface PulseReading {
   /** Visible part of the pulse in track pixels. */
   left: number
   width: number
-  /** Centre of the read-out, kept between 9 % and 91 % of the track. */
-  center: number
   /** Seconds of the visible part. */
   seconds: number
   /** Both edges are visible, so `seconds` is the whole pulse. */
@@ -60,7 +58,6 @@ export function readPulse(
   const to = Math.min(pulse.end, viewEnd)
   const left = sampleToX(view, from)
   const width = Math.max(0, sampleToX(view, to) - left)
-  const center = Math.min(view.width * 0.91, Math.max(view.width * 0.09, left + width / 2))
   const complete =
     pulse.startIsEdge && pulse.endIsEdge && pulse.start >= viewStart && pulse.end <= viewEnd
   const seconds = samplerate > 0 ? (to - from) / samplerate : 0
@@ -78,5 +75,5 @@ export function readPulse(
   const bits =
     complete && mode === 'bits' && bitSeconds ? Math.max(1, Math.round(seconds / bitSeconds)) : null
 
-  return { high: pulse.high, left, width, center, seconds, complete, period, duty, bits }
+  return { high: pulse.high, left, width, seconds, complete, period, duty, bits }
 }

@@ -104,8 +104,6 @@ export interface MeasureGeometry {
   span: { left: number; width: number; y: number } | null
   /** The drop from the first end to the line when the ends are on different rows. */
   drop: { x: number; top: number; height: number } | null
-  /** Centre and bottom of the read-out above the second end's row, while the ends are in view. */
-  label: { center: number; bottom: number } | null
 }
 
 /** Where the parts of a measurement from `from` to `to` go; `rowOf` places a row. */
@@ -124,7 +122,7 @@ export function measureGeometry(
   const a = point(from)
   const b = point(to)
   const line = b ?? a
-  if (!line) return { from: a, to: b, span: null, drop: null, label: null }
+  if (!line) return { from: a, to: b, span: null, drop: null }
 
   const y = line.top + line.height / 2
   const ax = sampleToX(view, from.sample)
@@ -137,7 +135,5 @@ export function measureGeometry(
     const from = a.top + a.height / 2
     drop = { x: ax, top: Math.min(from, y), height: Math.abs(from - y) }
   }
-  const center = Math.min(view.width * 0.91, Math.max(view.width * 0.09, (left + right) / 2))
-  const label = right >= left ? { center, bottom: line.top + 2 } : null
-  return { from: a, to: b, span, drop, label }
+  return { from: a, to: b, span, drop }
 }

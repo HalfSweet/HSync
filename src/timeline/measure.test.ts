@@ -82,29 +82,25 @@ describe('measurement geometry', () => {
   const rows: Record<string, RowBox> = { d0: { top: 40, height: 30 }, d3: { top: 100, height: 18 } }
   const rowOf = (key: string) => rows[key] ?? null
 
-  it('runs a line across the row between edges on it, the read-out above', () => {
+  it('runs a line across the row between edges on it', () => {
     const geometry = measureGeometry(edge(100), edge(300), view, rowOf)
     expect(geometry.from).toMatchObject({ x: 10, top: 40, visible: true, edge: true })
     expect(geometry.span).toEqual({ left: 10, width: 20, y: 55 })
     expect(geometry.drop).toBeNull()
-    expect(geometry.label).toEqual({ center: 20, bottom: 42 })
   })
 
   it('drops from the first edge to the row of the second', () => {
     const geometry = measureGeometry(edge(300), edge(100, 'd3'), view, rowOf)
     expect(geometry.span).toEqual({ left: 10, width: 20, y: 109 })
     expect(geometry.drop).toEqual({ x: 30, top: 55, height: 54 })
-    expect(geometry.label?.bottom).toBe(102)
   })
 
-  it('clips to the view and hides the read-out of a measurement out of it', () => {
+  it('clips to the view and leaves out the line of a measurement out of it', () => {
     const across = measureGeometry(edge(-500), edge(5000), view, rowOf)
     expect(across.span).toEqual({ left: 0, width: 100, y: 55 })
-    expect(across.label?.center).toBe(50)
     expect(across.from?.visible).toBe(false)
     const before = measureGeometry(edge(-500), edge(-100), view, rowOf)
     expect(before.span).toBeNull()
-    expect(before.label).toBeNull()
   })
 
   it('leaves out the end on a hidden row', () => {
