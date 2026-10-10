@@ -90,6 +90,7 @@ pub fn run() {
             commands::capture::capture_summary,
             commands::capture::capture_open_demo,
             commands::capture::capture_open_file,
+            commands::capture::capture_save,
             commands::capture::capture_start,
             commands::capture::capture_stop,
             commands::capture::capture_bins,

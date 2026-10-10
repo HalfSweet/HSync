@@ -62,6 +62,23 @@ async fn open(
     .await
 }
 
+/// Saves the open capture as a DSView `.dsl` file; it then counts as that file.
+#[tauri::command]
+pub async fn capture_save(
+    app: AppHandle,
+    capture_id: u64,
+    path: PathBuf,
+) -> CommandResult<CaptureSummary> {
+    blocking(app, move |state| {
+        if state.instrument.lock().is_capturing() {
+            return Err(hsync_session::SessionError::Busy);
+        }
+        log::info!("saving capture {capture_id} to {}", path.display());
+        state.workspace.lock().save(capture_id, &path)
+    })
+    .await
+}
+
 /// Starts a capture on the open device. The new capture replaces the open one at once and
 /// fills while [`LIVE_EVENT`]s report its progress.
 #[tauri::command]
