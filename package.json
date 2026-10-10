@@ -2,7 +2,7 @@
   "name": "hsync",
   "version": "0.1.1",
   "private": true,
-  "description": "A modern logic analyzer app for DreamSourceLab DSLogic devices, rewritten from DSView with Tauri, Vue and Rust.",
+  "description": "A modern logic analyzer app for DreamSourceLab DSLogic and ALIENTEK ATK-Logic devices, rewritten from DSView with Tauri, Vue and Rust.",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "packageManager": "pnpm@12.10.1",

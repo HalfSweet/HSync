@@ -104,8 +104,11 @@ export const useSessionStore = defineStore('session', () => {
     const state = device.state
     if (state && (!session.device || session.device.driver === state.info.driver)) {
       const options = [...session.options].sort((a, b) => optionRank(a[0]) - optionRank(b[0]))
+      // Some devices allow a rate only with fewer channels on (ATK-Logic): what they refuse
+      // now is tried again once the channels are set.
+      const refused: typeof options = []
       for (const [key, value] of options) {
-        if (device.option(key)) await device.setOption(key, value)
+        if (device.option(key) && !(await device.setOption(key, value))) refused.push([key, value])
       }
       if (session.enabledChannels) {
         const wanted = new Set(session.enabledChannels)
@@ -114,6 +117,7 @@ export const useSessionStore = defineStore('session', () => {
           if (enabled !== wanted.has(index)) await device.setChannel(index, wanted.has(index))
         }
       }
+      for (const [key, value] of refused) await device.setOption(key, value)
     }
     channels.triggers = { ...session.triggers }
     channels.colours = { ...session.colours }

@@ -61,7 +61,7 @@ async function menu() {
     channelCount: 16,
     enabledChannels: [0, 1],
     capturing: false,
-    trigger: { maxPosition: 100, advanced: true },
+    trigger: { maxPosition: 100, advanced: true, advancedOtherMode: false },
     canLoop: false,
     hardwareDepth: null,
   }

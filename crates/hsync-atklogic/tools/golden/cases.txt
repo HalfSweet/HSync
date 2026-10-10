@@ -1,0 +1,31 @@
+# Commands without arguments: device info, stop, exit
+command code=0x10
+command code=0x15
+command code=0x18
+# Switching the waveform outputs off
+command code=0x17 args=20
+command code=0x17 args=10
+# A capture settings command and a trigger command as sent
+command code=0x11 args=8010041000000000000000000000
+command code=0x12 args=f9ffffffffffffff00
+# Capture settings: Stream and Buffer, RLE, thresholds, rates and depths
+settings buffer=0 rle=0 vth=1.6 hz=5 depth=10000384 pos=1
+settings buffer=1 rle=0 vth=3.3 hz=11 depth=62500864 pos=50
+settings buffer=1 rle=1 vth=2.5 hz=13 depth=625000448 pos=90
+settings buffer=1 rle=0 vth=0.9 hz=8 depth=1024 pos=10
+settings buffer=0 rle=0 vth=-1.2 hz=0 depth=1099511627775 pos=1
+settings buffer=1 rle=0 vth=-0.25 hz=12 depth=3500000256 pos=33
+settings buffer=0 rle=0 vth=5 hz=9 depth=68719476735 pos=1
+settings buffer=1 rle=0 vth=-5 hz=3 depth=4096 pos=1
+settings buffer=1 rle=0 vth=0.05 hz=4 depth=123456 pos=7
+# Simple triggers: enabled channels and conditions
+trigger en=0xffff trig=XXXXXXXXXXXXXXXX instant=0
+trigger en=0xffff trig=RXXXXXXXXXXXXXXX instant=0
+trigger en=0x0001 trig=FXXXXXXXXXXXXXXX instant=0
+trigger en=0x8007 trig=R0X1XXXXXXXXXXXC instant=0
+trigger en=0xa5a5 trig=1F0RCX01FRC1X0RF instant=0
+trigger en=0xffff trig=RRRRRRRRRRRRRRRR instant=1
+trigger en=0x00ff trig=XXXXXXXXCCCCCCCC instant=0
+# Lane order of 2048-byte blocks
+lanes seed=1
+lanes seed=20260

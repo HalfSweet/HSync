@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use nusb::transfer::{
-    Buffer, Bulk, ControlIn, ControlOut, ControlType, In, Out, Recipient, TransferError,
+    Buffer, Bulk, Completion, ControlIn, ControlOut, ControlType, In, Out, Recipient, TransferError,
 };
 use nusb::{Endpoint, Interface, MaybeFuture};
 
@@ -63,6 +63,16 @@ pub trait UsbTransport: Send + Sync {
     /// Writes `data` to a bulk OUT endpoint.
     fn bulk_out(&self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<(), UsbError>;
 
+    /// Reads once from a bulk IN endpoint, as `libusb_bulk_transfer` does: up to `length` bytes,
+    /// or whatever arrived before `timeout`, possibly nothing. `length` must be a multiple of the
+    /// endpoint's maximum packet size.
+    fn bulk_read(
+        &self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbError>;
+
     /// A queue of bulk IN transfers on `endpoint`.
     fn bulk_in(&self, endpoint: u8) -> Result<Box<dyn BulkIn>, UsbError>;
 }
@@ -74,13 +84,14 @@ pub trait BulkIn: Send {
     fn submit(&mut self, length: usize);
 
     /// The next completed transfer, waiting at most `timeout`; `None` if none completed. A
-    /// transfer still completes later after a timeout.
+    /// transfer still completes later after a timeout. A cancelled transfer completes with the
+    /// bytes it received before it was cancelled, possibly none.
     fn next(&mut self, timeout: Duration) -> Option<Result<Vec<u8>, UsbError>>;
 
     /// Transfers submitted and not yet returned by [`Self::next`].
     fn pending(&self) -> usize;
 
-    /// Cancels every pending transfer; they complete with an error.
+    /// Cancels every pending transfer; each still completes, with what it had received.
     fn cancel_all(&mut self);
 }
 
@@ -89,6 +100,28 @@ pub trait BulkIn: Send {
 pub struct NusbTransport {
     interface: Interface,
     bulk_out: Mutex<Option<(u8, Endpoint<Bulk, Out>)>>,
+    /// The endpoint of the last [`UsbTransport::bulk_read`], kept for the next one; a queue
+    /// from [`UsbTransport::bulk_in`] on the same endpoint takes it over.
+    bulk_read: Mutex<Option<(u8, Endpoint<Bulk, In>)>>,
+}
+
+fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+/// The bytes an IN transfer received; a cancelled one keeps what arrived before it was
+/// cancelled.
+fn received(completion: Completion) -> Result<Vec<u8>, UsbError> {
+    match completion.status {
+        Ok(()) | Err(TransferError::Cancelled) => {
+            let mut data = completion.buffer.into_vec();
+            data.truncate(completion.actual_len);
+            Ok(data)
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 impl NusbTransport {
@@ -135,6 +168,7 @@ impl NusbTransport {
         Ok(Self {
             interface,
             bulk_out: Mutex::new(None),
+            bulk_read: Mutex::new(None),
         })
     }
 }
@@ -179,10 +213,7 @@ impl UsbTransport for NusbTransport {
     }
 
     fn bulk_out(&self, endpoint: u8, data: &[u8], timeout: Duration) -> Result<(), UsbError> {
-        let mut cached = self
-            .bulk_out
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cached = lock(&self.bulk_out);
         if cached
             .as_ref()
             .is_none_or(|(address, _)| *address != endpoint)
@@ -203,8 +234,32 @@ impl UsbTransport for NusbTransport {
         Ok(())
     }
 
+    fn bulk_read(
+        &self,
+        endpoint: u8,
+        length: usize,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, UsbError> {
+        let mut cached = lock(&self.bulk_read);
+        if cached
+            .as_ref()
+            .is_none_or(|(address, _)| *address != endpoint)
+        {
+            *cached = Some((endpoint, self.interface.endpoint::<Bulk, In>(endpoint)?));
+        }
+        let Some((_, input)) = cached.as_mut() else {
+            unreachable!("the endpoint was just opened");
+        };
+        received(input.transfer_blocking(Buffer::new(length), timeout))
+    }
+
     fn bulk_in(&self, endpoint: u8) -> Result<Box<dyn BulkIn>, UsbError> {
-        let endpoint = self.interface.endpoint::<Bulk, In>(endpoint)?;
+        // An endpoint is claimed once; the queue takes it over from single reads.
+        let cached = lock(&self.bulk_read).take_if(|(address, _)| *address == endpoint);
+        let endpoint = match cached {
+            Some((_, endpoint)) => endpoint,
+            None => self.interface.endpoint::<Bulk, In>(endpoint)?,
+        };
         Ok(Box::new(NusbBulkIn { endpoint }))
     }
 }
@@ -223,14 +278,7 @@ impl BulkIn for NusbBulkIn {
             return None;
         }
         let completion = self.endpoint.wait_next_complete(timeout)?;
-        Some(match completion.status {
-            Ok(()) => {
-                let mut data = completion.buffer.into_vec();
-                data.truncate(completion.actual_len);
-                Ok(data)
-            }
-            Err(error) => Err(error.into()),
-        })
+        Some(received(completion))
     }
 
     fn pending(&self) -> usize {

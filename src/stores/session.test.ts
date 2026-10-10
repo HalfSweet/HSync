@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import type { DeviceState } from '@/ipc/bindings/DeviceState'
+import type { OptionValue } from '@/ipc/bindings/OptionValue'
+import { uiError } from '@/ipc/mock/mockDevice'
 import { SESSION_FORMAT, SESSION_VERSION, type Session } from '@/session/session'
 
 import { useCaptureStore } from './capture'
@@ -11,12 +13,49 @@ import { useSessionStore } from './session'
 
 const files = new Map<string, string>()
 
+/** A device that, as an ATK-Logic in Stream mode, runs 100 MHz with three channels at most. */
+const SLOW = 20_000_000
+const FAST = 100_000_000
+let atk: DeviceState
+
+function atkState(enabledChannels: number[], rate: number): DeviceState {
+  const fast = enabledChannels.length <= 3
+  return {
+    ...stateOf('ATK-Logic'),
+    options: [
+      {
+        key: 'samplerate',
+        kind: { type: 'integers', values: fast ? [SLOW, FAST] : [SLOW] },
+        value: { type: 'integer', value: fast ? rate : SLOW },
+        enabled: true,
+      },
+    ],
+    enabledChannels,
+  }
+}
+
+function setRate(value: OptionValue): Promise<DeviceState> {
+  if (value.value === FAST && atk.enabledChannels.length > 3)
+    return Promise.reject(uiError('error.device.invalidRequest'))
+  atk = atkState(atk.enabledChannels, Number(value.value))
+  return Promise.resolve(atk)
+}
+
+function setChannel(channel: number, enabled: boolean): Promise<DeviceState> {
+  const others = atk.enabledChannels.filter((index) => index !== channel)
+  const rate = atk.options[0]?.value.value
+  atk = atkState(enabled ? [...others, channel].sort((a, b) => a - b) : others, Number(rate))
+  return Promise.resolve(atk)
+}
+
 vi.mock('@/ipc/backend', () => ({
   getBackend: () =>
     Promise.resolve({
       decodeList: () => Promise.resolve([]),
       decodeView: () => Promise.resolve([]),
       readText: (path: string) => Promise.resolve(files.get(path) ?? ''),
+      deviceSetOption: (_key: string, value: OptionValue) => setRate(value),
+      deviceSetChannel: setChannel,
     }),
 }))
 
@@ -38,7 +77,7 @@ function stateOf(driver: string): DeviceState {
     channelCount: 16,
     enabledChannels: [0, 1],
     capturing: false,
-    trigger: { maxPosition: 90, advanced: false },
+    trigger: { maxPosition: 90, advanced: false, advancedOtherMode: false },
     canLoop: false,
     hardwareDepth: null,
   }
@@ -137,6 +176,27 @@ describe('session store', () => {
     await vi.advanceTimersByTimeAsync(600)
     expect(remembered('DSLogic')?.channelNames).toEqual({})
     expect(remembered('DSLogic')?.decoders).toEqual([])
+  })
+
+  it('sets the rates a device allows only once its channels are set', async () => {
+    localStorage.setItem(
+      'hsync.session.ATK-Logic',
+      JSON.stringify(
+        session({
+          options: [['samplerate', { type: 'integer', value: FAST }]],
+          enabledChannels: [0, 1, 2],
+        }),
+      ),
+    )
+    useSessionStore()
+    const device = useDeviceStore()
+
+    atk = atkState([...Array(16).keys()], SLOW)
+    device.state = atk
+    await settle()
+    expect(device.enabledChannels).toEqual([0, 1, 2])
+    expect(device.samplerate).toBe(FAST)
+    expect(device.error).toBeNull()
   })
 
   it('gives a session loaded before any capture to the first capture', async () => {
