@@ -16,6 +16,8 @@ export interface ChannelRef {
   wire: number
   /** Role in the decoder, e.g. `sda`. */
   role?: string
+  /** The role as shown, e.g. `SDA`, when the label is the channel's own name instead. */
+  roleLabel?: string
 }
 
 export interface ChannelGroup {
@@ -123,12 +125,17 @@ export function groupChannels(
       unnamed: false,
       channels: roles.map(([role, index]) => {
         used.add(index)
+        // A channel named other than its number shows its name, with the role beside it.
+        const roleLabel = ROLE_LABELS[role] ?? role.toUpperCase()
+        const name = present.get(index)?.name ?? String(index)
+        const named = name !== String(index) && name.toUpperCase() !== roleLabel.toUpperCase()
         return {
           index,
-          label: ROLE_LABELS[role] ?? role.toUpperCase(),
+          label: named ? name : roleLabel,
           numeric: false,
           wire: wire(index),
           role,
+          ...(named ? { roleLabel } : {}),
         }
       }),
       options: isRecord(entry.options) ? entry.options : {},

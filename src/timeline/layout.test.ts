@@ -9,14 +9,17 @@ const channels = fixture.channels.map(({ index, name }) => ({ index, name }))
 const groups = groupChannels(channels, fixture.decoders)
 
 describe('groupChannels', () => {
-  it('groups the demo capture like the design', () => {
+  it('groups the demo capture by decoder', () => {
+    // Channels named in the file show their names; the role goes beside them.
     expect(groups.map((group) => [group.title, group.channels.map((c) => c.label)])).toEqual([
       ['I²C', ['SDA', 'SCL']],
-      ['UART', ['RX']],
+      ['UART', ['UART']],
       ['SPI', ['MISO', 'MOSI', 'CLK', 'CS#']],
-      ['CAN-FD', ['CAN']],
+      ['CAN-FD', ['CAN-FD']],
       ['', ['D2', 'D3', 'D4', 'D6', 'D7', 'D8', 'D10', 'D11']],
     ])
+    expect(groups[1]?.channels[0]?.roleLabel).toBe('RX')
+    expect(groups[0]?.channels[0]?.roleLabel).toBeUndefined()
     expect(groups.map((group) => group.kind)).toEqual(['i2c', 'uart', 'spi', 'can', 'other'])
     expect(groups.at(-1)?.unnamed).toBe(true)
   })
@@ -28,6 +31,24 @@ describe('groupChannels', () => {
       [14, 6],
       [12, 4],
       [13, 5],
+    ])
+  })
+
+  it('shows a channel renamed within a decoder group by its name', () => {
+    const renamed = groupChannels(
+      channels.map((channel) => (channel.index === 1 ? { ...channel, name: 'Clock' } : channel)),
+      fixture.decoders,
+    )
+    const scl = renamed[0]?.channels[1]
+    expect([scl?.label, scl?.roleLabel]).toEqual(['Clock', 'SCL'])
+    // Back to its number, it shows its role again.
+    const plain = groupChannels(
+      channels.map((channel) => (channel.index === 1 ? { ...channel, name: '1' } : channel)),
+      fixture.decoders,
+    )
+    expect([plain[0]?.channels[1]?.label, plain[0]?.channels[1]?.roleLabel]).toEqual([
+      'SCL',
+      undefined,
     ])
   })
 
