@@ -638,11 +638,7 @@ function onWheel(event: WheelEvent): void {
               :condition="channels.triggerOf(row.channel.index)"
               :menu-open="menu?.channel.index === row.channel.index"
               @trigger="(slot) => row.channel && toggleMenu(row.channel, slot)"
-              @menu="
-                (event) =>
-                  row.channel &&
-                  (channelMenu = { channel: row.channel, x: event.clientX, y: event.clientY })
-              "
+              @menu="(at) => row.channel && (channelMenu = { channel: row.channel, ...at })"
             />
           </div>
           <div

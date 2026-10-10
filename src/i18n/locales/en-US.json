@@ -209,7 +209,7 @@
       "6": "Blue",
       "7": "Violet"
     },
-    "tip": "Right-click to rename or recolour"
+    "tip": "Click the dot or double-click the name to rename or recolour; right-click works too"
   },
   "triggerPanel": {
     "title": "Trigger settings",

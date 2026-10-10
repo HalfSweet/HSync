@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
-import { computed, onMounted, shallowRef, useTemplateRef } from 'vue'
+import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useCaptureStore } from '@/stores/capture'
@@ -22,11 +22,19 @@ const input = useTemplateRef<HTMLInputElement>('input')
 
 const WIRES = [0, 1, 2, 3, 4, 5, 6, 7]
 
+// The name is kept when the menu closes, by Enter or a click elsewhere; Escape drops it.
+let cancelled = false
 onClickOutside(root, () => emit('close'))
-onKeyStroke('Escape', () => emit('close'))
+onKeyStroke('Escape', () => {
+  cancelled = true
+  emit('close')
+})
 onMounted(() => {
   input.value?.focus()
   input.value?.select()
+})
+onBeforeUnmount(() => {
+  if (!cancelled) void rename()
 })
 
 const current = computed(() => capture.channelNames.get(props.channel.index) ?? '')
@@ -41,11 +49,11 @@ const position = computed(() => ({
   top: `${Math.min(props.y, window.innerHeight - 150)}px`,
 }))
 
+/** Gives the channel the name typed, if it changed; an empty name goes back to its number. */
 async function rename(): Promise<void> {
-  if (name.value.trim() !== current.value) {
-    await capture.renameChannel(props.channel.index, name.value)
-  }
-  emit('close')
+  const wanted = name.value.trim()
+  const shown = current.value === String(props.channel.index) ? '' : current.value
+  if (wanted !== shown) await capture.renameChannel(props.channel.index, wanted)
 }
 </script>
 
@@ -59,8 +67,11 @@ async function rename(): Promise<void> {
   >
     <div class="flex items-center gap-2">
       <i class="size-[7px] flex-none rounded-full bg-wire" :class="`wire-${wire}`" />
-      <span class="font-medium">{{ channel.label }}</span>
-      <span class="font-mono text-caption text-ink-3">D{{ channel.index }}</span>
+      <span class="truncate font-medium">{{ channel.label }}</span>
+      <span class="flex flex-none gap-1 font-mono text-caption text-ink-3">
+        <span v-if="channel.roleLabel">{{ channel.roleLabel }}</span>
+        <span>D{{ channel.index }}</span>
+      </span>
     </div>
     <label class="flex flex-col gap-1">
       <span class="text-caption text-ink-3">{{ t('channelMenu.name') }}</span>
@@ -70,7 +81,7 @@ async function rename(): Promise<void> {
         class="h-7 rounded-6 border border-line-2 bg-raise px-2 text-ink"
         :placeholder="`D${channel.index}`"
         spellcheck="false"
-        @keydown.enter.prevent="rename"
+        @keydown.enter.prevent="emit('close')"
       />
     </label>
     <div class="flex flex-col gap-1">
