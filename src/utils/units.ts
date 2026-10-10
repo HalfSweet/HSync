@@ -27,6 +27,22 @@ export function formatTime(seconds: number, digits = 1, unit = timeUnitFor(secon
 }
 
 /**
+ * Formats a time that is a whole number of samples, with the fraction digits one sample needs
+ * (at most three), e.g. `9.80 µs` or `360 ns` at 25 MHz.
+ */
+export function formatSampled(seconds: number, samplerate: number): string {
+  const unit = timeUnitFor(seconds)
+  const step = samplerate > 0 ? inUnit(1 / samplerate, unit) : 1
+  let digits = 0
+  while (digits < 3) {
+    const scaled = step * 10 ** digits
+    if (Math.abs(scaled - Math.round(scaled)) <= 1e-6 * Math.max(1, scaled)) break
+    digits += 1
+  }
+  return formatTime(seconds, digits, unit)
+}
+
+/**
  * Formats a time with three significant digits, e.g. `5.24 ms`, `50 µs`, as the design shows
  * durations and time per division.
  */

@@ -6,6 +6,7 @@ import {
   formatCount,
   formatFrequency,
   formatFrequencyShort,
+  formatSampled,
   formatSamplerate,
   formatSpan,
   formatTime,
@@ -30,6 +31,17 @@ describe('time formatting', () => {
     expect(formatSpan(540e-6)).toBe('540.0 µs')
     expect(formatSpan(1.046e-3)).toBe('1.0460 ms')
     expect(formatTime(-0.00001e-6, 1)).toBe('0.0 ns')
+  })
+
+  it('formats sample counts to the resolution of one sample', () => {
+    // 25 MHz: a sample is 40 ns.
+    expect(formatSampled(245 / 25e6, 25e6)).toBe('9.80 µs')
+    expect(formatSampled(9 / 25e6, 25e6)).toBe('360 ns')
+    expect(formatSampled(0, 25e6)).toBe('0 ns')
+    // 400 MHz: 2.5 ns.
+    expect(formatSampled(145 / 400e6, 400e6)).toBe('362.5 ns')
+    // At most three digits.
+    expect(formatSampled(26_151 / 25e6, 25e6)).toBe('1.046 ms')
   })
 })
 
