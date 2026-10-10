@@ -546,7 +546,6 @@
   "error": {
     "app": {
       "taskFailed": "后台任务失败：{detail}",
-      "resourceMissing": "缺少应用资源：{detail}",
       "unexpected": "意外错误：{detail}",
       "unavailableInBrowser": "浏览器预览中不能读写文件",
       "logFolder": "找不到日志文件夹：{detail}",

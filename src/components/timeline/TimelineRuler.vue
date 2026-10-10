@@ -104,6 +104,7 @@ function onPointerUp(): void {
       @pointercancel="onPointerUp"
     >
       <span
+        v-if="capture.summary"
         class="absolute bottom-2.5 left-1.5 text-caption leading-none text-ink-3"
         :title="t('ruler.unitTip', { unit: t(`units.${view.ruler.unit}`) })"
       >

@@ -546,7 +546,6 @@
   "error": {
     "app": {
       "taskFailed": "A background task failed: {detail}",
-      "resourceMissing": "An application resource is missing: {detail}",
       "unexpected": "Unexpected error: {detail}",
       "unavailableInBrowser": "Files cannot be read or written in the browser preview",
       "logFolder": "Cannot find the log folder: {detail}",

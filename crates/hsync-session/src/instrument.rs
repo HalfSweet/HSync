@@ -8,9 +8,9 @@ use crossbeam_channel::Receiver;
 use hsync_capture::LogicCapture;
 use hsync_core::{ChannelIndex, TriggerCondition, UiError};
 use hsync_driver::{
-    Acquisition, AdvancedTrigger, Candidate, CandidateStatus, CapturePlan, Device, DeviceInfo,
-    DeviceManager, DeviceSummary, DriverError, EndReason, OptionKey, OptionState, OptionValue,
-    Packet, TriggerCaps,
+    Acquisition, AdvancedTrigger, Candidate, CandidateStatus, CapturePlan, CapturePreset, Device,
+    DeviceInfo, DeviceManager, DeviceSummary, DriverError, EndReason, OptionKey, OptionState,
+    OptionValue, Packet, TriggerCaps,
 };
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -67,6 +67,9 @@ pub struct CaptureRequest {
     /// A held-behind capture stopped early replaces the shown one all the same (DSView's
     /// "update the latest data when stopped in repeat mode"); otherwise it is dropped.
     pub keep_stopped: bool,
+    /// Channel names and decoders for a capture that follows no other, in place of the
+    /// device's own preset: those remembered for the device, or of a session.
+    pub preset: Option<CapturePreset>,
 }
 
 /// Where a running capture is.
@@ -382,6 +385,7 @@ impl Instrument {
             source,
             LogicCapture::new(samplerate, channels),
             request.hold,
+            request.preset.or_else(|| open.device.preset()),
         );
         let (summary, capture) = (live.summary, live.samples);
         let acquisition = Arc::new(Mutex::new(Some(acquisition)));

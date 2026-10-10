@@ -1,8 +1,10 @@
 //! Drivers recognise devices; devices are configured and run acquisitions.
 
+use std::collections::BTreeMap;
+
 use crossbeam_channel::Sender;
 use hsync_core::{ChannelIndex, TriggerCondition};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 use crate::error::DriverError;
@@ -115,6 +117,19 @@ pub struct CapturePlan {
     pub looping: bool,
 }
 
+/// Channel names and decoders a device's captures start with, such as those of the capture
+/// the demo device replays, or those the UI remembered for the device.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CapturePreset {
+    /// Names of channels, e.g. `SDA`; channels left out are named by their number.
+    pub channel_names: BTreeMap<ChannelIndex, String>,
+    /// Decoder stacks in DSView's `decoders` format; an empty list means none.
+    #[ts(type = "unknown[] | null")]
+    pub decoders: Option<serde_json::Value>,
+}
+
 /// An open device.
 pub trait Device: Send {
     fn info(&self) -> DeviceInfo;
@@ -142,6 +157,12 @@ pub trait Device: Send {
     /// Samples per channel the device's own memory holds with the current options, when it
     /// captures there first (Buffer mode); longer captures need RLE compression.
     fn hardware_depth(&self) -> Option<u64> {
+        None
+    }
+
+    /// Channel names and decoders for a capture that follows no other, with the current
+    /// options; DSView sets up the decoders of the demo device's patterns this way.
+    fn preset(&self) -> Option<CapturePreset> {
         None
     }
 

@@ -14,7 +14,8 @@ mod trigger;
 pub mod usb;
 
 pub use device::{
-    Acquisition, Candidate, CandidateStatus, CapturePlan, Device, DeviceInfo, DeviceSummary, Driver,
+    Acquisition, Candidate, CandidateStatus, CapturePlan, CapturePreset, Device, DeviceInfo,
+    DeviceSummary, Driver,
 };
 pub use error::DriverError;
 pub use manager::{DeviceManager, WatchHandle};

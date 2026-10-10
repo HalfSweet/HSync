@@ -148,7 +148,9 @@ function onWheel(event: WheelEvent): void {
   <div class="flex flex-none border-b border-line">
     <div class="flex w-(--lab) flex-none flex-col justify-center gap-0.5 border-r border-line px-3">
       <span class="text-caption text-ink-3">{{ t('overview.whole') }}</span>
-      <span class="font-medium tabular-nums">{{ formatTimeShort(wholeDuration) }}</span>
+      <span v-if="capture.summary" class="font-medium tabular-nums">{{
+        formatTimeShort(wholeDuration)
+      }}</span>
     </div>
     <div
       ref="strip"
@@ -160,6 +162,7 @@ function onWheel(event: WheelEvent): void {
       @wheel="onWheel"
     >
       <div
+        v-if="capture.summary"
         class="absolute top-[3px] bottom-[17px] rounded-4 border-[1.5px] border-ink bg-canvas"
         :title="viewportTip"
         :style="{ left: `${box.left}%`, width: `${box.width}%` }"

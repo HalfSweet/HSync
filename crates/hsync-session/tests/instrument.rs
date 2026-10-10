@@ -99,6 +99,7 @@ fn waits_for_the_trigger() {
         looping: false,
         hold: false,
         keep_stopped: false,
+        preset: None,
     };
     let summary = instrument
         .start(&mut workspace, request, sink)

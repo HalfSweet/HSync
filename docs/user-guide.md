@@ -14,11 +14,13 @@ From top to bottom, the window has five parts:
 
 ## Devices
 
-- Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**, which plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD).
+- HSync starts with an empty timeline; waveforms appear once you capture or open a file.
+- Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**; click **Capture** and it plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD), with its decoders already set up the first time.
 - The first time you open a DSLogic, HSync loads the firmware and FPGA bitstream onto it automatically; this takes a few seconds.
 - If you plug in a DSLogic while the demo device is open, the status bar shows "… connected"; click **Switch** to use it. If a loose USB cable makes the device drop out briefly and it reappears within two seconds, HSync reopens it automatically and restores its settings.
 - If a USB 3.0 model is plugged into a USB 2.0 port, the status bar reminds you to move it to a USB 3.0 port; otherwise Stream mode's speed is limited.
-- **Device options…** at the bottom of the device menu covers the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**) and, for Buffer mode, what happens **When stopped**. HSync remembers the settings of each kind of device and restores them the next time you open it.
+- **Device options…** at the bottom of the device menu covers the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**) and, for Buffer mode, what happens **When stopped**.
+- HSync remembers the settings of each kind of device and restores them the next time you open it: the device options, enabled channels, triggers, channel colours and capture mode at once, the channel names and decoders with the first capture after it opens. Showing a file or another device's capture leaves the names and decoders remembered for this device alone; removing every decoder is remembered too.
 
 ## Acquisition settings
 
@@ -78,7 +80,7 @@ Press `/` to focus the search box in the top bar:
 - **Open**: **Open file…** in the device menu, or ⌘O / Ctrl+O, reads DSView `.dsl` files (all versions).
 - **Save**: **Save capture…** in the export menu (the download icon in the top bar), or ⌘S / Ctrl+S, saves a `.dsl` file that DSView can open, including channel names and decoders.
 - **Export**: **Export…** in the export menu writes `.dsl`, CSV, VCD, sigrok `.sr` or raw binary. You can export just the segment, or only some of the channels. You can cancel a save or an export while it runs.
-- **Sessions**: **Save session…** in the export menu stores the device settings, channels, triggers, decoders and capture mode as `.hsync-session.json`; **Load session…** in the device menu also reads DSView `.dsc` sessions.
+- **Sessions**: **Save session…** in the export menu stores the device settings, channels, triggers, decoders and capture mode as `.hsync-session.json`; **Load session…** in the device menu also reads DSView `.dsc` sessions. A session loaded before anything was captured keeps its channel names and decoders for the first capture.
 
 ## Settings
 

@@ -18,6 +18,7 @@ use std::sync::{Arc, OnceLock};
 
 use hsync_capture::{CaptureInfo, LogicCapture};
 use hsync_core::{ChannelIndex, SampleIndex};
+use hsync_driver::CapturePreset;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -315,7 +316,8 @@ impl Workspace {
     }
 
     /// Makes `capture`, which a device is about to fill, the open capture. It keeps the channel
-    /// names and decoders of the capture it replaces, as DSView keeps them across captures.
+    /// names and decoders of the capture it replaces, as DSView keeps them across captures;
+    /// with no capture to replace, it takes those of the device's `preset`.
     ///
     /// With `hold`, the shown capture stays shown while `capture` fills behind it, as DSView's
     /// repeated captures fill a back buffer; [`LiveCapture::verdict`] then decides, once the
@@ -325,14 +327,22 @@ impl Workspace {
         source: CaptureSource,
         capture: LogicCapture,
         hold: bool,
+        preset: Option<CapturePreset>,
     ) -> LiveCapture {
         self.last_id += 1;
         let samples = Arc::new(RwLock::new(capture));
         let shown = self.take_shown();
-        let (channel_names, decoders) = shown
-            .as_ref()
-            .map(|open| (open.channel_names.clone(), open.decoders.clone()))
-            .unwrap_or_default();
+        let (channel_names, decoders) = match &shown {
+            Some(open) => (open.channel_names.clone(), open.decoders.clone()),
+            None => preset
+                .map(|preset| {
+                    let decoders = preset
+                        .decoders
+                        .filter(|decoders| !decoders.as_array().is_some_and(Vec::is_empty));
+                    (preset.channel_names, decoders)
+                })
+                .unwrap_or_default(),
+        };
         let verdict = (hold && shown.is_some()).then(Verdict::default);
         match shown {
             Some(open) if verdict.is_some() => self.held = Some(open),

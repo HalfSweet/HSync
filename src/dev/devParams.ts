@@ -3,10 +3,10 @@
  * design's artboards in screenshots:
  *
  *   ?theme=light|dark  &density=comfortable|compact  &lang=zh-CN|en-US
- *   &view=1860-2600      µs after the trigger shown on the timeline
- *   &segment=1910-2450   µs after the trigger marked as A–B
+ *   &view=1860-2600      µs after the trigger shown on the timeline, once a capture is complete
+ *   &segment=1910-2450   µs after the trigger marked as A–B, likewise
  *   &trig=0:fall,1:high  trigger conditions by channel index
- *   &autocapture=1       start a capture once a device is open
+ *   &autocapture=1       start a capture once a device is open (the app starts without one)
  *   &stream=0            open the data stream on decoder 0  &streamMode=hex
  *   &update=0.3.0        the mock backend announces this release, found at startup
  */
@@ -79,10 +79,15 @@ export function applyDevParams(search = window.location.search): void {
   const marked = range(params.get('segment'))
   if (!shown && !marked) return
   let applied = false
+  // Once the capture is complete: while it fills, the view follows the newest samples.
   const stop = watch(
-    [() => capture.summary?.id, () => view.viewport.width],
-    ([id, width]) => {
-      if (applied || id === undefined || width <= 0) return
+    [
+      () => capture.summary?.id,
+      () => capture.sampleCount > 0 && !capture.capturing,
+      () => view.viewport.width,
+    ],
+    ([id, complete, width]) => {
+      if (applied || id === undefined || !complete || width <= 0) return
       applied = true
       // After the view store has reacted to the new capture (it refits and clears the segment).
       void nextTick(() => {

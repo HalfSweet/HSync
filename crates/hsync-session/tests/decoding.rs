@@ -8,8 +8,8 @@ use std::time::Duration;
 use crossbeam_channel::Receiver;
 use hsync_decode::{Bus, LaneItem, StreamMode, StreamRow};
 use hsync_demo::DemoDriver;
-use hsync_driver::DeviceManager;
-use hsync_session::{CaptureRequest, DecodeState, Instrument, SessionEvent, Workspace};
+use hsync_driver::{CapturePreset, DeviceManager};
+use hsync_session::{CaptureRequest, DecodeState, EventSink, Instrument, SessionEvent, Workspace};
 
 fn demo_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/resources/demo/protocol.dsl")
@@ -110,6 +110,102 @@ fn captures_keep_the_decoders_and_decode_when_complete() {
     assert!(statuses.iter().all(|s| s.state == DecodeState::Done));
     // The demo device replays the same capture, so the same transfers decode.
     assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(6));
+}
+
+#[test]
+fn a_first_demo_capture_brings_the_decoders_of_the_protocol_capture() {
+    let (mut workspace, events) = workspace();
+    let mut instrument = Instrument::new(DeviceManager::new(vec![Arc::new(DemoDriver::new(
+        Some(demo_path()),
+    ))]));
+    instrument.scan();
+    instrument.open("virtual-demo").expect("demo device");
+    let sink = Arc::new(|_event: SessionEvent| {});
+    let summary = instrument
+        .start(&mut workspace, CaptureRequest::default(), sink)
+        .expect("start");
+    assert_eq!(summary.channels[1].name, "SCL");
+    assert!(
+        summary.decoders.is_some(),
+        "the protocol decoders come along"
+    );
+    decoded(&events, summary.id, 4);
+    let statuses = workspace.decoding(summary.id).expect("decoders").statuses();
+    assert!(statuses.iter().all(|s| s.state == DecodeState::Done));
+    assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(6));
+}
+
+fn demo_instrument() -> Instrument {
+    let mut instrument = Instrument::new(DeviceManager::new(vec![Arc::new(DemoDriver::new(
+        Some(demo_path()),
+    ))]));
+    instrument.scan();
+    instrument.open("virtual-demo").expect("demo device");
+    instrument
+}
+
+#[test]
+fn a_requested_preset_replaces_the_devices_for_a_first_capture_only() {
+    let only_uart = CapturePreset {
+        channel_names: [(5, "RX".to_owned())].into(),
+        decoders: Some(serde_json::json!([{
+            "id": "1:uart",
+            "channel": [{"rxtx": 5}],
+            "options": {"baudrate": 115200},
+        }])),
+    };
+    let sink: EventSink = Arc::new(|_event| {});
+
+    // Nothing shown: the request's preset, not the protocol capture's.
+    let (mut bare, events) = workspace();
+    let request = CaptureRequest {
+        preset: Some(only_uart.clone()),
+        ..CaptureRequest::default()
+    };
+    let summary = demo_instrument()
+        .start(&mut bare, request, Arc::clone(&sink))
+        .expect("start");
+    assert_eq!(summary.channels[1].name, "1");
+    assert_eq!(summary.channels[5].name, "RX");
+    decoded(&events, summary.id, 1);
+    let statuses = bare.decoding(summary.id).expect("decoders").statuses();
+    assert_eq!(statuses.len(), 1);
+    assert_eq!(statuses[0].bus, Some(Bus::Uart));
+
+    // An empty decoder list leaves the capture without decoders.
+    let (mut empty, _events) = workspace();
+    let request = CaptureRequest {
+        preset: Some(CapturePreset {
+            decoders: Some(serde_json::json!([])),
+            ..CapturePreset::default()
+        }),
+        ..CaptureRequest::default()
+    };
+    let summary = demo_instrument()
+        .start(&mut empty, request, Arc::clone(&sink))
+        .expect("start");
+    assert_eq!(summary.decoders, None);
+    assert_eq!(summary.channels[1].name, "1");
+
+    // A shown capture passes its own on instead.
+    let (mut shown, _events) = workspace();
+    shown.open_demo(&demo_path()).expect("demo");
+    let request = CaptureRequest {
+        preset: Some(only_uart),
+        ..CaptureRequest::default()
+    };
+    let summary = demo_instrument()
+        .start(&mut shown, request, sink)
+        .expect("start");
+    assert_eq!(summary.channels[1].name, "SCL");
+    assert_eq!(
+        summary
+            .decoders
+            .as_ref()
+            .and_then(|d| d.as_array())
+            .map(Vec::len),
+        Some(4)
+    );
 }
 
 #[test]
