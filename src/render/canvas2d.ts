@@ -5,7 +5,7 @@
 import { binStart } from '@/ipc/bins'
 import { sampleToX } from '@/timeline/viewport'
 
-import { traceShape } from './shape'
+import { gridWidth, traceShape } from './shape'
 import type { FrameDescriptor, RenderTokens, TraceDraw, WaveformRenderer } from './types'
 
 /** Where the high and low levels sit within a row, as fractions of its height (DESIGN.md §6.3). */
@@ -49,14 +49,16 @@ export class Canvas2DRenderer implements WaveformRenderer {
 
   private drawGrid(frame: FrameDescriptor, tokens: RenderTokens): void {
     const { context } = this
+    // One CSS pixel, on whole device pixels.
+    const width = gridWidth(frame.dpr)
     context.beginPath()
     for (const x of frame.grid) {
-      const px = Math.round((frame.trackLeft + x) * frame.dpr) / frame.dpr + 0.5 / frame.dpr
+      const px = (Math.round((frame.trackLeft + x) * frame.dpr) + (width % 2) / 2) / frame.dpr
       context.moveTo(px, frame.clipTop)
       context.lineTo(px, frame.height)
     }
     context.strokeStyle = tokens.grid
-    context.lineWidth = 1 / frame.dpr
+    context.lineWidth = width / frame.dpr
     context.stroke()
   }
 

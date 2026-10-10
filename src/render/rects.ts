@@ -6,7 +6,7 @@
 import { binStart } from '@/ipc/bins'
 import { sampleToX } from '@/timeline/viewport'
 
-import { traceShape } from './shape'
+import { gridWidth, traceShape } from './shape'
 import type { FrameDescriptor, RenderTokens } from './types'
 
 /** Floats per rectangle: x, y, width, height in device pixels, then premultiplied RGBA. */
@@ -76,9 +76,10 @@ export function frameRects(
   const list = new RectList()
   const dpr = frame.dpr
   const grid = parseColor(tokens.grid)
+  const gridPixels = gridWidth(dpr)
   for (const x of frame.grid) {
-    const px = Math.round((frame.trackLeft + x) * dpr)
-    list.push(px, frame.clipTop * dpr, 1, (frame.height - frame.clipTop) * dpr, grid)
+    const px = Math.round((frame.trackLeft + x) * dpr) - Math.floor(gridPixels / 2)
+    list.push(px, frame.clipTop * dpr, gridPixels, (frame.height - frame.clipTop) * dpr, grid)
   }
   const bins = frame.bins
   if (!bins) return list

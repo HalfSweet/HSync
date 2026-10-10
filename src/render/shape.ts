@@ -164,3 +164,8 @@ export function traceShape(
   if (washFrom !== null) washes.push([washFrom, right])
   return { path, washes, blocks: spans }
 }
+
+/** Grid lines are a CSS pixel wide, in whole device pixels. */
+export function gridWidth(dpr: number): number {
+  return Math.max(1, Math.round(dpr))
+}
