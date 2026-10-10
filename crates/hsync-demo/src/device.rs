@@ -267,6 +267,12 @@ impl Device for DemoDevice {
         sink: Sender<Packet>,
     ) -> Result<Box<dyn Acquisition>, DriverError> {
         self.ensure_idle()?;
+        if plan.advanced.is_some() {
+            // DSView offers virtual devices the simple trigger only.
+            return Err(DriverError::InvalidRequest(
+                "the demo device has simple triggers only".into(),
+            ));
+        }
         let channels = self.enabled_channels();
         if channels.is_empty() {
             return Err(DriverError::InvalidRequest("no channel is enabled".into()));
