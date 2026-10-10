@@ -163,7 +163,7 @@
     "whole": "Capture",
     "trigger": "Trigger",
     "start": "Start",
-    "viewport": "Viewport {from} – {to}"
+    "viewport": "Showing {from} – {to}"
   },
   "ruler": {
     "addDecoder": "Add decoder",
@@ -281,9 +281,6 @@
     "detail": "{samples} samples · 1/Δt {frequency}",
     "sameSample": "Both edges on one sample",
     "hint": "Click another edge to finish, Esc to cancel"
-  },
-  "selection": {
-    "outsideViewport": "Extends beyond view"
   },
   "measure": {
     "segment": "Segment {duration}",
