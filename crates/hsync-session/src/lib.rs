@@ -7,6 +7,7 @@
 #![forbid(unsafe_code)]
 
 mod bins;
+mod decoding;
 mod error;
 mod instrument;
 
@@ -21,6 +22,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use bins::{BINS_FORMAT_VERSION, BinsRequest, encode_bins};
+pub use decoding::{DecodeSet, DecodeState, DecoderLanes, DecoderStatus, StreamPage};
 pub use error::SessionError;
 pub use instrument::{
     CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,
@@ -114,19 +116,64 @@ struct OpenCapture {
     capture: Arc<RwLock<LogicCapture>>,
     channel_names: BTreeMap<ChannelIndex, String>,
     decoders: Option<serde_json::Value>,
+    decoding: Arc<DecodeSet>,
 }
 
 /// The captures of one window.
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Workspace {
     current: Option<OpenCapture>,
     last_id: u64,
+    events: Option<EventSink>,
+}
+
+impl std::fmt::Debug for Workspace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Workspace")
+            .field("current", &self.current)
+            .field("last_id", &self.last_id)
+            .finish_non_exhaustive()
+    }
+}
+
+/// A capture a device is filling, made the open capture of the workspace.
+pub struct LiveCapture {
+    pub summary: CaptureSummary,
+    /// The samples to append to.
+    pub samples: Arc<RwLock<LogicCapture>>,
+    /// Decodes the capture once it is complete.
+    pub decode: Box<dyn FnOnce() + Send>,
+}
+
+impl std::fmt::Debug for LiveCapture {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LiveCapture")
+            .field("summary", &self.summary)
+            .finish_non_exhaustive()
+    }
+}
+
+/// Tells `events` that decoder `index` of capture `capture_id` finished.
+fn decoded_events(events: Option<EventSink>, capture_id: u64) -> Arc<dyn Fn(u32) + Send + Sync> {
+    Arc::new(move |index| {
+        if let Some(events) = &events {
+            events(SessionEvent::Decoded { capture_id, index });
+        }
+    })
 }
 
 impl Workspace {
     /// Creates a workspace without a capture.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates a workspace that reports finished decoders to `events`.
+    pub fn with_events(events: EventSink) -> Self {
+        Self {
+            events: Some(events),
+            ..Self::default()
+        }
     }
 
     /// Opens a `.dsl` file.
@@ -146,35 +193,57 @@ impl Workspace {
         let document = hsync_fileio::read_dsl_file(path)?;
         let channel_names = document.header.probes.iter().cloned().collect();
         self.last_id += 1;
+        let capture = Arc::new(RwLock::new(document.capture));
+        let decoding = DecodeSet::new(document.decoders.as_ref());
+        decoding.run(&capture, decoded_events(self.events.clone(), self.last_id));
         self.current = Some(OpenCapture {
             id: self.last_id,
             source,
-            capture: Arc::new(RwLock::new(document.capture)),
+            capture,
             channel_names,
             decoders: document.decoders,
+            decoding,
         });
         self.summary().ok_or(SessionError::NoCapture)
     }
 
-    /// Makes `capture`, which a device is about to fill, the open capture. Returns its summary
-    /// and the samples to append to.
-    pub fn begin_live(
-        &mut self,
-        source: CaptureSource,
-        capture: LogicCapture,
-    ) -> (CaptureSummary, Arc<RwLock<LogicCapture>>) {
+    /// Makes `capture`, which a device is about to fill, the open capture. It keeps the channel
+    /// names and decoders of the capture it replaces, as DSView keeps them across captures.
+    pub fn begin_live(&mut self, source: CaptureSource, capture: LogicCapture) -> LiveCapture {
         self.last_id += 1;
-        let shared = Arc::new(RwLock::new(capture));
+        let samples = Arc::new(RwLock::new(capture));
+        let (channel_names, decoders) = self
+            .current
+            .take()
+            .map(|open| (open.channel_names, open.decoders))
+            .unwrap_or_default();
+        let decoding = DecodeSet::new(decoders.as_ref());
         let open = OpenCapture {
             id: self.last_id,
             source,
-            capture: Arc::clone(&shared),
-            channel_names: BTreeMap::new(),
-            decoders: None,
+            capture: Arc::clone(&samples),
+            channel_names,
+            decoders,
+            decoding: Arc::clone(&decoding),
         };
         let summary = summarize(&open);
         self.current = Some(open);
-        (summary, shared)
+        let finished = Arc::clone(&samples);
+        let done = decoded_events(self.events.clone(), self.last_id);
+        LiveCapture {
+            summary,
+            samples,
+            decode: Box::new(move || decoding.run(&finished, done)),
+        }
+    }
+
+    /// The decoders of capture `id`.
+    pub fn decoding(&self, id: u64) -> Result<Arc<DecodeSet>, SessionError> {
+        match &self.current {
+            Some(open) if open.id == id => Ok(Arc::clone(&open.decoding)),
+            Some(_) => Err(SessionError::StaleCapture),
+            None => Err(SessionError::NoCapture),
+        }
     }
 
     /// Summary of the open capture.

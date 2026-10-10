@@ -35,8 +35,9 @@ fn instrument() -> Instrument {
 fn events() -> (hsync_session::EventSink, Receiver<LiveStatus>) {
     let (sender, receiver) = crossbeam_channel::unbounded();
     let sink = Arc::new(move |event: SessionEvent| {
-        let SessionEvent::Live(status) = event;
-        let _ = sender.send(status);
+        if let SessionEvent::Live(status) = event {
+            let _ = sender.send(status);
+        }
     });
     (sink, receiver)
 }

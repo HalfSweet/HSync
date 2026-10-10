@@ -103,6 +103,8 @@ pub struct LiveStatus {
 pub enum SessionEvent {
     /// A capture from a device progressed or ended.
     Live(LiveStatus),
+    /// Decoder `index` of capture `capture_id` finished.
+    Decoded { capture_id: u64, index: u32 },
 }
 
 /// Receives [`SessionEvent`]s; called from background threads.
@@ -351,8 +353,8 @@ impl Instrument {
             driver: info.driver,
             model: info.model,
         };
-        let (summary, capture) =
-            workspace.begin_live(source, LogicCapture::new(samplerate, channels));
+        let live = workspace.begin_live(source, LogicCapture::new(samplerate, channels));
+        let (summary, capture) = (live.summary, live.samples);
         let acquisition = Arc::new(Mutex::new(Some(acquisition)));
         let ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
         let status = LiveStatus {
@@ -374,6 +376,7 @@ impl Instrument {
         events(SessionEvent::Live(status.clone()));
         let ingest = Ingest {
             capture,
+            decode: Some(live.decode),
             packets,
             acquisition: Arc::clone(&acquisition),
             ended: Arc::clone(&ended),
@@ -406,6 +409,8 @@ impl Instrument {
 /// Moves the packets of a running capture into its samples.
 struct Ingest {
     capture: Arc<RwLock<LogicCapture>>,
+    /// Decodes the capture once it is complete.
+    decode: Option<Box<dyn FnOnce() + Send>>,
     packets: Receiver<Packet>,
     acquisition: Arc<Mutex<Option<Box<dyn Acquisition>>>>,
     ended: Arc<std::sync::atomic::AtomicBool>,
@@ -483,5 +488,8 @@ impl Ingest {
         self.status.error = error;
         self.ended.store(true, std::sync::atomic::Ordering::Release);
         self.emit();
+        if let Some(decode) = self.decode.take() {
+            decode();
+        }
     }
 }

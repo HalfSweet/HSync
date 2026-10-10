@@ -1368,6 +1368,7 @@ dependencies = [
  "crossbeam-channel",
  "hsync-capture",
  "hsync-core",
+ "hsync-decode",
  "hsync-demo",
  "hsync-driver",
  "hsync-fileio",
