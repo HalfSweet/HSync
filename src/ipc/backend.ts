@@ -66,6 +66,8 @@ export interface Backend {
   cancelFile(): Promise<void>
   /** Writes text the UI composed, such as the data stream as listed. */
   saveText(path: string, text: string): Promise<void>
+  /** Reads a small text file, such as a session. */
+  readText(path: string): Promise<string>
   bins(request: BinsRequest): Promise<BinsResult>
   pulse(captureId: number, channel: number, sample: number): Promise<PulseInfo | null>
   edge(
@@ -186,6 +188,10 @@ class TauriBackend implements Backend {
 
   saveText(path: string, text: string) {
     return invoke<void>('text_save', { path, text })
+  }
+
+  readText(path: string) {
+    return invoke<string>('text_read', { path })
   }
 
   async bins(request: BinsRequest) {
