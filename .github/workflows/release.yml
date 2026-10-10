@@ -45,8 +45,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Set the version
         run: node scripts/version.mjs "$VERSION"
-      - name: Write the release notes
-        run: pnpm exec git-cliff --unreleased --tag "v$VERSION" --strip all --output "$RUNNER_TEMP/notes.md"
+      # The whole changelog is written again each time, so a section that missed commits merged
+      # while its pull request was open is complete again by the next release.
+      - name: Write the changelog and the release notes
+        run: |
+          pnpm exec git-cliff --tag "v$VERSION" --output CHANGELOG.md
+          pnpm exec prettier --write CHANGELOG.md
+          pnpm exec git-cliff --unreleased --tag "v$VERSION" --strip all --output "$RUNNER_TEMP/notes.md"
       - name: Open the pull request
         env:
           GH_TOKEN: ${{ github.token }}
@@ -55,8 +60,8 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git switch --create "$branch"
-          # The first release keeps the version already set, so its commit may change nothing.
-          git commit --all --allow-empty --message "chore: release $VERSION"
+          git add package.json Cargo.toml Cargo.lock CHANGELOG.md
+          git commit --message "chore: release $VERSION"
           git push --force origin "$branch"
           {
             echo "Merging this pull request releases HSync $VERSION: it tags the merge, builds the"
