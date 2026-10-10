@@ -86,13 +86,17 @@ fn python_uart_reads_the_demo_text() {
             .any(|(id, _)| id == "rxtx" || id.contains("data")),
         "{rows:?}"
     );
-    let shortest: String = results[0]
+    // 1:uart puts each frame's value as '@XX' for the user's number format.
+    let text: String = results[0]
         .annotations
         .iter()
         .filter(|annotation| annotation.class == 0)
-        .filter_map(|annotation| annotation.texts.last().cloned())
-        .collect::<Vec<_>>()
-        .join(" ");
-    assert!(!shortest.is_empty());
-    println!("{shortest}");
+        .filter_map(|annotation| annotation.value.as_deref())
+        .filter_map(|hex| u8::from_str_radix(hex, 16).ok())
+        .map(char::from)
+        .collect();
+    assert!(
+        text.contains("DSLogic series USB-based LA from DreamSourceLab"),
+        "{text}"
+    );
 }

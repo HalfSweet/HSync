@@ -180,30 +180,60 @@ fn option_specs(class: &Bound<'_, PyAny>) -> Result<Vec<OptionSpec>, SrdError> {
     Ok(out)
 }
 
+/// The text of a tuple element: a string, or an integer in decimal (DSView takes both).
+fn element(item: &Bound<'_, PyAny>) -> Option<String> {
+    item.extract::<String>()
+        .ok()
+        .or_else(|| item.extract::<i64>().ok().map(|number| number.to_string()))
+}
+
+/// The annotation classes with DSView's type codes (`decoder.c`, `get_annotations`): a
+/// three-element class carries its code; two-element ones count up from 7, continuing after
+/// the last code given.
 fn annotation_classes(class: &Bound<'_, PyAny>) -> Result<Vec<AnnotationClass>, SrdError> {
     let Ok(list) = class.getattr("annotations") else {
         return Ok(Vec::new());
     };
     let mut out = Vec::new();
+    let mut kind: u32 = 7;
     for item in list.try_iter()? {
         let item = item?;
-        let fields: Vec<String> = item.extract().unwrap_or_default();
+        let fields: Vec<String> = item
+            .try_iter()
+            .map(|items| {
+                items
+                    .filter_map(Result::ok)
+                    .filter_map(|one| element(&one))
+                    .collect()
+            })
+            .unwrap_or_default();
         out.push(match fields.as_slice() {
-            // DSView's form: type code, id, description.
-            [kind, id, desc] => AnnotationClass {
-                id: id.clone(),
-                desc: desc.clone(),
-                kind: kind.parse().ok(),
-            },
-            [id, desc] => AnnotationClass {
-                id: id.clone(),
-                desc: desc.clone(),
-                kind: None,
-            },
+            [code, id, desc] => {
+                kind = code
+                    .bytes()
+                    .filter(u8::is_ascii_digit)
+                    .fold(0u32, |sum, digit| {
+                        sum.wrapping_mul(10).wrapping_add(u32::from(digit - b'0'))
+                    });
+                AnnotationClass {
+                    id: id.clone(),
+                    desc: desc.clone(),
+                    kind: Some(kind),
+                }
+            }
+            [id, desc] => {
+                let class = AnnotationClass {
+                    id: id.clone(),
+                    desc: desc.clone(),
+                    kind: Some(kind),
+                };
+                kind += 1;
+                class
+            }
             _ => {
                 return Err(SrdError::InvalidDecoder {
                     decoder: text(class, "id"),
-                    detail: "annotations need two or three strings".into(),
+                    detail: "annotations need two or three elements".into(),
                 });
             }
         });

@@ -39,4 +39,9 @@ fn reads_every_decoder() {
             .iter()
             .any(|option| option.id == "baudrate" && option.default == 115_200)
     );
+
+    // DSView's codes: a two-element class after a coded one takes that code, then counts up.
+    let c2 = catalog.iter().find(|one| one.id == "C2").expect("C2");
+    let kinds: Vec<Option<u32>> = c2.annotations.iter().map(|class| class.kind).collect();
+    assert_eq!(&kinds[..3], [Some(106), Some(106), Some(106)]);
 }

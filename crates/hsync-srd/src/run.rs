@@ -79,32 +79,33 @@ impl Stack {
 #[derive(Debug, Clone, PartialEq)]
 pub struct LayerResult {
     pub id: String,
-    /// Its annotation rows, `(id, description)`; one per class when it declares none.
+    /// Its annotation rows, `(id, description)`; one row for all its classes when it declares
+    /// none.
     pub rows: Vec<(String, String)>,
     pub annotations: Vec<Annotation>,
+    /// The error a stacked decoder raised; the decoder below it carried on (DSView).
+    pub error: Option<String>,
 }
 
-/// The rows of a decoder and the row of each of its annotation classes.
-fn rows_of(info: &DecoderInfo) -> (Vec<(String, String)>, Vec<u32>) {
+/// The rows of a decoder and the row of each of its annotation classes, as DSView's decoder
+/// stack sorts them (`decoderstack.cpp`): without annotation rows a single row named after the
+/// decoder takes every class; with rows, a class goes to the last row listing it, and a class
+/// no row lists is not shown.
+fn rows_of(info: &DecoderInfo) -> (Vec<(String, String)>, Vec<Option<u32>>) {
     if info.annotation_rows.is_empty() {
-        let rows = info
-            .annotations
-            .iter()
-            .map(|class| (class.id.clone(), class.desc.clone()))
-            .collect();
-        let classes = (0..info.annotations.len() as u32).collect();
-        return (rows, classes);
+        let rows = vec![(info.id.clone(), info.name.clone())];
+        return (rows, vec![Some(0); info.annotations.len()]);
     }
     let rows = info
         .annotation_rows
         .iter()
         .map(|row| (row.id.clone(), row.desc.clone()))
         .collect();
-    let mut classes = vec![0; info.annotations.len()];
+    let mut classes = vec![None; info.annotations.len()];
     for (row, entry) in info.annotation_rows.iter().enumerate() {
         for &class in &entry.classes {
             if let Some(slot) = classes.get_mut(class as usize) {
-                *slot = row as u32;
+                *slot = Some(row as u32);
             }
         }
     }
@@ -161,6 +162,16 @@ pub struct StackOutcome {
     pub error: Option<SrdError>,
 }
 
+/// The message of a Python error, with its traceback for the log.
+fn describe_error(py: Python<'_>, error: &PyErr) -> (String, String) {
+    let message = error.to_string();
+    let detail = match error.traceback(py).map(|trace| trace.format()) {
+        Some(Ok(trace)) => format!("{trace}{message}"),
+        _ => message.clone(),
+    };
+    (message, detail)
+}
+
 /// Runs `stack` over the first `end` samples of `capture`. `cancel` stops it at the next wait.
 pub fn run_stack(
     host: &DecoderHost,
@@ -174,6 +185,22 @@ pub fn run_stack(
         .iter()
         .map(|layer| host.info(&layer.id).cloned())
         .collect::<Result<_, _>>()?;
+    let Some(bottom_info) = infos.first() else {
+        return Ok(StackOutcome {
+            layers: Vec::new(),
+            error: None,
+        });
+    };
+    if let Some(missing) = bottom_info
+        .channels
+        .iter()
+        .find(|channel| !stack.channels.contains_key(&channel.id))
+    {
+        return Err(SrdError::InvalidDecoder {
+            decoder: bottom_info.id.clone(),
+            detail: format!("a required channel is not given: {}", missing.id),
+        });
+    }
     let samplerate = capture.read().samplerate();
     Python::attach(|py| {
         module::install(py, host.dir())?;
@@ -196,17 +223,6 @@ pub fn run_stack(
             } else {
                 Vec::new()
             };
-            if position == 0
-                && info
-                    .channels
-                    .iter()
-                    .any(|channel| !stack.channels.contains_key(&channel.id))
-            {
-                return Err(SrdError::InvalidDecoder {
-                    decoder: info.id.clone(),
-                    detail: "a required channel is not given".into(),
-                });
-            }
             let (_, class_rows) = rows_of(info);
             {
                 let base = object
@@ -224,49 +240,82 @@ pub fn run_stack(
                     class_rows,
                     annotations: Arc::clone(&sinks[position]),
                     upper: upper.take(),
+                    upper_error: None,
                     cancel: Arc::clone(cancel),
                 });
             }
             object.setattr("options", options(py, info, &layer.options)?)?;
-            object.setattr("samplenum", 0)?;
-            object.setattr("matched", py.None())?;
             upper = Some(object.clone().unbind());
             instances.push(object);
         }
-        // `instances` runs from the top down; start them from the bottom up.
+        // `instances` runs from the top down; DSView starts them from the bottom up and sets
+        // samplenum and matched after start().
         instances.reverse();
         for object in &instances {
             if object.hasattr("metadata")? {
                 object.call_method1("metadata", (SRD_CONF_SAMPLERATE, samplerate))?;
             }
             object.call_method0("start")?;
+            object.setattr("samplenum", 0)?;
+            object.setattr("matched", 0)?;
         }
-        let error = match instances
-            .first()
-            .map(|bottom| bottom.call_method0("decode"))
-        {
-            None | Some(Ok(_)) => None,
-            Some(Err(error)) if error.is_instance_of::<EndOfData>(py) => None,
-            Some(Err(error)) => {
-                let detail = match error.traceback(py).map(|trace| trace.format()) {
-                    Some(Ok(trace)) => format!("{trace}{error}"),
-                    _ => error.to_string(),
-                };
-                log::warn!("decoder {} failed: {detail}", stack.layers[0].id);
-                Some(SrdError::Python(error.to_string()))
+        let bottom = &instances[0];
+        let mut error = match bottom.call_method0("decode") {
+            // decode() is meant to run until the samples run out; returning is an error.
+            Ok(returned) => Some(
+                returned
+                    .extract::<String>()
+                    .unwrap_or_else(|_| "decode() returned".into()),
+            ),
+            Err(error) if error.is_instance_of::<EndOfData>(py) => None,
+            Err(error) => {
+                let (message, detail) = describe_error(py, &error);
+                log::warn!("decoder {} failed: {detail}", bottom_info.id);
+                Some(message)
             }
         };
+        // DSView's end() hooks, after a complete run: the bottom decoder learns where the
+        // samples ended, then each decoder above it in turn.
+        if error.is_none() && !cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            bottom.setattr("last_samplenum", end)?;
+            for object in &instances {
+                if !object.hasattr("end")? {
+                    continue;
+                }
+                if let Err(failure) = object.call_method0("end") {
+                    let (message, detail) = describe_error(py, &failure);
+                    log::warn!("end() of a decoder failed: {detail}");
+                    error = Some(message);
+                    break;
+                }
+            }
+        }
+        // A decoder's upper_error tells of the decoder above it.
+        let mut upper_errors = vec![None; instances.len()];
+        for (position, object) in instances.iter().enumerate() {
+            if let Ok(base) = object.cast::<Decoder>()
+                && let Some(instance) = base.borrow().instance.lock().as_mut()
+                && position + 1 < upper_errors.len()
+            {
+                upper_errors[position + 1] = instance.upper_error.take();
+            }
+        }
         let layers = stack
             .layers
             .iter()
             .zip(&infos)
             .zip(&sinks)
-            .map(|((layer, info), sink)| LayerResult {
+            .zip(upper_errors)
+            .map(|(((layer, info), sink), error)| LayerResult {
                 id: layer.id.clone(),
                 rows: rows_of(info).0,
                 annotations: std::mem::take(&mut *sink.lock()),
+                error,
             })
             .collect();
-        Ok(StackOutcome { layers, error })
+        Ok(StackOutcome {
+            layers,
+            error: error.map(SrdError::Python),
+        })
     })
 }
