@@ -502,8 +502,8 @@
     "theme": {
       "label": "主题",
       "system": "跟随系统",
-      "paper": "纸面",
-      "night": "夜间"
+      "light": "亮色",
+      "dark": "暗色"
     },
     "density": {
       "label": "密度",

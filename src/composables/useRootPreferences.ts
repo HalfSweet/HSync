@@ -11,7 +11,7 @@ export function useRootPreferences(): void {
 
   watchEffect(() => {
     const root = document.documentElement
-    root.classList.toggle('theme-night', preferences.resolvedTheme === 'night')
+    root.classList.toggle('theme-dark', preferences.resolvedTheme === 'dark')
     root.classList.toggle('density-compact', preferences.density === 'compact')
   })
 

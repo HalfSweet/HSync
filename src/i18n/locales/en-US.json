@@ -502,8 +502,8 @@
     "theme": {
       "label": "Theme",
       "system": "System",
-      "paper": "Paper",
-      "night": "Night"
+      "light": "Light",
+      "dark": "Dark"
     },
     "density": {
       "label": "Density",

@@ -18,9 +18,9 @@ describe('preferences store', () => {
 
   it('resolves explicit choices', () => {
     const store = usePreferencesStore()
-    store.theme = 'night'
+    store.theme = 'dark'
     store.locale = 'en-US'
-    expect(store.resolvedTheme).toBe('night')
+    expect(store.resolvedTheme).toBe('dark')
     expect(store.resolvedLocale).toBe('en-US')
   })
 

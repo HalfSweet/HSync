@@ -1,7 +1,7 @@
 /*
  * Design tokens, see DESIGN.md §3.
  *
- * The paper theme is the default. `.theme-night` and `.density-compact` on the root
+ * The light theme is the default. `.theme-dark` and `.density-compact` on the root
  * element switch the theme and the density; components only ever read these variables
  * (through Tailwind theme utilities or var()) and never hard-code a colour or a size.
  */
@@ -94,7 +94,7 @@
   color-scheme: light;
 }
 
-:root.theme-night {
+:root.theme-dark {
   --canvas: #0f1317;
   --chrome: #161b20;
   --raise: #1e242a;

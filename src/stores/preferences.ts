@@ -5,7 +5,7 @@ import { computed, shallowRef } from 'vue'
 import { detectLocale, SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
 import { LOG_LEVELS, type LogLevel } from '@/ipc/logLevels'
 
-export const THEMES = ['system', 'paper', 'night'] as const
+export const THEMES = ['system', 'light', 'dark'] as const
 export type ThemePreference = (typeof THEMES)[number]
 export type Theme = Exclude<ThemePreference, 'system'>
 
@@ -75,7 +75,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   })
 
   const resolvedTheme = computed<Theme>(() =>
-    theme.value === 'system' ? (prefersDark.value ? 'night' : 'paper') : theme.value,
+    theme.value === 'system' ? (prefersDark.value ? 'dark' : 'light') : theme.value,
   )
   const resolvedLocale = computed<AppLocale>(() =>
     locale.value === 'system' ? detectLocale(navigator.languages) : locale.value,

@@ -139,7 +139,7 @@ docs: describe the data stream's tabs in DESIGN.md
 - 新功能附带测试；修 bug 先写能复现的测试。
 - Rust：存储与查询用 proptest 对照朴素实现；`.dsl` 读写做往返测试，并用 DSView 自带的 demo 文件做兼容性测试。
 - 前端：纯逻辑（单位格式化、触发汇总、数据流行生成、视口换算）用 Vitest 单测；交互组件用 Vue Test Utils。
-- 涉及界面外观的改动，用 Demo 设备打开 `protocol.demo`，在 1440×900 下检查纸面/夜间 × 舒适/紧凑四种组合，可以参照设计稿画板。
+- 涉及界面外观的改动，用 Demo 设备打开 `protocol.demo`，在 1440×900 下检查亮色/暗色 × 舒适/紧凑四种组合，可以参照设计稿画板。
 
 ## 许可
 

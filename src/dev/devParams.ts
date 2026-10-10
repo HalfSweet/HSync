@@ -2,7 +2,7 @@
  * Development-only URL parameters that put the UI into a given state, for comparing it with the
  * design's artboards in screenshots:
  *
- *   ?theme=paper|night  &density=comfortable|compact  &lang=zh-CN|en-US
+ *   ?theme=light|dark  &density=comfortable|compact  &lang=zh-CN|en-US
  *   &view=1860-2600      µs after the trigger shown on the timeline
  *   &segment=1910-2450   µs after the trigger marked as A–B
  *   &trig=0:fall,1:high  trigger conditions by channel index
