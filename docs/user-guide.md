@@ -82,13 +82,12 @@ Press `/` to focus the search box in the top bar:
 
 ## Settings
 
-The **Settings** button at the right end of the top bar opens:
+The **Settings** button at the right end of the top bar (or ⌘, / Ctrl+,) opens the settings page; pick a section on the left:
 
-- **Theme**: **System**, **Light** or **Dark**. **Density**: **Comfortable** or **Compact**. **Language**: **System**, **简体中文** or **English**.
-- **Graphics acceleration**: with **Auto (WebGPU)**, waveforms are drawn with WebGPU, falling back to Canvas2D automatically where WebGPU is unavailable; the panel shows which one is in use.
+- **Appearance**: **Theme** (**System**, **Light** or **Dark**), **Density** (**Comfortable** or **Compact**), **Language** (**System**, **简体中文** or **English**) and **Graphics acceleration**: with **Auto (WebGPU)**, waveforms are drawn with WebGPU, falling back to Canvas2D automatically where WebGPU is unavailable; the page shows which one is in use.
 - **Behaviour**: **Centre the view on the trigger**, **Follow the latest data while capturing**, **Keep scrolling after a quick drag**, **Show the latest data when a repeat stops** and **Check for updates at startup**. The first three have no effect while the view is zoomed to fit.
 - **Diagnostics**: the **Log level**, whether to **Write a log file**, and **Show in folder**, which opens the folder that holds the log.
-- **About HSync…**: the version and license, and updates. Click **Check for updates**; when a new version is available, click **Download and restart**, and once the download finishes the app restarts into the new version. With **Check for updates at startup** on, a small dot appears on the settings button when a new version is found, and the bottom of the panel shows the new version number.
+- **About** (at the foot of the side bar): the version and license, and updates. Click **Check for updates**; when a new version is available, click **Download and restart**, and once the download finishes the app restarts into the new version. With **Check for updates at startup** on, a small dot appears on the settings button and on **About** when a new version is found.
 
 Opening menus and panels, switching options, and adding or removing list items all come with short animations. If you turn on reduced motion in your system's accessibility settings, the interface stops playing them.
 
@@ -104,5 +103,6 @@ Opening menus and panels, switching options, and adding or removing list items a
 | `Esc`                         | Close a menu or dialog; clear the measurement or segment |
 | ⌘O / Ctrl+O                   | Open a file                                              |
 | ⌘S / Ctrl+S                   | Save the capture                                         |
+| ⌘, / Ctrl+,                   | Open or close the settings                               |
 | Ctrl / ⌘ + wheel              | Zoom around the pointer                                  |
 | Shift + wheel                 | Pan                                                      |
