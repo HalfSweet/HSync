@@ -11,7 +11,10 @@ authors = ["HalfSweet"]
 publish = false
 
 [workspace.dependencies]
+crossbeam-channel = "0.5.17"
+futures-lite = "2.6.1"
 log = "0.4.34"
+nusb = "0.2.7"
 parking_lot = "0.12.5"
 proptest = "1.11.0"
 serde = { version = "1.0.229", features = ["derive"] }
@@ -23,6 +26,7 @@ zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2
 
 hsync-core = { path = "crates/hsync-core" }
 hsync-capture = { path = "crates/hsync-capture" }
+hsync-driver = { path = "crates/hsync-driver" }
 hsync-fileio = { path = "crates/hsync-fileio" }
 hsync-session = { path = "crates/hsync-session" }
 
