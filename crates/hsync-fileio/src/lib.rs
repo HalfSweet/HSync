@@ -5,7 +5,12 @@
 mod dsl;
 mod error;
 pub mod header;
+mod progress;
 
-pub use dsl::{DslDocument, DslWriteRequest, read_dsl, read_dsl_file, write_dsl, write_dsl_file};
+pub use dsl::{
+    DslDocument, DslWriteRequest, read_dsl, read_dsl_file, write_atomically, write_dsl,
+    write_dsl_file, write_dsl_with,
+};
 pub use error::FileError;
 pub use header::DslHeader;
+pub use progress::Progress;

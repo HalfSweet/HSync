@@ -326,7 +326,7 @@ impl Workspace {
                 session: &session,
                 decoders: &decoders,
             };
-            hsync_fileio::write_dsl_file(path, &capture, &request)?;
+            hsync_fileio::write_dsl_file(path, &capture, &request, &mut |_| true)?;
             open.session = Some(session);
         }
         open.source = CaptureSource::File {

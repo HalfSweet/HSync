@@ -17,6 +17,7 @@ use zip::{CompressionMethod, ZipArchive, ZipWriter};
 
 use crate::FileError;
 use crate::header::{DslHeader, HEADER_VERSION, LOGIC_MODE};
+use crate::progress::Progress;
 
 /// A capture file loaded into memory.
 #[derive(Debug)]
@@ -36,18 +37,29 @@ pub fn read_dsl_file(path: &Path) -> Result<DslDocument, FileError> {
     read_dsl(BufReader::new(File::open(path)?))
 }
 
-/// Writes `capture` to the `.dsl` file at `path`. The file is written next to `path` and moved
-/// over it once complete, so a failed save leaves an existing file as it was.
+/// Writes `capture` to the `.dsl` file at `path`; see [`write_atomically`].
 pub fn write_dsl_file(
     path: &Path,
     capture: &LogicCapture,
     request: &DslWriteRequest<'_>,
+    progress: Progress<'_>,
+) -> Result<(), FileError> {
+    write_atomically(path, |file| {
+        write_dsl_with(file, capture, request, progress)
+    })
+}
+
+/// Writes a file next to `path` and moves it over `path` once complete, so a failed or cancelled
+/// write leaves an existing file as it was.
+pub fn write_atomically(
+    path: &Path,
+    write: impl FnOnce(BufWriter<File>) -> Result<BufWriter<File>, FileError>,
 ) -> Result<(), FileError> {
     let mut name = path.file_name().unwrap_or_default().to_os_string();
     name.push(".part");
     let partial = path.with_file_name(name);
     let written = (|| {
-        let writer = write_dsl(BufWriter::new(File::create(&partial)?), capture, request)?;
+        let writer = write(BufWriter::new(File::create(&partial)?))?;
         let file = writer.into_inner().map_err(|error| error.into_error())?;
         file.sync_all()?;
         std::fs::rename(&partial, path)?;
@@ -209,6 +221,16 @@ pub fn write_dsl<W: Write + Seek>(
     capture: &LogicCapture,
     request: &DslWriteRequest<'_>,
 ) -> Result<W, FileError> {
+    write_dsl_with(writer, capture, request, &mut |_| true)
+}
+
+/// [`write_dsl`], telling `progress` how far it got and stopping when it says so.
+pub fn write_dsl_with<W: Write + Seek>(
+    writer: W,
+    capture: &LogicCapture,
+    request: &DslWriteRequest<'_>,
+    progress: Progress<'_>,
+) -> Result<W, FileError> {
     let samples = capture.len();
     let words = usize::try_from(samples.div_ceil(64)).unwrap_or(usize::MAX);
     let blocks = words.div_ceil(CHUNK_WORDS);
@@ -251,8 +273,14 @@ pub fn write_dsl<W: Write + Seek>(
     zip.write_all(json_text(request.session, "session")?.as_bytes())?;
 
     let mut bytes = Vec::new();
+    let total = (blocks * info.channels.len()).max(1);
+    let mut done = 0;
     for (index, data) in capture.channels() {
         for block in 0..blocks {
+            if !progress(done as f64 / total as f64) {
+                return Err(FileError::Cancelled);
+            }
+            done += 1;
             let block_words = (words - block * CHUNK_WORDS).min(CHUNK_WORDS);
             bytes.clear();
             match data.chunk(block) {
@@ -271,6 +299,7 @@ pub fn write_dsl<W: Write + Seek>(
             zip.write_all(&bytes)?;
         }
     }
+    progress(1.0);
     Ok(zip.finish()?)
 }
 

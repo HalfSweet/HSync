@@ -29,6 +29,9 @@ pub enum FileError {
         /// Its length in bytes.
         len: u64,
     },
+    /// The user cancelled the write.
+    #[error("cancelled")]
+    Cancelled,
     /// An embedded JSON document is malformed.
     #[error("invalid json in {entry}: {source}")]
     Json {
@@ -60,6 +63,7 @@ impl From<&FileError> for UiError {
             FileError::Json { entry, .. } => {
                 UiError::new("error.file.corrupt").with("detail", entry.as_str())
             }
+            FileError::Cancelled => UiError::new("error.file.cancelled"),
         }
     }
 }
