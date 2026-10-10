@@ -4,6 +4,8 @@ import { listen } from '@tauri-apps/api/event'
 import type { BinsRequest } from './bindings/BinsRequest'
 import type { CaptureRequest } from './bindings/CaptureRequest'
 import type { CaptureSummary } from './bindings/CaptureSummary'
+import type { DecoderLanes } from './bindings/DecoderLanes'
+import type { DecoderStatus } from './bindings/DecoderStatus'
 import type { DeviceState } from './bindings/DeviceState'
 import type { DeviceSummary } from './bindings/DeviceSummary'
 import type { Direction } from './bindings/Direction'
@@ -11,10 +13,31 @@ import type { LiveStatus } from './bindings/LiveStatus'
 import type { OptionKey } from './bindings/OptionKey'
 import type { OptionValue } from './bindings/OptionValue'
 import type { PulseInfo } from './bindings/PulseInfo'
+import type { StreamMode } from './bindings/StreamMode'
+import type { StreamPage } from './bindings/StreamPage'
 import { decodeBins, type BinsResult } from './bins'
 
 /** Stops a subscription. */
 export type Unsubscribe = () => void
+
+/** A page of a decoder's data stream. */
+export interface StreamRequest {
+  captureId: number
+  index: number
+  mode: StreamMode
+  /** The marked segment, to count what lies inside it. */
+  segment: [number, number] | null
+  /** List only rows overlapping the segment. */
+  onlySegment: boolean
+  offset: number
+  count: number
+}
+
+/** A decoder of capture `captureId` finished. */
+export interface DecodedEvent {
+  captureId: number
+  index: number
+}
 
 /** Everything the UI asks of the Rust side. Components reach it only through stores. */
 export interface Backend {
@@ -43,12 +66,32 @@ export interface Backend {
   captureStart(request: CaptureRequest): Promise<CaptureSummary>
   captureStop(): Promise<void>
 
+  /** The decoders of a capture and how far they are. */
+  decodeList(captureId: number): Promise<DecoderStatus[]>
+  /** Decode lanes of finished decoders over `start..end`. */
+  decodeView(
+    captureId: number,
+    start: number,
+    end: number,
+    samplesPerPixel: number,
+  ): Promise<DecoderLanes[]>
+  decodeStream(request: StreamRequest): Promise<StreamPage | null>
+  /** Position in a decoder's data stream of the first row ending after `sample`. */
+  decodeRowAt(
+    captureId: number,
+    index: number,
+    mode: StreamMode,
+    sample: number,
+  ): Promise<number | null>
+
   /** Progress and end of captures taken with a device. */
   onLive(handler: (status: LiveStatus) => void): Promise<Unsubscribe>
   /** The device list after devices came or went. */
   onDevices(handler: (devices: DeviceSummary[]) => void): Promise<Unsubscribe>
   /** The open device, when it changed by itself (it was unplugged). */
   onDeviceState(handler: (state: DeviceState | null) => void): Promise<Unsubscribe>
+  /** A decoder finished. */
+  onDecoded(handler: (event: DecodedEvent) => void): Promise<Unsubscribe>
 }
 
 class TauriBackend implements Backend {
@@ -108,8 +151,28 @@ class TauriBackend implements Backend {
     return invoke<void>('capture_stop')
   }
 
+  decodeList(captureId: number) {
+    return invoke<DecoderStatus[]>('decode_list', { captureId })
+  }
+
+  decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
+    return invoke<DecoderLanes[]>('decode_view', { captureId, start, end, samplesPerPixel })
+  }
+
+  decodeStream(request: StreamRequest) {
+    return invoke<StreamPage | null>('decode_stream', { ...request })
+  }
+
+  decodeRowAt(captureId: number, index: number, mode: StreamMode, sample: number) {
+    return invoke<number | null>('decode_row_at', { captureId, index, mode, sample })
+  }
+
   onLive(handler: (status: LiveStatus) => void) {
     return listen<LiveStatus>('capture://live', (event) => handler(event.payload))
+  }
+
+  onDecoded(handler: (event: DecodedEvent) => void) {
+    return listen<DecodedEvent>('decode://done', (event) => handler(event.payload))
   }
 
   onDevices(handler: (devices: DeviceSummary[]) => void) {

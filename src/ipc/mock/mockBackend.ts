@@ -3,7 +3,7 @@
  * demo capture from edge lists that `cargo run -p hsync-fileio --example dsl_edges` exported, and
  * answers queries with the same algorithms as `hsync-capture` (see its tests for the semantics).
  */
-import type { Backend, Unsubscribe } from '../backend'
+import type { Backend, DecodedEvent, StreamRequest, Unsubscribe } from '../backend'
 import type { BinsRequest } from '../bindings/BinsRequest'
 import type { CaptureRequest } from '../bindings/CaptureRequest'
 import type { CaptureSummary } from '../bindings/CaptureSummary'
@@ -22,6 +22,7 @@ import {
   type BinsResult,
 } from '../bins'
 import fixture from './fixtures/protocol-demo.json'
+import { mockRowAt, mockStatuses, mockStream, mockView } from './mockDecode'
 import { DEMO_ID, MOCK_DEVICES, MockDemoDevice, uiError } from './mockDevice'
 
 /** How long a simulated capture takes to fill, and in how many steps. */
@@ -116,6 +117,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
   let lastId = 0
   let device: MockDemoDevice | null = null
   const liveHandlers = new Set<(status: LiveStatus) => void>()
+  const decodedHandlers = new Set<(event: DecodedEvent) => void>()
   let live: { status: LiveStatus; timers: ReturnType<typeof setTimeout>[] } | null = null
 
   const channel = (captureId: number, index: number): MockChannel => {
@@ -140,8 +142,15 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     if (!live) return
     for (const timer of live.timers) clearTimeout(timer)
     emit({ phase: 'ended', end })
+    const captureId = live.status.captureId
     live = null
     if (device) device.capturing = false
+    // The decoders run once the capture is complete.
+    setTimeout(() => {
+      for (const { index } of mockStatuses(false)) {
+        for (const handler of decodedHandlers) handler({ captureId, index })
+      }
+    }, 150)
   }
 
   const subscribe = <T>(handlers: Set<(value: T) => void>, handler: (value: T) => void) => {
@@ -219,6 +228,41 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       if (direction === 'next') return Promise.resolve(data.nextChange(sample))
       const prev = data.prevChange(sample)
       return Promise.resolve(prev === null ? null : prev + 1)
+    },
+
+    async decodeList(captureId: number) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      return Promise.resolve(mockStatuses(live?.status.captureId === captureId))
+    },
+
+    async decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      if (live?.status.captureId === captureId) return Promise.resolve([])
+      return Promise.resolve(mockView(start, end, samplesPerPixel))
+    },
+
+    async decodeStream(request: StreamRequest) {
+      if (!summary || summary.id !== request.captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      if (live?.status.captureId === request.captureId) return Promise.resolve(null)
+      return Promise.resolve(
+        mockStream(
+          request.index,
+          request.mode,
+          request.segment,
+          request.onlySegment,
+          request.offset,
+          request.count,
+        ),
+      )
+    },
+
+    async decodeRowAt(captureId, index, mode, sample) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      return Promise.resolve(mockRowAt(index, mode, sample))
     },
 
     async deviceList(): Promise<DeviceSummary[]> {
@@ -341,6 +385,10 @@ export function createMockBackend(data: Fixture = fixture): Backend {
 
     onDeviceState() {
       return Promise.resolve<Unsubscribe>(() => undefined)
+    },
+
+    onDecoded(handler) {
+      return subscribe(decodedHandlers, handler)
     },
   }
 }
