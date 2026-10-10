@@ -59,9 +59,9 @@ function presetOf(session: Session): CapturePreset | null {
 
 /**
  * Sessions: the device settings, channels, triggers and decoders as a whole,
- * saved to and loaded from files, and the device settings remembered per driver between runs,
- * as DSView restores a device's last settings. Channel names and decoders belong to captures:
- * those of a session loaded before any capture wait for the first one.
+ * saved to and loaded from files, and remembered per driver between runs, as DSView restores a
+ * device's last settings. Channel names and decoders belong to captures: those remembered, or of
+ * a session loaded before any capture, wait for the first one.
  */
 export const useSessionStore = defineStore('session', () => {
   const device = useDeviceStore()
@@ -183,6 +183,7 @@ export const useSessionStore = defineStore('session', () => {
       const driver = device.state?.info.driver
       if (id === undefined || !driver) return
       const stored = recall(driver)
+      capture.preset = stored && presetOf(stored)
       if (!stored) return
       restoring = true
       try {
@@ -194,18 +195,48 @@ export const useSessionStore = defineStore('session', () => {
   )
   let timer: ReturnType<typeof setTimeout> | undefined
   watch(
-    () => [device.state, channels.triggers, channels.colours, trigger.$state] as const,
+    () =>
+      [
+        device.state,
+        channels.triggers,
+        channels.colours,
+        trigger.$state,
+        capture.summary?.channels,
+        capture.summary?.decoders,
+        capture.preset,
+      ] as const,
     () => {
       const driver = device.state?.info.driver
       if (restoring || !driver) return
       clearTimeout(timer)
-      timer = setTimeout(() => {
-        const { decoders: _, channelNames: __, ...settings } = snapshot()
-        remember(driver, { ...settings, decoders: null, channelNames: {} })
-      }, 500)
+      timer = setTimeout(() => remember(driver, remembered(driver)), 500)
     },
     { deep: true },
   )
+
+  /**
+   * What to remember of `driver`: the settings, and the channel names and decoders of its own
+   * capture, kept while a file or another device's capture is shown. An empty decoder list
+   * remembers that there were none.
+   */
+  function remembered(driver: string): Session {
+    const settings = snapshot()
+    const summary = capture.summary
+    if (!summary) {
+      const preset = capture.preset
+      return {
+        ...settings,
+        channelNames: { ...preset?.channelNames },
+        decoders: preset?.decoders ?? null,
+      }
+    }
+    const source = summary.source
+    if (source.kind === 'device' && source.driver === driver) {
+      return { ...settings, channelNames: namesOf(summary), decoders: [...decode.entries] }
+    }
+    const kept = recall(driver)
+    return { ...settings, channelNames: kept?.channelNames ?? {}, decoders: kept?.decoders ?? null }
+  }
 
   return { snapshot, apply, save, load }
 })

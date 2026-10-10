@@ -66,8 +66,8 @@ export const useCaptureStore = defineStore('capture', () => {
   /** The save or export under way. */
   const job = shallowRef<FileJob | null>(null)
   /**
-   * Channel names and decoders for a capture that follows no other: those of a session loaded
-   * before any capture. Without, the device's own apply.
+   * Channel names and decoders for a capture that follows no other: those remembered for the
+   * open device, or of a session loaded before any capture. Without, the device's own apply.
    */
   const preset = shallowRef<CapturePreset | null>(null)
   let lastRequest: TriggerRequest | null = null
