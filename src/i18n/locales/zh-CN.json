@@ -6,11 +6,22 @@
     "device": {
       "options": "设备选项…",
       "unsupported": "暂不支持",
-      "select": "选择设备"
+      "select": "选择设备",
+      "none": "没有找到设备",
+      "opening": "正在打开…",
+      "needsFirmware": "打开时下载固件",
+      "speedTooLow": "USB 端口速度过低",
+      "rescan": "重新扫描",
+      "listTitle": "设备"
     },
     "acquisition": {
       "aria": "采集设置：采样率 {rate}，时长 {duration}，{channels} 个通道",
-      "channels": "{count} 通道"
+      "channels": "{count} 通道",
+      "samplerate": "采样率",
+      "duration": "时长",
+      "channelsTitle": "通道",
+      "samples": "{count} 个采样点",
+      "noDevice": "先选择设备"
     },
     "trigger": {
       "label": "触发",
@@ -28,7 +39,12 @@
       "single": "单次",
       "repeat": "重复",
       "loop": "循环",
-      "instant": "即时"
+      "instant": "即时",
+      "singleTip": "采集一次",
+      "instantTip": "忽略触发条件，立即开始",
+      "repeatTip": "每次采集完成后自动再采一次",
+      "loopTip": "持续采集，只保留最新的数据",
+      "notYet": "即将支持"
     },
     "search": {
       "aria": "搜索解码结果",
@@ -36,6 +52,49 @@
     },
     "export": "导出",
     "settings": "设置"
+  },
+  "device": {
+    "demo": "演示设备",
+    "dialog": {
+      "title": "{device} 的选项",
+      "close": "关闭",
+      "locked": "采集进行中，停止后才能修改"
+    },
+    "option": {
+      "operationMode": "运行模式",
+      "channelMode": "通道模式",
+      "samplerate": "采样率",
+      "sampleLimit": "采样深度",
+      "threshold": "阈值电平",
+      "vth": "阈值电压",
+      "filter": "滤除单个采样周期的毛刺",
+      "rle": "启用 RLE 压缩（Buffer 模式可超出硬件深度）",
+      "externalClock": "使用外部时钟",
+      "clockFallingEdge": "在时钟下降沿采样",
+      "bufferOption": "停止时",
+      "pattern": "信号"
+    },
+    "operationMode": {
+      "buffer": "Buffer 模式",
+      "stream": "Stream 模式"
+    },
+    "channelMode": {
+      "stream": "使用 {count} 个通道（最高 {rate}）",
+      "buffer": "使用通道 0–{last}（最高 {rate}）"
+    },
+    "threshold": {
+      "v33": "1.8/2.5/3.3 V",
+      "v50": "5.0 V"
+    },
+    "bufferOption": {
+      "stop": "立即停止",
+      "upload": "上传已采集的数据"
+    },
+    "pattern": {
+      "protocol": "协议演示",
+      "random": "随机脉冲",
+      "counter": "计数器"
+    }
   },
   "overview": {
     "whole": "全程",
@@ -178,7 +237,11 @@
     "perDivision": "{value}/格",
     "zoomOut": "缩小",
     "zoomIn": "放大",
-    "zoomFit": "缩放到全程"
+    "zoomFit": "缩放到全程",
+    "stopped": "已停止",
+    "failed": "采集失败",
+    "hardwareFill": "设备缓存 {percent}%",
+    "overflow": "USB 带宽不足，部分数据丢失"
   },
   "settings": {
     "title": "设置",
@@ -203,5 +266,44 @@
     "µs": "微秒",
     "ms": "毫秒",
     "s": "秒"
+  },
+  "error": {
+    "app": {
+      "taskFailed": "后台任务失败：{detail}",
+      "resourceMissing": "缺少应用资源：{detail}",
+      "unexpected": "意外错误：{detail}",
+      "unavailableInBrowser": "浏览器预览中不能打开文件"
+    },
+    "session": {
+      "noCapture": "没有打开的采集",
+      "staleCapture": "采集已被替换",
+      "unknownChannel": "采集中没有通道 {channel}",
+      "invalidRange": "无效的采样范围",
+      "noDevice": "没有打开设备",
+      "unknownDevice": "找不到设备 {id}",
+      "busy": "正在采集，请先停止"
+    },
+    "device": {
+      "usb": "USB 通信失败：{detail}",
+      "firmwareMissing": "缺少固件文件 {file}",
+      "firmwareIncompatible": "设备固件版本不兼容（{version}）",
+      "restarting": "设备正在重启",
+      "busy": "设备正被其他程序使用",
+      "noDriver": "没有可用的 USB 驱动，Windows 需要为设备安装 WinUSB",
+      "timeout": "设备没有响应：{detail}",
+      "protocol": "设备返回了无法识别的数据：{detail}",
+      "invalidRequest": "设备不接受这项设置：{detail}",
+      "unsupported": "暂不支持这台设备",
+      "overflow": "USB 带宽不足，采集已中止。请降低采样率或减少通道",
+      "detached": "设备已断开",
+      "lost": "与设备的连接中断"
+    },
+    "file": {
+      "io": "读取文件失败：{detail}",
+      "notCapture": "这不是 DSView 采集文件",
+      "corrupt": "文件已损坏：{detail}",
+      "unsupportedVersion": "不支持第 {version} 版的文件格式",
+      "unsupportedMode": "只能打开逻辑分析采集"
+    }
   }
 }

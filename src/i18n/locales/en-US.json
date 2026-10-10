@@ -6,11 +6,22 @@
     "device": {
       "options": "Device options…",
       "unsupported": "Not supported yet",
-      "select": "Select device"
+      "select": "Select device",
+      "none": "No devices found",
+      "opening": "Opening…",
+      "needsFirmware": "Loads firmware when opened",
+      "speedTooLow": "USB port too slow",
+      "rescan": "Scan again",
+      "listTitle": "Devices"
     },
     "acquisition": {
       "aria": "Acquisition: sample rate {rate}, duration {duration}, {channels} channels",
-      "channels": "{count} ch"
+      "channels": "{count} ch",
+      "samplerate": "Sample rate",
+      "duration": "Duration",
+      "channelsTitle": "Channels",
+      "samples": "{count} samples",
+      "noDevice": "Select a device first"
     },
     "trigger": {
       "label": "Trigger",
@@ -28,7 +39,12 @@
       "single": "Single",
       "repeat": "Repeat",
       "loop": "Loop",
-      "instant": "Instant"
+      "instant": "Instant",
+      "singleTip": "Capture once",
+      "instantTip": "Ignore the trigger and start at once",
+      "repeatTip": "Capture again after each capture completes",
+      "loopTip": "Capture continuously, keeping the latest data",
+      "notYet": "Coming soon"
     },
     "search": {
       "aria": "Search decoded data",
@@ -36,6 +52,49 @@
     },
     "export": "Export",
     "settings": "Settings"
+  },
+  "device": {
+    "demo": "Demo device",
+    "dialog": {
+      "title": "{device} options",
+      "close": "Close",
+      "locked": "A capture is running; stop it to change options"
+    },
+    "option": {
+      "operationMode": "Operation mode",
+      "channelMode": "Channel mode",
+      "samplerate": "Sample rate",
+      "sampleLimit": "Sample depth",
+      "threshold": "Threshold level",
+      "vth": "Threshold voltage",
+      "filter": "Filter one-sample glitches",
+      "rle": "RLE compression (buffer mode may exceed the hardware depth)",
+      "externalClock": "Use an external clock",
+      "clockFallingEdge": "Sample on the falling clock edge",
+      "bufferOption": "When stopped",
+      "pattern": "Signals"
+    },
+    "operationMode": {
+      "buffer": "Buffer mode",
+      "stream": "Stream mode"
+    },
+    "channelMode": {
+      "stream": "{count} channels (up to {rate})",
+      "buffer": "Channels 0–{last} (up to {rate})"
+    },
+    "threshold": {
+      "v33": "1.8/2.5/3.3 V",
+      "v50": "5.0 V"
+    },
+    "bufferOption": {
+      "stop": "Stop immediately",
+      "upload": "Upload captured data"
+    },
+    "pattern": {
+      "protocol": "Protocol demo",
+      "random": "Random pulses",
+      "counter": "Counter"
+    }
   },
   "overview": {
     "whole": "Capture",
@@ -178,7 +237,11 @@
     "perDivision": "{value}/div",
     "zoomOut": "Zoom out",
     "zoomIn": "Zoom in",
-    "zoomFit": "Zoom to fit"
+    "zoomFit": "Zoom to fit",
+    "stopped": "Stopped",
+    "failed": "Capture failed",
+    "hardwareFill": "Device buffer {percent}%",
+    "overflow": "USB bandwidth exceeded; some data was lost"
   },
   "settings": {
     "title": "Settings",
@@ -203,5 +266,44 @@
     "µs": "microseconds",
     "ms": "milliseconds",
     "s": "seconds"
+  },
+  "error": {
+    "app": {
+      "taskFailed": "A background task failed: {detail}",
+      "resourceMissing": "An application resource is missing: {detail}",
+      "unexpected": "Unexpected error: {detail}",
+      "unavailableInBrowser": "Files cannot be opened in the browser preview"
+    },
+    "session": {
+      "noCapture": "No capture is open",
+      "staleCapture": "The capture was replaced",
+      "unknownChannel": "The capture has no channel {channel}",
+      "invalidRange": "Invalid sample range",
+      "noDevice": "No device is open",
+      "unknownDevice": "Device {id} was not found",
+      "busy": "A capture is running; stop it first"
+    },
+    "device": {
+      "usb": "USB communication failed: {detail}",
+      "firmwareMissing": "Firmware file {file} is missing",
+      "firmwareIncompatible": "Incompatible device firmware ({version})",
+      "restarting": "The device is restarting",
+      "busy": "Another program is using the device",
+      "noDriver": "No usable USB driver; on Windows, install WinUSB for the device",
+      "timeout": "The device did not respond: {detail}",
+      "protocol": "The device sent data that could not be understood: {detail}",
+      "invalidRequest": "The device does not accept this setting: {detail}",
+      "unsupported": "This device is not supported yet",
+      "overflow": "USB bandwidth exceeded, so the capture stopped. Lower the sample rate or use fewer channels",
+      "detached": "The device was disconnected",
+      "lost": "The connection to the device was lost"
+    },
+    "file": {
+      "io": "Reading the file failed: {detail}",
+      "notCapture": "This is not a DSView capture file",
+      "corrupt": "The file is damaged: {detail}",
+      "unsupportedVersion": "File format version {version} is not supported",
+      "unsupportedMode": "Only logic analyzer captures can be opened"
+    }
   }
 }
