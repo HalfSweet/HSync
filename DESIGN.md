@@ -54,7 +54,8 @@ The palette is restrained: fills and text are near-neutral greys with a hint of 
 | `--trace`                  | Default trace line                                             | `#3B3D40`             | `#BCBEC0`             |
 | `--trace-2`                | Narrow-row trace line, empty trigger slot                      | `#95999C`             | `#67696C`             |
 | `--grid`                   | Grid lines                                                     | ink 7%                | ink 6%                |
-| `--veil`                   | Segment band, dialog backdrop                                  | ink 5%                | ink 6%                |
+| `--veil`                   | Segment band                                                   | ink 5%                | ink 6%                |
+| `--scrim`                  | Behind dialogs and the settings page, over a 12 px blur        | ink 12%               | black 45%             |
 | `--hover`                  | Hover fill                                                     | ink 6%                | ink 8%                |
 | `--sel`                    | Selected content in the data stream                            | ink 12%               | ink 18%               |
 | `--find`                   | Rows containing search matches                                 | `#FBF4DA`             | `#332E19`             |
@@ -130,7 +131,7 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 | Capture              | Primary button (`--ink` fill, `--canvas` text) + 28 px drop-down on the right             | Capture / Stop; drop-down: Single, Repeat, Loop, plus Instant                                                                                                                            |
 | Search box           | 220–340 px; placeholder "Search values or text, e.g. 4F, HOST"; `/` key hint on the right | See §8                                                                                                                                                                                   |
 | Export               | 32×32 icon button                                                                         | "Save capture…", "Export…", "Save session…"                                                                                                                                              |
-| Settings             | 32×32 icon button; when an update is available, a 6 px `--ink` dot at the top right       | Settings panel; when an update is available, the button is named "Settings (version x available)"                                                                                        |
+| Settings             | 32×32 icon button; when an update is available, a 6 px `--ink` dot at the top right       | Opens the settings page (§11); ⌘/Ctrl+, opens and closes it as well; when an update is available, the button is named "Settings (version x available)"                                   |
 
 **Acquisition settings**: durations step down the 1-2-5 sequence from the longest available value until fewer than 1024 samples remain; durations beyond the device memory are marked "RLE", and choosing one turns on RLE compression. On opening, both lists scroll to the current values. When the chosen capture would take more than half of this machine's memory, the bottom of the popover states in the alert colour how much it needs; the capture is not blocked.
 
@@ -139,13 +140,6 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 - **Repeat**: interval 0.1–10 s in steps of 0.1 s, default 1 s, set in the drop-down menu; while waiting for the next capture, the status bar reads "Capturing again in N s". Every later capture runs in the background: the screen keeps the previous complete result, the status bar shows progress, and the new result replaces it whole when done; stopping midway discards that capture unless "Show the latest data when a repeat stops" is on.
 - **Loop**: selectable only when the device supports it; otherwise greyed out, with the reason given.
 - The next capture on the same device keeps the zoom and position; opening a file or Demo zooms to fit.
-
-**Settings panel**:
-
-- Theme (System / Light / Dark), Density (Comfortable / Compact), Graphics acceleration (Auto / Off, with the renderer in use named below) and Language (System / `简体中文` / `English`), all segmented controls.
-- Behaviour: "Centre the view on the trigger" (on), "Follow the latest data while capturing" (on), "Keep scrolling after a quick drag" (on: when a drag is released faster than 0.5 px/ms, panning continues with exponential decay until a press or the wheel stops it), "Show the latest data when a repeat stops" (off), "Check for updates at startup" (on: checks once in the background after startup, and a failure stays silent). The first three have no effect while zoomed to fit.
-- Diagnostics: log level, "Write a log file", "Show in folder".
-- "About HSync…"; when an update is available, "Version x available" beside it.
 
 ## 5. Overview strip
 
@@ -263,19 +257,24 @@ The top bar's "Trigger" button opens a 480 px wide panel:
 - From the left: the "Data stream" toggle (`--hover` fill when pressed), the status ("Capture complete", "Waiting for trigger", "Captured 37%"…), save or export progress (cancellable), an error or "Saved to …", the trigger time, the sample count ("131,072 samples") and the segment duration (§6.6).
 - On the right: the warning about a too-slow port, and "Switch / Dismiss" for a newly plugged-in device; Zoom out, the current time base ("50 µs/div", at least 64 px wide, centred), Zoom in and Zoom to fit.
 - **Pointer**: Ctrl/⌘ + wheel zooms around the pointer; Shift + wheel or a horizontal trackpad swipe pans; dragging in the trace area pans, and clicking an edge starts an edge measurement (§6.5).
-- **Keyboard**: `+` / `-` zoom, `←` / `→` pan, `Home` zooms to fit, `/` searches, ⌘/Ctrl+O opens, ⌘/Ctrl+S saves, and `Esc` closes a menu, cancels an edge measurement and cancels the segment, in that order.
+- **Keyboard**: `+` / `-` zoom, `←` / `→` pan, `Home` zooms to fit, `/` searches, ⌘/Ctrl+O opens, ⌘/Ctrl+S saves, ⌘/Ctrl+, opens the settings, and `Esc` closes a menu, cancels an edge measurement and cancels the segment, in that order.
 
-## 11. Dialogs
+## 11. Dialogs and the settings page
 
-- Shared style: a panel centred on a full-window `--veil` backdrop (`--raise` fill, 1 px `--ink` border, 6 px radius), with a 40 px title bar and a close button on the right. Focus moves into the dialog when it opens; Esc or a click on the backdrop closes it.
+- Shared style: the interface behind is blurred by `--veil-blur` (12 px) and dimmed by `--scrim`; over it a panel is centred (`--raise` fill, 6 px radius) without an outline, set apart from the interface by shade alone, with a 40 px title bar and a close button on the right. Focus moves into the panel when it opens; Esc or a click on the backdrop closes it.
 - **Device options**: a form generated from the options the device provides (switches, drop-downs, numbers); sample rate and duration live in the top bar's acquisition settings. During a capture the form is read-only, with an explanation.
 - **Add / edit decoder**: a searchable decoder list, channel mapping, options (one group per stacked decoder), decode range (Whole capture / Segment) and display (number base, showing or hiding annotation rows); when editing, the decoder can be removed.
 - **Export**: format (DSView capture, CSV table, VCD waveform, sigrok session, Raw binary, each with a one-line description; CSV can write one row per sample), range (Whole capture / Segment) and channels (All / None); the save location is chosen after confirming.
-- **About**: version, license and component credits. Below the version number is the update area: when no update is known, it offers "Check for updates", with "Checking for updates…" or "HSync is up to date" beside it; with an update, it reads "Version x is available" and offers "Download and restart"; while downloading, it shows a percentage ("Downloading…" when the size is unknown), and once installed the app restarts by itself. On failure, the reason appears below, and the user can try again.
+- **Settings page**: 760 × 560 px, shrinking in small windows. A 176 px side bar on the left (`--chrome` fill) lists Appearance, Behaviour and Diagnostics, with About set apart at its foot; the selected section has a `--raise` fill and an outline like a segmented control's, which slides to the next section. When an update is available, a `--ink` dot sits at the right of About, and its tip and screen reader text read "Version x available". The current section fills the right, labels on the left and controls on the right:
+  - **Appearance**: Theme (System / Light / Dark), Density (Comfortable / Compact), Graphics acceleration (Auto / Off, with the renderer in use named below) and Language (System / `简体中文` / `English`), all segmented controls.
+  - **Behaviour**: "Centre the view on the trigger" (on), "Follow the latest data while capturing" (on), "Keep scrolling after a quick drag" (on: when a drag is released faster than 0.5 px/ms, panning continues with exponential decay until a press or the wheel stops it), "Show the latest data when a repeat stops" (off), "Check for updates at startup" (on: checks once in the background after startup, and a failure stays silent). The first three have no effect while zoomed to fit.
+  - **Diagnostics**: log level, "Write a log file", "Show in folder".
+  - **About**: version, license and component credits. Below the version number is the update area: when no update is known, it offers "Check for updates", with "Checking for updates…" or "HSync is up to date" beside it; with an update, it reads "Version x is available" and offers "Download and restart"; while downloading, it shows a percentage ("Downloading…" when the size is unknown), and once installed the app restarts by itself. On failure, the reason appears below, and the user can try again.
+  - Focus moves into the panel without a focus ring on a section; when the keyboard moves onto the sections, the ring is drawn inside them. On closing, focus returns to the button that opened the page; opened again, the page shows the section last viewed.
 
 ## 12. Accessibility
 
-- Every icon button has an `aria-label`; the group header's expand button has `aria-expanded`; trigger slots have `aria-haspopup="menu"`; menu items have `role="menuitemradio"` plus `aria-checked`; data stream tabs have `role="tab"`; segmented controls use `aria-pressed`.
+- Every icon button has an `aria-label`; the group header's expand button has `aria-expanded`; trigger slots have `aria-haspopup="menu"`; menu items have `role="menuitemradio"` plus `aria-checked`; data stream tabs have `role="tab"`; the settings page's side bar is a vertical `role="tablist"`, where ↑ / ↓ / Home / End move between sections; segmented controls use `aria-pressed`.
 - Focus ring: 2 px solid `--ink`, offset 2 px (offset −2 px inside tabs).
 - With reduced motion on, motion durations are 0, and the start and end states of transitions do not apply either, so every change completes at once (§13).
 
@@ -283,16 +282,16 @@ The top bar's "Trigger" button opens a 480 px wide panel:
 
 When the interface changes state, brief motion shows where things come from and where they go, timed by the tokens in §3.6. Motion changes only opacity, translation and scale (except panel height), so it does not compete with waveform rendering for the main thread.
 
-| Situation                                                                                                               | Motion                                                                                                                                              |
-| ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Menus and popovers                                                                                                      | Grow from the corner of the control that opened them: opacity 0→1, scale 0.96→1; reversed on close                                                  |
-| Dialogs                                                                                                                 | The backdrop fades in; the dialog rises 8 px and scales up from 98%                                                                                 |
-| Data stream panel                                                                                                       | Slides in from, and out to, the bottom edge of the workspace; while moving it covers the timeline, which resizes only once, at the start or the end |
-| Segmented controls, tabs                                                                                                | The selected option's fill (the underline for data stream tabs) slides to the new option with a slight bounce                                       |
-| Panel content changes (trigger type, stage of a stage trigger, export's CSV option, data stream decoder / mode / range) | New content rises 4 px and fades in, and old content disappears at once; the frame's height eases to the new content's height                       |
-| List additions and removals (devices, stage tabs of a stage trigger, channels with conditions)                          | Items scale and fade in or out in place; the other items slide over to close the gap                                                                |
-| Appearing notices (status bar messages, warnings, search match count, trigger summary)                                  | Rise and fade in                                                                                                                                    |
-| Group header expand arrow                                                                                               | Rotates with the slide timing                                                                                                                       |
+| Situation                                                                                                                                      | Motion                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Menus and popovers                                                                                                                             | Grow from the corner of the control that opened them: opacity 0→1, scale 0.96→1; reversed on close                                                  |
+| Dialogs and the settings page                                                                                                                  | The backdrop fades in; the panel rises 8 px and scales up from 98%                                                                                  |
+| Data stream panel                                                                                                                              | Slides in from, and out to, the bottom edge of the workspace; while moving it covers the timeline, which resizes only once, at the start or the end |
+| Segmented controls, tabs, the settings page's side bar                                                                                         | The selected option's fill (the underline for data stream tabs) slides to the new option with a slight bounce                                       |
+| Panel content changes (trigger type, stage of a stage trigger, export's CSV option, data stream decoder / mode / range, settings page section) | New content rises 4 px and fades in, and old content disappears at once; the frame's height eases to the new content's height                       |
+| List additions and removals (devices, stage tabs of a stage trigger, channels with conditions)                                                 | Items scale and fade in or out in place; the other items slide over to close the gap                                                                |
+| Appearing notices (status bar messages, warnings, search match count, trigger summary)                                                         | Rise and fade in                                                                                                                                    |
+| Group header expand arrow                                                                                                                      | Rotates with the slide timing                                                                                                                       |
 
 - Elements that are leaving no longer respond to the pointer.
 - No motion for: anything that follows the pointer (hover readout, edge measurement, segment dragging, panning and zooming); viewport jumps; theme, density and language switches (the canvas redraws in a single frame, so interface colours that transition slowly would fall out of step with it); expanding and collapsing channel groups (the rows are drawn on the canvas).
