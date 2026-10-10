@@ -4,7 +4,7 @@
 
 # HSync
 
-**为 DreamSourceLab DSLogic 打造的现代逻辑分析仪上位机**
+**为 DreamSourceLab DSLogic 与正点原子 ATK-Logic 打造的现代逻辑分析仪上位机**
 
 采集、触发、解码、测量，DSView 的文件照常打开。
 
@@ -26,7 +26,7 @@
   <img src="assets/screenshots/zh-CN/hero-light.webp" alt="HSync 显示一段包含 I²C、UART、SPI 与 CAN-FD 总线的采集：解码结果位于对应波形上方，下方是 I²C 的数据流">
 </picture>
 
-HSync 是 DreamSourceLab DSLogic 系列逻辑分析仪的桌面上位机。接上 DSLogic，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，DSView 自带的 150 种协议解码器也是搜索即用。HSync 能打开、保存 DSView 的 `.dsl` 文件，以前的采集照常可用；运行所需的一切都已打包在内：设备固件、解码器，以及解码器依赖的 Python 运行环境。
+HSync 是 DreamSourceLab DSLogic 与正点原子（ALIENTEK）ATK-Logic 系列逻辑分析仪的桌面上位机。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，DSView 自带的 150 种协议解码器也是搜索即用。HSync 能打开、保存 DSView 的 `.dsl` 文件，以前的采集照常可用；运行所需的一切都已打包在内：设备固件、解码器，以及解码器依赖的 Python 运行环境。
 
 手边没有硬件？HSync 会打开内置的「演示设备」，回放一段包含四种总线的采集数据，所有功能都可以马上试用。
 
@@ -35,15 +35,16 @@ HSync 是 DreamSourceLab DSLogic 系列逻辑分析仪的桌面上位机。接�
 ### 采集
 
 - **支持全部 DSLogic 型号**，从初代 DSLogic 到 U3Pro32（[完整列表](#支持的设备)）。固件与 FPGA 位流已内置，打开设备时自动加载。
+- **支持正点原子 ATK-Logic DL16 与 DL16 Plus**：Buffer 模式最高 1 GHz，阈值可在 −5 至 5 V 之间任意设置。
 - **Buffer 与 Stream 两种模式**：时长超出设备内存时可启用 RLE 压缩；所需内存超过本机一半时会提前提醒。
 - **单次、重复、循环、即时四种采集方式。** 重复采集时，屏幕保留上一次的完整结果，新的一次在后台采集；循环采集持续进行，只保留最新的一段。
 - **设备选项**：阈值电压、毛刺滤波、外部时钟等，设置会被记住。
-- **支持热插拔。** 打开演示设备时插入 DSLogic，HSync 会提示切换过去；USB 短暂断开后，HSync 会重新打开设备并恢复设置。
+- **支持热插拔。** 打开演示设备时插入逻辑分析仪，HSync 会提示切换过去；USB 短暂断开后，HSync 会重新打开设备并恢复设置。
 
 ### 触发
 
 - **触发条件直接设在通道行上。** 点通道名右侧的触发位，选择上升沿、下降沿、任意沿、高电平或低电平。
-- **多级触发**最多 16 级，每级由两组条件组合而成，满足指定次数后进入下一级；**串行触发**可匹配最多 16 位的数据值（Buffer 模式）。
+- **多级触发**最多 16 级，每级由两组条件组合而成，满足指定次数后进入下一级；**串行触发**可匹配最多 16 位的数据值（DSLogic 的 Buffer 模式）。
 - **触发位置可调**，标尺以触发点为零点计时。
 
 ![触发面板设置为三级触发，条件设在通道 D0、D1 与 D5 上](assets/screenshots/zh-CN/trigger.webp)
@@ -95,12 +96,15 @@ HSync 是 DreamSourceLab DSLogic 系列逻辑分析仪的桌面上位机。接�
 ### 首次运行
 
 - **macOS**：HSync 尚未经过 Apple 公证，第一次打开时 macOS 会提示无法验证此 App。关闭提示后，打开「系统设置 → 隐私与安全性」，在关于 HSync 的提示旁点击「仍要打开」。只需操作一次。
-- **Windows**：安装程序尚未签名，SmartScreen 可能会拦截：点击「更多信息 → 仍要运行」。HSync 通过 WinUSB 驱动访问 DSLogic；如果提示没有可用的 USB 驱动，用 [Zadig](https://zadig.akeo.ie/) 为设备安装 WinUSB（「Options → List All Devices」，选中 DSLogic，选择「WinUSB」后点击「Install Driver」或「Replace Driver」）。
-- **Linux**：要以普通用户身份使用 DSLogic，添加一条针对 DreamSourceLab USB 设备的 udev 规则，然后重新插拔设备。装过 DSView 的系统已有同样的规则，可以跳过这一步。
+- **Windows**：安装程序尚未签名，SmartScreen 可能会拦截：点击「更多信息 → 仍要运行」。HSync 通过 WinUSB 驱动访问 DSLogic 与 ATK-Logic；如果提示没有可用的 USB 驱动，用 [Zadig](https://zadig.akeo.ie/) 为设备安装 WinUSB（「Options → List All Devices」，选中该设备，选择「WinUSB」后点击「Install Driver」或「Replace Driver」）。
+- **Linux**：要以普通用户身份使用 DSLogic 或 ATK-Logic，为它们添加 udev 规则，然后重新插拔设备。装过 DSView 的系统已有 DreamSourceLab 的规则，可以跳过这一条。
 
   ```sh
   sudo tee /etc/udev/rules.d/60-dreamsourcelab.rules > /dev/null <<'EOF'
   SUBSYSTEM=="usb", ATTRS{idVendor}=="2a0e", MODE="0666"
+  EOF
+  sudo tee /etc/udev/rules.d/60-atk-logic.rules > /dev/null <<'EOF'
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="ffcc", MODE="0666"
   EOF
   sudo udevadm control --reload-rules
   sudo udevadm trigger
@@ -112,8 +116,8 @@ HSync 每次启动时检查新版本（可在「设置 → 行为」里关闭）
 
 ## 快速上手
 
-1. **打开设备。** 连接 DSLogic，在左上角的设备菜单里选中它。第一次打开时，HSync 会加载设备固件，需要几秒钟。没有硬件时，当前设备就是「演示设备」。
-2. **设置采集。** 设备菜单右边的按钮显示采样率、时长与通道数，点它即可修改这些以及设备选项：运行模式（Buffer / Stream）、阈值、滤波与时钟等设置。
+1. **打开设备。** 连接逻辑分析仪，在左上角的设备菜单里选中它。第一次打开 DSLogic 时，HSync 会加载设备固件，需要几秒钟。没有硬件时，当前设备就是「演示设备」。
+2. **设置采集。** 设备菜单右边的按钮显示采样率、时长与通道数，点它即可修改这些以及设备选项：运行模式（Buffer / Stream）、阈值，以及 DSLogic 的滤波与时钟等设置。
 3. **设置触发**（可选）。点通道名右侧的触发位，选择一种边沿或电平。顶栏的「触发」里有触发位置、多级触发与串行触发。
 4. **采集。** 点「采集」。旁边的下拉箭头可以在「单次」「重复」「循环」之间切换，或发起忽略触发条件的「即时」采集。
 5. **解码。** 点「添加协议解码」，搜索协议并为它选择通道。点状态栏的「数据流」查看全部解码结果。
@@ -124,19 +128,21 @@ HSync 每次启动时检查新版本（可在「设置 → 行为」里关闭）
 
 ## 支持的设备
 
-| 设备            | 通道数 | USB  |
-| --------------- | ------ | ---- |
-| DSLogic         | 16     | 2.0  |
-| DSLogic Pro     | 16     | 2.0  |
-| DSLogic Plus    | 16     | 2.0  |
-| DSLogic Basic   | 16     | 2.0  |
-| DSLogic U2Basic | 16     | 2.0  |
-| DSLogic U2Pro16 | 16     | 2.0  |
-| DSLogic U3Pro16 | 16     | 3.0  |
-| DSLogic U3Pro32 | 32     | 3.0  |
-| 演示设备        | 16     | 内置 |
+| 设备                | 通道数 | USB  |
+| ------------------- | ------ | ---- |
+| DSLogic             | 16     | 2.0  |
+| DSLogic Pro         | 16     | 2.0  |
+| DSLogic Plus        | 16     | 2.0  |
+| DSLogic Basic       | 16     | 2.0  |
+| DSLogic U2Basic     | 16     | 2.0  |
+| DSLogic U2Pro16     | 16     | 2.0  |
+| DSLogic U3Pro16     | 16     | 3.0  |
+| DSLogic U3Pro32     | 32     | 3.0  |
+| ATK-Logic DL16      | 16     | 2.0  |
+| ATK-Logic DL16 Plus | 16     | 2.0  |
+| 演示设备            | 16     | 内置 |
 
-HSync 与设备的通信方式与 DSView 逐字节一致，已在 DSLogic U2Pro16 上实测。如果你在用其他型号，欢迎[反馈使用情况](https://github.com/HalfSweet/HSync/issues/new)。DSCope 示波器以及 DSView 的示波器、数据采集模式暂不支持。
+HSync 与 DSLogic 的通信方式与 DSView 逐字节一致，与 ATK-Logic 的通信方式与正点原子的 ATK-Logic 软件逐字节一致，已在 DSLogic U2Pro16 上实测。如果你在用其他型号，欢迎[反馈使用情况](https://github.com/HalfSweet/HSync/issues/new)。DSCope 示波器、DSView 的示波器与数据采集模式，以及 ATK-Logic 设备的 PWM 输出暂不支持。ATK-Logic 设备的固件请用正点原子的 ATK-Logic 软件更新。
 
 ## 常见问题
 
@@ -172,6 +178,7 @@ pnpm bundle       # 构建本机的安装包
 
 - DreamSourceLab 的 [DSView](https://github.com/DreamSourceLab/DSView)：设备支持与协议解码器移植自其中的 libsigrok4DSL 与 libsigrokdecode4DSL，它们源自 [sigrok](https://sigrok.org/) 项目。
 - DSLogic 固件与 FPGA 位流来自 DreamSourceLab，以 MIT 许可分发。
+- 正点原子的 [ATK-Logic](https://github.com/alientek-openedv/atk-logic)：ATK-Logic 设备的支持移植自它。
 - [IBM Plex](https://github.com/IBM/plex) 字体，以 SIL Open Font License 1.1 许可分发。
 - [Lucide](https://lucide.dev/) 图标，以 ISC 许可分发。
 - 基于 [Tauri](https://tauri.app/)、[Vue](https://vuejs.org/) 与 [Rust](https://www.rust-lang.org/) 构建。
