@@ -86,11 +86,11 @@ Get the latest version from the [Releases page](https://github.com/HalfSweet/HSy
 
 | Platform | Package                             | Requirements                     |
 | -------- | ----------------------------------- | -------------------------------- |
-| macOS    | `.dmg` (Apple silicon)              | macOS 13.3 or later              |
-| Windows  | `-setup.exe` or `.msi` (x64)        | Windows 10 or 11                 |
+| macOS    | `.dmg` (Apple silicon and Intel)    | macOS 13.3 or later              |
+| Windows  | `-setup.exe` (x64)                  | Windows 10 or 11                 |
 | Linux    | `.AppImage`, `.deb` or `.rpm` (x64) | Ubuntu 22.04, Debian 12 or newer |
 
-The firmware, the protocol decoders and the Python they run on are all included; you don't need DSView or Python. On an Intel Mac or another platform, you can [build HSync from source](#building-from-source).
+The firmware, the protocol decoders and the Python they run on are all included; you don't need DSView or Python. On another platform, you can [build HSync from source](#building-from-source).
 
 ### First launch
 
@@ -166,7 +166,7 @@ pnpm tauri dev    # run HSync from source
 pnpm bundle       # build the installers for this machine
 ```
 
-`pnpm bundle` builds the way releases are built: it downloads the Python runtime that ships with HSync and puts the installers in `target/release/bundle/`. To contribute, start with [AGENTS.md](AGENTS.md), which covers the project's requirements, commands and commit conventions.
+`pnpm bundle` builds the way releases are built: it downloads the Python runtime that ships with HSync and puts the installers in `target/release/bundle/`. On macOS it makes one build for Apple silicon and Intel, in `target/universal-apple-darwin/release/bundle/`; first run `rustup target add aarch64-apple-darwin x86_64-apple-darwin`. To contribute, start with [AGENTS.md](AGENTS.md), which covers the project's requirements, commands and commit conventions.
 
 ## Acknowledgements
 

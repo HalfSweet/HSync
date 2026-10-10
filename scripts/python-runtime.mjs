@@ -5,6 +5,9 @@
  *
  *   node scripts/python-runtime.mjs [--target <rust triple>] [--github-env]
  *
+ * `--target universal-apple-darwin` prepares both macOS architectures and joins them into one
+ * runtime, for `tauri build --target universal-apple-darwin`.
+ *
  * Under `target/python/<triple>/` it leaves
  * - `dist/python/`: the distribution as published; builds link against its libpython,
  * - `home/`: what the app ships as its `python` resource and starts Python with,
@@ -22,6 +25,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   rmSync,
   writeFileSync,
 } from 'node:fs'
@@ -32,6 +36,9 @@ import { parseArgs } from 'node:util'
 /** The python-build-standalone release and the CPython in it; update `DIGESTS` with them. */
 const RELEASE = '20261009'
 const VERSION = '3.14.8'
+const [MAJOR, MINOR] = VERSION.split('.')
+/** libpython as the macOS distributions name it. */
+const MAC_LIBRARY = `libpython${MAJOR}.${MINOR}.dylib`
 
 /** SHA-256 of each target's `install_only_stripped` archive, from the release's `SHA256SUMS`. */
 const DIGESTS = {
@@ -65,7 +72,11 @@ const UNUSED_NATIVE =
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url))
 
+/** The macOS target that holds both architectures, as `tauri build --target` names it. */
+export const UNIVERSAL = 'universal-apple-darwin'
+
 /** @typedef {keyof typeof DIGESTS} Triple */
+/** @typedef {Triple | typeof UNIVERSAL} Target */
 
 /**
  * Where a prepared runtime is.
@@ -99,6 +110,12 @@ function writeIfChanged(/** @type {string} */ path, /** @type {string} */ text) 
   writeFileSync(path, text)
 }
 
+/** Runs a tool, failing with its name when it does. */
+function run(/** @type {string} */ command, /** @type {string[]} */ args) {
+  const result = spawnSync(command, args, { stdio: 'inherit' })
+  if (result.status !== 0) throw new Error(`${command} failed: ${args.join(' ')}`)
+}
+
 /** Downloads the archive once and checks it on every use. */
 async function archive(/** @type {Triple} */ triple) {
   const name = `cpython-${VERSION}+${RELEASE}-${triple}-install_only_stripped.tar.gz`
@@ -126,8 +143,7 @@ function untar(/** @type {string} */ file, /** @type {string} */ into) {
     process.platform === 'win32'
       ? join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'tar.exe')
       : 'tar'
-  const result = spawnSync(tar, ['-xzf', file, '-C', into], { stdio: 'inherit' })
-  if (result.status !== 0) throw new Error(`tar failed on ${file}`)
+  run(tar, ['-xzf', file, '-C', into])
 }
 
 /** Copies the parts of a standard library or extension directory the runtime keeps. */
@@ -149,12 +165,42 @@ function copyKept(/** @type {string} */ from, /** @type {string} */ to) {
 }
 
 /**
- * Prepares the runtime for `triple` under `target/python/<triple>/`.
- * @param {Triple} triple
+ * Writes the `PYO3_CONFIG_FILE` and the `tauri build --config` file into `work`.
+ * @param {string} work
+ * @param {{ windows: boolean, libDir: string, executable: string, bundle: object }} runtime
+ */
+function configure(work, { windows, libDir, executable, bundle }) {
+  const pyo3Config = join(work, 'pyo3.cfg')
+  writeIfChanged(
+    pyo3Config,
+    [
+      'implementation=CPython',
+      `version=${MAJOR}.${MINOR}`,
+      'shared=true',
+      `target_abi=CPython-gil_enabled-${MAJOR}.${MINOR}`,
+      `lib_name=${windows ? `python${MAJOR}${MINOR}` : `python${MAJOR}.${MINOR}`}`,
+      `lib_dir=${slashes(libDir)}`,
+      `executable=${slashes(executable)}`,
+      'pointer_width=64',
+      'build_flags=',
+      'python_framework_prefix=',
+      'suppress_build_script_link_lines=false',
+      '',
+    ].join('\n'),
+  )
+  const tauriConfig = join(work, 'tauri.conf.json')
+  writeIfChanged(tauriConfig, `${JSON.stringify({ bundle }, null, 2)}\n`)
+  return { pyo3Config, tauriConfig }
+}
+
+/**
+ * Prepares the runtime for `target` under `target/python/<target>/`.
+ * @param {Target} target
  * @returns {Promise<Runtime>}
  */
-export async function prepare(triple) {
-  const [major, minor] = VERSION.split('.')
+export async function prepare(target) {
+  if (target === UNIVERSAL) return universal()
+  const triple = target
   const work = join(ROOT, 'target', 'python', triple)
   const dist = join(work, 'dist')
   const python = join(dist, 'python')
@@ -176,58 +222,89 @@ export async function prepare(triple) {
     copyKept(join(python, 'Lib'), join(home, 'Lib'))
     copyKept(join(python, 'DLLs'), join(home, 'DLLs'))
     // Beside the executable, where Windows looks for the DLLs it imports.
-    for (const dll of [`python${major}${minor}.dll`, 'vcruntime140.dll', 'vcruntime140_1.dll']) {
+    for (const dll of [`python${MAJOR}${MINOR}.dll`, 'vcruntime140.dll', 'vcruntime140_1.dll']) {
       resources[slashes(join(python, dll))] = dll
     }
     libDir = python
   } else {
-    const stdlib = join('lib', `python${major}.${minor}`)
+    const stdlib = join('lib', `python${MAJOR}.${MINOR}`)
     copyKept(join(python, stdlib), join(home, stdlib))
     if (mac) {
       // Contents/Frameworks; its install name is @rpath/…, and Tauri adds the rpath.
-      bundle.macOS = {
-        frameworks: [slashes(join(python, 'lib', `libpython${major}.${minor}.dylib`))],
-      }
+      bundle.macOS = { frameworks: [slashes(join(python, 'lib', MAC_LIBRARY))] }
       libDir = join(python, 'lib')
     } else {
       // Beside the standard library; src-tauri/build.rs points the executable's RUNPATH here.
-      const library = `libpython${major}.${minor}.so.1.0`
+      const library = `libpython${MAJOR}.${MINOR}.so.1.0`
       cpSync(join(python, 'lib', library), join(home, 'lib', library))
       libDir = join(home, 'lib')
     }
   }
 
-  const pyo3Config = join(work, 'pyo3.cfg')
-  writeIfChanged(
-    pyo3Config,
-    [
-      'implementation=CPython',
-      `version=${major}.${minor}`,
-      'shared=true',
-      `target_abi=CPython-gil_enabled-${major}.${minor}`,
-      `lib_name=${windows ? `python${major}${minor}` : `python${major}.${minor}`}`,
-      `lib_dir=${slashes(join(python, windows ? 'libs' : 'lib'))}`,
-      `executable=${slashes(windows ? join(python, 'python.exe') : join(python, 'bin', 'python3'))}`,
-      'pointer_width=64',
-      'build_flags=',
-      'python_framework_prefix=',
-      'suppress_build_script_link_lines=false',
-      '',
-    ].join('\n'),
-  )
-  const tauriConfig = join(work, 'tauri.conf.json')
-  writeIfChanged(tauriConfig, `${JSON.stringify({ bundle }, null, 2)}\n`)
-  return { home, libDir, pyo3Config, tauriConfig }
+  const configs = configure(work, {
+    windows,
+    libDir: join(python, windows ? 'libs' : 'lib'),
+    executable: windows ? join(python, 'python.exe') : join(python, 'bin', 'python3'),
+    bundle,
+  })
+  return { home, libDir, ...configs }
+}
+
+/**
+ * Prepares one runtime for both macOS architectures. Their trimmed standard libraries differ only
+ * in the build's sysconfig data, which no decoder reads, so the Apple silicon one serves both; its
+ * native parts (libpython, and any extension module left in lib-dynload) become universal binaries
+ * that both slices of the app link against and load.
+ * @returns {Promise<Runtime>}
+ */
+async function universal() {
+  const arm = await prepare('aarch64-apple-darwin')
+  const intel = await prepare('x86_64-apple-darwin')
+  const work = join(ROOT, 'target', 'python', UNIVERSAL)
+  const lib = join(work, 'lib')
+  const home = join(work, 'home')
+
+  rmSync(lib, { recursive: true, force: true })
+  rmSync(home, { recursive: true, force: true })
+  mkdirSync(lib, { recursive: true })
+  cpSync(arm.home, home, { recursive: true })
+  const library = join(lib, MAC_LIBRARY)
+  run('lipo', [
+    '-create',
+    '-output',
+    library,
+    join(arm.libDir, MAC_LIBRARY),
+    join(intel.libDir, MAC_LIBRARY),
+  ])
+  for (const file of readdirSync(home, { recursive: true, encoding: 'utf8' })) {
+    if (!file.endsWith('.so')) continue
+    const native = join(home, file)
+    run('lipo', ['-create', '-output', native, join(arm.home, file), join(intel.home, file)])
+  }
+
+  // The interpreter is never run for builds; any architecture's will do.
+  const host = process.arch === 'x64' ? 'x86_64-apple-darwin' : 'aarch64-apple-darwin'
+  const configs = configure(work, {
+    windows: false,
+    libDir: lib,
+    executable: join(ROOT, 'target', 'python', host, 'dist', 'python', 'bin', 'python3'),
+    bundle: {
+      resources: { [`${slashes(home)}/`]: 'python/' },
+      macOS: { frameworks: [slashes(library)] },
+    },
+  })
+  return { home, libDir: lib, ...configs }
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({
     options: { target: { type: 'string' }, 'github-env': { type: 'boolean', default: false } },
   })
-  const triple = /** @type {Triple} */ (values.target ?? hostTriple())
-  if (!(triple in DIGESTS)) throw new Error(`no Python runtime for ${triple}`)
-  const runtime = await prepare(triple)
-  console.warn(`CPython ${VERSION} for ${triple} in ${runtime.home}`)
+  const target = /** @type {Target} */ (values.target ?? hostTriple())
+  if (!(target in DIGESTS) && target !== UNIVERSAL)
+    throw new Error(`no Python runtime for ${target}`)
+  const runtime = await prepare(target)
+  console.warn(`CPython ${VERSION} for ${target} in ${runtime.home}`)
   if (values['github-env']) {
     const env = process.env.GITHUB_ENV
     if (!env) throw new Error('--github-env needs GITHUB_ENV')

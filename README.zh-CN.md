@@ -86,11 +86,11 @@ HSync 是 DreamSourceLab DSLogic 系列逻辑分析仪的桌面上位机。接�
 
 | 平台    | 安装包                               | 系统要求                           |
 | ------- | ------------------------------------ | ---------------------------------- |
-| macOS   | `.dmg`（Apple 芯片）                 | macOS 13.3 或更高版本              |
-| Windows | `-setup.exe` 或 `.msi`（x64）        | Windows 10 或 11                   |
+| macOS   | `.dmg`（Apple 芯片与 Intel）         | macOS 13.3 或更高版本              |
+| Windows | `-setup.exe`（x64）                  | Windows 10 或 11                   |
 | Linux   | `.AppImage`、`.deb` 或 `.rpm`（x64） | Ubuntu 22.04、Debian 12 或更新版本 |
 
-固件、协议解码器及其依赖的 Python 都已包含在内，无需另装 DSView 或 Python。Intel 芯片的 Mac 或其他平台可以[从源码构建](#从源码构建)。
+固件、协议解码器及其依赖的 Python 都已包含在内，无需另装 DSView 或 Python。其他平台可以[从源码构建](#从源码构建)。
 
 ### 首次运行
 
@@ -166,7 +166,7 @@ pnpm tauri dev    # 从源码运行 HSync
 pnpm bundle       # 构建本机的安装包
 ```
 
-`pnpm bundle` 与发行版的构建方式相同：它会下载随 HSync 发布的 Python 运行环境，安装包输出到 `target/release/bundle/`。参与开发请先阅读 [AGENTS.md](AGENTS.md)（英文），其中有项目的硬性要求、常用命令与提交规范。
+`pnpm bundle` 与发行版的构建方式相同：它会下载随 HSync 发布的 Python 运行环境，安装包输出到 `target/release/bundle/`。在 macOS 上它构建同时支持 Apple 芯片与 Intel 的通用版本，输出到 `target/universal-apple-darwin/release/bundle/`，构建前先运行 `rustup target add aarch64-apple-darwin x86_64-apple-darwin`。参与开发请先阅读 [AGENTS.md](AGENTS.md)（英文），其中有项目的硬性要求、常用命令与提交规范。
 
 ## 致谢
 

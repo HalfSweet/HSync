@@ -1,6 +1,6 @@
-# Builds the installers for macOS (Apple silicon), Windows (x64) and Linux (x64) with the bundled
-# Python. The release workflow calls it to fill a draft release; run by
-# hand, it keeps the installers with the run as artifacts.
+# Builds the installers for macOS (universal: Apple silicon and Intel), Windows (x64) and Linux
+# (x64) with the bundled Python. The release workflow calls it to fill a draft release; run by hand,
+# it keeps the installers with the run as artifacts.
 name: Bundle
 
 on:
@@ -33,8 +33,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # One universal build for Apple silicon and Intel.
           - name: macOS
             os: macos-15
+            target: universal-apple-darwin
+            rust-targets: aarch64-apple-darwin,x86_64-apple-darwin
           - name: Windows
             os: windows-2025
           # The oldest supported Ubuntu, so the binaries run on older glibc too.
@@ -62,9 +65,11 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
       - uses: Swatinem/rust-cache@v2
       - name: Lay out the bundled Python
-        run: node scripts/python-runtime.mjs --github-env
+        run: node scripts/python-runtime.mjs ${{ matrix.target && format('--target {0}', matrix.target) || '' }} --github-env
       # Every decoder must load from the trimmed standard library on every platform.
       - name: Test the decoder host against it
         shell: bash
@@ -98,9 +103,9 @@ jobs:
         with:
           releaseId: ${{ inputs.release-id }}
           releaseBody: ${{ inputs.release-notes }}
-          updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: ${{ inputs.release-id == '' }}
           # Updater artifacts need the signing key; builds by hand without it skip them.
           args: >-
             --config ${{ env.HSYNC_PYTHON_TAURI_CONFIG }}
+            ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
             ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}

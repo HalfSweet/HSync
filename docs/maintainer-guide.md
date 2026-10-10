@@ -63,11 +63,11 @@ Merging a `release/v*` pull request runs the rest of the Release workflow:
 
 The published release carries:
 
-| Platform              | Installers                  | Used by in-app updates      |
-| --------------------- | --------------------------- | --------------------------- |
-| macOS (Apple silicon) | `.dmg`                      | `.app.tar.gz` + `.sig`      |
-| Windows (x64)         | NSIS `-setup.exe`, `.msi`   | the NSIS installer + `.sig` |
-| Linux (x64)           | `.AppImage`, `.deb`, `.rpm` | the AppImage + `.sig`       |
+| Platform          | Installers                  | Used by in-app updates      |
+| ----------------- | --------------------------- | --------------------------- |
+| macOS (universal) | `.dmg`                      | `.app.tar.gz` + `.sig`      |
+| Windows (x64)     | NSIS `-setup.exe`           | the NSIS installer + `.sig` |
+| Linux (x64)       | `.AppImage`, `.deb`, `.rpm` | the AppImage + `.sig`       |
 
 It also carries `latest.json`, which the installed apps read.
 
@@ -97,9 +97,13 @@ Subjects appear as written, so write them for users.
 
 | Runner         | Target                     | Why this runner                                      |
 | -------------- | -------------------------- | ---------------------------------------------------- |
-| `macos-15`     | `aarch64-apple-darwin`     | Apple silicon; the bundle needs macOS 13.3 or later  |
+| `macos-15`     | `universal-apple-darwin`   | one build for Apple silicon and Intel; macOS 13.3+   |
 | `windows-2025` | `x86_64-pc-windows-msvc`   |                                                      |
 | `ubuntu-22.04` | `x86_64-unknown-linux-gnu` | the oldest supported Ubuntu, so an older glibc works |
+
+The bundle types are listed in `bundle.targets` of `tauri.conf.json`: the `.app` and `.dmg` on macOS, the NSIS installer on Windows (no `.msi`), and the AppImage, `.deb` and `.rpm` on Linux.
+
+The macOS build is universal: Tauri builds `aarch64-apple-darwin` and `x86_64-apple-darwin` and joins them with `lipo`. `python-runtime.mjs --target universal-apple-darwin` prepares the runtime for it from both distributions: libpython becomes a universal binary that both builds link against, and the Apple silicon standard library serves both (the two differ only in the build's sysconfig data, which no decoder reads). In-app updates offer the universal build to both architectures.
 
 On each runner it:
 
@@ -115,6 +119,8 @@ To build the installers for your own machine the same way (without update signat
 pnpm bundle                  # all bundle types
 pnpm bundle --bundles app    # arguments go on to `tauri build`
 ```
+
+On macOS this is the universal build, which needs both Rust targets: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`.
 
 ## Bundled Python
 
