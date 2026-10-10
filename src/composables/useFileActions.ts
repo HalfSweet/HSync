@@ -12,6 +12,7 @@ export const EXTENSIONS: Record<ExportKind, string> = {
   dsl: 'dsl',
   csv: 'csv',
   vcd: 'vcd',
+  fst: 'fst',
   sigrok: 'sr',
   binary: 'bin',
 }

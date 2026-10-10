@@ -94,6 +94,7 @@
       "dsl": "DSView capture",
       "csv": "CSV table",
       "vcd": "VCD waveform",
+      "fst": "FST waveform",
       "sigrok": "sigrok session",
       "binary": "Raw binary"
     },
@@ -101,6 +102,7 @@
       "dsl": "Opens in HSync and DSView, decoders included",
       "csv": "A time and every channel level per row, for spreadsheets",
       "vcd": "The common digital waveform format, for GTKWave and others",
+      "fst": "GTKWave’s compact waveform format, far smaller than VCD",
       "sigrok": "Opens in PulseView",
       "binary": "⌈channels / 8⌉ bytes per sample, channel k in bit k"
     },

@@ -94,6 +94,7 @@
       "dsl": "DSView 采集文件",
       "csv": "CSV 表格",
       "vcd": "VCD 波形",
+      "fst": "FST 波形",
       "sigrok": "sigrok 会话",
       "binary": "原始二进制"
     },
@@ -101,6 +102,7 @@
       "dsl": "HSync 与 DSView 都能打开，保留解码设置",
       "csv": "每行一个时刻与各通道的电平，可用表格软件打开",
       "vcd": "通用的数字波形格式，GTKWave 等工具可打开",
+      "fst": "GTKWave 的紧凑波形格式，比 VCD 小得多",
       "sigrok": "PulseView 可打开",
       "binary": "每个采样点 ⌈通道数 / 8⌉ 个字节，第 k 个通道在第 k 位"
     },

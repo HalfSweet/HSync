@@ -26,7 +26,7 @@ const dialog = useTemplateRef<HTMLElement>('dialog')
 onKeyStroke('Escape', () => emit('close'))
 onMounted(() => dialog.value?.focus())
 
-const KINDS: ExportKind[] = ['dsl', 'csv', 'vcd', 'sigrok', 'binary']
+const KINDS: ExportKind[] = ['dsl', 'csv', 'vcd', 'fst', 'sigrok', 'binary']
 const kind = shallowRef<ExportKind>('csv')
 const everySample = shallowRef(false)
 
