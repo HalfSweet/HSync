@@ -69,7 +69,8 @@
     },
     "export": "导出",
     "settings": "设置",
-    "settingsUpdate": "设置（有新版本 {version}）"
+    "settingsUpdate": "设置（有新版本 {version}）",
+    "withShortcut": "{label}（{shortcut}）"
   },
   "file": {
     "filter": "DSView 采集文件",
@@ -499,6 +500,12 @@
   },
   "settings": {
     "title": "设置",
+    "sections": {
+      "appearance": "外观",
+      "behaviour": "行为",
+      "diagnostics": "诊断"
+    },
+    "close": "关闭设置",
     "theme": {
       "label": "主题",
       "system": "跟随系统",
@@ -524,7 +531,6 @@
       }
     },
     "behaviour": {
-      "label": "行为",
       "centerTrigger": "触发位置自动居中显示",
       "followLatest": "采集时自动滚动到最新数据",
       "quickScroll": "快速拖动后波形继续滚动",
@@ -532,7 +538,6 @@
       "checkUpdates": "启动时检查更新"
     },
     "diagnostics": {
-      "label": "诊断",
       "level": "日志级别",
       "levels": {
         "error": "错误",

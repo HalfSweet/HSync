@@ -69,7 +69,8 @@
     },
     "export": "Export",
     "settings": "Settings",
-    "settingsUpdate": "Settings (version {version} available)"
+    "settingsUpdate": "Settings (version {version} available)",
+    "withShortcut": "{label} ({shortcut})"
   },
   "file": {
     "filter": "DSView capture",
@@ -499,6 +500,12 @@
   },
   "settings": {
     "title": "Settings",
+    "sections": {
+      "appearance": "Appearance",
+      "behaviour": "Behaviour",
+      "diagnostics": "Diagnostics"
+    },
+    "close": "Close settings",
     "theme": {
       "label": "Theme",
       "system": "System",
@@ -524,7 +531,6 @@
       }
     },
     "behaviour": {
-      "label": "Behaviour",
       "centerTrigger": "Centre the view on the trigger",
       "followLatest": "Follow the latest data while capturing",
       "quickScroll": "Keep scrolling after a quick drag",
@@ -532,7 +538,6 @@
       "checkUpdates": "Check for updates at startup"
     },
     "diagnostics": {
-      "label": "Diagnostics",
       "level": "Log level",
       "levels": {
         "error": "Errors",
