@@ -44,6 +44,8 @@ export interface Backend {
   captureSummary(): Promise<CaptureSummary | null>
   openDemo(): Promise<CaptureSummary>
   openFile(path: string): Promise<CaptureSummary>
+  /** Saves a capture as a `.dsl` file; it then counts as that file. */
+  saveFile(captureId: number, path: string): Promise<CaptureSummary>
   bins(request: BinsRequest): Promise<BinsResult>
   pulse(captureId: number, channel: number, sample: number): Promise<PulseInfo | null>
   edge(
@@ -107,6 +109,10 @@ class TauriBackend implements Backend {
 
   openFile(path: string) {
     return invoke<CaptureSummary>('capture_open_file', { path })
+  }
+
+  saveFile(captureId: number, path: string) {
+    return invoke<CaptureSummary>('capture_save', { captureId, path })
   }
 
   async bins(request: BinsRequest) {
