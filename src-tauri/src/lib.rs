@@ -124,7 +124,6 @@ pub fn run() {
             commands::app::log_reveal,
             commands::app::system_memory,
             commands::capture::capture_summary,
-            commands::capture::capture_open_demo,
             commands::capture::capture_open_file,
             commands::capture::capture_start,
             commands::capture::capture_stop,

@@ -9,8 +9,7 @@ use hsync_session::{
     PatternCondition, PulseInfo, SessionEvent, encode_bins,
 };
 use tauri::ipc::Response;
-use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
 use super::{CommandResult, blocking};
 use crate::state::AppState;
@@ -18,25 +17,10 @@ use crate::state::AppState;
 /// Event with the [`hsync_session::LiveStatus`] of a capture taken with a device.
 pub const LIVE_EVENT: &str = "capture://live";
 
-/// Location of the demo capture among the bundled resources.
-const DEMO_CAPTURE: &str = "demo/protocol.dsl";
-
 /// The open capture, if any.
 #[tauri::command]
 pub fn capture_summary(state: State<'_, AppState>) -> Option<CaptureSummary> {
     state.workspace.lock().summary()
-}
-
-/// Opens the bundled demo capture.
-#[tauri::command]
-pub async fn capture_open_demo(app: AppHandle) -> CommandResult<CaptureSummary> {
-    let path = app
-        .path()
-        .resolve(DEMO_CAPTURE, BaseDirectory::Resource)
-        .map_err(|error| {
-            UiError::new("error.app.resourceMissing").with("detail", error.to_string())
-        })?;
-    open(app, move |workspace| workspace.open_demo(&path)).await
 }
 
 /// Opens a `.dsl` capture file.
