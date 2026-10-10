@@ -511,7 +511,8 @@ fn reports_what_the_trigger_can_do_in_each_mode() {
         device.trigger_caps(),
         TriggerCaps {
             max_position: 1,
-            advanced: false
+            advanced: false,
+            advanced_other_mode: true
         }
     );
     device
@@ -527,7 +528,8 @@ fn reports_what_the_trigger_can_do_in_each_mode() {
         device.trigger_caps(),
         TriggerCaps {
             max_position: 90,
-            advanced: true
+            advanced: true,
+            advanced_other_mode: false
         }
     );
     let profile = find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("profile");

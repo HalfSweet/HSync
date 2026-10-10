@@ -17,6 +17,12 @@ pub enum DriverError {
     /// The device needs firmware and is restarting after receiving it.
     #[error("the device is restarting with new firmware")]
     Restarting,
+    /// The device's firmware needs an update that only this vendor tool performs.
+    #[error("the device firmware needs an update with {0}")]
+    FirmwareUpdate(&'static str),
+    /// The device reported a fault; plugging it in again usually clears it.
+    #[error("the device reported a fault")]
+    Fault,
     /// Another program holds the device.
     #[error("the device is in use by another program")]
     Busy,
@@ -37,6 +43,22 @@ pub enum DriverError {
     Unsupported,
 }
 
+impl DriverError {
+    /// Why opening a USB device failed, in terms the user can act on.
+    pub fn opening(error: UsbError) -> Self {
+        if let UsbError::Device(device) = &error {
+            match device.kind() {
+                nusb::ErrorKind::Busy => return Self::Busy,
+                nusb::ErrorKind::NotFound | nusb::ErrorKind::Unsupported if cfg!(windows) => {
+                    return Self::NoDriver;
+                }
+                _ => {}
+            }
+        }
+        Self::Usb(error)
+    }
+}
+
 impl From<&DriverError> for UiError {
     fn from(error: &DriverError) -> Self {
         match error {
@@ -50,6 +72,10 @@ impl From<&DriverError> for UiError {
                 UiError::new("error.device.firmwareIncompatible").with("version", version.as_str())
             }
             DriverError::Restarting => UiError::new("error.device.restarting"),
+            DriverError::FirmwareUpdate(tool) => {
+                UiError::new("error.device.firmwareUpdate").with("tool", *tool)
+            }
+            DriverError::Fault => UiError::new("error.device.fault"),
             DriverError::Busy => UiError::new("error.device.busy"),
             DriverError::NoDriver => UiError::new("error.device.noDriver"),
             DriverError::Timeout(what) => {

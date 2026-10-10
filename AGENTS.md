@@ -4,7 +4,7 @@ This file is for the AI agents and engineers working in this repository: what th
 
 ## What the project is
 
-HSync rewrites [DSView](https://github.com/DreamSourceLab/DSView) on a modern stack, aiming to be a general-purpose logic analyzer application. **The first release (v1) matches DSView's logic analyzer features**: every DSLogic model and the Demo device, Buffer and Stream capture, simple, advanced and serial triggers, protocol decoding, measurement, search, reading and writing `.dsl` files, and export. The oscilloscope (DSO) and data acquisition (DAQ) modes are out of scope for v1.
+HSync rewrites [DSView](https://github.com/DreamSourceLab/DSView) on a modern stack, aiming to be a general-purpose logic analyzer application. **The first release (v1) matches DSView's logic analyzer features**: every DSLogic model and the Demo device, Buffer and Stream capture, simple, advanced and serial triggers, protocol decoding, measurement, search, reading and writing `.dsl` files, and export. The oscilloscope (DSO) and data acquisition (DAQ) modes are out of scope for v1. Beyond DSView's devices, HSync drives ALIENTEK's ATK-Logic analyzers (DL16, DL16 Plus), ported from the [ATK-Logic](https://github.com/alientek-openedv/atk-logic) application.
 
 ## Hard requirements
 
@@ -13,7 +13,7 @@ These come from the project owner; no change may break them:
 1. **Stack**: the desktop shell is **Tauri 2**; the frontend is **Vue 3 + TypeScript + Tailwind CSS v4**; waveforms render with Canvas2D as the baseline, **accelerated with WebGPU where it is available**, and the fallback always stays.
 2. **DESIGN.md governs the UI and UX; the `.hsync/` mockups are only a reference**: `.hsync/handoff.md` and the HTML mockup beside it (local files, not in the repository) are a starting point, not a spec to follow. The interface may improve on them for real-world use; such changes go into DESIGN.md.
 3. **Internationalization**: the first release supports Simplified Chinese (the default) and English. Every user-visible string in the interface goes through vue-i18n, never hard-coded; the Rust side outputs no natural language, only i18n keys and parameters.
-4. **All interaction with real hardware is written in Rust**, and USB is reached only through **nusb**. Never bring in libusb, rusb or FFI to any C/C++ driver code; DSView's C code is only a porting reference.
+4. **All interaction with real hardware is written in Rust**, and USB is reached only through **nusb**. Never bring in libusb, rusb or FFI to any C/C++ driver code; DSView's C code and ATK-Logic's C++ are only porting references.
 5. **Code style**: the frontend follows **ESLint + Prettier**; Rust follows rustfmt + clippy. **lefthook** makes sure code is formatted when it is committed, and commitlint checks the commit messages.
 6. **Commits**: use **fine-grained Conventional Commits**; **write pull requests and issues in English**. See [Commit conventions](#commit-conventions) below.
 7. **Language**: everything in the repository is written in English (documentation, DESIGN.md, this file, code comments, commit messages), except the Chinese README `README.zh-CN.md` and the Chinese interface strings `src/i18n/locales/zh-CN.json`. Chinese that is data stays as it is (such as the values DSView writes into `.dsc` sessions, which `src/session/session.ts` reads). `README.md` and `README.zh-CN.md` say the same thing; change them together.
@@ -30,13 +30,13 @@ These come from the project owner; no change may break them:
 | `assets/`                      | The brand mark and social preview (`brand/`), the README screenshots (`screenshots/`)                                                                                |
 | `src/`                         | Vue frontend (components, Pinia stores, renderers, IPC wrappers, i18n)                                                                                               |
 | `src-tauri/`                   | Tauri app crate (commands, events, resources: firmware and demo data)                                                                                                |
-| `crates/hsync-*`               | Rust libraries: core, capture, driver, dslogic, demo, decode, srd, fileio, session                                                                                   |
+| `crates/hsync-*`               | Rust libraries: core, capture, driver, dslogic, atklogic, demo, decode, srd, fileio, session                                                                         |
 | `scripts/`                     | Lays out the bundled CPython; builds this machine's installers the way releases are built                                                                            |
 | `.github/`                     | CI checks, installer builds and releases                                                                                                                             |
 | `.hsync/`                      | Design mockups (a local reference, listed in `.gitignore`; never commit them)                                                                                        |
 | `../DSView`                    | The reference implementation (DSView's source), read-only                                                                                                            |
 
-Dependencies between the Rust crates run `src-tauri → hsync-session → {driver, capture, decode, srd, fileio} → hsync-core`; `hsync-srd` (the Python decoder host) builds on `hsync-decode`, and `hsync-dslogic` and `hsync-demo` implement the traits of `hsync-driver`. Library crates must not depend on Tauri.
+Dependencies between the Rust crates run `src-tauri → hsync-session → {driver, capture, decode, srd, fileio} → hsync-core`; `hsync-srd` (the Python decoder host) builds on `hsync-decode`, and `hsync-dslogic`, `hsync-atklogic` and `hsync-demo` implement the traits of `hsync-driver`. Library crates must not depend on Tauri.
 
 ## Common commands
 
@@ -84,11 +84,11 @@ Building `crates/hsync-srd` (the Python decoder host, which embeds CPython throu
 - The hardware, storage and decoding crates stay free of `unsafe` as a rule; where it is really needed, explain it in a `// SAFETY:` comment.
 - Long tasks (capture, decoding, saving, export) must be cancellable and report progress through events or a `Channel`.
 
-### Hardware layer (`hsync-dslogic`, `hsync-driver`)
+### Hardware layer (`hsync-dslogic`, `hsync-atklogic`, `hsync-driver`)
 
-- Behave **byte for byte like DSView**: commands, registers, the `DSL_setting` layout, trigger encoding, transfer sizes and the stop sequence all follow `libsigrok4DSL/hardware/DSL/`. Where the port departs from it, say why in a code comment.
+- Behave **byte for byte like DSView**: commands, registers, the `DSL_setting` layout, trigger encoding, transfer sizes and the stop sequence all follow `libsigrok4DSL/hardware/DSL/`. `hsync-atklogic` likewise follows the ATK-Logic application (`pv/usb/`, `pv/thread/`, `pv/data/analysis.cpp`, `SessionController::start()`): command frames, the lane order of the USB data, the connect, start and stop sequences. Where the port departs from its reference, say why in a code comment.
 - Control transfers always go through a claimed `nusb::Interface` (Windows does not support `Device::control_*`).
-- Polling that has no limit in DSView gets a timeout in the port.
+- Polling that has no limit in the reference gets a timeout in the port.
 - Every protocol detail has unit tests: struct byte layouts are asserted against golden data; command sequences are replayed with the `UsbTransport` mock.
 - Do not modify the firmware and bitstreams in `src-tauri/resources/firmware/` (MIT licensed, from `DSView/res`; keep their license file).
 
@@ -114,7 +114,7 @@ Format:
 ```
 
 - **type**: `feat`, `fix`, `perf`, `refactor`, `style`, `test`, `docs`, `build`, `ci`, `chore`, `revert`.
-- **scope** (optional; when given it must be on the allow-list in `commitlint.config.js`): `core`, `capture`, `driver`, `dslogic`, `demo`, `decode`, `fileio`, `session`, `app`, `ui`, `timeline`, `stream`, `trigger`, `render`, `i18n`, `theme`, `ipc`, `store`, `deps`, `tooling`, `repo`.
+- **scope** (optional; when given it must be on the allow-list in `commitlint.config.js`): `core`, `capture`, `driver`, `dslogic`, `atklogic`, `demo`, `decode`, `fileio`, `session`, `app`, `ui`, `timeline`, `stream`, `trigger`, `render`, `i18n`, `theme`, `ipc`, `store`, `deps`, `tooling`, `repo`.
 - **subject**: an imperative sentence in English, starting in lower case, without a full stop, at most 72 characters.
 - **Fine-grained**: a commit does one thing that can be reverted and reviewed on its own. Configuration, scaffolding, features, tests and documentation go in separate commits; formatting and logic changes are never mixed; a new dependency may share a commit with the code that uses it.
 - Breaking changes add `!` after the type and a `BREAKING CHANGE:` line in the body.

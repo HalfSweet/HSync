@@ -14,13 +14,10 @@ const rowOf = (key: string) => rows[key] ?? null
 const end = (sample: number, rowKey: string, edge = true): MeasureEnd => ({ sample, rowKey, edge })
 
 describe('edge measurement overlay', () => {
-  it('marks both edges, drops to the second row and announces the read-out', () => {
+  it('marks both edges and drops to the second row', () => {
     const wrapper = mount(MeasureOverlay, {
       props: {
         geometry: measureGeometry(end(100, 'd0'), end(300, 'd3'), view, rowOf),
-        primary: 'Δt 9.80 µs',
-        secondary: '245 samples',
-        done: true,
         target: null,
       },
     })
@@ -30,36 +27,25 @@ describe('edge measurement overlay', () => {
       'left: 30px; top: 109px;',
     ])
     expect(wrapper.find('.border-dashed').attributes('style')).toContain('height: 54px')
-    const readout = wrapper.find('[role="status"]')
-    expect(readout.text()).toBe('Δt 9.80 µs245 samples')
     expect(wrapper.find('[data-part="target"]').exists()).toBe(false)
+    // The read-out is the status bar's, so nothing covers the rows.
+    expect(wrapper.text()).toBe('')
   })
 
-  it('draws a cursor for an end between edges and only hints until the measurement is done', () => {
+  it('draws a cursor for an end between edges', () => {
     const wrapper = mount(MeasureOverlay, {
       props: {
         geometry: measureGeometry(end(100, 'd0'), end(300, 'd0', false), view, rowOf),
-        primary: 'Δt 8.00 µs',
-        secondary: 'Click another edge',
-        done: false,
         target: null,
       },
     })
     expect(wrapper.findAll('[data-part="dot"]')).toHaveLength(1)
     expect(wrapper.find('[data-part="cursor"]').attributes('style')).toContain('height: 24px')
-    expect(wrapper.find('[role="status"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Click another edge')
   })
 
   it('rings the edge a click would start from', () => {
     const wrapper = mount(MeasureOverlay, {
-      props: {
-        geometry: null,
-        primary: null,
-        secondary: null,
-        done: false,
-        target: { x: 12, y: 55 },
-      },
+      props: { geometry: null, target: { x: 12, y: 55 } },
     })
     expect(wrapper.find('[data-part="target"]').attributes('style')).toBe('left: 12px; top: 55px;')
   })

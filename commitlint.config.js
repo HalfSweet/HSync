@@ -15,6 +15,7 @@ export default {
         'capture',
         'driver',
         'dslogic',
+        'atklogic',
         'demo',
         'decode',
         'fileio',

@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.1.1 (2026-10-10)
+
+### Features
+
+- **app:** Release universal macos builds and nsis-only windows (#10) ([fb4c369](https://github.com/HalfSweet/HSync/commit/fb4c3697b1e5b7e258dd257005b0b92e923a9248))
+- **ui:** Give the settings page icons (#12) ([2729f66](https://github.com/HalfSweet/HSync/commit/2729f66aada85778f80ef16f9c0ad565b418710e))
+- **ui:** Move device options into the acquisition settings popover (#15) ([9a44941](https://github.com/HalfSweet/HSync/commit/9a4494122ab7f2f6c731e36ea8688b728fd57039))
+
+### Bug Fixes
+
+- **i18n:** Say what is on screen instead of using the word viewport (#9) ([c92e9f5](https://github.com/HalfSweet/HSync/commit/c92e9f55b3353731f012876fa62815b2169146fe))
+- **theme:** Keep drop-down options legible in the dark theme on Windows (#11) ([783ad3e](https://github.com/HalfSweet/HSync/commit/783ad3e202bcc62fa6992d98bcc5562570539a34))
+- **timeline:** Show period and duty cycle on hover as DSView does (#13) ([49e63a8](https://github.com/HalfSweet/HSync/commit/49e63a8c7a1a01a9358ea3d9dfd91563fefb9e7b))
+- **timeline:** Read out pulses and measurements in the status bar (#14) ([6a4ef29](https://github.com/HalfSweet/HSync/commit/6a4ef29209ee25476688d8366de44c909fdeec28))
+
 ## 0.1.0 (2026-10-10)
 
 ### Features

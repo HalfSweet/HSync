@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*", "src-tauri"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.90"
 license = "GPL-3.0-or-later"
@@ -30,6 +30,7 @@ wellen = "0.25.6"
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 hsync-core = { path = "crates/hsync-core" }
+hsync-atklogic = { path = "crates/hsync-atklogic" }
 hsync-capture = { path = "crates/hsync-capture" }
 hsync-decode = { path = "crates/hsync-decode" }
 hsync-demo = { path = "crates/hsync-demo" }

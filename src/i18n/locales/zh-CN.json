@@ -4,7 +4,6 @@
   },
   "header": {
     "device": {
-      "options": "设备选项…",
       "unsupported": "暂不支持",
       "select": "选择设备",
       "none": "没有找到设备",
@@ -28,7 +27,8 @@
       "samples": "{count} 个采样点",
       "noDevice": "先选择设备",
       "rle": "RLE",
-      "tooLarge": "这次采集约需 {size} 内存，超过本机内存的一半，可能无法完成；请缩短时长或减少通道"
+      "tooLarge": "这次采集约需 {size} 内存，超过本机内存的一半，可能无法完成；请缩短时长或减少通道",
+      "locked": "采集进行中，停止后才能修改"
     },
     "trigger": {
       "label": "触发",
@@ -150,11 +150,6 @@
   },
   "device": {
     "demo": "演示设备",
-    "dialog": {
-      "title": "{device} 的选项",
-      "close": "关闭",
-      "locked": "采集进行中，停止后才能修改"
-    },
     "option": {
       "operationMode": "运行模式",
       "channelMode": "通道模式",
@@ -256,7 +251,8 @@
     "unavailable": {
       "noDevice": "打开设备后可用多级与串行触发",
       "demo": "演示设备只有简单触发",
-      "stream": "Stream 模式只有简单触发，换到 Buffer 模式可用多级与串行触发"
+      "stream": "Stream 模式只有简单触发，换到 Buffer 模式可用多级与串行触发",
+      "simpleOnly": "这台设备只有简单触发"
     },
     "position": "触发位置",
     "positionTip": "触发点之前的数据占整次采集的比例",
@@ -596,6 +592,8 @@
       "firmwareMissing": "缺少固件文件 {file}",
       "firmwareIncompatible": "设备固件版本不兼容（{version}）",
       "restarting": "设备正在重启",
+      "firmwareUpdate": "请先用 {tool} 更新设备固件",
+      "fault": "设备状态异常，请重新插拔后再试",
       "busy": "设备正被其他程序使用",
       "noDriver": "没有可用的 USB 驱动，Windows 需要为设备安装 WinUSB",
       "timeout": "设备没有响应：{detail}",
@@ -603,6 +601,8 @@
       "invalidRequest": "设备不接受这项设置：{detail}",
       "unsupported": "暂不支持这台设备",
       "overflow": "USB 带宽不足，采集已中止。请降低采样率或减少通道",
+      "memoryFull": "压缩后的数据超出了设备内存，采集已中止。请缩短采集时长",
+      "rleOverrun": "信号变化太快，来不及压缩，采集已中止。请选择不超出设备内存的时长",
       "detached": "设备已断开",
       "lost": "与设备的连接中断"
     },
@@ -645,6 +645,6 @@
       "restarting": "正在重启…"
     },
     "license": "HSync 是自由软件，以 GPL-3.0-or-later 许可发布。",
-    "credits": "设备驱动与协议解码移植自 DreamSourceLab 的 DSView（libsigrok4DSL、libsigrokdecode4DSL，GPL）；DSLogic 固件与 FPGA 位流以 MIT 许可随附；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
+    "credits": "设备驱动与协议解码移植自 DreamSourceLab 的 DSView（libsigrok4DSL、libsigrokdecode4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL）；DSLogic 固件与 FPGA 位流以 MIT 许可随附；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
   }
 }

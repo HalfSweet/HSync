@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
+use hsync_atklogic::AtkLogicDriver;
 use hsync_demo::DemoDriver;
 use hsync_driver::DeviceManager;
 use hsync_dslogic::{DslogicDriver, FirmwareDir};
@@ -17,11 +18,12 @@ use tauri::{App, Emitter, Manager};
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
 
 /// Crates whose messages follow the log level of the settings; others log warnings and up.
-const OWN_LOG_TARGETS: [&str; 6] = [
+const OWN_LOG_TARGETS: [&str; 7] = [
     "hsync_lib",
     "hsync_session",
     "hsync_driver",
     "hsync_dslogic",
+    "hsync_atklogic",
     "hsync_demo",
     "hsync_srd",
 ];
@@ -65,6 +67,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let manager = DeviceManager::new(vec![
         Arc::new(DemoDriver::new(demo)),
         Arc::new(DslogicDriver::new(FirmwareDir(firmware))),
+        Arc::new(AtkLogicDriver::new()),
     ]);
     let emitter = app.handle().clone();
     let events: EventSink = Arc::new(move |event| {

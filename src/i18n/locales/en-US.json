@@ -4,7 +4,6 @@
   },
   "header": {
     "device": {
-      "options": "Device options…",
       "unsupported": "Not supported yet",
       "select": "Select device",
       "none": "No devices found",
@@ -28,7 +27,8 @@
       "samples": "{count} samples",
       "noDevice": "Select a device first",
       "rle": "RLE",
-      "tooLarge": "This capture needs about {size} of memory, over half of this machine’s, and may not finish; shorten it or use fewer channels"
+      "tooLarge": "This capture needs about {size} of memory, over half of this machine’s, and may not finish; shorten it or use fewer channels",
+      "locked": "A capture is running; stop it to make changes"
     },
     "trigger": {
       "label": "Trigger",
@@ -150,11 +150,6 @@
   },
   "device": {
     "demo": "Demo device",
-    "dialog": {
-      "title": "{device} options",
-      "close": "Close",
-      "locked": "A capture is running; stop it to change options"
-    },
     "option": {
       "operationMode": "Operation mode",
       "channelMode": "Channel mode",
@@ -256,7 +251,8 @@
     "unavailable": {
       "noDevice": "Stage and serial triggers need an open device",
       "demo": "The demo device has simple triggers only",
-      "stream": "Stream mode has simple triggers only; switch to Buffer mode for stage and serial triggers"
+      "stream": "Stream mode has simple triggers only; switch to Buffer mode for stage and serial triggers",
+      "simpleOnly": "This device has simple triggers only"
     },
     "position": "Position",
     "positionTip": "Share of the capture before the trigger",
@@ -596,6 +592,8 @@
       "firmwareMissing": "Firmware file {file} is missing",
       "firmwareIncompatible": "Incompatible device firmware ({version})",
       "restarting": "The device is restarting",
+      "firmwareUpdate": "Update the device firmware with {tool} first",
+      "fault": "The device reported a fault. Unplug it and plug it in again",
       "busy": "Another program is using the device",
       "noDriver": "No usable USB driver; on Windows, install WinUSB for the device",
       "timeout": "The device did not respond: {detail}",
@@ -603,6 +601,8 @@
       "invalidRequest": "The device does not accept this setting: {detail}",
       "unsupported": "This device is not supported yet",
       "overflow": "USB bandwidth exceeded, so the capture stopped. Lower the sample rate or use fewer channels",
+      "memoryFull": "The compressed samples outgrew the device memory, so the capture stopped. Choose a shorter duration",
+      "rleOverrun": "The signals changed too fast to compress, so the capture stopped. Choose a duration that fits the device memory",
       "detached": "The device was disconnected",
       "lost": "The connection to the device was lost"
     },
@@ -645,6 +645,6 @@
       "restarting": "Restarting…"
     },
     "license": "HSync is free software, released under the GPL-3.0-or-later license.",
-    "credits": "Device drivers and protocol decoders are ported from DreamSourceLab’s DSView (libsigrok4DSL, libsigrokdecode4DSL, GPL); the DSLogic firmware and FPGA bitstreams ship under the MIT license; the IBM Plex fonts under the SIL OFL 1.1; the Lucide icons under the ISC license."
+    "credits": "Device drivers and protocol decoders are ported from DreamSourceLab’s DSView (libsigrok4DSL, libsigrokdecode4DSL, GPL), and the ATK-Logic driver from ALIENTEK’s ATK-Logic (GPL); the DSLogic firmware and FPGA bitstreams ship under the MIT license; the IBM Plex fonts under the SIL OFL 1.1; the Lucide icons under the ISC license."
   }
 }

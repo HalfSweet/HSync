@@ -15,6 +15,7 @@ name = "hsync_lib"
 tauri-build = { version = "2.7.1", features = [] }
 
 [dependencies]
+hsync-atklogic.workspace = true
 hsync-core.workspace = true
 hsync-decode.workspace = true
 hsync-demo.workspace = true

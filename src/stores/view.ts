@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 
+import type { ChannelRef } from '@/timeline/groups'
 import type { Measure } from '@/timeline/measure'
 import { rulerTicks } from '@/timeline/ticks'
 import {
@@ -26,13 +27,25 @@ export interface Segment {
   blockId?: string
 }
 
-/** Which samples the timeline shows, the segment the user marked and the edges they measure. */
+/** What the status bar reads out about the timeline, so that nothing covers the waveforms. */
+export interface Readouts {
+  /** The pulse under the pointer (DESIGN.md §6.4), with its channel. */
+  pulse: { channel: ChannelRef; primary: string; secondary: string | null } | null
+  /** The edge measurement (DESIGN.md §6.5); `done` once both edges are chosen. */
+  measure: { primary: string | null; secondary: string | null; done: boolean } | null
+}
+
+/**
+ * Which samples the timeline shows, the segment the user marked, the edges they measure and
+ * what the status bar reads out about them.
+ */
 export const useViewStore = defineStore('view', () => {
   const capture = useCaptureStore()
   const preferences = usePreferencesStore()
   const viewport = shallowRef<Viewport>({ start: 0, samplesPerPixel: 1, width: 0 })
   const segment = shallowRef<Segment | null>(null)
   const measure = shallowRef<Measure | null>(null)
+  const readouts = shallowRef<Readouts>({ pulse: null, measure: null })
   /** Refit to the whole capture when the width changes, until the user zooms or pans. */
   let autoFit = true
 
@@ -84,6 +97,10 @@ export const useViewStore = defineStore('view', () => {
 
   function setMeasure(next: Measure | null): void {
     measure.value = next
+  }
+
+  function setReadouts(next: Readouts): void {
+    readouts.value = next
   }
 
   /** The shown capture's sample rate, and whether a device took it. */
@@ -155,6 +172,7 @@ export const useViewStore = defineStore('view', () => {
     ruler,
     segment,
     measure,
+    readouts,
     setWidth,
     fit,
     zoom,
@@ -163,5 +181,6 @@ export const useViewStore = defineStore('view', () => {
     centerOn,
     setSegment,
     setMeasure,
+    setReadouts,
   }
 })

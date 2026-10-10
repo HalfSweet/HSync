@@ -12,4 +12,9 @@ maxPosition: number,
 /**
  * Multi-stage and serial triggers are available.
  */
-advanced: boolean, };
+advanced: boolean, 
+/**
+ * Multi-stage and serial triggers come with another operation mode (DSLogic's Buffer
+ * mode); without it the device has simple triggers only.
+ */
+advancedOtherMode: boolean, };
