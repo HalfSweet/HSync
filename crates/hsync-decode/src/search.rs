@@ -12,6 +12,8 @@ pub struct Needle {
     sequences: Vec<(Vec<u32>, bool)>,
     /// The query as one hex number, also matched against CAN identifiers.
     number: Option<u32>,
+    /// The query in lower case, found in the texts of annotations.
+    text: String,
 }
 
 impl Needle {
@@ -61,7 +63,11 @@ impl Needle {
         if !sequences.iter().any(|(words, _)| *words == text) {
             sequences.push((text, true));
         }
-        Some(Self { sequences, number })
+        Some(Self {
+            sequences,
+            number,
+            text: query.to_lowercase(),
+        })
     }
 }
 
@@ -78,6 +84,8 @@ pub struct Sequence {
 #[derive(Debug, Default)]
 pub(crate) struct Searchable {
     sequences: Vec<Sequence>,
+    /// Annotation texts in lower case with their spans, for decoders without words.
+    texts: Vec<(u64, u64, String)>,
     /// CAN identifiers with the spans of their frames.
     ids: Vec<(u32, u64, u64)>,
     /// For each listing (text, hex): the rows holding words of each line, in time order.
@@ -173,7 +181,27 @@ impl Searchable {
         Self {
             sequences,
             ids,
+            texts: Vec::new(),
             rows: [index_rows(text_rows), index_rows(hex_rows)],
+        }
+    }
+
+    /// What a search finds in annotation texts: `rows` lists every annotation.
+    pub(crate) fn annotations(rows: &[StreamRow]) -> Self {
+        let texts = rows
+            .iter()
+            .filter_map(|row| match row {
+                StreamRow::Annotation {
+                    start, end, text, ..
+                } => Some((*start, *end, text.to_lowercase())),
+                _ => None,
+            })
+            .collect();
+        Self {
+            sequences: Vec::new(),
+            ids: Vec::new(),
+            texts,
+            rows: [index_rows(rows), index_rows(rows)],
         }
     }
 
@@ -195,6 +223,12 @@ impl Searchable {
                 });
             }
         }
+        found.extend(
+            self.texts
+                .iter()
+                .filter(|(_, _, text)| text.contains(&needle.text))
+                .map(|&(start, end, _)| (start, end, None)),
+        );
         if let Some(number) = needle.number {
             found.extend(
                 self.ids
@@ -256,6 +290,7 @@ fn index_rows(rows: &[StreamRow]) -> Vec<(Option<DataLine>, Vec<u32>)> {
             StreamRow::I2c { .. } | StreamRow::UartText { .. } | StreamRow::Can { .. } => None,
             StreamRow::Hex { line, .. } | StreamRow::Run { line, .. } => *line,
             StreamRow::SpiText { line, .. } => Some(*line),
+            StreamRow::Annotation { .. } => None,
             StreamRow::Note { .. } | StreamRow::Gap { .. } => continue,
         };
         match index.iter_mut().find(|(other, _)| *other == line) {

@@ -127,3 +127,40 @@ fn level_patterns_find_the_i2c_start_conditions() {
     let last = document.capture.find_pattern(&pattern, u64::MAX, false);
     assert_eq!(last, expected.last().copied());
 }
+
+#[test]
+fn presents_and_searches_plain_annotations() {
+    use hsync_decode::{Annotation, LaneItem};
+
+    let annotation = |start: u64, row: u32, text: &str| Annotation {
+        start,
+        end: start + 10,
+        class: row,
+        row,
+        texts: vec![text.to_owned(), text[..1].to_owned()],
+    };
+    let rows = ["bits".to_owned(), "fields".to_owned()];
+    let presentation = Presentation::annotations(
+        &rows,
+        vec![
+            annotation(30, 1, "Temperature: 21.5"),
+            annotation(0, 0, "1"),
+            annotation(10, 0, "0"),
+        ],
+    );
+    let view = presentation.view(0, 100, 0.1);
+    assert_eq!(view.lanes.len(), 2);
+    assert_eq!(view.lanes[0].items.len(), 2);
+    assert!(
+        matches!(&view.lanes[1].items[0], LaneItem::Annotation { texts, .. } if texts[0] == "Temperature: 21.5")
+    );
+    let listed: Vec<u64> = presentation
+        .rows(StreamMode::Text)
+        .iter()
+        .map(StreamRow::start)
+        .collect();
+    assert_eq!(listed, [0, 10, 30]);
+    let found = presentation.search(&needle("temperature"), StreamMode::Text);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].row, Some(2));
+}

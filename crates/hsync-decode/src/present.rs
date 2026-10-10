@@ -135,6 +135,14 @@ pub enum LaneItem {
         length: u32,
         ok: bool,
     },
+    /// An annotation of a decoder without a native presentation: its texts from the longest to
+    /// the shortest, to fit the width it has.
+    Annotation {
+        start: u64,
+        end: u64,
+        class: u32,
+        texts: Vec<String>,
+    },
 }
 
 impl LaneItem {
@@ -151,7 +159,8 @@ impl LaneItem {
             | Self::SpiText { start, .. }
             | Self::SpiRun { start, .. }
             | Self::SpiWord { start, .. }
-            | Self::CanFrame { start, .. } => start,
+            | Self::CanFrame { start, .. }
+            | Self::Annotation { start, .. } => start,
         }
     }
 
@@ -168,7 +177,8 @@ impl LaneItem {
             | Self::SpiText { end, .. }
             | Self::SpiRun { end, .. }
             | Self::SpiWord { end, .. }
-            | Self::CanFrame { end, .. } => end,
+            | Self::CanFrame { end, .. }
+            | Self::Annotation { end, .. } => end,
         }
     }
 }
@@ -307,6 +317,14 @@ pub enum StreamRow {
     },
     /// A blank line between sections.
     Gap { start: u64, end: u64 },
+    /// An annotation of a decoder without a native presentation and the row it belongs to.
+    Annotation {
+        start: u64,
+        end: u64,
+        /// Position of the row in the decoder's annotation rows.
+        row: u32,
+        text: String,
+    },
 }
 
 impl StreamRow {
@@ -319,7 +337,8 @@ impl StreamRow {
             | Self::SpiText { start, .. }
             | Self::Run { start, .. }
             | Self::Can { start, .. }
-            | Self::Gap { start, .. } => start,
+            | Self::Gap { start, .. }
+            | Self::Annotation { start, .. } => start,
         }
     }
 
@@ -332,7 +351,8 @@ impl StreamRow {
             | Self::SpiText { end, .. }
             | Self::Run { end, .. }
             | Self::Can { end, .. }
-            | Self::Gap { end, .. } => end,
+            | Self::Gap { end, .. }
+            | Self::Annotation { end, .. } => end,
         }
     }
 }
@@ -374,6 +394,19 @@ pub struct Presentation {
     /// SPI transfers by start with their words' spans, for the offsets in view.
     transfer_words: Vec<(u64, Vec<(u64, u64)>)>,
     search: Searchable,
+}
+
+/// An annotation of a decoder without a native presentation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Annotation {
+    pub start: u64,
+    pub end: u64,
+    /// Its class among the decoder's annotations.
+    pub class: u32,
+    /// Its row among the decoder's annotation rows.
+    pub row: u32,
+    /// From the longest to the shortest.
+    pub texts: Vec<String>,
 }
 
 /// Items of one lane, sorted by start, with the running maximum of their ends.
@@ -517,6 +550,53 @@ impl Presentation {
             transfer_words: &self.transfer_words,
             sequences: self.search.sequences(),
             ids: self.search.ids(),
+        }
+    }
+
+    /// Annotations as they are: a lane per row (named by `rows`), and in the data stream one
+    /// line per annotation with its row, in time order.
+    pub fn annotations(rows: &[String], mut annotations: Vec<Annotation>) -> Self {
+        annotations.sort_by_key(|annotation| (annotation.start, annotation.row));
+        let mut lanes: Vec<(String, Vec<LaneItem>)> =
+            rows.iter().map(|row| (row.clone(), Vec::new())).collect();
+        let mut stream = Vec::with_capacity(annotations.len());
+        let mut units = Vec::with_capacity(annotations.len());
+        for annotation in &annotations {
+            if let Some((_, items)) = lanes.get_mut(annotation.row as usize) {
+                items.push(LaneItem::Annotation {
+                    start: annotation.start,
+                    end: annotation.end,
+                    class: annotation.class,
+                    texts: annotation.texts.clone(),
+                });
+            }
+            stream.push(StreamRow::Annotation {
+                start: annotation.start,
+                end: annotation.end,
+                row: annotation.row,
+                text: annotation.texts.first().cloned().unwrap_or_default(),
+            });
+            units.push((annotation.start, annotation.end));
+        }
+        units.sort_unstable();
+        let search = Searchable::annotations(&stream);
+        Presentation {
+            bus: Bus::Other,
+            lanes: lanes
+                .into_iter()
+                .map(|(name, items)| (name, Lane::new(items)))
+                .collect(),
+            hex_rows: stream.clone(),
+            text_rows: stream,
+            units,
+            counts: StreamCounts {
+                transfers: 0,
+                frames: annotations.len() as u32,
+                bytes: 0,
+            },
+            addresses: Vec::new(),
+            transfer_words: Vec::new(),
+            search,
         }
     }
 

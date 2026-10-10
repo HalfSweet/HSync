@@ -13,4 +13,4 @@ cut: boolean, } | { "type": "i2cAddress", start: number, end: number, address: n
 /**
  * Offsets of the first and last words in view; filled in by [`Presentation::view`].
  */
-first: number, last: number, } | { "type": "spiText", start: number, end: number, text: string, centers: Array<number>, } | { "type": "spiRun", start: number, end: number, value: number, count: number, since: number, } | { "type": "spiWord", start: number, end: number, value: number, } | { "type": "canFrame", start: number, end: number, id: number, extended: boolean, fd: boolean, length: number, ok: boolean, };
+first: number, last: number, } | { "type": "spiText", start: number, end: number, text: string, centers: Array<number>, } | { "type": "spiRun", start: number, end: number, value: number, count: number, since: number, } | { "type": "spiWord", start: number, end: number, value: number, } | { "type": "canFrame", start: number, end: number, id: number, extended: boolean, fd: boolean, length: number, ok: boolean, } | { "type": "annotation", start: number, end: number, class: number, texts: Array<string>, };

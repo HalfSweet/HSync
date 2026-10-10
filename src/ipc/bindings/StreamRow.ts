@@ -11,4 +11,8 @@ export type StreamRow = { "type": "note", start: number, end: number, note: Stre
 /**
  * Bits per word.
  */
-bits: number, } | { "type": "spiText", start: number, end: number, line: DataLine, offset: number, text: string, } | { "type": "run", start: number, end: number, line: DataLine | null, offset: number, value: number, count: number, bits: number, } | { "type": "can", start: number, end: number, id: number, extended: boolean, fd: boolean, brs: boolean, data: Array<number>, ok: boolean, acked: boolean, error: boolean, } | { "type": "gap", start: number, end: number, };
+bits: number, } | { "type": "spiText", start: number, end: number, line: DataLine, offset: number, text: string, } | { "type": "run", start: number, end: number, line: DataLine | null, offset: number, value: number, count: number, bits: number, } | { "type": "can", start: number, end: number, id: number, extended: boolean, fd: boolean, brs: boolean, data: Array<number>, ok: boolean, acked: boolean, error: boolean, } | { "type": "gap", start: number, end: number, } | { "type": "annotation", start: number, end: number, 
+/**
+ * Position of the row in the decoder's annotation rows.
+ */
+row: number, text: string, };

@@ -13,8 +13,8 @@ pub mod spi;
 pub mod uart;
 
 pub use present::{
-    DataLine, DecoderView, I2cCondition, I2cMeaning, I2cToken, LaneItem, LaneView, Presentation,
-    StreamCounts, StreamMode, StreamNote, StreamRow,
+    Annotation, DataLine, DecoderView, I2cCondition, I2cMeaning, I2cToken, LaneItem, LaneView,
+    Presentation, StreamCounts, StreamMode, StreamNote, StreamRow,
 };
 pub use search::{Found, Needle};
 pub use spec::{Bus, Decoded, Settings, Spec};

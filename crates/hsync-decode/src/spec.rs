@@ -11,7 +11,8 @@ use ts_rs::TS;
 
 use crate::{can, i2c, spi, uart};
 
-/// The buses with native decoders.
+/// How a decoder's results are presented: the buses with native decoders, and `Other` for the
+/// annotations of any other decoder.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -20,6 +21,7 @@ pub enum Bus {
     Uart,
     Spi,
     Can,
+    Other,
 }
 
 /// Decoder settings by bus.
@@ -88,6 +90,7 @@ impl Spec {
             .and_then(Value::as_object)
             .unwrap_or(&empty);
         let settings = match bus {
+            Bus::Other => return None,
             Bus::I2c => Settings::I2c {
                 shifted: text(options, "address_format") == Some("shifted"),
             },
