@@ -1544,6 +1544,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-atklogic"
+version = "0.1.1"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-driver",
+ "log",
+ "nusb",
+]
+
+[[package]]
 name = "hsync-capture"
 version = "0.1.1"
 dependencies = [

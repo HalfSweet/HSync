@@ -27,6 +27,7 @@ ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
 zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 hsync-core = { path = "crates/hsync-core" }
+hsync-atklogic = { path = "crates/hsync-atklogic" }
 hsync-capture = { path = "crates/hsync-capture" }
 hsync-decode = { path = "crates/hsync-decode" }
 hsync-demo = { path = "crates/hsync-demo" }
