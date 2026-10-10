@@ -78,3 +78,48 @@
 .drawer-leave-to {
   transform: translateY(100%);
 }
+
+/*
+ * The mark of a segmented control's or tab bar's selected option, which `v-indicator`
+ * (src/motion/indicator.ts) keeps at that option's box in `--mark-*`: the raised face of a
+ * segment, or the line under a tab, overshooting slightly as it slides to the next selection.
+ */
+[data-indicator] {
+  position: relative;
+  isolation: isolate;
+}
+
+[data-indicator][data-marked]::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: -1;
+  width: var(--mark-w);
+  height: var(--mark-h);
+  transform: translate(var(--mark-x), var(--mark-y));
+  transition-property: transform, width, height;
+  transition-duration: var(--motion-slide);
+  transition-timing-function: var(--ease-slide);
+  pointer-events: none;
+}
+
+[data-indicator='face'][data-marked]::before {
+  border-radius: 4px;
+  background: var(--raise);
+  box-shadow: 0 0 0 1px var(--line-2);
+}
+
+/* The selected segment's own face gives way to the mark. */
+[data-indicator='face'][data-marked] > .seg[aria-pressed='true'] {
+  background: none;
+  box-shadow: none;
+}
+
+[data-indicator='line'][data-marked]::before {
+  top: auto;
+  bottom: 0;
+  height: 2px;
+  transform: translateX(var(--mark-x));
+  background: var(--ink);
+}

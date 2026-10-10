@@ -18,6 +18,7 @@ import { entryFormat, FORMAT_KEY, NUMBER_FORMATS, type NumberFormat } from '@/de
 import { entryRange, withRange } from '@/decode/range'
 import { laneShown, withLaneShown } from '@/decode/rows'
 import { toUiError } from '@/ipc/errors'
+import { vIndicator } from '@/motion/indicator'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useViewStore } from '@/stores/view'
@@ -401,7 +402,7 @@ const locked = computed(() => capture.running)
         <fieldset v-if="bottom" class="flex flex-col gap-2">
           <legend class="mb-1 text-caption text-ink-3">{{ t('decoderDialog.range') }}</legend>
           <div class="flex items-center gap-3">
-            <div role="group" class="flex flex-none gap-0.5 rounded-6 bg-hover p-0.5">
+            <div v-indicator role="group" class="flex flex-none gap-0.5 rounded-6 bg-hover p-0.5">
               <button
                 class="seg"
                 :aria-pressed="rangeMode === 'all'"
@@ -429,7 +430,7 @@ const locked = computed(() => capture.running)
           <legend class="mb-1 text-caption text-ink-3">{{ t('decoderDialog.display') }}</legend>
           <div class="flex items-center gap-3">
             <span class="w-40 flex-none text-ink-2">{{ t('decoderDialog.numberFormat') }}</span>
-            <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
+            <div v-indicator role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
               <button
                 v-for="one in NUMBER_FORMATS"
                 :key="one"

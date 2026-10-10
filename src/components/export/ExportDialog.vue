@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { EXTENSIONS, useFileActions } from '@/composables/useFileActions'
 import type { ExportKind } from '@/ipc/bindings/ExportKind'
+import { vIndicator } from '@/motion/indicator'
 import { useCaptureStore } from '@/stores/capture'
 import { useViewStore } from '@/stores/view'
 
@@ -118,7 +119,7 @@ async function run(): Promise<void> {
 
         <div class="flex items-center gap-3">
           <span class="w-12 flex-none text-caption text-ink-3">{{ t('exportDialog.range') }}</span>
-          <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
+          <div v-indicator role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
             <button class="seg" :aria-pressed="!onlySegment" @click="onlySegment = false">
               {{ t('exportDialog.rangeAll') }}
             </button>

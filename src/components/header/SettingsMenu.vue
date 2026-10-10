@@ -9,6 +9,7 @@ import { useBackendText } from '@/composables/useBackendText'
 import { getBackend } from '@/ipc/backend'
 import { toUiError, type UiError } from '@/ipc/errors'
 import { LOG_LEVELS } from '@/ipc/logLevels'
+import { vIndicator } from '@/motion/indicator'
 import {
   DENSITIES,
   GRAPHICS,
@@ -99,7 +100,7 @@ async function revealLog(): Promise<void> {
       >
         <div class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('settings.theme.label') }}</span>
-          <div role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
+          <div v-indicator role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
             <button
               v-for="theme in THEMES"
               :key="theme"
@@ -113,7 +114,7 @@ async function revealLog(): Promise<void> {
         </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('settings.density.label') }}</span>
-          <div role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
+          <div v-indicator role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
             <button
               v-for="density in DENSITIES"
               :key="density"
@@ -127,7 +128,7 @@ async function revealLog(): Promise<void> {
         </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('settings.graphics.label') }}</span>
-          <div role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
+          <div v-indicator role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
             <button
               v-for="option in GRAPHICS"
               :key="option"
@@ -144,7 +145,7 @@ async function revealLog(): Promise<void> {
         </div>
         <div class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('settings.language.label') }}</span>
-          <div role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
+          <div v-indicator role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
             <button
               v-for="locale in LOCALE_PREFERENCES"
               :key="locale"
@@ -166,6 +167,7 @@ async function revealLog(): Promise<void> {
         <div class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('settings.diagnostics.label') }}</span>
           <div
+            v-indicator
             role="group"
             :aria-label="t('settings.diagnostics.level')"
             class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5"

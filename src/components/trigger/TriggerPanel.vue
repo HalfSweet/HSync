@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
+import { vIndicator } from '@/motion/indicator'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDeviceStore } from '@/stores/device'
@@ -155,7 +156,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
         <fieldset :disabled="locked" class="flex flex-col gap-3">
           <div class="flex items-center gap-3">
             <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.mode') }}</span>
-            <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
+            <div v-indicator role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
               <button
                 v-for="one in MODES"
                 :key="one"
@@ -239,7 +240,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                   </option>
                 </select>
               </label>
-              <div role="tablist" class="flex min-w-0 flex-1 flex-wrap gap-0.5">
+              <div v-indicator role="tablist" class="flex min-w-0 flex-1 flex-wrap gap-0.5">
                 <button
                   v-for="index in trigger.stageCount"
                   :key="index"
@@ -290,7 +291,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                 <span class="w-16 flex-none text-ink-2">{{
                   t('triggerPanel.stages.combine')
                 }}</span>
-                <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
+                <div v-indicator role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
                   <button class="seg" :aria-pressed="stage.both" @click="stage.both = true">
                     {{ t('triggerPanel.stages.both') }}
                   </button>

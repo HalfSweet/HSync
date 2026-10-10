@@ -10,6 +10,7 @@ import { escapePieces, hex, hexBytes, i2cMeaningText, type TextPiece } from '@/d
 import { getBackend } from '@/ipc/backend'
 import { pickSavePath } from '@/ipc/dialogs'
 import type { StreamRow } from '@/ipc/bindings/StreamRow'
+import { vIndicator } from '@/motion/indicator'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useSearchStore } from '@/stores/search'
@@ -483,14 +484,19 @@ function onGripUp(): void {
     <div
       class="flex h-[33px] flex-none items-stretch gap-3 border-b border-line bg-chrome pr-2 pl-1"
     >
-      <div role="tablist" :aria-label="t('stream.decoders')" class="flex items-stretch">
+      <div
+        v-indicator:line
+        role="tablist"
+        :aria-label="t('stream.decoders')"
+        class="flex items-stretch"
+      >
         <button
           v-for="tab in tabs"
           :key="tab.index"
           role="tab"
           :aria-selected="tab.index === stream.decoder"
           class="inline-flex items-center gap-1.5 px-2.5 text-small font-medium whitespace-nowrap text-ink-2 hover:text-ink"
-          :class="tab.index === stream.decoder && 'text-ink shadow-[inset_0_-2px_0_var(--ink)]'"
+          :class="tab.index === stream.decoder && 'text-ink'"
           @click="stream.decoder = tab.index"
         >
           <i class="size-2 rounded-2" :class="tab.square" />
@@ -501,6 +507,7 @@ function onGripUp(): void {
       <div class="ml-auto flex items-center gap-2">
         <div
           v-if="stream.hasModes"
+          v-indicator
           role="group"
           :aria-label="t('stream.mode.label')"
           class="flex gap-0.5 rounded-6 bg-hover p-0.5"
@@ -513,6 +520,7 @@ function onGripUp(): void {
           </button>
         </div>
         <div
+          v-indicator
           role="group"
           :aria-label="t('stream.scope.label')"
           class="flex gap-0.5 rounded-6 bg-hover p-0.5"
