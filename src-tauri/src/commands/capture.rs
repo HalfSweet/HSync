@@ -70,8 +70,8 @@ pub async fn capture_start(
     request: CaptureRequest,
 ) -> CommandResult<CaptureSummary> {
     let emitter = app.clone();
-    let events: EventSink = Arc::new(move |event| match event {
-        SessionEvent::Live(status) => {
+    let events: EventSink = Arc::new(move |event| {
+        if let SessionEvent::Live(status) = event {
             let _ = emitter.emit(LIVE_EVENT, status);
         }
     });

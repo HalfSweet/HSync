@@ -9,10 +9,10 @@ use std::time::Duration;
 use hsync_demo::DemoDriver;
 use hsync_driver::DeviceManager;
 use hsync_dslogic::{DslogicDriver, FirmwareDir};
-use hsync_session::Instrument;
+use hsync_session::{EventSink, Instrument, SessionEvent, Workspace};
 use state::AppState;
 use tauri::path::BaseDirectory;
-use tauri::{App, Manager};
+use tauri::{App, Emitter, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
 /// Crates whose debug messages development builds keep.
@@ -38,7 +38,19 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         Arc::new(DemoDriver::new(demo)),
         Arc::new(DslogicDriver::new(FirmwareDir(firmware))),
     ]);
-    app.manage(AppState::new(Instrument::new(manager.clone())));
+    let emitter = app.handle().clone();
+    let events: EventSink = Arc::new(move |event| {
+        if let SessionEvent::Decoded { capture_id, index } = event {
+            let _ = emitter.emit(
+                commands::decode::DECODED_EVENT,
+                serde_json::json!({ "captureId": capture_id, "index": index }),
+            );
+        }
+    });
+    app.manage(AppState::new(
+        Workspace::with_events(events),
+        Instrument::new(manager.clone()),
+    ));
     let handle = app.handle().clone();
     let watch = manager.watch(HOTPLUG_SETTLE, move || {
         commands::device::devices_changed(&handle);
@@ -83,6 +95,10 @@ pub fn run() {
             commands::capture::capture_pulse,
             commands::capture::capture_edge,
             commands::capture::capture_clock_period,
+            commands::decode::decode_list,
+            commands::decode::decode_view,
+            commands::decode::decode_stream,
+            commands::decode::decode_row_at,
             commands::device::device_list,
             commands::device::device_open,
             commands::device::device_state,

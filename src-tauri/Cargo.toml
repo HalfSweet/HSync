@@ -16,6 +16,7 @@ tauri-build = { version = "2.7.1", features = [] }
 
 [dependencies]
 hsync-core.workspace = true
+hsync-decode.workspace = true
 hsync-demo.workspace = true
 hsync-driver.workspace = true
 hsync-dslogic.workspace = true

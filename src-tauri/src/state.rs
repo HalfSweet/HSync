@@ -15,9 +15,9 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(instrument: Instrument) -> Self {
+    pub fn new(workspace: Workspace, instrument: Instrument) -> Self {
         Self {
-            workspace: Mutex::new(Workspace::new()),
+            workspace: Mutex::new(workspace),
             instrument: Mutex::new(instrument),
             hotplug: Mutex::new(None),
         }

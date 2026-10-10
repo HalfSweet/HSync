@@ -1266,6 +1266,7 @@ name = "hsync"
 version = "0.1.0"
 dependencies = [
  "hsync-core",
+ "hsync-decode",
  "hsync-demo",
  "hsync-driver",
  "hsync-dslogic",

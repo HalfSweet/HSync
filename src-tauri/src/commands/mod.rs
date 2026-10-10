@@ -1,6 +1,7 @@
 //! IPC commands, see DESIGN.md §3.4. Errors cross as [`UiError`]: an i18n key and parameters.
 
 pub mod capture;
+pub mod decode;
 pub mod device;
 
 use hsync_core::UiError;
