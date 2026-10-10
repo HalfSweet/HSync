@@ -237,3 +237,58 @@ fn counts_edges_in_a_segment_as_dsview() {
     }
     assert!(hsync_session::edges(&capture, 0, 10, &[99]).is_err());
 }
+
+fn host() -> Arc<hsync_srd::DecoderHost> {
+    Arc::new(hsync_srd::DecoderHost::new(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/resources/decoders"),
+    ))
+}
+
+#[test]
+fn python_decoders_stack_on_native_ones_and_run_alone() {
+    let (mut workspace, events) = workspace();
+    workspace.set_decoder_host(host());
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let decoding = workspace.decoding(opened.id).expect("decoders");
+    let statuses = decoding.statuses();
+    // 1:i2c carries eeprom24xx: the native lanes plus the EEPROM's.
+    let i2c = &statuses[0];
+    assert_eq!(i2c.state, DecodeState::Done, "{:?}", i2c.error);
+    assert_eq!(i2c.bus, Some(Bus::I2c));
+    assert!(
+        i2c.lanes
+            .iter()
+            .all(|lane| lane.lane.starts_with("eeprom24xx/"))
+    );
+    assert!(!i2c.lanes.is_empty());
+    let view = decoding.view(0, opened.info.sample_count, 50.0);
+    let lanes: Vec<&str> = view[0]
+        .view
+        .lanes
+        .iter()
+        .map(|lane| lane.lane.as_str())
+        .collect();
+    assert!(lanes.contains(&"header") && lanes.iter().any(|lane| lane.starts_with("eeprom24xx/")));
+
+    // A decoder only Python has: count SCL's edges.
+    let counter = serde_json::json!([{
+        "id": "counter",
+        "channel": [{"data": 1}],
+        "options": {"data_edge": "rising"},
+    }]);
+    workspace
+        .set_decoders(opened.id, counter, false)
+        .expect("decoders");
+    decoded(&events, opened.id, 1);
+    let decoding = workspace.decoding(opened.id).expect("decoders");
+    let status = &decoding.statuses()[0];
+    assert_eq!(status.state, DecodeState::Done, "{:?}", status.error);
+    assert_eq!(status.bus, Some(Bus::Other));
+    assert_eq!(status.lanes[0].lane, "counter/edge_counts");
+    assert!(status.counts.is_some_and(|counts| counts.frames > 100));
+    let page = decoding
+        .stream(0, StreamMode::Text, None, false, 0, 3)
+        .expect("rows");
+    assert!(matches!(&page.rows[0], StreamRow::Annotation { text, .. } if !text.is_empty()));
+}

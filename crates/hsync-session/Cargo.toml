@@ -15,6 +15,7 @@ hsync-core.workspace = true
 hsync-decode.workspace = true
 hsync-driver.workspace = true
 hsync-fileio.workspace = true
+hsync-srd.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 serde.workspace = true

@@ -144,6 +144,8 @@ pub struct Workspace {
     current: Option<OpenCapture>,
     last_id: u64,
     events: Option<EventSink>,
+    /// Runs the decoders without a native implementation, and those stacked on native ones.
+    decoders: Option<Arc<hsync_srd::DecoderHost>>,
 }
 
 impl std::fmt::Debug for Workspace {
@@ -195,6 +197,11 @@ impl Workspace {
         }
     }
 
+    /// Lets the Python decoders of `host` decode what no native decoder does.
+    pub fn set_decoder_host(&mut self, host: Arc<hsync_srd::DecoderHost>) {
+        self.decoders = Some(host);
+    }
+
     /// Opens a `.dsl` file.
     pub fn open_file(&mut self, path: &Path) -> Result<CaptureSummary, SessionError> {
         let source = CaptureSource::File {
@@ -213,7 +220,10 @@ impl Workspace {
         let channel_names = document.header.probes.iter().cloned().collect();
         self.last_id += 1;
         let capture = Arc::new(RwLock::new(document.capture));
-        let decoding = DecodeSet::new(document.decoders.as_ref());
+        if let Some(open) = &self.current {
+            open.decoding.cancel();
+        }
+        let decoding = DecodeSet::new(document.decoders.as_ref(), self.decoders.clone());
         decoding.run(&capture, decoded_events(self.events.clone(), self.last_id));
         self.current = Some(OpenCapture {
             id: self.last_id,
@@ -236,9 +246,12 @@ impl Workspace {
         let (channel_names, decoders) = self
             .current
             .take()
-            .map(|open| (open.channel_names, open.decoders))
+            .map(|open| {
+                open.decoding.cancel();
+                (open.channel_names, open.decoders)
+            })
             .unwrap_or_default();
-        let decoding = DecodeSet::new(decoders.as_ref());
+        let decoding = DecodeSet::new(decoders.as_ref(), self.decoders.clone());
         let driver = match &source {
             CaptureSource::Device { driver, .. } => driver.clone(),
             _ => String::new(),
@@ -273,6 +286,7 @@ impl Workspace {
         capturing: bool,
     ) -> Result<CaptureSummary, SessionError> {
         let events = self.events.clone();
+        let host = self.decoders.clone();
         let open = match &mut self.current {
             Some(open) if open.id == id => open,
             Some(_) => return Err(SessionError::StaleCapture),
@@ -282,8 +296,9 @@ impl Workspace {
             return Err(SessionError::Busy);
         }
         let decoders = (!decoders.as_array().is_some_and(Vec::is_empty)).then_some(decoders);
-        let decoding = DecodeSet::new(decoders.as_ref());
+        let decoding = DecodeSet::new(decoders.as_ref(), host);
         decoding.run(&open.capture, decoded_events(events, id));
+        open.decoding.cancel();
         open.decoders = decoders;
         open.decoding = decoding;
         Ok(summarize(open))

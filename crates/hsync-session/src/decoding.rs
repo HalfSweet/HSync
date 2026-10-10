@@ -4,9 +4,13 @@
 use std::sync::Arc;
 
 use hsync_capture::LogicCapture;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use hsync_decode::{
-    Bus, DataLine, DecoderView, Needle, Presentation, Spec, StreamCounts, StreamMode, StreamRow,
+    Annotation, Bus, DataLine, DecoderView, Needle, Presentation, Spec, StreamCounts, StreamMode,
+    StreamRow,
 };
+use hsync_srd::{DecoderHost, LayerResult, Stack, StackOutcome};
 use parking_lot::RwLock;
 use serde::Serialize;
 use serde_json::Value;
@@ -22,8 +26,20 @@ pub enum DecodeState {
     Done,
     /// A channel the decoder needs is not in the capture.
     MissingChannels,
-    /// No native decoder for this bus yet.
+    /// Neither a native nor a Python decoder can run it.
     Unsupported,
+    /// A Python decoder raised an error; what it put out before stays.
+    Failed,
+}
+
+/// A lane of annotations from a decoder without a native presentation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct AnnotationLane {
+    /// The lane's name in views: `decoder id/row id`.
+    pub lane: String,
+    /// The row's description, in English as the decoder has it.
+    pub desc: String,
 }
 
 /// A decoder of the open capture.
@@ -37,6 +53,10 @@ pub struct DecoderStatus {
     pub bus: Option<Bus>,
     pub state: DecodeState,
     pub counts: Option<StreamCounts>,
+    /// Lanes of annotations, below any native lanes.
+    pub lanes: Vec<AnnotationLane>,
+    /// Why a Python decoder failed.
+    pub error: Option<String>,
 }
 
 /// A decoder's lanes in a viewport.
@@ -87,11 +107,22 @@ pub struct SearchResult {
 /// Hits a search returns at most.
 pub const SEARCH_LIMIT: usize = 10_000;
 
+/// How an entry is decoded.
+#[derive(Debug)]
+enum Job {
+    Native(Spec),
+    /// A native decoder with Python decoders stacked on it: the native one draws the bus, the
+    /// whole stack runs in Python for the decoders above.
+    NativeStacked(Spec, Stack),
+    Python(Stack),
+}
+
 #[derive(Debug)]
 enum State {
-    Pending(Spec),
+    Pending(Job),
     Running,
-    Done(Arc<Presentation>),
+    Done(Arc<Presentation>, Vec<AnnotationLane>),
+    Failed(Arc<Presentation>, Vec<AnnotationLane>, String),
     MissingChannels,
     Unsupported,
 }
@@ -107,11 +138,34 @@ struct Entry {
 #[derive(Debug, Default)]
 pub struct DecodeSet {
     entries: RwLock<Vec<Entry>>,
+    host: Option<Arc<DecoderHost>>,
+    /// Stops the Python decoders of a set that was replaced.
+    cancel: Arc<AtomicBool>,
+}
+
+/// Lanes for the annotations of `layers`, named `decoder id/row id`, and the annotations with
+/// their rows counted across all of them.
+fn annotation_lanes(layers: &[LayerResult]) -> (Vec<AnnotationLane>, Vec<Annotation>) {
+    let mut lanes = Vec::new();
+    let mut annotations = Vec::new();
+    for layer in layers {
+        let offset = lanes.len() as u32;
+        lanes.extend(layer.rows.iter().map(|(row, desc)| AnnotationLane {
+            lane: format!("{}/{row}", layer.id),
+            desc: desc.clone(),
+        }));
+        annotations.extend(layer.annotations.iter().cloned().map(|mut annotation| {
+            annotation.row += offset;
+            annotation
+        }));
+    }
+    (lanes, annotations)
 }
 
 impl DecodeSet {
-    /// Entries for DSView's `decoders` list, not run yet.
-    pub fn new(decoders: Option<&Value>) -> Arc<Self> {
+    /// Entries for DSView's `decoders` list, not run yet. Without `host` only the native
+    /// decoders run, and stacked decoders are left out.
+    pub fn new(decoders: Option<&Value>, host: Option<Arc<DecoderHost>>) -> Arc<Self> {
         let entries = decoders
             .and_then(Value::as_array)
             .into_iter()
@@ -122,23 +176,95 @@ impl DecodeSet {
                     .and_then(Value::as_str)
                     .unwrap_or_default()
                     .to_owned();
-                match Spec::from_dsview(entry) {
-                    Some(spec) => Entry {
-                        id,
-                        bus: Some(spec.bus),
-                        state: State::Pending(spec),
-                    },
-                    None => Entry {
-                        id,
-                        bus: None,
-                        state: State::Unsupported,
-                    },
-                }
+                let stack = host
+                    .as_ref()
+                    .and_then(|_| Stack::from_dsview(entry))
+                    .filter(|stack| !stack.layers.is_empty());
+                let (bus, state) = match (Spec::from_dsview(entry), stack) {
+                    (Some(spec), Some(stack)) if stack.layers.len() > 1 => (
+                        Some(spec.bus),
+                        State::Pending(Job::NativeStacked(spec, stack)),
+                    ),
+                    (Some(spec), _) => (Some(spec.bus), State::Pending(Job::Native(spec))),
+                    (None, Some(stack)) => (Some(Bus::Other), State::Pending(Job::Python(stack))),
+                    (None, None) => (None, State::Unsupported),
+                };
+                Entry { id, bus, state }
             })
             .collect();
         Arc::new(Self {
             entries: RwLock::new(entries),
+            host,
+            cancel: Arc::new(AtomicBool::new(false)),
         })
+    }
+
+    /// Stops the Python decoders still running; their results are not needed any more.
+    pub fn cancel(&self) {
+        self.cancel.store(true, Ordering::Relaxed);
+    }
+
+    /// Runs one job over the capture.
+    fn decode(
+        host: Option<&DecoderHost>,
+        job: Job,
+        capture: &Arc<RwLock<LogicCapture>>,
+        cancel: &Arc<AtomicBool>,
+    ) -> State {
+        let native = |spec: &Spec| {
+            let capture = capture.read();
+            spec.run(&capture, capture.len())
+        };
+        let python = |stack: &Stack| -> Result<StackOutcome, String> {
+            let host = host.ok_or("no decoder host")?;
+            let end = capture.read().len();
+            hsync_srd::run_stack(host, capture, end, stack, cancel)
+                .map_err(|error| error.to_string())
+        };
+        match job {
+            Job::Native(spec) => match native(&spec) {
+                Some(decoded) => State::Done(Arc::new(Presentation::new(&decoded)), Vec::new()),
+                None => State::MissingChannels,
+            },
+            Job::NativeStacked(spec, stack) => {
+                let Some(decoded) = native(&spec) else {
+                    return State::MissingChannels;
+                };
+                let mut presentation = Presentation::new(&decoded);
+                match python(&stack) {
+                    Ok(outcome) => {
+                        let (lanes, annotations) = annotation_lanes(&outcome.layers[1..]);
+                        let names: Vec<String> =
+                            lanes.iter().map(|lane| lane.lane.clone()).collect();
+                        presentation.append_lanes(&names, annotations);
+                        match outcome.error {
+                            None => State::Done(Arc::new(presentation), lanes),
+                            Some(error) => {
+                                State::Failed(Arc::new(presentation), lanes, error.to_string())
+                            }
+                        }
+                    }
+                    Err(error) => State::Failed(Arc::new(presentation), Vec::new(), error),
+                }
+            }
+            Job::Python(stack) => match python(&stack) {
+                Ok(outcome) => {
+                    let (lanes, annotations) = annotation_lanes(&outcome.layers);
+                    let names: Vec<String> = lanes.iter().map(|lane| lane.lane.clone()).collect();
+                    let presentation = Arc::new(Presentation::annotations(&names, annotations));
+                    match outcome.error {
+                        None => State::Done(presentation, lanes),
+                        Some(error) => State::Failed(presentation, lanes, error.to_string()),
+                    }
+                }
+                Err(error) if error.contains("required channel") => State::MissingChannels,
+                Err(error) => State::Failed(
+                    Arc::new(Presentation::annotations(&[], Vec::new())),
+                    Vec::new(),
+                    error,
+                ),
+            },
+        }
     }
 
     /// Decodes every pending entry on its own thread; `done` hears of each one finished.
@@ -149,29 +275,22 @@ impl DecodeSet {
     ) {
         let mut entries = self.entries.write();
         for (index, entry) in entries.iter_mut().enumerate() {
-            let State::Pending(spec) = std::mem::replace(&mut entry.state, State::Running) else {
+            let State::Pending(job) = std::mem::replace(&mut entry.state, State::Running) else {
                 continue;
             };
             let set = Arc::clone(self);
             let capture = Arc::clone(capture);
             let done = Arc::clone(&done);
+            let id = entry.id.clone();
             let spawned = std::thread::Builder::new()
-                .name(format!("decode-{}", spec.id))
+                .name(format!("decode-{id}"))
                 .spawn(move || {
                     let began = std::time::Instant::now();
-                    let decoded = {
-                        let capture = capture.read();
-                        spec.run(&capture, capture.len())
-                    };
+                    let state = Self::decode(set.host.as_deref(), job, &capture, &set.cancel);
                     log::debug!(
-                        "decoded {} in {:.1} ms",
-                        spec.id,
+                        "decoded {id} in {:.1} ms",
                         began.elapsed().as_secs_f64() * 1e3
                     );
-                    let state = match decoded {
-                        Some(decoded) => State::Done(Arc::new(Presentation::new(&decoded))),
-                        None => State::MissingChannels,
-                    };
                     if let Some(entry) = set.entries.write().get_mut(index) {
                         entry.state = state;
                     }
@@ -195,12 +314,23 @@ impl DecodeSet {
                 bus: entry.bus,
                 state: match entry.state {
                     State::Pending(_) | State::Running => DecodeState::Running,
-                    State::Done(_) => DecodeState::Done,
+                    State::Done(..) => DecodeState::Done,
+                    State::Failed(..) => DecodeState::Failed,
                     State::MissingChannels => DecodeState::MissingChannels,
                     State::Unsupported => DecodeState::Unsupported,
                 },
                 counts: match &entry.state {
-                    State::Done(presentation) => Some(presentation.counts()),
+                    State::Done(presentation, _) | State::Failed(presentation, ..) => {
+                        Some(presentation.counts())
+                    }
+                    _ => None,
+                },
+                lanes: match &entry.state {
+                    State::Done(_, lanes) | State::Failed(_, lanes, _) => lanes.clone(),
+                    _ => Vec::new(),
+                },
+                error: match &entry.state {
+                    State::Failed(_, _, error) => Some(error.clone()),
                     _ => None,
                 },
             })
@@ -209,7 +339,9 @@ impl DecodeSet {
 
     fn presentation(&self, index: u32) -> Option<Arc<Presentation>> {
         match &self.entries.read().get(index as usize)?.state {
-            State::Done(presentation) => Some(Arc::clone(presentation)),
+            State::Done(presentation, _) | State::Failed(presentation, ..) => {
+                Some(Arc::clone(presentation))
+            }
             _ => None,
         }
     }
@@ -222,7 +354,9 @@ impl DecodeSet {
             .iter()
             .enumerate()
             .filter_map(|(index, entry)| match &entry.state {
-                State::Done(presentation) => Some((index as u32, Arc::clone(presentation))),
+                State::Done(presentation, _) | State::Failed(presentation, ..) => {
+                    Some((index as u32, Arc::clone(presentation)))
+                }
                 _ => None,
             })
             .collect();
@@ -280,7 +414,9 @@ impl DecodeSet {
             .iter()
             .enumerate()
             .filter_map(|(index, entry)| match &entry.state {
-                State::Done(presentation) => Some((index as u32, Arc::clone(presentation))),
+                State::Done(presentation, _) | State::Failed(presentation, ..) => {
+                    Some((index as u32, Arc::clone(presentation)))
+                }
                 _ => None,
             })
             .collect();

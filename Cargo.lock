@@ -1375,6 +1375,7 @@ dependencies = [
  "hsync-demo",
  "hsync-driver",
  "hsync-fileio",
+ "hsync-srd",
  "log",
  "parking_lot",
  "serde",
