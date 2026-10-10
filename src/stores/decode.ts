@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 
+import { DECODERS, specFromInfo, type DecoderSpec } from '@/decode/catalog'
 import { getBackend } from '@/ipc/backend'
 import type { DecoderStatus } from '@/ipc/bindings/DecoderStatus'
 import type { DecoderView } from '@/ipc/bindings/DecoderView'
@@ -38,11 +39,24 @@ export const useDecodeStore = defineStore('decode', () => {
     { immediate: true },
   )
 
+  /** The decoders the dialog offers: the host's catalog, or the native ones without it. */
+  const catalog = shallowRef<readonly DecoderSpec[]>(DECODERS)
+
+  async function loadCatalog(): Promise<void> {
+    try {
+      const found = await (await getBackend()).decodeCatalog()
+      if (found.length > 0) catalog.value = found.map(specFromInfo)
+    } catch (error) {
+      console.warn('the decoder catalog is not available', error)
+    }
+  }
+
   let subscribed = false
   /** Follows decoders finishing in the background. */
   async function init(): Promise<void> {
     if (subscribed) return
     subscribed = true
+    void loadCatalog()
     await (
       await getBackend()
     ).onDecoded(({ captureId }) => {
@@ -124,6 +138,7 @@ export const useDecodeStore = defineStore('decode', () => {
     lanes,
     editor,
     entries,
+    catalog,
     init,
     statusOf,
     lanesOf,
