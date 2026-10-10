@@ -84,6 +84,7 @@ pub fn run() {
                 ])
                 .build(),
         )
+        .plugin(tauri_plugin_dialog::init())
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
             commands::capture::capture_summary,
