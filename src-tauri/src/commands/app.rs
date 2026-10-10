@@ -1,4 +1,5 @@
-//! Diagnostics (DESIGN.md §2.5): the log level and log file the settings panel controls.
+//! The app's surroundings: diagnostics (DESIGN.md §2.5), the log level and log file the settings
+//! panel controls, and the machine's memory, which large captures must fit in (§5.2).
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -60,4 +61,12 @@ pub fn log_reveal(app: AppHandle) -> CommandResult<()> {
     };
     tauri_plugin_opener::reveal_item_in_dir(target)
         .map_err(|error| UiError::new("error.app.reveal").with("detail", error.to_string()))
+}
+
+/// Physical memory in bytes; captures beyond half of it get a warning, as DESIGN.md §5.2 asks.
+#[tauri::command]
+pub fn system_memory() -> u64 {
+    let mut system = sysinfo::System::new();
+    system.refresh_memory_specifics(sysinfo::MemoryRefreshKind::nothing().with_ram());
+    system.total_memory()
 }

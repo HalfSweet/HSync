@@ -26,6 +26,7 @@ log.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
 tauri = { version = "2.12.2", features = [] }
 tauri-plugin-dialog = "2.8.1"
 tauri-plugin-log = "2.10.0"

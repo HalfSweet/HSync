@@ -113,6 +113,7 @@ pub fn run() {
             commands::app::log_configure,
             commands::app::log_file,
             commands::app::log_reveal,
+            commands::app::system_memory,
             commands::capture::capture_summary,
             commands::capture::capture_open_demo,
             commands::capture::capture_open_file,
