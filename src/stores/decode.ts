@@ -94,5 +94,41 @@ export const useDecodeStore = defineStore('decode', () => {
     return decoder === null ? undefined : lanes.value.get(decoder)
   }
 
-  return { statuses, revision, lanes, init, statusOf, lanesOf }
+  /** The decoder dialog: closed, adding (`null`) or editing decoder `index`. */
+  const editor = shallowRef<{ index: number | null } | null>(null)
+
+  function openEditor(index: number | null): void {
+    editor.value = { index }
+  }
+
+  function closeEditor(): void {
+    editor.value = null
+  }
+
+  /** The capture's decoder list as stored with it. */
+  const entries = computed<unknown[]>(() => {
+    const decoders = capture.summary?.decoders
+    return Array.isArray(decoders) ? (decoders as unknown[]) : []
+  })
+
+  /** Replaces the decoder list; the capture decodes again. */
+  async function setEntries(next: unknown[]): Promise<void> {
+    const id = capture.summary?.id
+    if (id === undefined) return
+    capture.replaceSummary(await (await getBackend()).decodeSet(id, next))
+  }
+
+  return {
+    statuses,
+    revision,
+    lanes,
+    editor,
+    entries,
+    init,
+    statusOf,
+    lanesOf,
+    openEditor,
+    closeEditor,
+    setEntries,
+  }
 })

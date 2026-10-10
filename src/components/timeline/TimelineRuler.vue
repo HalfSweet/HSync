@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useCaptureStore } from '@/stores/capture'
+import { useDecodeStore } from '@/stores/decode'
 import { useViewStore } from '@/stores/view'
 import { segmentGeometry } from '@/timeline/segment'
 import { xToSample } from '@/timeline/viewport'
@@ -11,6 +12,7 @@ import { formatSpan } from '@/utils/units'
 
 const { t } = useI18n()
 const capture = useCaptureStore()
+const decode = useDecodeStore()
 const view = useViewStore()
 const track = useTemplateRef<HTMLElement>('track')
 
@@ -77,7 +79,11 @@ function onPointerUp(): void {
     <div
       class="sticky left-0 z-[3] flex w-(--lab) flex-none items-center justify-between gap-2 border-r border-line bg-chrome pr-3 pl-2 whitespace-nowrap"
     >
-      <button class="btn-ghost max-[640px]:px-1">
+      <button
+        class="btn-ghost max-[640px]:px-1"
+        :disabled="!capture.summary"
+        @click="decode.openEditor(null)"
+      >
         <AppIcon name="plus" />
         <span class="max-[640px]:hidden">{{ t('ruler.addDecoder') }}</span>
       </button>

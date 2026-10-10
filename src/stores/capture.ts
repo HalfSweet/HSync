@@ -155,6 +155,11 @@ export const useCaptureStore = defineStore('capture', () => {
     }
   }
 
+  /** Takes a new summary of the open capture, such as one with other decoders. */
+  function replaceSummary(next: CaptureSummary): void {
+    if (summary.value?.id === next.id) summary.value = next
+  }
+
   /** Stops the running capture, or the next repeat; what was captured so far stays. */
   async function stop(): Promise<void> {
     cancelRepeat()
@@ -199,5 +204,6 @@ export const useCaptureStore = defineStore('capture', () => {
     openFile,
     start,
     stop,
+    replaceSummary,
   }
 })
