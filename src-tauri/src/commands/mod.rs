@@ -25,7 +25,10 @@ async fn blocking<T: Send + 'static>(
 ) -> CommandResult<T> {
     tauri::async_runtime::spawn_blocking(move || {
         let state = app.state::<AppState>();
-        task(&state).map_err(|error| UiError::from(&error))
+        task(&state).map_err(|error| {
+            log::warn!("command failed: {error}");
+            UiError::from(&error)
+        })
     })
     .await
     .map_err(task_failed)?

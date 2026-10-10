@@ -29,7 +29,7 @@ pub enum SessionError {
     #[error("a capture is running")]
     Busy,
     /// The device or its driver failed.
-    #[error("device error {}", .0.code)]
+    #[error("device error {} {:?}", .0.code, .0.params)]
     Device(UiError),
 }
 
