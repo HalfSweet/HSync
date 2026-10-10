@@ -153,6 +153,14 @@ fn options<'py>(
     Ok(dict)
 }
 
+/// What a run of a stack gave: every decoder's annotations, and why it stopped early if it did.
+#[derive(Debug)]
+pub struct StackOutcome {
+    pub layers: Vec<LayerResult>,
+    /// The error a decoder raised; the annotations up to it are kept.
+    pub error: Option<SrdError>,
+}
+
 /// Runs `stack` over the first `end` samples of `capture`. `cancel` stops it at the next wait.
 pub fn run_stack(
     host: &DecoderHost,
@@ -160,7 +168,7 @@ pub fn run_stack(
     end: u64,
     stack: &Stack,
     cancel: &Arc<AtomicBool>,
-) -> Result<Vec<LayerResult>, SrdError> {
+) -> Result<StackOutcome, SrdError> {
     let infos: Vec<DecoderInfo> = stack
         .layers
         .iter()
@@ -233,21 +241,22 @@ pub fn run_stack(
             }
             object.call_method0("start")?;
         }
-        let Some(bottom) = instances.first() else {
-            return Ok(Vec::new());
-        };
-        match bottom.call_method0("decode") {
-            Ok(_) => {}
-            Err(error) if error.is_instance_of::<EndOfData>(py) => {}
-            Err(error) => {
+        let error = match instances
+            .first()
+            .map(|bottom| bottom.call_method0("decode"))
+        {
+            None | Some(Ok(_)) => None,
+            Some(Err(error)) if error.is_instance_of::<EndOfData>(py) => None,
+            Some(Err(error)) => {
                 let detail = match error.traceback(py).map(|trace| trace.format()) {
                     Some(Ok(trace)) => format!("{trace}{error}"),
                     _ => error.to_string(),
                 };
-                return Err(SrdError::Python(detail));
+                log::warn!("decoder {} failed: {detail}", stack.layers[0].id);
+                Some(SrdError::Python(error.to_string()))
             }
-        }
-        Ok(stack
+        };
+        let layers = stack
             .layers
             .iter()
             .zip(&infos)
@@ -257,6 +266,7 @@ pub fn run_stack(
                 rows: rows_of(info).0,
                 annotations: std::mem::take(&mut *sink.lock()),
             })
-            .collect())
+            .collect();
+        Ok(StackOutcome { layers, error })
     })
 }

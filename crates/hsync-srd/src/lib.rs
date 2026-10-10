@@ -13,4 +13,4 @@ pub use catalog::{
 };
 pub use error::SrdError;
 pub use host::DecoderHost;
-pub use run::{Layer, LayerResult, Stack, run_stack};
+pub use run::{Layer, LayerResult, Stack, StackOutcome, run_stack};

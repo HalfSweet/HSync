@@ -36,7 +36,7 @@ fn python_i2c_and_its_eeprom_decode_the_demo() {
     let host = DecoderHost::new(root().join("src-tauri/resources/decoders"));
     let len = document.capture.len();
     let capture = Arc::new(RwLock::new(document.capture));
-    let results = run_stack(
+    let outcome = run_stack(
         &host,
         &capture,
         len,
@@ -44,6 +44,8 @@ fn python_i2c_and_its_eeprom_decode_the_demo() {
         &Arc::new(AtomicBool::new(false)),
     )
     .expect("run");
+    assert!(outcome.error.is_none(), "{:?}", outcome.error);
+    let results = outcome.layers;
     let i2c = &results[0];
     // Address and data bytes: the same 4 + 3 × 5 + 4 + 4 = 27 bytes as the native decoder.
     let bytes = i2c
@@ -68,7 +70,7 @@ fn python_uart_reads_the_demo_text() {
     let host = DecoderHost::new(root().join("src-tauri/resources/decoders"));
     let len = document.capture.len();
     let capture = Arc::new(RwLock::new(document.capture));
-    let results = run_stack(
+    let outcome = run_stack(
         &host,
         &capture,
         len,
@@ -76,6 +78,8 @@ fn python_uart_reads_the_demo_text() {
         &Arc::new(AtomicBool::new(false)),
     )
     .expect("run");
+    assert!(outcome.error.is_none(), "{:?}", outcome.error);
+    let results = outcome.layers;
     let rows = &results[0].rows;
     assert!(
         rows.iter()
