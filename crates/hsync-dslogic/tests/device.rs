@@ -431,6 +431,78 @@ fn stopping_a_stream_capture_discards_and_stops_the_device() {
 }
 
 #[test]
+fn loops_past_the_limit_in_stream_mode() {
+    let mut fake = configured();
+    let limit: u64 = 4096;
+    let limit_bytes = (limit / 64 * 16 * 8) as usize;
+    fake.on_start = vec![header(None, 0), vec![0x3c; 3 * limit_bytes]];
+    let (transport, mut device) = open(fake, firmware_dir(&[]));
+    assert!(device.can_loop());
+    device
+        .set_option(OptionKey::SampleLimit, &OptionValue::Integer(limit))
+        .expect("limit");
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let plan = CapturePlan {
+        looping: true,
+        ..CapturePlan::default()
+    };
+    let acquisition = device.start(plan.clone(), sink).expect("start");
+    // Everything the device sends is forwarded, three times the limit, until stopped.
+    let mut forwarded = 0;
+    while forwarded < 3 * limit_bytes {
+        match packets.recv_timeout(Duration::from_secs(5)).expect("data") {
+            Packet::Logic(data) => forwarded += data.len(),
+            Packet::End(reason) => panic!("ended by itself: {reason:?}"),
+            _ => {}
+        }
+    }
+    acquisition.stop();
+    let rest = collect(&packets);
+    acquisition.wait();
+    assert_eq!(rest.last(), Some(&Packet::End(EndReason::Stopped)));
+    assert_eq!(forwarded + logic_bytes(&rest), 3 * limit_bytes);
+
+    // The FPGA is told to loop: DSView sets the analog mode bit for it.
+    let trigger = TriggerSetup::simple(&[], 1, false);
+    let expected = setting(&ArmConfig {
+        profile: find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("profile"),
+        mode: &CHANNEL_MODES[0],
+        samplerate: 1_000_000,
+        limit_samples: limit,
+        enabled: 0xffff,
+        filter: false,
+        external_clock: false,
+        clock_falling_edge: false,
+        rle: false,
+        instant: false,
+        looping: true,
+        trigger: &trigger,
+    });
+    assert_eq!(transport.device().settings, vec![expected.to_vec()]);
+}
+
+#[test]
+fn refuses_to_loop_in_buffer_mode() {
+    let (_, mut device) = open(configured(), firmware_dir(&[]));
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    assert!(!device.can_loop());
+    let (sink, _packets) = crossbeam_channel::unbounded();
+    let plan = CapturePlan {
+        looping: true,
+        ..CapturePlan::default()
+    };
+    assert!(matches!(
+        device.start(plan, sink),
+        Err(DriverError::InvalidRequest(_))
+    ));
+}
+
+#[test]
 fn reports_what_the_trigger_can_do_in_each_mode() {
     let (_, mut device) = open(configured(), firmware_dir(&[]));
     assert_eq!(

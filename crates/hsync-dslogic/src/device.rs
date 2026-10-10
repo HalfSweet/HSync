@@ -546,6 +546,12 @@ impl Device for DslogicDevice {
         self.settings.channel_mode.channels
     }
 
+    /// DSView only loops in Stream mode (`SigSession::set_device_mode` falls back to single
+    /// captures otherwise): Buffer mode captures into the device's memory, which cannot run on.
+    fn can_loop(&self) -> bool {
+        self.settings.stream
+    }
+
     /// DSView's trigger dock limits (`TriggerDock::device_updated`): in Stream mode only simple
     /// triggers at 1 %; in Buffer mode up to 90 % of the capture, less when the capture is longer
     /// than the hardware holds, and multi-stage and serial triggers.
@@ -635,6 +641,11 @@ impl Device for DslogicDevice {
                 .check(self.channel_count())
                 .map_err(DriverError::InvalidRequest)?;
         }
+        if plan.looping && !self.can_loop() {
+            return Err(DriverError::InvalidRequest(
+                "loop captures need Stream mode".into(),
+            ));
+        }
         // The trigger dock's slider keeps the position within 1 % and the limit.
         let position = plan.trigger_position.clamp(1, caps.max_position);
         let trigger = match &plan.advanced {
@@ -652,7 +663,7 @@ impl Device for DslogicDevice {
             clock_falling_edge: self.settings.clock_falling_edge,
             rle: !self.settings.stream && self.settings.rle && limit > depth,
             instant: plan.instant,
-            looping: false,
+            looping: plan.looping,
             buffer_upload: self.settings.buffer_upload,
             trigger,
         };
