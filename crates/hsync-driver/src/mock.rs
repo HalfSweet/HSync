@@ -26,6 +26,10 @@ pub enum UsbCall {
         endpoint: u8,
         data: Vec<u8>,
     },
+    BulkRead {
+        endpoint: u8,
+        length: usize,
+    },
     BulkInSubmit {
         endpoint: u8,
         length: usize,
@@ -51,6 +55,13 @@ pub trait MockDevice: Send {
     fn bulk_out(&mut self, endpoint: u8, data: &[u8]) -> Result<(), UsbError>;
     /// Completes a submitted IN transfer of up to `length` bytes, or leaves it pending (`None`).
     fn bulk_in(&mut self, endpoint: u8, length: usize) -> Option<Result<Vec<u8>, UsbError>>;
+
+    /// Answers a single read of up to `length` bytes; by default as a submitted transfer,
+    /// one left pending timing out with nothing.
+    fn bulk_read(&mut self, endpoint: u8, length: usize) -> Result<Vec<u8>, UsbError> {
+        self.bulk_in(endpoint, length)
+            .unwrap_or_else(|| Ok(Vec::new()))
+    }
 
     /// What a pending IN transfer of up to `length` bytes had received when it was cancelled;
     /// nothing by default.
@@ -155,6 +166,16 @@ impl<D: MockDevice + 'static> UsbTransport for MockTransport<D> {
             data: data.to_vec(),
         });
         self.device().bulk_out(endpoint, data)
+    }
+
+    fn bulk_read(
+        &self,
+        endpoint: u8,
+        length: usize,
+        _timeout: Duration,
+    ) -> Result<Vec<u8>, UsbError> {
+        self.record(UsbCall::BulkRead { endpoint, length });
+        self.device().bulk_read(endpoint, length)
     }
 
     fn bulk_in(&self, endpoint: u8) -> Result<Box<dyn BulkIn>, UsbError> {
