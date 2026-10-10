@@ -45,9 +45,16 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .resolve("demo/protocol.dsl", BaseDirectory::Resource)
         .ok();
     let firmware = resolver.resolve("firmware", BaseDirectory::Resource)?;
-    let decoders = Arc::new(hsync_srd::DecoderHost::new(
-        resolver.resolve("decoders", BaseDirectory::Resource)?,
-    ));
+    let decoders =
+        hsync_srd::DecoderHost::new(resolver.resolve("decoders", BaseDirectory::Resource)?);
+    // Release builds carry their own Python (DESIGN.md §7.3); development builds use the one they
+    // linked against.
+    let python = resolver.resolve("python", BaseDirectory::Resource)?;
+    let decoders = Arc::new(if python.is_dir() {
+        decoders.with_python_home(python)
+    } else {
+        decoders
+    });
     // Reading the decoders starts Python and imports them all; do it before anyone asks.
     let preload = Arc::clone(&decoders);
     std::thread::Builder::new()
