@@ -1311,6 +1311,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-dslogic"
+version = "0.1.0"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-core",
+ "hsync-driver",
+ "log",
+ "nusb",
+]
+
+[[package]]
 name = "hsync-fileio"
 version = "0.1.0"
 dependencies = [
