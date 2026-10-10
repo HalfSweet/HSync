@@ -40,7 +40,9 @@
       "icons/icon.ico"
     ],
     "macOS": {
-      "minimumSystemVersion": "13.3"
+      "minimumSystemVersion": "13.3",
+      "signingIdentity": "-",
+      "hardenedRuntime": false
     },
     "resources": {
       "resources/demo/": "demo/",
