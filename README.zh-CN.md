@@ -173,6 +173,7 @@ pnpm bundle       # 构建本机的安装包
 - DreamSourceLab 的 [DSView](https://github.com/DreamSourceLab/DSView)：设备支持与协议解码器移植自其中的 libsigrok4DSL 与 libsigrokdecode4DSL，它们源自 [sigrok](https://sigrok.org/) 项目。
 - DSLogic 固件与 FPGA 位流来自 DreamSourceLab，以 MIT 许可分发。
 - [IBM Plex](https://github.com/IBM/plex) 字体，以 SIL Open Font License 1.1 许可分发。
+- [Lucide](https://lucide.dev/) 图标，以 ISC 许可分发。
 - 基于 [Tauri](https://tauri.app/)、[Vue](https://vuejs.org/) 与 [Rust](https://www.rust-lang.org/) 构建。
 
 ## 许可

@@ -173,6 +173,7 @@ pnpm bundle       # build the installers for this machine
 - [DSView](https://github.com/DreamSourceLab/DSView) by DreamSourceLab: the device support and protocol decoders are ported from its libsigrok4DSL and libsigrokdecode4DSL, which grew out of the [sigrok](https://sigrok.org/) project.
 - The DSLogic firmware and FPGA bitstreams come from DreamSourceLab under the MIT license.
 - [IBM Plex](https://github.com/IBM/plex) fonts, under the SIL Open Font License 1.1.
+- [Lucide](https://lucide.dev/) icons, under the ISC license.
 - Built with [Tauri](https://tauri.app/), [Vue](https://vuejs.org/) and [Rust](https://www.rust-lang.org/).
 
 ## License
