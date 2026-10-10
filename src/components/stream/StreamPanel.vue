@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { defaultCaptureName, withExtension } from '@/composables/useFileActions'
+import { entryFormat, shownTexts } from '@/decode/numberFormat'
 import { escapePieces, hex, hexBytes, i2cMeaningText, type TextPiece } from '@/decode/text'
 import { getBackend } from '@/ipc/backend'
 import { pickSavePath } from '@/ipc/dialogs'
@@ -56,6 +57,10 @@ const tabs = computed(() =>
 )
 
 const bus = computed(() => stream.bus)
+/** How the listed decoder's annotation values show. */
+const format = computed(() =>
+  entryFormat(stream.decoder === null ? undefined : decode.entries[stream.decoder]),
+)
 const address = computed(() => decode.lanesOf(stream.decoder)?.address ?? null)
 
 /** "9 transfers, 4 bytes in the segment" and its variants. */
@@ -273,7 +278,12 @@ function cellsOf(row: StreamRow): Cell[] {
       ]
     }
     case 'annotation':
-      return [{ text: row.text, kind: 'plain' }]
+      return [
+        {
+          text: shownTexts([row.text].filter(Boolean), row.value, format.value)[0] ?? '',
+          kind: 'plain',
+        },
+      ]
     default:
       return []
   }

@@ -14,6 +14,8 @@ import {
   type DecoderSpec,
   type OptionSpec,
 } from '@/decode/catalog'
+import { entryFormat, FORMAT_KEY, NUMBER_FORMATS, type NumberFormat } from '@/decode/numberFormat'
+import { laneShown, withLaneShown } from '@/decode/rows'
 import { toUiError } from '@/ipc/errors'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
@@ -164,6 +166,15 @@ function validate(): string | null {
   return null
 }
 
+// Display (editing only): the number format and which annotation rows show.
+const lanes = computed(() =>
+  editing.value === null ? [] : (decode.statusOf(editing.value)?.lanes ?? []),
+)
+const numberFormat = shallowRef<NumberFormat>(entryFormat(existing.value))
+const shownLanes = reactive<Record<string, boolean>>(
+  Object.fromEntries(lanes.value.map((lane) => [lane.lane, laneShown(existing.value, lane)])),
+)
+
 const saving = shallowRef(false)
 
 async function commit(next: unknown[]): Promise<void> {
@@ -189,8 +200,15 @@ async function save(): Promise<void> {
     stacked.map((spec, position) => ({ spec, options: { ...options[position + 1] } })),
   )
   const next = [...decode.entries]
-  if (editing.value === null) next.push(entry)
-  else next[editing.value] = { ...(existing.value ?? {}), ...entry }
+  if (editing.value === null) {
+    next.push(entry)
+  } else {
+    let edited: unknown = { ...(existing.value ?? {}), ...entry, [FORMAT_KEY]: numberFormat.value }
+    for (const lane of lanes.value) {
+      edited = withLaneShown(edited, lane, shownLanes[lane.lane] ?? true)
+    }
+    next[editing.value] = edited
+  }
   await commit(next)
 }
 
@@ -352,6 +370,33 @@ const locked = computed(() => capture.capturing)
             </label>
           </fieldset>
         </template>
+
+        <fieldset v-if="lanes.length > 0" class="flex flex-col gap-2">
+          <legend class="mb-1 text-caption text-ink-3">{{ t('decoderDialog.display') }}</legend>
+          <div class="flex items-center gap-3">
+            <span class="w-40 flex-none text-ink-2">{{ t('decoderDialog.numberFormat') }}</span>
+            <div role="group" class="flex gap-0.5 rounded-6 bg-hover p-0.5">
+              <button
+                v-for="one in NUMBER_FORMATS"
+                :key="one"
+                class="seg"
+                :aria-pressed="numberFormat === one"
+                @click="numberFormat = one"
+              >
+                {{ t(`decoderDialog.formats.${one}`) }}
+              </button>
+            </div>
+          </div>
+          <div class="flex items-start gap-3">
+            <span class="w-40 flex-none pt-0.5 text-ink-2">{{ t('decoderDialog.rows') }}</span>
+            <div class="flex min-w-0 flex-1 flex-col gap-1">
+              <label v-for="lane in lanes" :key="lane.lane" class="flex items-center gap-2">
+                <input v-model="shownLanes[lane.lane]" type="checkbox" class="accent-ink" />
+                <span class="truncate">{{ lane.desc }}</span>
+              </label>
+            </div>
+          </div>
+        </fieldset>
 
         <p v-if="error" role="alert" class="rounded-4 bg-alert-wash px-2 py-1.5 text-alert">
           {{ error }}

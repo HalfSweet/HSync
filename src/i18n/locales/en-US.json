@@ -369,7 +369,17 @@
     "noMatch": "No decoder matches",
     "stacksOn": "Stacked on: {chain}",
     "noStack": "The decoder it needs below cannot be found",
-    "optionsOf": "{name} options"
+    "optionsOf": "{name} options",
+    "display": "Display",
+    "numberFormat": "Numbers",
+    "rows": "Annotation rows",
+    "formats": {
+      "hex": "Hex",
+      "dec": "Dec",
+      "oct": "Oct",
+      "bin": "Bin",
+      "ascii": "ASCII"
+    }
   },
   "stream": {
     "title": "Data stream",

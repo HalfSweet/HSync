@@ -22,6 +22,8 @@ import type { FrameDescriptor, RenderTokens, TraceDraw } from '@/render/types'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDecodeStore } from '@/stores/decode'
+import { entryFormat } from '@/decode/numberFormat'
+import { laneShown } from '@/decode/rows'
 import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -61,9 +63,11 @@ const scroller = useTemplateRef<HTMLElement>('scroller')
 const rowsElement = useTemplateRef<HTMLElement>('rows')
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas')
 
-/** Annotation lanes of a group's decoder, once it has decoded. */
-const annotationLanes = (group: { decoder: number | null }) =>
-  decode.statusOf(group.decoder)?.lanes ?? []
+/** Annotation lanes of a group's decoder that show, once it has decoded. */
+const annotationLanes = (group: { decoder: number | null }) => {
+  const entry = group.decoder === null ? undefined : decode.entries[group.decoder]
+  return (decode.statusOf(group.decoder)?.lanes ?? []).filter((lane) => laneShown(entry, lane))
+}
 
 const layout = computed(() =>
   layoutRows(
@@ -486,6 +490,7 @@ function onWheel(event: WheelEvent): void {
               :selected="view.segment?.blockId ?? null"
               :time-of="capture.timeOf"
               :samplerate="capture.samplerate"
+              :format="entryFormat(decode.entries[row.group.decoder])"
               @pick="(block) => row.group.decoder !== null && pickBlock(block, row.group.decoder)"
               @go="view.centerOn"
             />

@@ -369,7 +369,17 @@
     "noMatch": "没有匹配的解码器",
     "stacksOn": "叠加在下层解码器上：{chain}",
     "noStack": "找不到它所需的下层解码器",
-    "optionsOf": "{name} 的选项"
+    "optionsOf": "{name} 的选项",
+    "display": "显示",
+    "numberFormat": "数值进制",
+    "rows": "注解行",
+    "formats": {
+      "hex": "十六进制",
+      "dec": "十进制",
+      "oct": "八进制",
+      "bin": "二进制",
+      "ascii": "ASCII"
+    }
   },
   "stream": {
     "title": "数据流",

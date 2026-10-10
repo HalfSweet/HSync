@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import { shownTexts, type NumberFormat } from '@/decode/numberFormat'
 import type { DecoderView } from '@/ipc/bindings/DecoderView'
 import type { I2cMeaning } from '@/ipc/bindings/I2cMeaning'
 import type { LaneItem } from '@/ipc/bindings/LaneItem'
@@ -26,6 +27,8 @@ const props = defineProps<{
   /** Converts a sample to seconds from the trigger, for tips. */
   timeOf: (sample: number) => number
   samplerate: number
+  /** How annotation values show. */
+  format: NumberFormat
 }>()
 const emit = defineEmits<{
   pick: [block: { id: string; start: number; end: number }]
@@ -316,10 +319,12 @@ function pick(item: LaneItem, id: string): void {
         :class="blockClass(g, on)"
         :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
         :aria-pressed="on"
-        :title="`${item.texts[0] ?? ''} · ${at(item.start)}`"
+        :title="`${shownTexts(item.texts, item.value, format)[0] ?? ''} · ${at(item.start)}`"
         @click="pick(item, id)"
       >
-        <span class="min-w-0 truncate">{{ fitting(item.texts, g.width) }}</span>
+        <span class="min-w-0 truncate">{{
+          fitting(shownTexts(item.texts, item.value, format), g.width)
+        }}</span>
       </button>
     </template>
     <span
