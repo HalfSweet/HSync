@@ -5,14 +5,8 @@ import { pulseMode, readPulse } from './pulse'
 const view = { start: 1000, samplesPerPixel: 1, width: 1000 }
 const RATE = 25_000_000
 
-function pulse(
-  start: number,
-  end: number,
-  nextEnd: number | null = null,
-  edges = true,
-  afterEnd: number | null = null,
-) {
-  return { high: true, start, end, startIsEdge: edges, endIsEdge: edges, nextEnd, afterEnd }
+function pulse(start: number, end: number, nextEnd: number | null = null, edges = true) {
+  return { high: true, start, end, startIsEdge: edges, endIsEdge: edges, nextEnd, afterEnd: null }
 }
 
 describe('readPulse', () => {
@@ -25,22 +19,26 @@ describe('readPulse', () => {
     expect(reading.period).toBeNull()
   })
 
-  it('reports clocks with similar neighbouring pulses', () => {
+  it('measures the period and duty cycle with the next pulse', () => {
     const clock = readPulse(pulse(1100, 1225, 1350), view, RATE, 'clock')
     expect(clock.period).toBeCloseTo(10e-6)
-    const irregular = readPulse(pulse(1100, 1225, 1600), view, RATE, 'clock')
-    expect(irregular.period).toBeNull()
-  })
-
-  it('reports the duty cycle of periodic signals, PWM included', () => {
-    const clock = readPulse(pulse(1100, 1225, 1350), view, RATE, 'clock')
     expect(clock.duty).toBeCloseTo(0.5)
-    // 20 % PWM: high 50, low 200, high 50 again.
-    const pwm = readPulse(pulse(1100, 1150, 1350, true, 1400), view, RATE, 'clock')
+    // High 50, low 200: 20 % of 10 µs, though the neighbours differ in width.
+    const pwm = readPulse(pulse(1100, 1150, 1350), view, RATE, 'clock')
     expect(pwm.period).toBeCloseTo(10e-6)
     expect(pwm.duty).toBeCloseTo(0.2)
-    // Unequal neighbours and a third pulse that does not repeat: no period.
-    const data = readPulse(pulse(1100, 1150, 1350, true, 1500), view, RATE, 'clock')
+  })
+
+  it('takes the duty cycle from the high level of a low pulse', () => {
+    // Low 200, high 50.
+    const low = readPulse({ ...pulse(1100, 1300, 1350), high: false }, view, RATE, 'clock')
+    expect(low.period).toBeCloseTo(10e-6)
+    expect(low.duty).toBeCloseTo(0.2)
+  })
+
+  it('needs the next pulse and a line that is not data', () => {
+    expect(readPulse(pulse(1100, 1225), view, RATE, 'clock').period).toBeNull()
+    const data = readPulse(pulse(1100, 1225, 1350), view, RATE, 'data')
     expect(data.period).toBeNull()
     expect(data.duty).toBeNull()
   })

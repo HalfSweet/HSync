@@ -1,7 +1,7 @@
 /**
  * The hover read-out of a pulse (DESIGN.md §6.4): its level and width within the viewport,
- * plus the period, frequency and duty cycle of clocks and other periodic signals, or the bit
- * count of UART lines.
+ * plus the period, frequency and duty cycle it makes with the next pulse, or the bit count of
+ * UART lines.
  */
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
 
@@ -10,7 +10,7 @@ import { sampleToX, viewportEnd, type Viewport } from './viewport'
 
 export type PulseMode = 'data' | 'clock' | 'bits'
 
-/** UART lines count bits, data lines show the pulse only, everything else may be a clock. */
+/** UART lines count bits, data lines show the pulse only, everything else reads a period. */
 export function pulseMode(channel: ChannelRef): PulseMode {
   switch (channel.role) {
     case 'rxtx':
@@ -39,7 +39,7 @@ export interface PulseReading {
   seconds: number
   /** Both edges are visible, so `seconds` is the whole pulse. */
   complete: boolean
-  /** Period of a clock or another periodic signal such as PWM. */
+  /** This pulse and the next one, when the next one ends at an edge. */
   period: number | null
   /** Share of the period at the high level, with `period`. */
   duty: number | null
@@ -68,17 +68,12 @@ export function readPulse(
   let period: number | null = null
   let duty: number | null = null
   if (complete && mode === 'clock' && pulse.nextEnd !== null && samplerate > 0) {
+    // As DSView measures it: this pulse and the next make the period, with no guess at
+    // whether the signal repeats.
     const own = pulse.end - pulse.start
     const next = pulse.nextEnd - pulse.end
-    // A clock: neighbouring pulses of similar width. Periodic, PWM included: the pulse after
-    // the next one as wide as this one.
-    const after = pulse.afterEnd === null ? null : pulse.afterEnd - pulse.nextEnd
-    const clock = Math.abs(own - next) / Math.max(own, next) < 0.34
-    const periodic = after !== null && Math.abs(own - after) / Math.max(own, after) < 0.1
-    if (clock || periodic) {
-      period = (own + next) / samplerate
-      duty = (pulse.high ? own : next) / (own + next)
-    }
+    period = (own + next) / samplerate
+    duty = (pulse.high ? own : next) / (own + next)
   }
   const bits =
     complete && mode === 'bits' && bitSeconds ? Math.max(1, Math.round(seconds / bitSeconds)) : null
