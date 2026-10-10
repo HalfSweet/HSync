@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { computed, shallowRef } from 'vue'
 
 import { detectLocale, SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
+import { LOG_LEVELS, type LogLevel } from '@/ipc/logLevels'
 
 export const THEMES = ['system', 'paper', 'night'] as const
 export type ThemePreference = (typeof THEMES)[number]
@@ -22,7 +23,7 @@ function oneOf<T extends string>(allowed: readonly T[], value: string, fallback:
   return (allowed as readonly string[]).includes(value) ? (value as T) : fallback
 }
 
-/** Interface preferences, kept in the WebView's local storage (DESIGN.md §2.3). */
+/** Interface preferences, kept in the WebView's local storage (DESIGN.md §2.3, §9.4). */
 export const usePreferencesStore = defineStore('preferences', () => {
   const storedTheme = useStorage<string>('hsync.theme', 'system')
   const storedDensity = useStorage<string>('hsync.density', 'comfortable')
@@ -30,6 +31,21 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const storedGraphics = useStorage<string>('hsync.graphics', 'auto')
   /** The renderer the timeline ended up with. */
   const activeRenderer = shallowRef<'webgpu' | 'canvas2d' | null>(null)
+
+  // Behaviour, DSView's display options with its defaults.
+  /** Centre the timeline on the trigger when a capture finds it, unless fitted to it all. */
+  const centerTrigger = useStorage('hsync.centerTrigger', true)
+  /** Keep the newest samples in view while a capture streams in. */
+  const followLatest = useStorage('hsync.followLatest', true)
+  /** A quick drag on the tracks keeps the waveform moving after release. */
+  const quickScroll = useStorage('hsync.quickScroll', true)
+  /** A repeat stopped early shows what it caught instead of the last complete capture. */
+  const keepStopped = useStorage('hsync.keepStopped', false)
+
+  // Diagnostics.
+  const storedLogLevel = useStorage<string>('hsync.logLevel', 'info')
+  /** Also write the log to the log file. */
+  const logToFile = useStorage('hsync.logToFile', true)
   const prefersDark = usePreferredDark()
 
   const theme = computed<ThemePreference>({
@@ -50,6 +66,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
     set: (value) => (storedGraphics.value = value),
   })
 
+  const logLevel = computed<LogLevel>({
+    get: () => oneOf(LOG_LEVELS, storedLogLevel.value, 'info'),
+    set: (value) => (storedLogLevel.value = value),
+  })
+
   const resolvedTheme = computed<Theme>(() =>
     theme.value === 'system' ? (prefersDark.value ? 'night' : 'paper') : theme.value,
   )
@@ -63,6 +84,12 @@ export const usePreferencesStore = defineStore('preferences', () => {
     locale,
     graphics,
     activeRenderer,
+    centerTrigger,
+    followLatest,
+    quickScroll,
+    keepStopped,
+    logLevel,
+    logToFile,
     resolvedTheme,
     resolvedLocale,
   }
