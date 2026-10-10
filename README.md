@@ -50,12 +50,12 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 
 ### Decode
 
-- **Native I²C, UART, SPI, CAN and CAN-FD decoders**, drawn in line with the waveforms, with whole transactions above and their bytes below.
+- **Native I²C, UART, SPI, CAN and CAN-FD decoders**, drawn in line with the waveforms. They show what the bus carried, byte by byte, without guessing what it meant.
 - **150 more protocols** from DSView's decoder library, from 1-Wire and JTAG to USB Power Delivery and WS281x LEDs. Decoders that build on others stack automatically.
 - **Decode the whole capture or just a segment**, and show values in hex, decimal, octal, binary or ASCII.
 - **The data stream** lists everything a decoder found. Click a row to jump to it on the waveform; copy the list or export it as CSV or text.
 
-![A search for HOST highlighted in the decoded SPI text on the timeline and in the data stream](assets/screenshots/en-US/search.webp)
+![A search for HOST: its bytes, 48 4F 53 54, highlighted on the SPI MISO lane and in the data stream](assets/screenshots/en-US/search.webp)
 
 ### Measure and search
 

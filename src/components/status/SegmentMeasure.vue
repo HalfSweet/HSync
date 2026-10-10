@@ -95,9 +95,9 @@ const range = computed(() => {
         v-if="open"
         role="dialog"
         :aria-label="t('measure.title')"
-        class="absolute bottom-full left-0 z-20 mb-1 flex max-h-[60vh] w-72 origin-bottom-left flex-col rounded-6 border border-ink bg-raise text-small"
+        class="absolute bottom-full left-0 z-20 mb-1 flex max-h-[60vh] w-72 origin-bottom-left flex-col rounded-6 bg-menu text-small"
       >
-        <div class="flex flex-none flex-col gap-0.5 border-b border-line px-3 py-2">
+        <div class="flex flex-none flex-col gap-0.5 border-b border-line-2 px-3 py-2">
           <span class="font-medium">{{ t('measure.title') }}</span>
           <span class="text-ink-3 tabular-nums">{{ range }} · {{ duration }}</span>
         </div>

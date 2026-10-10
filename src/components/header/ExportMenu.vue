@@ -53,7 +53,7 @@ function saveSession(): void {
         v-if="open"
         role="menu"
         :aria-label="t('header.export')"
-        class="absolute top-full right-0 z-20 mt-1 flex w-56 origin-top-right flex-col rounded-6 border border-ink bg-raise p-1 text-small"
+        class="absolute top-full right-0 z-20 mt-1 flex w-56 origin-top-right flex-col rounded-6 bg-menu p-1 text-small"
       >
         <button
           role="menuitem"
@@ -72,7 +72,7 @@ function saveSession(): void {
         >
           <span class="flex-1 text-left">{{ t('file.exportItem') }}</span>
         </button>
-        <div class="my-1 border-t border-line" />
+        <div class="my-1 border-t border-line-2" />
         <button
           role="menuitem"
           class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"

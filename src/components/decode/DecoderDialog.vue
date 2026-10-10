@@ -279,7 +279,7 @@ const locked = computed(() => capture.running)
         <div v-if="editing === null" class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('decoderDialog.protocol') }}</span>
           <label
-            class="flex h-8 items-center gap-2 rounded-6 border border-line-2 bg-raise px-2 text-ink-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ink"
+            class="flex h-8 items-center gap-2 rounded-6 bg-control px-2 text-ink-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ink"
           >
             <AppIcon name="search" />
             <input
@@ -293,7 +293,7 @@ const locked = computed(() => capture.running)
           <div
             role="listbox"
             :aria-label="t('decoderDialog.protocol')"
-            class="flex max-h-48 flex-col overflow-y-auto rounded-6 border border-line"
+            class="flex max-h-48 flex-col overflow-y-auto rounded-6 bg-control"
           >
             <button
               v-for="one in found"
@@ -338,7 +338,7 @@ const locked = computed(() => capture.running)
             <span class="w-20 flex-none truncate font-medium">{{ role.name }}</span>
             <select
               v-model="channels[role.id]"
-              class="h-8 min-w-0 flex-1 rounded-6 border border-line-2 bg-raise px-2 text-ink"
+              class="h-8 min-w-0 flex-1 rounded-6 bg-control px-2 text-ink"
               :disabled="locked"
             >
               <option v-if="!role.required" :value="null">{{ t('decoderDialog.unused') }}</option>
@@ -372,7 +372,7 @@ const locked = computed(() => capture.running)
               <select
                 v-if="option.kind === 'choice'"
                 v-model="options[position]![option.id]"
-                class="h-8 min-w-0 flex-1 rounded-6 border border-line-2 bg-raise px-2 text-ink"
+                class="h-8 min-w-0 flex-1 rounded-6 bg-control px-2 text-ink"
                 :disabled="locked"
               >
                 <option v-for="value in option.values" :key="value" :value="value">
@@ -382,14 +382,14 @@ const locked = computed(() => capture.running)
               <input
                 v-else-if="option.kind === 'text'"
                 v-model="options[position]![option.id]"
-                class="h-8 min-w-0 flex-1 rounded-6 border border-line-2 bg-raise px-2 text-ink"
+                class="h-8 min-w-0 flex-1 rounded-6 bg-control px-2 text-ink"
                 :disabled="locked"
               />
               <input
                 v-else
                 v-model.number="options[position]![option.id]"
                 type="number"
-                class="h-8 min-w-0 flex-1 rounded-6 border border-line-2 bg-raise px-2 text-ink tabular-nums"
+                class="h-8 min-w-0 flex-1 rounded-6 bg-control px-2 text-ink tabular-nums"
                 :min="option.min"
                 :max="option.max"
                 :step="option.step"

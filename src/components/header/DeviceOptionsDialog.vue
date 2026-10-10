@@ -96,7 +96,7 @@ function current(option: OptionState): string {
             <span class="text-caption text-ink-3">{{ t(`device.option.${option.key}`) }}</span>
             <select
               v-if="option.kind.type === 'choice' || option.kind.type === 'integers'"
-              class="h-8 rounded-6 border border-line-2 bg-raise px-2 text-ink disabled:opacity-55"
+              class="h-8 rounded-6 bg-control px-2 text-ink disabled:opacity-55"
               :value="current(option)"
               :disabled="locked || !option.enabled"
               @change="choose(option, ($event.target as HTMLSelectElement).value)"
@@ -115,7 +115,7 @@ function current(option: OptionState): string {
             <span v-else-if="option.kind.type === 'range'" class="flex items-center gap-2">
               <input
                 type="number"
-                class="h-8 w-28 rounded-6 border border-line-2 bg-raise px-2 text-ink tabular-nums disabled:opacity-55"
+                class="h-8 w-28 rounded-6 bg-control px-2 text-ink tabular-nums disabled:opacity-55"
                 :min="option.kind.min"
                 :max="option.kind.max"
                 :step="option.kind.step"

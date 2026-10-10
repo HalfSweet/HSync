@@ -62,7 +62,7 @@ async function rename(): Promise<void> {
     ref="root"
     role="dialog"
     :aria-label="t('channelMenu.title', { channel: `D${channel.index}` })"
-    class="fixed z-30 flex w-60 origin-top-left flex-col gap-2.5 rounded-6 border border-ink bg-raise p-3 text-small"
+    class="fixed z-30 flex w-60 origin-top-left flex-col gap-2.5 rounded-6 bg-menu p-3 text-small"
     :style="position"
   >
     <div class="flex items-center gap-2">
@@ -78,7 +78,7 @@ async function rename(): Promise<void> {
       <input
         ref="input"
         v-model="name"
-        class="h-7 rounded-6 border border-line-2 bg-raise px-2 text-ink"
+        class="h-7 rounded-6 bg-control px-2 text-ink"
         :placeholder="`D${channel.index}`"
         spellcheck="false"
         @keydown.enter.prevent="emit('close')"
@@ -94,7 +94,7 @@ async function rename(): Promise<void> {
           :aria-checked="choice === wire"
           :aria-label="t(`channelMenu.wires.${choice}`)"
           :title="t(`channelMenu.wires.${choice}`)"
-          class="flex size-5 items-center justify-center rounded-full aria-checked:outline-[1.5px] aria-checked:outline-offset-1 aria-checked:outline-ink aria-checked:outline-solid"
+          class="flex size-5 items-center justify-center rounded-full hover:bg-hover aria-checked:bg-sel"
           :class="`wire-${choice}`"
           @click="channels.setColour(channel.index, choice)"
         >

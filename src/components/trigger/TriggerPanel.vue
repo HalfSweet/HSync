@@ -150,7 +150,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
         v-if="open"
         role="dialog"
         :aria-label="t('triggerPanel.title')"
-        class="absolute top-full left-0 z-20 mt-1 flex w-[480px] max-w-[calc(100vw-32px)] origin-top-left flex-col gap-3 overflow-x-auto rounded-6 border border-ink bg-raise p-3 text-small"
+        class="absolute top-full left-0 z-20 mt-1 flex w-[480px] max-w-[calc(100vw-32px)] origin-top-left flex-col gap-3 overflow-x-auto rounded-6 bg-menu p-3 text-small"
       >
         <AnimatedHeight>
           <fieldset :disabled="locked" class="flex flex-col gap-3">
@@ -196,7 +196,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
               {{ t('triggerPanel.positionMax', { max: trigger.caps.maxPosition }) }}
             </p>
 
-            <div class="border-t border-line" />
+            <div class="border-t border-line-2" />
 
             <!-- Simple: the conditions set on the timeline. -->
             <div v-if="trigger.activeMode === 'simple'" class="rise-in flex flex-col gap-3">
@@ -238,7 +238,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                   <span class="text-ink-2">{{ t('triggerPanel.stages.count') }}</span>
                   <select
                     v-model.number="trigger.stageCount"
-                    class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink tabular-nums"
+                    class="h-7 rounded-6 bg-control px-1.5 text-ink tabular-nums"
                   >
                     <option v-for="count in stageChoices" :key="count" :value="count">
                       {{ count }}
@@ -326,7 +326,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                     type="number"
                     min="1"
                     step="1"
-                    class="h-7 w-24 rounded-6 border border-line-2 bg-raise px-2 text-ink tabular-nums"
+                    class="h-7 w-24 rounded-6 bg-control px-2 text-ink tabular-nums"
                     :aria-label="t('triggerPanel.stages.repeat')"
                   />
                   <span class="text-ink-2">{{ t('triggerPanel.stages.times') }}</span>
@@ -359,7 +359,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                 <span class="w-16 flex-none text-ink-2">{{ t('triggerPanel.serial.data') }}</span>
                 <select
                   v-model.number="trigger.serial.dataChannel"
-                  class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink"
+                  class="h-7 rounded-6 bg-control px-1.5 text-ink"
                   :aria-label="t('triggerPanel.serial.data')"
                 >
                   <option v-for="channel in dataChannels" :key="channel" :value="channel">
@@ -370,7 +370,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                   <span class="text-ink-2">{{ t('triggerPanel.serial.bits') }}</span>
                   <select
                     v-model.number="trigger.serial.bits"
-                    class="h-7 rounded-6 border border-line-2 bg-raise px-1.5 text-ink tabular-nums"
+                    class="h-7 rounded-6 bg-control px-1.5 text-ink tabular-nums"
                   >
                     <option v-for="bits in bitChoices" :key="bits" :value="bits">{{ bits }}</option>
                   </select>
@@ -384,8 +384,8 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                 >
                 <input
                   v-model="valueText"
-                  class="h-7 w-[20ch] flex-none rounded-6 border bg-raise px-2 font-mono text-ink"
-                  :class="valueError ? 'border-alert' : 'border-line-2'"
+                  class="h-7 w-[20ch] flex-none rounded-6 px-2 font-mono"
+                  :class="valueError ? 'bg-alert-wash text-alert' : 'bg-control text-ink'"
                   :title="t('triggerPanel.serial.valueTip')"
                   :aria-label="t('triggerPanel.serial.value')"
                   :aria-invalid="valueError"
@@ -395,7 +395,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                   <span class="text-ink-2">{{ t('triggerPanel.serial.hex') }}</span>
                   <input
                     :value="hex"
-                    class="h-7 w-[7ch] flex-none rounded-6 border border-line-2 bg-raise px-2 font-mono text-ink uppercase"
+                    class="h-7 w-[7ch] flex-none rounded-6 bg-control px-2 font-mono text-ink uppercase"
                     maxlength="4"
                     spellcheck="false"
                     @change="onHex"

@@ -50,12 +50,12 @@ HSync 是 DreamSourceLab DSLogic 系列逻辑分析仪的桌面上位机。接�
 
 ### 解码
 
-- **原生的 I²C、UART、SPI、CAN 与 CAN-FD 解码器**，解码块与波形对齐：上方是整次传输的含义，下方是逐个字节。
+- **原生的 I²C、UART、SPI、CAN 与 CAN-FD 解码器**，解码块与波形对齐，逐字节显示总线上实际传输的内容，不猜测其含义。
 - **另有 150 种协议**来自 DSView 的解码器库，从 1-Wire、JTAG 到 USB PD、WS281x 灯珠；依赖下层解码器的协议会自动叠加。
 - **可以解码全程，也可以只解码选段**；数值可用十六进制、十进制、八进制、二进制或 ASCII 显示。
 - **数据流**列出一个解码器的全部结果：点一行跳到波形上的对应位置，也可以复制列表或导出为 CSV、文本。
 
-![搜索 HOST：时间轴上的 SPI 解码文本与数据流中的对应行都被高亮](assets/screenshots/zh-CN/search.webp)
+![搜索 HOST：对应的字节 48 4F 53 54 在 SPI 的 MISO 解码与数据流中都被高亮](assets/screenshots/zh-CN/search.webp)
 
 ### 测量与搜索
 

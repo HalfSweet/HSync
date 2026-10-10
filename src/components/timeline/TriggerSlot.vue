@@ -33,7 +33,6 @@ const tip = computed(() =>
     class="inline-flex h-[min(16px,calc(var(--h-trc)-2px))] w-5 flex-none items-center justify-center rounded-3"
     :class="[
       set ? 'bg-ink text-canvas hover:opacity-86' : 'text-trace-2 hover:bg-hover hover:text-ink',
-      open && 'outline-[1.5px] outline-offset-1 outline-ink outline-solid',
       open && !set && 'bg-hover text-ink',
       dormant && 'opacity-40',
     ]"
