@@ -16,6 +16,7 @@ import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDeviceStore } from '@/stores/device'
 import { useStreamStore } from '@/stores/stream'
+import { useTriggerStore } from '@/stores/trigger'
 import { DENSITIES, LOCALE_PREFERENCES, THEMES, usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 
@@ -64,11 +65,7 @@ export function applyDevParams(search = window.location.search): void {
       (state) => {
         if (!state) return
         void nextTick(() => stop())
-        void capture.start({
-          triggers: channels.armed.map(({ index, condition }) => [index, condition]),
-          triggerPosition: channels.triggerPosition,
-          instant: false,
-        })
+        void capture.start(useTriggerStore().request(false))
       },
       { immediate: true },
     )

@@ -4,12 +4,10 @@ import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
-import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
+import TriggerPanel from '@/components/trigger/TriggerPanel.vue'
 import { useFileActions } from '@/composables/useFileActions'
 import { useCaptureStore } from '@/stores/capture'
-import { useChannelsStore } from '@/stores/channels'
 import { useSearchStore } from '@/stores/search'
-import { summarizeTriggers } from '@/timeline/triggerSummary'
 import { isCommand } from '@/utils/keys'
 import { formatTime } from '@/utils/units'
 
@@ -21,23 +19,8 @@ import SettingsMenu from './SettingsMenu.vue'
 
 const { t } = useI18n()
 const capture = useCaptureStore()
-const channels = useChannelsStore()
 const finder = useSearchStore()
 const search = useTemplateRef<HTMLInputElement>('search')
-
-const trigger = computed(() => summarizeTriggers(channels.armed))
-const triggerTip = computed(() => {
-  if (channels.armed.length === 0) return t('header.trigger.tipNone')
-  const conditions = channels.armed
-    .map(({ index, condition }) =>
-      t('header.trigger.tipItem', {
-        channel: capture.channelLabel(index),
-        condition: t(`trigger.condition.${condition}`),
-      }),
-    )
-    .join(t('header.trigger.tipJoin'))
-  return t('header.trigger.tipSet', { conditions })
-})
 
 // ⌘/Ctrl+O opens a capture file and ⌘/Ctrl+S saves the open capture.
 const files = useFileActions()
@@ -109,24 +92,7 @@ onKeyStroke('/', (event) => {
 
     <AcquisitionMenu />
 
-    <button class="btn" :aria-label="triggerTip" :title="triggerTip">
-      <AppIcon name="trigger" />
-      <span>{{ t('header.trigger.label') }}</span>
-      <span v-if="trigger.shown.length === 0" class="text-ink-3">{{
-        t('header.trigger.none')
-      }}</span>
-      <template v-for="(item, position) in trigger.shown" :key="item.index">
-        <span v-if="position > 0" class="text-ink-3">+</span>
-        <span class="inline-flex items-center gap-0.5 font-medium">
-          <span>{{ capture.channelLabel(item.index) }}</span>
-          <TriggerGlyph :condition="item.condition" />
-        </span>
-      </template>
-      <span v-if="trigger.more" class="text-ink-3">
-        {{ t('header.trigger.more', { count: trigger.more }) }}
-      </span>
-      <AppIcon name="chevron-down" />
-    </button>
+    <TriggerPanel />
 
     <CaptureButton />
 

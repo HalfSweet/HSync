@@ -150,6 +150,60 @@
       "low": "低电平"
     }
   },
+  "triggerPanel": {
+    "title": "触发设置",
+    "mode": "方式",
+    "modes": {
+      "simple": "简单",
+      "stages": "多级",
+      "serial": "串行"
+    },
+    "unavailable": {
+      "noDevice": "打开设备后可用多级与串行触发",
+      "demo": "演示设备只有简单触发",
+      "stream": "Stream 模式只有简单触发，换到 Buffer 模式可用多级与串行触发"
+    },
+    "position": "触发位置",
+    "positionTip": "触发点之前的数据占整次采集的比例",
+    "positionFixed": "Stream 模式下触发位置固定为 1%",
+    "positionMax": "采集长度超过硬件缓存，最多 {max}%",
+    "simple": {
+      "note": "在各通道所在的行里设条件，同时满足才触发",
+      "none": "还没有通道设条件",
+      "clear": "清除全部条件"
+    },
+    "stages": {
+      "count": "级数",
+      "pattern0": "条件 A",
+      "pattern1": "条件 B",
+      "invert": "取反",
+      "combine": "组合",
+      "both": "A 与 B 同时满足",
+      "either": "A 或 B 满足",
+      "repeat": "次数",
+      "times": "次",
+      "contiguous": "连续",
+      "note": "逐级满足，最后一级满足时触发；每级满足所设的次数后才进入下一级"
+    },
+    "serial": {
+      "start": "起始",
+      "stop": "停止",
+      "clock": "时钟",
+      "data": "数据通道",
+      "bits": "位数",
+      "value": "数据值",
+      "valueTip": "16 位，最高位在左；每位写 0、1 或 X（不关心），少写的高位按 X",
+      "hex": "十六进制",
+      "invalid": "数据值只能写 0、1 和 X，最多 16 位"
+    },
+    "legend": "X 不关心 · 0 低电平 · 1 高电平 · R 上升沿 · F 下降沿 · C 任意沿。点格子切换，右键反向，也可直接按这些字母",
+    "cellTip": "{channel}：{condition}",
+    "summary": {
+      "stages": "多级 · {count} 级",
+      "serial": "串行 · {channel} · {bits} 位"
+    },
+    "dormant": "{channel}：当前使用{mode}触发，通道行上的条件不生效"
+  },
   "hover": {
     "high": "高",
     "low": "低",

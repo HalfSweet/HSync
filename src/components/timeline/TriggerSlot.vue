@@ -4,18 +4,27 @@ import { useI18n } from 'vue-i18n'
 
 import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
+import { useTriggerStore } from '@/stores/trigger'
 
 const props = defineProps<{ channel: string; condition: TriggerCondition; open: boolean }>()
 const emit = defineEmits<{ toggle: [slot: HTMLElement] }>()
 
 const { t } = useI18n()
+const trigger = useTriggerStore()
 const set = computed(() => props.condition !== 'none')
+/** A multi-stage or serial trigger is in use: the row's condition waits for the simple one. */
+const dormant = computed(() => trigger.activeMode !== 'simple')
 const tip = computed(() =>
-  t('trigger.slotTip', {
-    channel: props.channel,
-    condition: t(`trigger.condition.${props.condition}`),
-    action: t(set.value ? 'trigger.slotChange' : 'trigger.slotSet'),
-  }),
+  dormant.value
+    ? t('triggerPanel.dormant', {
+        channel: props.channel,
+        mode: t(`triggerPanel.modes.${trigger.activeMode}`),
+      })
+    : t('trigger.slotTip', {
+        channel: props.channel,
+        condition: t(`trigger.condition.${props.condition}`),
+        action: t(set.value ? 'trigger.slotChange' : 'trigger.slotSet'),
+      }),
 )
 </script>
 
@@ -26,6 +35,7 @@ const tip = computed(() =>
       set ? 'bg-ink text-canvas hover:opacity-86' : 'text-trace-2 hover:bg-hover hover:text-ink',
       open && 'outline-[1.5px] outline-offset-1 outline-ink outline-solid',
       open && !set && 'bg-hover text-ink',
+      dormant && 'opacity-40',
     ]"
     aria-haspopup="menu"
     :aria-expanded="open"

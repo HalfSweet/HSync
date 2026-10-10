@@ -4,15 +4,14 @@ import { computed, ref, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
-import type { CaptureRequest } from '@/ipc/bindings/CaptureRequest'
 import { useCaptureStore, type CaptureMode } from '@/stores/capture'
-import { useChannelsStore } from '@/stores/channels'
 import { useDeviceStore } from '@/stores/device'
+import { useTriggerStore } from '@/stores/trigger'
 
 /** Capture / stop, and how to capture (DESIGN.md §9.4). */
 const { t } = useI18n()
 const capture = useCaptureStore()
-const channels = useChannelsStore()
+const trigger = useTriggerStore()
 const device = useDeviceStore()
 const open = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
@@ -23,17 +22,9 @@ onKeyStroke('Escape', () => (open.value = false))
 const MODES: CaptureMode[] = ['single', 'repeat']
 const ready = computed(() => device.state !== null && device.opening === null)
 
-function request(instant: boolean): CaptureRequest {
-  return {
-    triggers: channels.armed.map(({ index, condition }) => [index, condition]),
-    triggerPosition: channels.triggerPosition,
-    instant,
-  }
-}
-
 function run(): void {
   if (capture.busy) void capture.stop()
-  else void capture.start(request(false))
+  else void capture.start(trigger.request(false))
 }
 
 function setMode(mode: CaptureMode): void {
@@ -43,7 +34,7 @@ function setMode(mode: CaptureMode): void {
 
 function instant(): void {
   open.value = false
-  if (!capture.busy) void capture.start(request(true))
+  if (!capture.busy) void capture.start(trigger.request(true))
 }
 </script>
 

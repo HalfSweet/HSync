@@ -150,6 +150,60 @@
       "low": "Low level"
     }
   },
+  "triggerPanel": {
+    "title": "Trigger settings",
+    "mode": "Type",
+    "modes": {
+      "simple": "Simple",
+      "stages": "Stages",
+      "serial": "Serial"
+    },
+    "unavailable": {
+      "noDevice": "Stage and serial triggers need an open device",
+      "demo": "The demo device has simple triggers only",
+      "stream": "Stream mode has simple triggers only; switch to Buffer mode for stage and serial triggers"
+    },
+    "position": "Position",
+    "positionTip": "Share of the capture before the trigger",
+    "positionFixed": "Stream mode fixes the trigger position at 1%",
+    "positionMax": "The capture outgrows the hardware buffer: at most {max}%",
+    "simple": {
+      "note": "Set conditions in each channel row; all must hold at once",
+      "none": "No channel has a condition",
+      "clear": "Clear all conditions"
+    },
+    "stages": {
+      "count": "Stages",
+      "pattern0": "Pattern A",
+      "pattern1": "Pattern B",
+      "invert": "Invert",
+      "combine": "Combine",
+      "both": "A and B",
+      "either": "A or B",
+      "repeat": "Count",
+      "times": "times",
+      "contiguous": "In a row",
+      "note": "Stages hold one after another, each as often as set; the last one fires the trigger"
+    },
+    "serial": {
+      "start": "Start",
+      "stop": "Stop",
+      "clock": "Clock",
+      "data": "Data",
+      "bits": "Bits",
+      "value": "Value",
+      "valueTip": "16 bits, highest first: 0, 1 or X (any) each; missing high bits are X",
+      "hex": "Hex",
+      "invalid": "Use only 0, 1 and X, up to 16 bits"
+    },
+    "legend": "X any · 0 low · 1 high · R rising · F falling · C either edge. Click a cell to change it, right-click to go back, or type these letters",
+    "cellTip": "{channel}: {condition}",
+    "summary": {
+      "stages": "{count} stages",
+      "serial": "serial · {channel} · {bits} bits"
+    },
+    "dormant": "{channel}: a {mode} trigger is in use, so row conditions do not apply"
+  },
   "hover": {
     "high": "High",
     "low": "Low",
