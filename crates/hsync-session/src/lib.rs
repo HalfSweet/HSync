@@ -289,6 +289,30 @@ impl Workspace {
         Ok(summarize(open))
     }
 
+    /// Renames channel `channel` of capture `id`; an empty name goes back to the channel number.
+    pub fn rename_channel(
+        &mut self,
+        id: u64,
+        channel: ChannelIndex,
+        name: &str,
+    ) -> Result<CaptureSummary, SessionError> {
+        let open = match &mut self.current {
+            Some(open) if open.id == id => open,
+            Some(_) => return Err(SessionError::StaleCapture),
+            None => return Err(SessionError::NoCapture),
+        };
+        if open.capture.read().channel(channel).is_none() {
+            return Err(SessionError::UnknownChannel(channel));
+        }
+        let name = name.trim();
+        if name.is_empty() {
+            open.channel_names.remove(&channel);
+        } else {
+            open.channel_names.insert(channel, name.to_owned());
+        }
+        Ok(summarize(open))
+    }
+
     /// What saving or exporting capture `id` needs, taken so the writing can go on without
     /// holding the workspace.
     pub fn export_source(&self, id: u64) -> Result<ExportSource, SessionError> {

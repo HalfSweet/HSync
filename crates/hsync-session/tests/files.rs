@@ -145,3 +145,23 @@ fn writes_text_files() {
     assert_eq!(std::fs::read_to_string(&path).expect("read"), "a,b\n1,2\n");
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn renamed_channels_are_saved_with_their_names() {
+    let (mut workspace, _) = fresh();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    let renamed = workspace
+        .rename_channel(opened.id, 2, "  RESET ")
+        .expect("rename");
+    assert_eq!(renamed.channels[2].name, "RESET");
+    assert!(workspace.rename_channel(opened.id, 99, "x").is_err());
+    let back = workspace.rename_channel(opened.id, 0, "").expect("clear");
+    assert_eq!(back.channels[0].name, "0");
+    let path = temp("renamed.dsl");
+    workspace.save(opened.id, &path).expect("save");
+    let (mut other, _) = fresh();
+    let reopened = other.open_file(&path).expect("reopen");
+    assert_eq!(reopened.channels[2].name, "RESET");
+    assert_eq!(reopened.channels[0].name, "0");
+    let _ = std::fs::remove_file(path);
+}
