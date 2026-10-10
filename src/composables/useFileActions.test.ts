@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { defaultCaptureName, withExtension } from './useFileActions'
+import {
+  defaultCaptureName,
+  isWaveformPath,
+  suggestedDslPath,
+  withExtension,
+} from './useFileActions'
 
 describe('file names', () => {
   it('stamps the date and time', () => {
@@ -13,5 +18,19 @@ describe('file names', () => {
   it('adds a missing extension', () => {
     expect(withExtension('/tmp/a', 'csv')).toBe('/tmp/a.csv')
     expect(withExtension('/tmp/a.CSV', 'csv')).toBe('/tmp/a.CSV')
+  })
+
+  it('tells waveform files from captures', () => {
+    expect(isWaveformPath('/tmp/sim.vcd')).toBe(true)
+    expect(isWaveformPath('C:\\dumps\\ila.FST')).toBe(true)
+    expect(isWaveformPath('/tmp/tb.ghw')).toBe(true)
+    expect(isWaveformPath('/tmp/capture.dsl')).toBe(false)
+    expect(isWaveformPath('/tmp/vcd')).toBe(false)
+  })
+
+  it('suggests a .dsl name for an imported waveform', () => {
+    expect(suggestedDslPath('/tmp/sim.vcd')).toBe('/tmp/sim.dsl')
+    expect(suggestedDslPath('/tmp/ila.fst')).toBe('/tmp/ila.dsl')
+    expect(suggestedDslPath('/tmp/capture.dsl')).toBe('/tmp/capture.dsl')
   })
 })

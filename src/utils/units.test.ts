@@ -12,6 +12,7 @@ import {
   formatTime,
   formatTimeShort,
   niceStep,
+  parseFrequency,
   timeUnitFor,
 } from './units'
 
@@ -93,5 +94,27 @@ describe('size formatting', () => {
     expect(formatBytes(1536)).toBe('1.5 KiB')
     expect(formatBytes(16 * 2 ** 30)).toBe('16 GiB')
     expect(formatBytes(1.25 * 2 ** 40)).toBe('1.25 TiB')
+  })
+})
+
+describe('parseFrequency', () => {
+  it('reads values with and without a unit', () => {
+    expect(parseFrequency('25 MHz')).toBe(25_000_000)
+    expect(parseFrequency('25MHz')).toBe(25_000_000)
+    expect(parseFrequency('25M')).toBe(25_000_000)
+    expect(parseFrequency(' 100 khz ')).toBe(100_000)
+    expect(parseFrequency('1 GHz')).toBe(1_000_000_000)
+    expect(parseFrequency('12.5 MHz')).toBe(12_500_000)
+    expect(parseFrequency('12,5 MHz')).toBe(12_500_000)
+    expect(parseFrequency('8333333')).toBe(8_333_333)
+    expect(parseFrequency('1e6')).toBe(1_000_000)
+  })
+
+  it('refuses what is not a frequency', () => {
+    expect(parseFrequency('')).toBeNull()
+    expect(parseFrequency('fast')).toBeNull()
+    expect(parseFrequency('0 Hz')).toBeNull()
+    expect(parseFrequency('-5 MHz')).toBeNull()
+    expect(parseFrequency('5 THz')).toBeNull()
   })
 })
