@@ -43,7 +43,8 @@
       "minimumSystemVersion": "13.3"
     },
     "resources": {
-      "resources/demo/": "demo/"
+      "resources/demo/": "demo/",
+      "resources/firmware/": "firmware/"
     }
   }
 }
