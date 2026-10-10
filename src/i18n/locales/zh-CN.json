@@ -493,6 +493,15 @@
     "language": {
       "label": "语言",
       "system": "跟随系统"
+    },
+    "graphics": {
+      "label": "图形加速",
+      "auto": "自动（WebGPU）",
+      "off": "关闭",
+      "active": {
+        "webgpu": "正在用 WebGPU 绘制波形",
+        "canvas2d": "正在用 Canvas2D 绘制波形"
+      }
     }
   },
   "units": {

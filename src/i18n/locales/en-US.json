@@ -493,6 +493,15 @@
     "language": {
       "label": "Language",
       "system": "System"
+    },
+    "graphics": {
+      "label": "Graphics acceleration",
+      "auto": "Auto (WebGPU)",
+      "off": "Off",
+      "active": {
+        "webgpu": "Waveforms drawn with WebGPU",
+        "canvas2d": "Waveforms drawn with Canvas2D"
+      }
     }
   },
   "units": {

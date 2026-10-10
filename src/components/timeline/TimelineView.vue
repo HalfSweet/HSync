@@ -17,6 +17,8 @@ import type { BinsResult } from '@/ipc/bins'
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { Canvas2DRenderer } from '@/render/canvas2d'
+import type { WaveformRenderer } from '@/render/types'
+import { WebGpuRenderer } from '@/render/webgpu'
 import { readRenderTokens } from '@/render/tokens'
 import type { FrameDescriptor, RenderTokens, TraceDraw } from '@/render/types'
 import { useCaptureStore } from '@/stores/capture'
@@ -204,8 +206,41 @@ watch(
   { immediate: true },
 )
 
-// Canvas layer.
-let renderer: Canvas2DRenderer | null = null
+// Canvas layer: WebGPU where it works and is wanted, else Canvas2D. A canvas holds one kind of
+// context, so changing the preference or losing the GPU makes a new canvas.
+let renderer: WaveformRenderer | null = null
+let creating = false
+const gpuLost = shallowRef(false)
+const canvasKey = computed(() => `${preferences.graphics}:${gpuLost.value}`)
+
+async function createRenderer(element: HTMLCanvasElement): Promise<void> {
+  if (creating) return
+  creating = true
+  try {
+    const gpu =
+      preferences.graphics === 'auto' && !gpuLost.value
+        ? await WebGpuRenderer.create(element, () => {
+            gpuLost.value = true
+          })
+        : null
+    const made = gpu ?? new Canvas2DRenderer(element)
+    if (canvas.value !== element) {
+      made.dispose()
+      return
+    }
+    renderer = made
+    preferences.activeRenderer = gpu ? 'webgpu' : 'canvas2d'
+    frameRequest ||= requestAnimationFrame(draw)
+  } finally {
+    creating = false
+  }
+}
+
+watch(canvasKey, () => {
+  renderer?.dispose()
+  renderer = null
+  frameRequest ||= requestAnimationFrame(draw)
+})
 const tokens = shallowRef<RenderTokens | null>(null)
 watch(
   () => preferences.resolvedTheme,
@@ -252,8 +287,12 @@ const frame = computed<FrameDescriptor>(() => {
 let frameRequest = 0
 function draw(): void {
   frameRequest = 0
-  if (!canvas.value || !tokens.value) return
-  renderer ??= new Canvas2DRenderer(canvas.value)
+  const element = canvas.value
+  if (!element || !tokens.value) return
+  if (!renderer) {
+    void createRenderer(element)
+    return
+  }
   renderer.draw(frame.value, tokens.value)
 }
 watch([frame, tokens], () => {
@@ -426,6 +465,7 @@ function onWheel(event: WheelEvent): void {
 <template>
   <div class="relative min-h-0 flex-1 bg-canvas">
     <canvas
+      :key="canvasKey"
       ref="canvas"
       class="pointer-events-none absolute top-0 left-0"
       :style="{ width: `${client.width}px`, height: `${client.height}px` }"

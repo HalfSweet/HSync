@@ -4,7 +4,13 @@ import { ref, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
-import { DENSITIES, LOCALE_PREFERENCES, THEMES, usePreferencesStore } from '@/stores/preferences'
+import {
+  DENSITIES,
+  GRAPHICS,
+  LOCALE_PREFERENCES,
+  THEMES,
+  usePreferencesStore,
+} from '@/stores/preferences'
 
 const { t } = useI18n()
 const preferences = usePreferencesStore()
@@ -63,6 +69,23 @@ const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US
             {{ t(`settings.density.${density}`) }}
           </button>
         </div>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="text-caption text-ink-3">{{ t('settings.graphics.label') }}</span>
+        <div role="group" class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5">
+          <button
+            v-for="option in GRAPHICS"
+            :key="option"
+            class="seg"
+            :aria-pressed="preferences.graphics === option"
+            @click="preferences.graphics = option"
+          >
+            {{ t(`settings.graphics.${option}`) }}
+          </button>
+        </div>
+        <span v-if="preferences.activeRenderer" class="text-caption text-ink-3">{{
+          t(`settings.graphics.active.${preferences.activeRenderer}`)
+        }}</span>
       </div>
       <div class="flex flex-col gap-1.5">
         <span class="text-caption text-ink-3">{{ t('settings.language.label') }}</span>

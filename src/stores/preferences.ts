@@ -1,6 +1,6 @@
 import { usePreferredDark, useStorage } from '@vueuse/core'
 import { defineStore } from 'pinia'
-import { computed } from 'vue'
+import { computed, shallowRef } from 'vue'
 
 import { detectLocale, SUPPORTED_LOCALES, type AppLocale } from '@/i18n'
 
@@ -10,6 +10,10 @@ export type Theme = Exclude<ThemePreference, 'system'>
 
 export const DENSITIES = ['comfortable', 'compact'] as const
 export type Density = (typeof DENSITIES)[number]
+
+/** Waveform drawing: WebGPU where it works (else Canvas2D), or Canvas2D always. */
+export const GRAPHICS = ['auto', 'off'] as const
+export type GraphicsPreference = (typeof GRAPHICS)[number]
 
 export const LOCALE_PREFERENCES = ['system', ...SUPPORTED_LOCALES] as const
 export type LocalePreference = (typeof LOCALE_PREFERENCES)[number]
@@ -23,6 +27,9 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const storedTheme = useStorage<string>('hsync.theme', 'system')
   const storedDensity = useStorage<string>('hsync.density', 'comfortable')
   const storedLocale = useStorage<string>('hsync.locale', 'system')
+  const storedGraphics = useStorage<string>('hsync.graphics', 'auto')
+  /** The renderer the timeline ended up with. */
+  const activeRenderer = shallowRef<'webgpu' | 'canvas2d' | null>(null)
   const prefersDark = usePreferredDark()
 
   const theme = computed<ThemePreference>({
@@ -38,6 +45,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
     set: (value) => (storedLocale.value = value),
   })
 
+  const graphics = computed<GraphicsPreference>({
+    get: () => oneOf(GRAPHICS, storedGraphics.value, 'auto'),
+    set: (value) => (storedGraphics.value = value),
+  })
+
   const resolvedTheme = computed<Theme>(() =>
     theme.value === 'system' ? (prefersDark.value ? 'night' : 'paper') : theme.value,
   )
@@ -45,5 +57,13 @@ export const usePreferencesStore = defineStore('preferences', () => {
     locale.value === 'system' ? detectLocale(navigator.languages) : locale.value,
   )
 
-  return { theme, density, locale, resolvedTheme, resolvedLocale }
+  return {
+    theme,
+    density,
+    locale,
+    graphics,
+    activeRenderer,
+    resolvedTheme,
+    resolvedLocale,
+  }
 })
