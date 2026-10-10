@@ -31,6 +31,7 @@ import { useStreamStore } from '@/stores/stream'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
+import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/timeline/fling'
 import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
@@ -358,7 +359,33 @@ interface Hover {
 const hover = shallowRef<Hover | null>(null)
 let hoverTarget: { row: Row; sample: number } | null = null
 let hoverRequest = 0
-let drag: { x: number } | null = null
+let drag: { x: number; moves: PointerSample[] } | null = null
+let fling = 0
+
+function stopFling(): void {
+  cancelAnimationFrame(fling)
+  fling = 0
+}
+
+/** Keeps the waveform moving after a quick drag (DSView's quick scroll) until it slows down
+ * or reaches an end. */
+function startFling(speed: number): void {
+  let last = performance.now()
+  const frame = (now: number) => {
+    const step = flingStep(speed, now - last)
+    last = now
+    const before = view.viewport.start
+    if (step) view.pan(-step.dx)
+    if (!step || view.viewport.start === before) {
+      fling = 0
+      return
+    }
+    speed = step.speed
+    fling = requestAnimationFrame(frame)
+  }
+  fling = requestAnimationFrame(frame)
+}
+onBeforeUnmount(stopFling)
 
 function trackSample(event: PointerEvent): number {
   const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
@@ -380,6 +407,8 @@ function onTrackPointerMove(row: Row, event: PointerEvent): void {
   if (drag) {
     view.pan(drag.x - event.clientX)
     drag.x = event.clientX
+    drag.moves.push({ x: event.clientX, t: event.timeStamp })
+    if (drag.moves.length > 32) drag.moves.splice(0, drag.moves.length - 32)
     return
   }
   if (!isTrace(row) || !row.channel) return
@@ -402,13 +431,18 @@ function onTrackPointerLeave(): void {
 }
 
 function onTrackPointerDown(event: PointerEvent): void {
+  stopFling()
   if (event.button !== 0 || (event.target as Element).closest('button')) return
-  drag = { x: event.clientX }
+  drag = { x: event.clientX, moves: [{ x: event.clientX, t: event.timeStamp }] }
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   onTrackPointerLeave()
 }
 
-function onTrackPointerUp(): void {
+function onTrackPointerUp(event: PointerEvent): void {
+  if (drag && preferences.quickScroll) {
+    const speed = releaseSpeed(drag.moves, event.timeStamp)
+    if (Math.abs(speed) >= FLING_MIN_SPEED) startFling(speed)
+  }
   drag = null
 }
 
@@ -446,6 +480,7 @@ const readout = computed(() => {
 
 // Ctrl/⌘ + wheel zooms around the pointer; shift + wheel and horizontal swipes pan.
 function onWheel(event: WheelEvent): void {
+  stopFling()
   const rows = rowsElement.value?.getBoundingClientRect()
   if (!rows) return
   const x = Math.min(
