@@ -238,6 +238,10 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve()
     },
 
+    async saveText() {
+      return Promise.reject(uiError('error.app.unavailableInBrowser'))
+    },
+
     async bins(request: BinsRequest): Promise<BinsResult> {
       const bins = Math.min(request.bins, request.end - request.start)
       const cells = request.channels.map(

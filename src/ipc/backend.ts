@@ -63,6 +63,8 @@ export interface Backend {
   ): Promise<void>
   /** Stops the save or export under way; it fails as cancelled. */
   cancelFile(): Promise<void>
+  /** Writes text the UI composed, such as the data stream as listed. */
+  saveText(path: string, text: string): Promise<void>
   bins(request: BinsRequest): Promise<BinsResult>
   pulse(captureId: number, channel: number, sample: number): Promise<PulseInfo | null>
   edge(
@@ -175,6 +177,10 @@ class TauriBackend implements Backend {
 
   cancelFile() {
     return invoke<void>('file_cancel')
+  }
+
+  saveText(path: string, text: string) {
+    return invoke<void>('text_save', { path, text })
   }
 
   async bins(request: BinsRequest) {
