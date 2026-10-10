@@ -28,7 +28,7 @@ pub use decoding::{
     StreamPage,
 };
 pub use error::SessionError;
-pub use files::{ExportKind, ExportRequest, ExportSource};
+pub use files::{ExportKind, ExportRequest, ExportSource, write_text};
 pub use hsync_capture::{PatternCondition, PatternLevel};
 pub use instrument::{
     CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,

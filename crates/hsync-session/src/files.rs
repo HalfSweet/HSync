@@ -198,6 +198,15 @@ impl ExportSource {
     }
 }
 
+/// Writes `text` to `path`, such as the data stream as the panel lists it.
+pub fn write_text(path: &Path, text: &str) -> Result<(), SessionError> {
+    hsync_fileio::write_atomically(path, |mut file| {
+        std::io::Write::write_all(&mut file, text.as_bytes())?;
+        Ok(file)
+    })?;
+    Ok(())
+}
+
 /// Channels a DSView decoder entry uses.
 fn decoder_channels(entry: &serde_json::Value) -> Vec<ChannelIndex> {
     entry

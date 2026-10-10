@@ -137,3 +137,11 @@ fn cancelling_leaves_no_file() {
     let empty = source.export(&path, &request(ExportKind::Csv, None, &[42]), &mut |_| true);
     assert!(matches!(empty, Err(SessionError::NothingToExport)));
 }
+
+#[test]
+fn writes_text_files() {
+    let path = temp("stream.csv");
+    hsync_session::write_text(&path, "a,b\n1,2\n").expect("write");
+    assert_eq!(std::fs::read_to_string(&path).expect("read"), "a,b\n1,2\n");
+    let _ = std::fs::remove_file(path);
+}
