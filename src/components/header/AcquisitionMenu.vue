@@ -174,7 +174,7 @@ function toggleChannel(channel: number): void {
               })
             }}
           </p>
-          <p v-if="tooLarge" role="alert" class="text-caption text-alert tabular-nums">
+          <p v-if="tooLarge" role="alert" class="rise-in text-caption text-alert tabular-nums">
             {{ t('header.acquisition.tooLarge', { size: formatBytes(needed) }) }}
           </p>
           <div class="flex flex-col gap-1.5">

@@ -191,7 +191,7 @@ async function revealLog(): Promise<void> {
               {{ t('settings.diagnostics.reveal') }}
             </button>
           </div>
-          <span v-if="revealError" role="alert" class="text-caption text-alert">{{
+          <span v-if="revealError" role="alert" class="rise-in text-caption text-alert">{{
             text.error(revealError)
           }}</span>
         </div>

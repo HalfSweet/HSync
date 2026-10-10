@@ -93,7 +93,11 @@ const perDivision = computed(() =>
       <span>{{ t('stream.title') }}</span>
     </button>
     <span :aria-live="capture.running ? 'off' : 'polite'">{{ status }}</span>
-    <span v-if="capture.job" role="status" class="inline-flex items-center gap-2 tabular-nums">
+    <span
+      v-if="capture.job"
+      role="status"
+      class="rise-in inline-flex items-center gap-2 tabular-nums"
+    >
       <span>{{
         t(capture.job.kind === 'save' ? 'file.saving' : 'file.exporting', {
           percent: Math.floor(capture.job.progress * 100),
@@ -106,8 +110,8 @@ const perDivision = computed(() =>
         {{ t('file.cancel') }}
       </button>
     </span>
-    <span v-else-if="problem" role="alert" class="text-alert">{{ problem }}</span>
-    <span v-else-if="savedName" role="status" class="text-ink-3">{{
+    <span v-else-if="problem" role="alert" class="rise-in text-alert">{{ problem }}</span>
+    <span v-else-if="savedName" role="status" class="rise-in text-ink-3">{{
       t(capture.savedKind === 'save' ? 'file.saved' : 'file.exported', { name: savedName })
     }}</span>
     <span v-if="triggerTime" class="text-ink-3 tabular-nums">{{ triggerTime }}</span>
@@ -116,13 +120,13 @@ const perDivision = computed(() =>
     </span>
     <SegmentMeasure />
     <div class="flex-1" />
-    <span v-if="device.slowPort" role="alert" class="inline-flex items-center gap-1.5">
+    <span v-if="device.slowPort" role="alert" class="rise-in inline-flex items-center gap-1.5">
       <span class="text-alert">{{ t('header.device.slowPort') }}</span>
       <button class="btn-ghost h-[22px]" @click="device.dismissSlowPort()">
         {{ t('header.device.gotIt') }}
       </button>
     </span>
-    <span v-if="device.arrival" role="status" class="inline-flex items-center gap-1.5">
+    <span v-if="device.arrival" role="status" class="rise-in inline-flex items-center gap-1.5">
       <span class="text-ink">{{
         t('header.device.arrived', { device: device.arrival.model })
       }}</span>

@@ -80,7 +80,7 @@ const range = computed(() => {
 </script>
 
 <template>
-  <div v-if="span" ref="root" class="relative">
+  <div v-if="span" ref="root" class="rise-in relative">
     <button
       class="-mx-1 inline-flex h-[22px] items-center gap-1 rounded-4 px-1 whitespace-nowrap text-ink-2 tabular-nums hover:bg-hover hover:text-ink aria-expanded:bg-hover aria-expanded:text-ink"
       aria-haspopup="dialog"

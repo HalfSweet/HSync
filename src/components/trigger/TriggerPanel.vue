@@ -118,12 +118,12 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
       <AppIcon name="trigger" />
       <span>{{ t('header.trigger.label') }}</span>
       <template v-if="trigger.activeMode === 'stages'">
-        <span class="font-medium">{{
+        <span class="rise-in font-medium">{{
           t('triggerPanel.summary.stages', { count: trigger.stageCount })
         }}</span>
       </template>
       <template v-else-if="trigger.activeMode === 'serial'">
-        <span class="font-medium">{{
+        <span class="rise-in font-medium">{{
           t('triggerPanel.summary.serial', {
             channel: capture.channelLabel(trigger.serial.dataChannel),
             bits: trigger.serial.bits,
@@ -131,17 +131,17 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
         }}</span>
       </template>
       <template v-else>
-        <span v-if="summary.shown.length === 0" class="text-ink-3">{{
+        <span v-if="summary.shown.length === 0" class="rise-in text-ink-3">{{
           t('header.trigger.none')
         }}</span>
         <template v-for="(item, position) in summary.shown" :key="item.index">
-          <span v-if="position > 0" class="text-ink-3">+</span>
-          <span class="inline-flex items-center gap-0.5 font-medium">
+          <span v-if="position > 0" class="rise-in text-ink-3">+</span>
+          <span class="rise-in inline-flex items-center gap-0.5 font-medium">
             <span>{{ capture.channelLabel(item.index) }}</span>
             <TriggerGlyph :condition="item.condition" />
           </span>
         </template>
-        <span v-if="summary.more" class="text-ink-3">
+        <span v-if="summary.more" class="rise-in text-ink-3">
           {{ t('header.trigger.more', { count: summary.more }) }}
         </span>
       </template>

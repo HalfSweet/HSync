@@ -453,7 +453,7 @@ const locked = computed(() => capture.running)
           </div>
         </fieldset>
 
-        <p v-if="error" role="alert" class="rounded-4 bg-alert-wash px-2 py-1.5 text-alert">
+        <p v-if="error" role="alert" class="rise-in rounded-4 bg-alert-wash px-2 py-1.5 text-alert">
           {{ error }}
         </p>
       </div>

@@ -127,7 +127,11 @@ function current(option: OptionState): string {
             </span>
           </label>
         </template>
-        <p v-if="device.error" role="alert" class="rounded-4 bg-alert-wash px-2 py-1.5 text-alert">
+        <p
+          v-if="device.error"
+          role="alert"
+          class="rise-in rounded-4 bg-alert-wash px-2 py-1.5 text-alert"
+        >
           {{ text.error(device.error) }}
         </p>
       </div>

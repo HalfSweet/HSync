@@ -114,7 +114,7 @@ onKeyStroke('/', (event) => {
       />
       <span
         v-if="searchNote"
-        class="flex-none text-caption whitespace-nowrap tabular-nums"
+        class="rise-in flex-none text-caption whitespace-nowrap tabular-nums"
         :class="searchNote.alert ? 'text-alert' : 'text-ink-3'"
         aria-live="polite"
         >{{ searchNote.text }}</span
