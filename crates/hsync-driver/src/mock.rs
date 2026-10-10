@@ -51,6 +51,12 @@ pub trait MockDevice: Send {
     fn bulk_out(&mut self, endpoint: u8, data: &[u8]) -> Result<(), UsbError>;
     /// Completes a submitted IN transfer of up to `length` bytes, or leaves it pending (`None`).
     fn bulk_in(&mut self, endpoint: u8, length: usize) -> Option<Result<Vec<u8>, UsbError>>;
+
+    /// What a pending IN transfer of up to `length` bytes had received when it was cancelled;
+    /// nothing by default.
+    fn cancel_in(&mut self, _endpoint: u8, _length: usize) -> Vec<u8> {
+        Vec::new()
+    }
 }
 
 /// A transport whose device is a [`MockDevice`].
@@ -160,10 +166,18 @@ impl<D: MockDevice + 'static> UsbTransport for MockTransport<D> {
     }
 }
 
+/// A transfer of a [`MockBulkIn`].
+enum Queued {
+    /// Pending, of up to this many bytes.
+    Pending(usize),
+    /// Cancelled with what it had received.
+    Cancelled(Vec<u8>),
+}
+
 struct MockBulkIn<D> {
     transport: MockTransport<D>,
     endpoint: u8,
-    queue: VecDeque<usize>,
+    queue: VecDeque<Queued>,
 }
 
 impl<D: MockDevice + 'static> BulkIn for MockBulkIn<D> {
@@ -172,11 +186,19 @@ impl<D: MockDevice + 'static> BulkIn for MockBulkIn<D> {
             endpoint: self.endpoint,
             length,
         });
-        self.queue.push_back(length);
+        self.queue.push_back(Queued::Pending(length));
     }
 
     fn next(&mut self, timeout: Duration) -> Option<Result<Vec<u8>, UsbError>> {
-        let length = *self.queue.front()?;
+        let length = match self.queue.front()? {
+            Queued::Pending(length) => *length,
+            Queued::Cancelled(_) => {
+                let Some(Queued::Cancelled(data)) = self.queue.pop_front() else {
+                    unreachable!("the front was just matched");
+                };
+                return Some(Ok(data));
+            }
+        };
         let completed = self.transport.device().bulk_in(self.endpoint, length);
         match completed {
             Some(result) => {
@@ -195,6 +217,11 @@ impl<D: MockDevice + 'static> BulkIn for MockBulkIn<D> {
     }
 
     fn cancel_all(&mut self) {
-        self.queue.clear();
+        let mut device = self.transport.device();
+        for queued in &mut self.queue {
+            if let Queued::Pending(length) = *queued {
+                *queued = Queued::Cancelled(device.cancel_in(self.endpoint, length));
+            }
+        }
     }
 }

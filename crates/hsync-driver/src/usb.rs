@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use nusb::transfer::{
-    Buffer, Bulk, ControlIn, ControlOut, ControlType, In, Out, Recipient, TransferError,
+    Buffer, Bulk, Completion, ControlIn, ControlOut, ControlType, In, Out, Recipient, TransferError,
 };
 use nusb::{Endpoint, Interface, MaybeFuture};
 
@@ -74,13 +74,14 @@ pub trait BulkIn: Send {
     fn submit(&mut self, length: usize);
 
     /// The next completed transfer, waiting at most `timeout`; `None` if none completed. A
-    /// transfer still completes later after a timeout.
+    /// transfer still completes later after a timeout. A cancelled transfer completes with the
+    /// bytes it received before it was cancelled, possibly none.
     fn next(&mut self, timeout: Duration) -> Option<Result<Vec<u8>, UsbError>>;
 
     /// Transfers submitted and not yet returned by [`Self::next`].
     fn pending(&self) -> usize;
 
-    /// Cancels every pending transfer; they complete with an error.
+    /// Cancels every pending transfer; each still completes, with what it had received.
     fn cancel_all(&mut self);
 }
 
@@ -89,6 +90,19 @@ pub trait BulkIn: Send {
 pub struct NusbTransport {
     interface: Interface,
     bulk_out: Mutex<Option<(u8, Endpoint<Bulk, Out>)>>,
+}
+
+/// The bytes an IN transfer received; a cancelled one keeps what arrived before it was
+/// cancelled.
+fn received(completion: Completion) -> Result<Vec<u8>, UsbError> {
+    match completion.status {
+        Ok(()) | Err(TransferError::Cancelled) => {
+            let mut data = completion.buffer.into_vec();
+            data.truncate(completion.actual_len);
+            Ok(data)
+        }
+        Err(error) => Err(error.into()),
+    }
 }
 
 impl NusbTransport {
@@ -223,14 +237,7 @@ impl BulkIn for NusbBulkIn {
             return None;
         }
         let completion = self.endpoint.wait_next_complete(timeout)?;
-        Some(match completion.status {
-            Ok(()) => {
-                let mut data = completion.buffer.into_vec();
-                data.truncate(completion.actual_len);
-                Ok(data)
-            }
-            Err(error) => Err(error.into()),
-        })
+        Some(received(completion))
     }
 
     fn pending(&self) -> usize {
