@@ -22,6 +22,7 @@ import type { FrameDescriptor, RenderTokens, TraceDraw } from '@/render/types'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDecodeStore } from '@/stores/decode'
+import { useStreamStore } from '@/stores/stream'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
@@ -47,6 +48,7 @@ const { t } = useI18n()
 const capture = useCaptureStore()
 const channels = useChannelsStore()
 const decode = useDecodeStore()
+const stream = useStreamStore()
 const preferences = usePreferencesStore()
 const view = useViewStore()
 const metrics = useRowMetrics()
@@ -72,10 +74,25 @@ function decodeLaneOf(row: Row): string | null {
 }
 
 /** Clicking a decoded block marks it as the segment; clicking it again lets go. */
-function pickBlock(block: { id: string; start: number; end: number }): void {
-  if (view.segment?.blockId === block.id) view.setSegment(null)
-  else view.setSegment({ from: block.start, to: block.end, blockId: block.id })
+function pickBlock(block: { id: string; start: number; end: number }, decoder: number): void {
+  if (view.segment?.blockId === block.id) {
+    view.setSegment(null)
+    return
+  }
+  view.setSegment({ from: block.start, to: block.end, blockId: block.id })
+  stream.select(decoder)
 }
+
+/** The data stream row under the pointer, banded across the timeline. */
+const hotBand = computed(() => {
+  const hot = stream.hot
+  if (!hot) return null
+  const { start, samplesPerPixel, width } = view.viewport
+  const left = (hot.start - start) / samplesPerPixel
+  const right = (hot.end - start) / samplesPerPixel
+  if (right < 0 || left > width) return null
+  return { left: Math.max(0, left), width: Math.max(2, Math.min(width, right) - Math.max(0, left)) }
+})
 
 /** The I²C bytes lane names the target most transfers in view address. */
 function laneLabel(row: Row): string | null {
@@ -434,7 +451,7 @@ function onWheel(event: WheelEvent): void {
               :selected="view.segment?.blockId ?? null"
               :time-of="capture.timeOf"
               :samplerate="capture.samplerate"
-              @pick="pickBlock"
+              @pick="(block) => row.group.decoder !== null && pickBlock(block, row.group.decoder)"
               @go="view.centerOn"
             />
             <PulseReadout
@@ -453,12 +470,22 @@ function onWheel(event: WheelEvent): void {
         </div>
 
         <div
+          v-if="hotBand"
+          class="pointer-events-none absolute inset-y-0 right-0 left-(--lab) z-[2]"
+          aria-hidden="true"
+        >
+          <div
+            class="absolute inset-y-0 bg-[color-mix(in_srgb,var(--ink)_8%,transparent)] shadow-[inset_1px_0_0_var(--ink-3),inset_-1px_0_0_var(--ink-3)]"
+            :style="{ left: `${hotBand.left}px`, width: `${hotBand.width}px` }"
+          />
+        </div>
+        <div
           v-if="segment"
           class="pointer-events-none absolute inset-y-0 right-0 left-(--lab) z-[2]"
           aria-hidden="true"
         >
           <div
-            v-if="segment.band"
+            v-if="segment && segment.band"
             class="absolute inset-y-0 bg-veil"
             :style="{ left: `${segment.band.left}px`, width: `${segment.band.width}px` }"
           />

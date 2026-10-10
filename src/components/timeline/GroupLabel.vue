@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useClockFrequency } from '@/composables/useClockFrequency'
+import { useStreamStore } from '@/stores/stream'
 import { I2C_RATES, nominalRate } from '@/timeline/clock'
 import { uartFormat, type BusKind, type ChannelGroup } from '@/timeline/groups'
 import { formatFrequencyShort, formatSamplerate } from '@/utils/units'
@@ -12,6 +13,8 @@ const props = defineProps<{ group: ChannelGroup; collapsed: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
 
 const { t } = useI18n()
+const stream = useStreamStore()
+const showing = computed(() => stream.open && stream.decoder === props.group.decoder)
 
 const title = computed(() => (props.group.unnamed ? t('group.unnamed') : props.group.title))
 
@@ -67,10 +70,12 @@ const meta = computed<{ text: string; tip?: string } | null>(() => {
       title
     }}</span>
     <button
-      v-if="!group.unnamed"
-      class="ml-auto inline-flex h-[18px] w-5 flex-none items-center justify-center rounded-4 text-ink-2 opacity-0 group-hover/label:opacity-100 hover:bg-hover hover:text-ink focus-visible:opacity-100 max-[640px]:hidden"
+      v-if="!group.unnamed && group.decoder !== null"
+      class="ml-auto inline-flex h-[18px] w-5 flex-none items-center justify-center rounded-4 text-ink-2 opacity-0 group-hover/label:opacity-100 hover:bg-hover hover:text-ink focus-visible:opacity-100 aria-pressed:bg-hover aria-pressed:text-ink aria-pressed:opacity-100 max-[640px]:hidden"
       :aria-label="t('group.showStream', { name: title })"
+      :aria-pressed="showing"
       :title="t('group.showStreamTip')"
+      @click="group.decoder !== null && stream.show(group.decoder)"
     >
       <AppIcon name="stream" />
     </button>

@@ -238,7 +238,19 @@
       "afterSegment": "The end of this transfer lies outside the segment",
       "uartHeadCut": "This frame was already being sent when the capture began; it is not decoded",
       "uartTailCut": "This frame was still being sent when the capture ended; it is not decoded",
-      "canFrame": "FD, {count} bytes, CRC OK, acknowledged"
+      "canFrame": "FD, {count} bytes, CRC OK, acknowledged",
+      "canCut": "A frame cut by the start or end of the capture was not decoded"
+    },
+    "can": {
+      "fd": "FD",
+      "classic": "CAN",
+      "bytes": "{count} bytes",
+      "crcOk": "CRC OK",
+      "crcError": "CRC error",
+      "acked": "acknowledged",
+      "noAck": "not acknowledged",
+      "errorFrame": "frame error",
+      "separator": ", "
     }
   },
   "status": {

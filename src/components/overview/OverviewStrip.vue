@@ -7,6 +7,7 @@ import { getBackend } from '@/ipc/backend'
 import type { DecoderLanes } from '@/ipc/bindings/DecoderLanes'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
+import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
 import { overviewTicks } from '@/timeline/ticks'
 import { formatTimeShort } from '@/utils/units'
@@ -18,6 +19,14 @@ const strip = useTemplateRef<HTMLElement>('strip')
 const { width } = useElementSize(strip)
 
 const decode = useDecodeStore()
+const stream = useStreamStore()
+
+/** The data stream row under the pointer. */
+const hot = computed(() => {
+  const row = stream.hot
+  if (!row) return null
+  return { left: percent(row.start), width: percent(row.end) - percent(row.start) }
+})
 
 const percent = (sample: number) => (capture.extent > 0 ? (sample / capture.extent) * 100 : 0)
 
@@ -152,6 +161,12 @@ function onWheel(event: WheelEvent): void {
         class="pointer-events-none absolute h-[5px] rounded-[1.5px] opacity-62"
         :class="band.color"
         :style="{ top: `${band.top}px`, left: `${band.left}%`, width: `${band.width}%` }"
+        aria-hidden="true"
+      />
+      <i
+        v-if="hot"
+        class="pointer-events-none absolute top-0 bottom-[15px] z-[1] bg-[color-mix(in_srgb,var(--ink)_14%,transparent)] shadow-[inset_1px_0_0_var(--ink),inset_-1px_0_0_var(--ink)]"
+        :style="{ left: `${hot.left}%`, width: `max(${hot.width}%, 2px)` }"
         aria-hidden="true"
       />
       <span

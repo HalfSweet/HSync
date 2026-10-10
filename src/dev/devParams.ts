@@ -7,6 +7,7 @@
  *   &segment=1910-2450   µs after the trigger marked as A–B
  *   &trig=0:fall,1:high  trigger conditions by channel index
  *   &autocapture=1       start a capture once a device is open
+ *   &stream=0            open the data stream on decoder 0  &streamMode=hex
  */
 import { nextTick, watch } from 'vue'
 
@@ -14,6 +15,7 @@ import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDeviceStore } from '@/stores/device'
+import { useStreamStore } from '@/stores/stream'
 import { DENSITIES, LOCALE_PREFERENCES, THEMES, usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 
@@ -46,6 +48,13 @@ export function applyDevParams(search = window.location.search): void {
     const [index, condition] = pair.split(':')
     const valid = oneOf(CONDITIONS, condition ?? null)
     if (valid && index !== undefined) channels.setTrigger(Number(index), valid)
+  }
+
+  const streamDecoder = params.get('stream')
+  if (streamDecoder !== null && /^\d+$/.test(streamDecoder)) {
+    const stream = useStreamStore()
+    stream.show(Number(streamDecoder))
+    if (params.get('streamMode') === 'hex') stream.mode = 'hex'
   }
 
   if (params.get('autocapture') === '1') {

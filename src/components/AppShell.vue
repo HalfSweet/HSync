@@ -1,8 +1,13 @@
 <script setup lang="ts">
+import { useStreamStore } from '@/stores/stream'
+
 import AppHeader from './header/AppHeader.vue'
 import OverviewStrip from './overview/OverviewStrip.vue'
 import StatusBar from './status/StatusBar.vue'
+import StreamPanel from './stream/StreamPanel.vue'
 import TimelineView from './timeline/TimelineView.vue'
+
+const stream = useStreamStore()
 </script>
 
 <template>
@@ -12,6 +17,7 @@ import TimelineView from './timeline/TimelineView.vue'
       <main class="flex min-w-0 flex-1 flex-col">
         <OverviewStrip />
         <TimelineView />
+        <StreamPanel v-if="stream.open" />
       </main>
     </div>
     <StatusBar />

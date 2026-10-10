@@ -238,7 +238,19 @@
       "afterSegment": "这次传输靠后的部分在选段之外",
       "uartHeadCut": "采集开始时这一帧已经在传，没有解码",
       "uartTailCut": "采集结束时这一帧还没传完，没有解码",
-      "canFrame": "FD，{count} 个字节，CRC 正确，已应答"
+      "canFrame": "FD，{count} 个字节，CRC 正确，已应答",
+      "canCut": "采集开始或结束时总线上的帧不完整，没有解码"
+    },
+    "can": {
+      "fd": "FD",
+      "classic": "CAN",
+      "bytes": "{count} 个字节",
+      "crcOk": "CRC 正确",
+      "crcError": "CRC 错误",
+      "acked": "已应答",
+      "noAck": "未应答",
+      "errorFrame": "帧出错",
+      "separator": "，"
     }
   },
   "status": {
