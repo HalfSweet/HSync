@@ -206,3 +206,34 @@ fn searches_every_decoder_in_time_order() {
             .is_none()
     );
 }
+
+#[test]
+fn counts_edges_in_a_segment_as_dsview() {
+    let (mut workspace, _events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    let capture = workspace.capture(opened.id).expect("capture");
+    let capture = capture.read();
+    // SCL (D1) starts high; its first edge falls at 45 479.
+    let first = hsync_session::edges(&capture, 0, 45_479, &[1]).expect("edges");
+    assert_eq!((first[0].rising, first[0].falling), (0, 1));
+    let none = hsync_session::edges(&capture, 0, 45_478, &[1]).expect("edges");
+    assert_eq!((none[0].rising, none[0].falling), (0, 0));
+    // The order of the ends does not matter, and every edge of the capture is counted once.
+    let all =
+        hsync_session::edges(&capture, opened.info.sample_count - 1, 0, &[0, 1]).expect("all");
+    let halves = [
+        hsync_session::edges(&capture, 0, 60_000, &[0, 1]).expect("first half"),
+        hsync_session::edges(&capture, 60_000, opened.info.sample_count - 1, &[0, 1])
+            .expect("second half"),
+    ];
+    for (index, total) in all.iter().enumerate() {
+        assert_eq!(
+            total.rising + total.falling,
+            halves
+                .iter()
+                .map(|half| half[index].rising + half[index].falling)
+                .sum::<u64>()
+        );
+    }
+    assert!(hsync_session::edges(&capture, 0, 10, &[99]).is_err());
+}

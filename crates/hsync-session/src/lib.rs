@@ -102,6 +102,15 @@ pub struct PulseInfo {
     pub next_end: Option<SampleIndex>,
 }
 
+/// Edges of a channel within a segment, as DSView's cursor measurement counts them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct ChannelEdges {
+    pub channel: ChannelIndex,
+    pub rising: u64,
+    pub falling: u64,
+}
+
 /// Direction of an edge search.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -490,6 +499,32 @@ pub fn clock_period(
     let middle = periods.len() / 2;
     let (_, median, _) = periods.select_nth_unstable(middle);
     Ok(Some(*median as f64))
+}
+
+/// Rising and falling edges of `channels` from sample `from` to sample `to`: the changes whose
+/// new level starts after `from` and no later than `to`, as DSView's cursor measurement counts
+/// them (`LogicSignal::edges`).
+pub fn edges(
+    capture: &LogicCapture,
+    from: SampleIndex,
+    to: SampleIndex,
+    channels: &[ChannelIndex],
+) -> Result<Vec<ChannelEdges>, SessionError> {
+    let (from, to) = (from.min(to), from.max(to));
+    channels
+        .iter()
+        .map(|&channel| {
+            let data = capture
+                .channel(channel)
+                .ok_or(SessionError::UnknownChannel(channel))?;
+            let counted = data.count_edges(from, to.saturating_add(1));
+            Ok(ChannelEdges {
+                channel,
+                rising: counted.rising,
+                falling: counted.falling,
+            })
+        })
+        .collect()
 }
 
 /// The nearest edge of `channel` after or before `sample`: the first sample of the new level.
