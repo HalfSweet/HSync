@@ -303,7 +303,7 @@
       "read": "读",
       "slave": "从机 0x{address}",
       "ack": "ACK",
-      "nack": "NACK：主机读完最后一个字节，不再应答",
+      "nack": "NACK",
       "start": "起始",
       "repeatedStart": "重复起始",
       "stop": "停止",

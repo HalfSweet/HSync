@@ -303,7 +303,7 @@
       "read": "R",
       "slave": "Target 0x{address}",
       "ack": "ACK",
-      "nack": "NACK: the controller read its last byte and stops acknowledging",
+      "nack": "NACK",
       "start": "Start",
       "repeatedStart": "Repeated start",
       "stop": "Stop",
