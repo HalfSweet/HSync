@@ -55,7 +55,8 @@
     "toggle": "展开或收起 {name}",
     "showStream": "在数据流里看 {name} 的全部解码结果",
     "showStreamTip": "在数据流里看全部解码结果",
-    "unnamed": "未命名通道"
+    "unnamed": "未命名通道",
+    "measuredClock": "实测 {value}"
   },
   "trigger": {
     "menuTitle": "{channel} 的触发条件",

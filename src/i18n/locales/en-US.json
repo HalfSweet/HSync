@@ -55,7 +55,8 @@
     "toggle": "Expand or collapse {name}",
     "showStream": "Show all {name} results in the data stream",
     "showStreamTip": "Show all decoded results in the data stream",
-    "unnamed": "Other channels"
+    "unnamed": "Other channels",
+    "measuredClock": "Measured {value}"
   },
   "trigger": {
     "menuTitle": "Trigger on {channel}",
