@@ -100,7 +100,7 @@ describe('findPattern', () => {
     ]
     const found = await backend.find(summary.id, conditions, 0, 'next')
     const lanes = (
-      decoded as {
+      decoded as unknown as {
         presentation: { lanes: [string, { type: string; condition?: string; start: number }[]][] }
       }[]
     )[0]?.presentation.lanes
