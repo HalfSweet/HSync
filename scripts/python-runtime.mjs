@@ -136,7 +136,14 @@ function copyKept(/** @type {string} */ from, /** @type {string} */ to) {
     recursive: true,
     filter: (source) => {
       const name = basename(source)
-      return !UNUSED.has(name) && !name.startsWith('config-') && !UNUSED_NATIVE.test(name)
+      // Hidden files are placeholders such as lib-dynload/.empty; artifact uploads drop them,
+      // which breaks the signature of a macOS bundle that sealed them.
+      return (
+        !name.startsWith('.') &&
+        !UNUSED.has(name) &&
+        !name.startsWith('config-') &&
+        !UNUSED_NATIVE.test(name)
+      )
     },
   })
 }
