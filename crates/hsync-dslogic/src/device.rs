@@ -553,6 +553,12 @@ impl Device for DslogicDevice {
         self.settings.stream
     }
 
+    /// DSView marks the durations beyond this depth "(RLE)" (`SamplingBar::update_sample_count_selector`).
+    fn hardware_depth(&self) -> Option<u64> {
+        (!self.settings.stream)
+            .then(|| channel_depth(self.profile, self.settings.enabled_count().max(1)))
+    }
+
     /// DSView's trigger dock limits (`TriggerDock::device_updated`): in Stream mode only simple
     /// triggers at 1 %; in Buffer mode up to 90 % of the capture, less when the capture is longer
     /// than the hardware holds, and multi-stage and serial triggers.

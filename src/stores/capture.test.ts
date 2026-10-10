@@ -75,6 +75,7 @@ function deviceState(canLoop: boolean): DeviceState {
     capturing: false,
     trigger: { maxPosition: 1, advanced: false },
     canLoop,
+    hardwareDepth: null,
   }
 }
 

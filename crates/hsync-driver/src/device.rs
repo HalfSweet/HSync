@@ -139,6 +139,12 @@ pub trait Device: Send {
         false
     }
 
+    /// Samples per channel the device's own memory holds with the current options, when it
+    /// captures there first (Buffer mode); longer captures need RLE compression.
+    fn hardware_depth(&self) -> Option<u64> {
+        None
+    }
+
     /// Channels that will be captured, ascending.
     fn enabled_channels(&self) -> Vec<ChannelIndex>;
 

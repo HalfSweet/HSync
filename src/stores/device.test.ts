@@ -30,6 +30,7 @@ function stateOf(device: DeviceSummary): DeviceState {
     capturing: false,
     trigger: { maxPosition: 90, advanced: false },
     canLoop: false,
+    hardwareDepth: null,
   }
 }
 

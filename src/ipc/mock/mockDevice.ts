@@ -98,6 +98,7 @@ export class MockDemoDevice {
       capturing: this.capturing,
       trigger: { maxPosition: 90, advanced: ADVANCED_TRIGGERS },
       canLoop: true,
+      hardwareDepth: null,
     }
   }
 

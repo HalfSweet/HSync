@@ -43,6 +43,8 @@ pub struct DeviceState {
     pub trigger: TriggerCaps,
     /// Whether captures can loop with the current options.
     pub can_loop: bool,
+    /// Samples per channel the device's memory holds (Buffer mode); longer captures use RLE.
+    pub hardware_depth: Option<u64>,
 }
 
 /// A capture request from the UI (DESIGN.md §9.7).
@@ -278,6 +280,7 @@ impl Instrument {
             capturing: self.is_capturing(),
             trigger: open.device.trigger_caps(),
             can_loop: open.device.can_loop(),
+            hardware_depth: open.device.hardware_depth(),
         })
     }
 

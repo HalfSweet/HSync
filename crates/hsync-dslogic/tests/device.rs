@@ -505,6 +505,8 @@ fn refuses_to_loop_in_buffer_mode() {
 #[test]
 fn reports_what_the_trigger_can_do_in_each_mode() {
     let (_, mut device) = open(configured(), firmware_dir(&[]));
+    // Stream mode keeps nothing in the device; Buffer mode holds its memory's share per channel.
+    assert_eq!(device.hardware_depth(), None);
     assert_eq!(
         device.trigger_caps(),
         TriggerCaps {
@@ -527,6 +529,14 @@ fn reports_what_the_trigger_can_do_in_each_mode() {
             max_position: 90,
             advanced: true
         }
+    );
+    let profile = find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("profile");
+    assert_eq!(
+        device.hardware_depth(),
+        Some(hsync_dslogic::setting::channel_depth(
+            profile,
+            device.enabled_channels().len() as u32
+        ))
     );
 }
 

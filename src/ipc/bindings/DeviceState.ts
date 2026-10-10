@@ -26,4 +26,8 @@ trigger: TriggerCaps,
 /**
  * Whether captures can loop with the current options.
  */
-canLoop: boolean, };
+canLoop: boolean, 
+/**
+ * Samples per channel the device's memory holds (Buffer mode); longer captures use RLE.
+ */
+hardwareDepth: number | null, };
