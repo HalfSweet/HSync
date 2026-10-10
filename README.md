@@ -60,7 +60,7 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 ### Measure and search
 
 - **An overview of the whole capture**, with each decoder's activity, to see where things happen and get there in one click.
-- **Hover a pulse** to read its width, plus the period, frequency and duty cycle of clocks and PWM.
+- **Hover a pulse** to read its width, plus the period, frequency and duty cycle it makes with the next pulse.
 - **Click two edges** to measure the time between them, on one channel or across channels; the pointer snaps to edges.
 - **Mark a segment** on the ruler to see its duration and every channel's rising and falling edges inside it.
 - **Search** decoded data for values or text (`4F 32`, `HOST`), or find a level pattern such as `D3=R D5=1`.
