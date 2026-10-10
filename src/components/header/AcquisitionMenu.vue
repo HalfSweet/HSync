@@ -10,9 +10,11 @@ import { useCaptureStore } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
 import { formatBytes, formatCount, formatSamplerate, formatTimeShort } from '@/utils/units'
 
+import DeviceOptions from './DeviceOptions.vue'
+
 /**
  * `rate │ duration │ N channels` and its menu (DESIGN.md §4): sample rates, the durations
- * DSView offers for the rate, and which channels to capture.
+ * DSView offers for the rate, which channels to capture, and the device's other options.
  */
 const { t, locale } = useI18n()
 const device = useDeviceStore()
@@ -49,6 +51,12 @@ const seconds = computed(() =>
 )
 const channelCount = computed(() =>
   device.state ? device.enabledChannels.length : (capture.summary?.channels.length ?? 0),
+)
+/** The device's options but rate and depth, which the lists hold. */
+const otherOptions = computed(() =>
+  (device.state?.options ?? []).filter(
+    (option) => option.key !== 'samplerate' && option.key !== 'sampleLimit',
+  ),
 )
 const durations = computed(() => durationChoices(rate.value, maxSamples.value))
 const currentDuration = computed(() => closestDuration(durations.value, seconds.value))
@@ -122,80 +130,101 @@ function toggleChannel(channel: number): void {
         v-if="open"
         role="dialog"
         :aria-label="label"
-        class="absolute top-full left-0 z-20 mt-1 flex w-[360px] origin-top-left flex-col gap-3 rounded-6 bg-menu p-3 text-small"
+        class="absolute top-full left-0 z-20 mt-1 flex max-h-[calc(100vh-100px)] w-[360px] origin-top-left flex-col gap-3 overflow-y-auto rounded-6 bg-menu p-3 text-small"
+        :class="otherOptions.length > 0 && 'lg:w-[640px]'"
       >
         <p v-if="!device.state" class="text-ink-3">{{ t('header.acquisition.noDevice') }}</p>
         <template v-else>
-          <div class="grid grid-cols-2 gap-3">
-            <div class="flex min-w-0 flex-col gap-1">
-              <span class="text-caption text-ink-3">{{ t('header.acquisition.samplerate') }}</span>
-              <div data-list class="flex max-h-56 flex-col overflow-y-auto">
-                <button
-                  v-for="value in rates"
-                  :key="value"
-                  class="flex h-6 shrink-0 items-center justify-between rounded-4 px-2 tabular-nums hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-                  :class="value === rate && 'font-medium'"
-                  :aria-pressed="value === rate"
-                  :disabled="locked || rateOption?.enabled === false"
-                  @click="pickRate(value)"
-                >
-                  <span>{{ formatSamplerate(value) }}</span>
-                  <AppIcon v-if="value === rate" name="check" />
-                </button>
+          <p v-if="capture.busy" class="text-caption text-ink-3">
+            {{ t('header.acquisition.locked') }}
+          </p>
+          <div class="flex flex-col gap-3 lg:flex-row">
+            <div class="flex min-w-0 flex-col gap-3 lg:w-[336px] lg:flex-none">
+              <div class="grid grid-cols-2 gap-3">
+                <div class="flex min-w-0 flex-col gap-1">
+                  <span class="text-caption text-ink-3">{{
+                    t('header.acquisition.samplerate')
+                  }}</span>
+                  <div data-list class="flex max-h-56 flex-col overflow-y-auto">
+                    <button
+                      v-for="value in rates"
+                      :key="value"
+                      class="flex h-6 shrink-0 items-center justify-between rounded-4 px-2 tabular-nums hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+                      :class="value === rate && 'font-medium'"
+                      :aria-pressed="value === rate"
+                      :disabled="locked || rateOption?.enabled === false"
+                      @click="pickRate(value)"
+                    >
+                      <span>{{ formatSamplerate(value) }}</span>
+                      <AppIcon v-if="value === rate" name="check" />
+                    </button>
+                  </div>
+                </div>
+                <div class="flex min-w-0 flex-col gap-1">
+                  <span class="text-caption text-ink-3">{{
+                    t('header.acquisition.duration')
+                  }}</span>
+                  <div data-list class="flex max-h-56 flex-col overflow-y-auto">
+                    <button
+                      v-for="duration in durations"
+                      :key="duration"
+                      class="flex h-6 shrink-0 items-center justify-between rounded-4 px-2 tabular-nums hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+                      :class="duration === currentDuration && 'font-medium'"
+                      :aria-pressed="duration === currentDuration"
+                      :disabled="locked"
+                      @click="pickDuration(duration)"
+                    >
+                      <span class="inline-flex items-baseline gap-1.5"
+                        >{{ formatTimeShort(duration) }}
+                        <span v-if="needsRle(duration)" class="text-caption text-ink-3">{{
+                          t('header.acquisition.rle')
+                        }}</span></span
+                      >
+                      <AppIcon v-if="duration === currentDuration" name="check" />
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div class="flex min-w-0 flex-col gap-1">
-              <span class="text-caption text-ink-3">{{ t('header.acquisition.duration') }}</span>
-              <div data-list class="flex max-h-56 flex-col overflow-y-auto">
-                <button
-                  v-for="duration in durations"
-                  :key="duration"
-                  class="flex h-6 shrink-0 items-center justify-between rounded-4 px-2 tabular-nums hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-                  :class="duration === currentDuration && 'font-medium'"
-                  :aria-pressed="duration === currentDuration"
-                  :disabled="locked"
-                  @click="pickDuration(duration)"
-                >
-                  <span class="inline-flex items-baseline gap-1.5"
-                    >{{ formatTimeShort(duration) }}
-                    <span v-if="needsRle(duration)" class="text-caption text-ink-3">{{
-                      t('header.acquisition.rle')
-                    }}</span></span
+              <p class="text-caption text-ink-3 tabular-nums">
+                {{
+                  t('header.acquisition.samples', {
+                    count: formatCount(device.sampleLimit, locale),
+                  })
+                }}
+              </p>
+              <p v-if="tooLarge" role="alert" class="rise-in text-caption text-alert tabular-nums">
+                {{ t('header.acquisition.tooLarge', { size: formatBytes(needed) }) }}
+              </p>
+              <div class="flex flex-col gap-1.5">
+                <span class="text-caption text-ink-3">{{
+                  t('header.acquisition.channelsTitle')
+                }}</span>
+                <div class="grid grid-cols-8 gap-1">
+                  <button
+                    v-for="channel in device.state.channelCount"
+                    :key="channel"
+                    class="h-6 rounded-4 text-caption tabular-nums disabled:opacity-55"
+                    :class="
+                      device.enabledChannels.includes(channel - 1)
+                        ? 'bg-control-on font-medium text-ink'
+                        : 'bg-control text-ink-3 hover:bg-control-hover'
+                    "
+                    :aria-pressed="device.enabledChannels.includes(channel - 1)"
+                    :disabled="locked"
+                    @click="toggleChannel(channel - 1)"
                   >
-                  <AppIcon v-if="duration === currentDuration" name="check" />
-                </button>
+                    {{ channel - 1 }}
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-          <p class="text-caption text-ink-3 tabular-nums">
-            {{
-              t('header.acquisition.samples', {
-                count: formatCount(device.sampleLimit, locale),
-              })
-            }}
-          </p>
-          <p v-if="tooLarge" role="alert" class="rise-in text-caption text-alert tabular-nums">
-            {{ t('header.acquisition.tooLarge', { size: formatBytes(needed) }) }}
-          </p>
-          <div class="flex flex-col gap-1.5">
-            <span class="text-caption text-ink-3">{{ t('header.acquisition.channelsTitle') }}</span>
-            <div class="grid grid-cols-8 gap-1">
-              <button
-                v-for="channel in device.state.channelCount"
-                :key="channel"
-                class="h-6 rounded-4 text-caption tabular-nums disabled:opacity-55"
-                :class="
-                  device.enabledChannels.includes(channel - 1)
-                    ? 'bg-control-on font-medium text-ink'
-                    : 'bg-control text-ink-3 hover:bg-control-hover'
-                "
-                :aria-pressed="device.enabledChannels.includes(channel - 1)"
-                :disabled="locked"
-                @click="toggleChannel(channel - 1)"
-              >
-                {{ channel - 1 }}
-              </button>
-            </div>
+            <!-- Beside the lists on wide windows, below them on narrow ones. -->
+            <DeviceOptions
+              v-if="otherOptions.length > 0"
+              :options="otherOptions"
+              :locked="locked"
+              class="min-w-0 flex-1 border-t border-line-2 pt-3 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-3"
+            />
           </div>
         </template>
       </div>
