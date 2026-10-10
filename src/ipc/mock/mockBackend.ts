@@ -466,6 +466,7 @@ export function createMockBackend(data: Fixture = fixture): Backend {
           hardwareTriggered: false,
           hardwareSamples: null,
           overflow: false,
+          dropped: 0,
           end: null,
           error: null,
         },

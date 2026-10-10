@@ -22,4 +22,8 @@ capturing: boolean,
 /**
  * What the trigger can do with the current options.
  */
-trigger: TriggerCaps, };
+trigger: TriggerCaps, 
+/**
+ * Whether captures can loop with the current options.
+ */
+canLoop: boolean, };

@@ -41,6 +41,8 @@ pub struct DeviceState {
     pub capturing: bool,
     /// What the trigger can do with the current options.
     pub trigger: TriggerCaps,
+    /// Whether captures can loop with the current options.
+    pub can_loop: bool,
 }
 
 /// A capture request from the UI (DESIGN.md §9.7).
@@ -56,6 +58,8 @@ pub struct CaptureRequest {
     pub instant: bool,
     /// A multi-stage or serial trigger in place of `triggers`.
     pub advanced: Option<AdvancedTrigger>,
+    /// Capture until stopped, keeping the newest samples up to the sample limit.
+    pub looping: bool,
 }
 
 /// Where a running capture is.
@@ -99,6 +103,8 @@ pub struct LiveStatus {
     pub hardware_samples: Option<u64>,
     /// The device lost data because the host did not keep up.
     pub overflow: bool,
+    /// Samples a loop capture has dropped from its start to stay within `limit`.
+    pub dropped: u64,
     pub end: Option<EndKind>,
     pub error: Option<UiError>,
 }
@@ -266,6 +272,7 @@ impl Instrument {
             enabled_channels: open.device.enabled_channels(),
             capturing: self.is_capturing(),
             trigger: open.device.trigger_caps(),
+            can_loop: open.device.can_loop(),
         })
     }
 
@@ -332,12 +339,13 @@ impl Instrument {
                     .triggers
                     .iter()
                     .any(|(_, condition)| *condition != TriggerCondition::None));
+        let looping = request.looping;
         let plan = CapturePlan {
             triggers: request.triggers,
             trigger_position: request.trigger_position,
             instant: request.instant,
             advanced: request.advanced,
-            looping: false,
+            looping: request.looping,
         };
         let (sink, packets) = crossbeam_channel::unbounded();
         let acquisition = open
@@ -379,12 +387,14 @@ impl Instrument {
             hardware_triggered: false,
             hardware_samples: None,
             overflow: false,
+            dropped: 0,
             end: None,
             error: None,
         };
         events(SessionEvent::Live(status.clone()));
         let ingest = Ingest {
             capture,
+            looping,
             decode: Some(live.decode),
             packets,
             acquisition: Arc::clone(&acquisition),
@@ -418,6 +428,8 @@ impl Instrument {
 /// Moves the packets of a running capture into its samples.
 struct Ingest {
     capture: Arc<RwLock<LogicCapture>>,
+    /// Keep only the newest `status.limit` samples.
+    looping: bool,
     /// Decodes the capture once it is complete.
     decode: Option<Box<dyn FnOnce() + Send>>,
     packets: Receiver<Packet>,
@@ -444,6 +456,17 @@ impl Ingest {
                 Packet::Logic(bytes) => {
                     let mut capture = self.capture.write();
                     capture.append_cross(&mut deinterleaver, &bytes);
+                    if self.looping && self.status.limit > 0 {
+                        // Whole words, as the samples arrive.
+                        let excess = capture.len().saturating_sub(self.status.limit) / 64 * 64;
+                        if excess > 0 {
+                            capture.drop_front(excess);
+                            self.status.dropped += excess;
+                            if self.status.trigger_sample.is_some() {
+                                self.status.trigger_sample = capture.trigger_sample();
+                            }
+                        }
+                    }
                     self.status.samples = capture.len();
                     drop(capture);
                     let first = self.status.phase == LivePhase::Waiting;
@@ -454,8 +477,10 @@ impl Ingest {
                     }
                 }
                 Packet::Trigger { sample } => {
-                    self.capture.write().set_trigger(Some(sample), now_ms());
-                    self.status.trigger_sample = Some(sample);
+                    // Counted from the start of the capture, before anything was dropped.
+                    let sample = sample.checked_sub(self.status.dropped);
+                    self.capture.write().set_trigger(sample, now_ms());
+                    self.status.trigger_sample = sample;
                     self.status.phase = LivePhase::Capturing;
                     self.emit();
                 }
@@ -476,6 +501,10 @@ impl Ingest {
         };
         if let Some(acquisition) = self.acquisition.lock().take() {
             acquisition.wait();
+        }
+        if self.status.dropped > 0 {
+            // Saving reads whole chunks, which must line up with the samples again.
+            self.capture.write().compact();
         }
         let (end, error) = match reason {
             EndReason::Completed => (EndKind::Completed, None),

@@ -29,6 +29,7 @@ function stateOf(device: DeviceSummary): DeviceState {
     enabledChannels: [],
     capturing: false,
     trigger: { maxPosition: 90, advanced: false },
+    canLoop: false,
   }
 }
 

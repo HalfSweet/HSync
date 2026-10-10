@@ -2,7 +2,6 @@ import { defineStore } from 'pinia'
 import { computed, shallowRef } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
-import type { CaptureRequest } from '@/ipc/bindings/CaptureRequest'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import type { ExportRequest } from '@/ipc/bindings/ExportRequest'
 import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
@@ -10,6 +9,7 @@ import { toUiError, type UiError } from '@/ipc/errors'
 import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
 import { useChannelsStore } from './channels'
+import type { TriggerRequest } from './trigger'
 
 export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
 /** Single captures, or another one a moment after each completes (DESIGN.md §9.4). */
@@ -39,7 +39,7 @@ export const useCaptureStore = defineStore('capture', () => {
   const savedKind = shallowRef<FileJob['kind']>('save')
   /** The save or export under way. */
   const job = shallowRef<FileJob | null>(null)
-  let lastRequest: CaptureRequest | null = null
+  let lastRequest: TriggerRequest | null = null
   let repeatTimer: ReturnType<typeof setTimeout> | null = null
 
   const samplerate = computed(() => summary.value?.info.samplerate ?? 0)
@@ -135,7 +135,7 @@ export const useCaptureStore = defineStore('capture', () => {
     }
   }
 
-  function scheduleRepeat(request: CaptureRequest): void {
+  function scheduleRepeat(request: TriggerRequest): void {
     cancelRepeat()
     repeatPending.value = true
     repeatTimer = setTimeout(() => {
@@ -158,12 +158,12 @@ export const useCaptureStore = defineStore('capture', () => {
   }
 
   /** Starts a capture on the open device. */
-  async function start(request: CaptureRequest): Promise<void> {
+  async function start(request: TriggerRequest): Promise<void> {
     error.value = null
     savedPath.value = null
     lastRequest = request
     try {
-      const started = await (await getBackend()).captureStart(request)
+      const started = await (await getBackend()).captureStart({ ...request, looping: false })
       summary.value = started
       status.value = 'ready'
       // A status may have arrived before the summary did.

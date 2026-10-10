@@ -96,6 +96,7 @@ fn waits_for_the_trigger() {
         trigger_position: 25,
         instant: false,
         advanced: None,
+        looping: false,
     };
     let summary = instrument
         .start(&mut workspace, request, sink)
@@ -112,6 +113,54 @@ fn waits_for_the_trigger() {
             .trigger_sample(),
         Some(16_384)
     );
+}
+
+#[test]
+fn loops_until_stopped_keeping_the_newest_samples() {
+    let mut instrument = instrument();
+    assert!(instrument.state().expect("state").can_loop);
+    let mut workspace = Workspace::new();
+    let (sink, statuses) = events();
+    let request = CaptureRequest {
+        looping: true,
+        ..CaptureRequest::default()
+    };
+    let summary = instrument
+        .start(&mut workspace, request, sink)
+        .expect("start");
+    // Run on well past the limit.
+    loop {
+        let status = statuses
+            .recv_timeout(Duration::from_secs(10))
+            .expect("status");
+        assert_ne!(status.phase, LivePhase::Ended, "a loop capture runs on");
+        assert!(status.samples <= 65_536);
+        if status.dropped > 4 * 65_536 {
+            break;
+        }
+    }
+    instrument.stop();
+    let last = until_ended(&statuses).pop().expect("status");
+    assert_eq!(last.end, Some(EndKind::Stopped));
+    assert_eq!(last.samples, 65_536);
+    assert!(last.dropped > 4 * 65_536);
+
+    // The newest samples, counted on from where the dropped ones ended.
+    let capture = workspace.capture(summary.id).expect("capture");
+    let capture = capture.read();
+    assert_eq!(capture.len(), 65_536);
+    let first = last.dropped;
+    for channel in 0..6u16 {
+        let data = capture.channel(channel).expect("channel");
+        assert!(data.is_compact());
+        for sample in [0, 1, 63, 64, 1000, 65_535] {
+            assert_eq!(
+                data.sample(sample),
+                ((first + sample) >> channel) & 1 == 1,
+                "D{channel} sample {sample}"
+            );
+        }
+    }
 }
 
 #[test]

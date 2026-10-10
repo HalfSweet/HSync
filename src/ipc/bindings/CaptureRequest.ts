@@ -21,4 +21,8 @@ instant: boolean,
 /**
  * A multi-stage or serial trigger in place of `triggers`.
  */
-advanced: AdvancedTrigger | null, };
+advanced: AdvancedTrigger | null, 
+/**
+ * Capture until stopped, keeping the newest samples up to the sample limit.
+ */
+looping: boolean, };

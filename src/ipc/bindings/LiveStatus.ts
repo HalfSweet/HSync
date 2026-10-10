@@ -22,4 +22,8 @@ hardwareTriggered: boolean, hardwareSamples: number | null,
 /**
  * The device lost data because the host did not keep up.
  */
-overflow: boolean, end: EndKind | null, error: UiError | null, };
+overflow: boolean, 
+/**
+ * Samples a loop capture has dropped from its start to stay within `limit`.
+ */
+dropped: number, end: EndKind | null, error: UiError | null, };

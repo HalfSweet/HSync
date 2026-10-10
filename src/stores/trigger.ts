@@ -16,6 +16,9 @@ import {
 import { useChannelsStore } from './channels'
 import { useDeviceStore } from './device'
 
+/** What the trigger decides of a capture request; the capture store adds how to capture. */
+export type TriggerRequest = Omit<CaptureRequest, 'looping'>
+
 /** What a trigger can do without a device to ask: simple triggers up to 90 %, as DSView. */
 const DEFAULT_CAPS: TriggerCaps = { maxPosition: 90, advanced: false }
 
@@ -42,8 +45,8 @@ export const useTriggerStore = defineStore('trigger', () => {
     Math.min(Math.max(1, Math.round(position.value)), caps.value.maxPosition),
   )
 
-  /** The request for the next capture. */
-  function request(instant: boolean): CaptureRequest {
+  /** The trigger part of the next capture's request. */
+  function request(instant: boolean): TriggerRequest {
     return {
       triggers: channels.armed.map(({ index, condition }) => [index, condition]),
       triggerPosition: activePosition.value,
