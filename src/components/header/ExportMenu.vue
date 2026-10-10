@@ -4,15 +4,17 @@ import { ref, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import ExportDialog from '@/components/export/ExportDialog.vue'
 import { useFileActions } from '@/composables/useFileActions'
 import { useCaptureStore } from '@/stores/capture'
 import { commandLabel } from '@/utils/keys'
 
-/** The export button of the top bar (DESIGN.md §9.4): saving the capture as a `.dsl` file. */
+/** The export button of the top bar (DESIGN.md §9.4): saving the capture, and exporting it. */
 const { t } = useI18n()
 const capture = useCaptureStore()
 const files = useFileActions()
 const open = ref(false)
+const showDialog = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
 
 onClickOutside(root, () => (open.value = false))
@@ -21,6 +23,11 @@ onKeyStroke('Escape', () => (open.value = false))
 function save(): void {
   open.value = false
   void files.save()
+}
+
+function exportAs(): void {
+  open.value = false
+  showDialog.value = true
 }
 </script>
 
@@ -45,12 +52,21 @@ function save(): void {
       <button
         role="menuitem"
         class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-        :disabled="!capture.summary || capture.busy"
+        :disabled="!capture.summary || capture.busy || capture.job !== null"
         @click="save"
       >
         <span class="flex-1 text-left">{{ t('file.save') }}</span>
         <kbd class="font-sans text-caption text-ink-3">{{ commandLabel('s') }}</kbd>
       </button>
+      <button
+        role="menuitem"
+        class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+        :disabled="!capture.summary || capture.busy || capture.job !== null"
+        @click="exportAs"
+      >
+        <span class="flex-1 text-left">{{ t('file.exportItem') }}</span>
+      </button>
     </div>
+    <ExportDialog v-if="showDialog" @close="showDialog = false" />
   </div>
 </template>

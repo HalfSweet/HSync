@@ -68,7 +68,41 @@
     "filter": "DSView capture",
     "open": "Open file…",
     "save": "Save capture…",
-    "saved": "Saved to {name}"
+    "saved": "Saved to {name}",
+    "exportItem": "Export…",
+    "saving": "Saving {percent}%",
+    "exporting": "Exporting {percent}%",
+    "cancel": "Cancel",
+    "exported": "Exported to {name}"
+  },
+  "exportDialog": {
+    "title": "Export",
+    "format": "Format",
+    "formats": {
+      "dsl": "DSView capture",
+      "csv": "CSV table",
+      "vcd": "VCD waveform",
+      "sigrok": "sigrok session",
+      "binary": "Raw binary"
+    },
+    "formatTips": {
+      "dsl": "Opens in HSync and DSView, decoders included",
+      "csv": "A time and every channel level per row, for spreadsheets",
+      "vcd": "The common digital waveform format, for GTKWave and others",
+      "sigrok": "Opens in PulseView",
+      "binary": "⌈channels / 8⌉ bytes per sample, channel k in bit k"
+    },
+    "range": "Range",
+    "rangeAll": "Whole capture",
+    "rangeSegment": "Segment",
+    "segmentNeeded": "Drag on the ruler to mark a segment first",
+    "channels": "Channels",
+    "all": "All",
+    "none": "None",
+    "everySample": "A row for every sample (otherwise only where a level changes)",
+    "noChannel": "Choose at least one channel",
+    "export": "Export…",
+    "cancel": "Cancel"
   },
   "device": {
     "demo": "Demo device",
@@ -426,7 +460,7 @@
       "taskFailed": "A background task failed: {detail}",
       "resourceMissing": "An application resource is missing: {detail}",
       "unexpected": "Unexpected error: {detail}",
-      "unavailableInBrowser": "Files cannot be opened in the browser preview"
+      "unavailableInBrowser": "Files cannot be read or written in the browser preview"
     },
     "session": {
       "noCapture": "No capture is open",
@@ -435,7 +469,8 @@
       "invalidRange": "Invalid sample range",
       "noDevice": "No device is open",
       "unknownDevice": "Device {id} was not found",
-      "busy": "A capture is running; stop it first"
+      "busy": "A capture is running; stop it first",
+      "nothingToExport": "No channel to export"
     },
     "device": {
       "usb": "USB communication failed: {detail}",
@@ -453,11 +488,12 @@
       "lost": "The connection to the device was lost"
     },
     "file": {
-      "io": "Reading the file failed: {detail}",
+      "io": "File access failed: {detail}",
       "notCapture": "This is not a DSView capture file",
       "corrupt": "The file is damaged: {detail}",
       "unsupportedVersion": "File format version {version} is not supported",
-      "unsupportedMode": "Only logic analyzer captures can be opened"
+      "unsupportedMode": "Only logic analyzer captures can be opened",
+      "cancelled": "Cancelled"
     }
   }
 }

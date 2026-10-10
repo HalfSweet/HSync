@@ -68,7 +68,41 @@
     "filter": "DSView 采集文件",
     "open": "打开文件…",
     "save": "保存采集…",
-    "saved": "已保存到 {name}"
+    "saved": "已保存到 {name}",
+    "exportItem": "导出…",
+    "saving": "正在保存 {percent}%",
+    "exporting": "正在导出 {percent}%",
+    "cancel": "取消",
+    "exported": "已导出到 {name}"
+  },
+  "exportDialog": {
+    "title": "导出",
+    "format": "格式",
+    "formats": {
+      "dsl": "DSView 采集文件",
+      "csv": "CSV 表格",
+      "vcd": "VCD 波形",
+      "sigrok": "sigrok 会话",
+      "binary": "原始二进制"
+    },
+    "formatTips": {
+      "dsl": "HSync 与 DSView 都能打开，保留解码设置",
+      "csv": "每行一个时刻与各通道的电平，可用表格软件打开",
+      "vcd": "通用的数字波形格式，GTKWave 等工具可打开",
+      "sigrok": "PulseView 可打开",
+      "binary": "每个采样点 ⌈通道数 / 8⌉ 个字节，第 k 个通道在第 k 位"
+    },
+    "range": "范围",
+    "rangeAll": "全程",
+    "rangeSegment": "选段",
+    "segmentNeeded": "先在标尺上拖出一段",
+    "channels": "通道",
+    "all": "全选",
+    "none": "全不选",
+    "everySample": "每个采样点写一行（默认只在电平变化时写一行）",
+    "noChannel": "至少选一个通道",
+    "export": "导出…",
+    "cancel": "取消"
   },
   "device": {
     "demo": "演示设备",
@@ -426,7 +460,7 @@
       "taskFailed": "后台任务失败：{detail}",
       "resourceMissing": "缺少应用资源：{detail}",
       "unexpected": "意外错误：{detail}",
-      "unavailableInBrowser": "浏览器预览中不能打开文件"
+      "unavailableInBrowser": "浏览器预览中不能读写文件"
     },
     "session": {
       "noCapture": "没有打开的采集",
@@ -435,7 +469,8 @@
       "invalidRange": "无效的采样范围",
       "noDevice": "没有打开设备",
       "unknownDevice": "找不到设备 {id}",
-      "busy": "正在采集，请先停止"
+      "busy": "正在采集，请先停止",
+      "nothingToExport": "没有可导出的通道"
     },
     "device": {
       "usb": "USB 通信失败：{detail}",
@@ -453,11 +488,12 @@
       "lost": "与设备的连接中断"
     },
     "file": {
-      "io": "读取文件失败：{detail}",
+      "io": "文件读写失败：{detail}",
       "notCapture": "这不是 DSView 采集文件",
       "corrupt": "文件已损坏：{detail}",
       "unsupportedVersion": "不支持第 {version} 版的文件格式",
-      "unsupportedMode": "只能打开逻辑分析采集"
+      "unsupportedMode": "只能打开逻辑分析采集",
+      "cancelled": "已取消"
     }
   }
 }

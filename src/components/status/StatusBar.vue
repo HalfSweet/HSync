@@ -88,9 +88,22 @@ const perDivision = computed(() =>
       <span>{{ t('stream.title') }}</span>
     </button>
     <span :aria-live="capture.capturing ? 'off' : 'polite'">{{ status }}</span>
-    <span v-if="problem" role="alert" class="text-alert">{{ problem }}</span>
+    <span v-if="capture.job" role="status" class="inline-flex items-center gap-2 tabular-nums">
+      <span>{{
+        t(capture.job.kind === 'save' ? 'file.saving' : 'file.exporting', {
+          percent: Math.floor(capture.job.progress * 100),
+        })
+      }}</span>
+      <span class="h-1 w-24 overflow-hidden rounded-full bg-hover" aria-hidden="true">
+        <span class="block h-full bg-ink" :style="{ width: `${capture.job.progress * 100}%` }" />
+      </span>
+      <button class="btn-ghost h-[22px]" @click="capture.cancelFile()">
+        {{ t('file.cancel') }}
+      </button>
+    </span>
+    <span v-else-if="problem" role="alert" class="text-alert">{{ problem }}</span>
     <span v-else-if="savedName" role="status" class="text-ink-3">{{
-      t('file.saved', { name: savedName })
+      t(capture.savedKind === 'save' ? 'file.saved' : 'file.exported', { name: savedName })
     }}</span>
     <span v-if="triggerTime" class="text-ink-3 tabular-nums">{{ triggerTime }}</span>
     <span v-if="capture.summary" class="text-ink-3 tabular-nums">
