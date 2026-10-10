@@ -201,7 +201,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
             <div class="border-t border-line" />
 
             <!-- Simple: the conditions set on the timeline. -->
-            <template v-if="trigger.activeMode === 'simple'">
+            <div v-if="trigger.activeMode === 'simple'" class="rise-in flex flex-col gap-3">
               <p class="text-ink-2">{{ t('triggerPanel.simple.note') }}</p>
               <div class="flex items-center gap-2">
                 <span v-if="channels.armed.length === 0" class="flex-1 text-ink-3">{{
@@ -226,10 +226,10 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                 </button>
               </div>
               <p v-if="unavailable" class="text-ink-3">{{ unavailable }}</p>
-            </template>
+            </div>
 
             <!-- Multi-stage. -->
-            <template v-else-if="trigger.activeMode === 'stages'">
+            <div v-else-if="trigger.activeMode === 'stages'" class="rise-in flex flex-col gap-3">
               <div class="flex items-center gap-3">
                 <label class="flex items-center gap-2">
                   <span class="text-ink-2">{{ t('triggerPanel.stages.count') }}</span>
@@ -256,7 +256,12 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                   </button>
                 </div>
               </div>
-              <div v-if="stage" role="tabpanel" class="flex flex-col gap-2">
+              <div
+                v-if="stage"
+                :key="stageShown"
+                role="tabpanel"
+                class="rise-in flex flex-col gap-2"
+              >
                 <div class="flex items-start gap-3">
                   <span class="w-16 flex-none pt-3 text-ink-2">{{
                     t('triggerPanel.stages.pattern0')
@@ -322,10 +327,10 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
                 </div>
               </div>
               <p class="text-ink-3">{{ t('triggerPanel.stages.note') }}</p>
-            </template>
+            </div>
 
             <!-- Serial. -->
-            <template v-else>
+            <div v-else class="rise-in flex flex-col gap-3">
               <div
                 v-for="field in ['start', 'stop', 'clock'] as const"
                 :key="field"
@@ -390,9 +395,9 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
               <p v-if="valueError" role="alert" class="-mt-1 pl-19 text-alert">
                 {{ t('triggerPanel.serial.invalid') }}
               </p>
-            </template>
+            </div>
 
-            <p v-if="trigger.activeMode !== 'simple'" class="text-ink-3">
+            <p v-if="trigger.activeMode !== 'simple'" class="rise-in text-ink-3">
               {{ t('triggerPanel.legend') }}
             </p>
           </fieldset>

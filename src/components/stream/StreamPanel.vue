@@ -606,7 +606,12 @@ function onGripUp(): void {
         }}</span>
         <span v-if="header.chars" class="font-sans">{{ t('stream.column.characters') }}</span>
       </div>
-      <div class="relative" :style="{ height: `${stream.total * ROW}px` }">
+      <!-- Another decoder, mode or scope is another listing, which rises in. -->
+      <div
+        :key="`${stream.decoder}:${stream.mode}:${stream.scope}`"
+        class="rise-in relative"
+        :style="{ height: `${stream.total * ROW}px` }"
+      >
         <template v-for="{ index, row, find } in visible" :key="index">
           <div
             v-if="row"

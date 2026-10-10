@@ -111,7 +111,7 @@ async function run(): Promise<void> {
               </label>
               <label
                 v-if="one === 'csv' && kind === 'csv'"
-                class="-mt-1 mb-1 flex items-center gap-2 pl-8 text-ink-2"
+                class="rise-in -mt-1 mb-1 flex items-center gap-2 pl-8 text-ink-2"
               >
                 <input v-model="everySample" type="checkbox" class="accent-ink" />
                 {{ t('exportDialog.everySample') }}

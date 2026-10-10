@@ -123,3 +123,16 @@
   transform: translateX(var(--mark-x));
   background: var(--ink);
 }
+
+/* rise-in: what takes another's place in a view, or a notice that shows up, fades in as it
+   rises into place. What it replaces is gone at once, so the two never overlap. */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.rise-in {
+  animation: rise-in var(--motion-enter) var(--ease-enter);
+}
