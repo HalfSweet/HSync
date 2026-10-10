@@ -17,7 +17,7 @@ export interface Row {
   channel?: ChannelRef
   /** Whether the label column shows the channel (raw rows under SPI data lanes do not). */
   labeled: boolean
-  /** Decoder lane on `lane` rows, e.g. `bytes`, `miso`. */
+  /** Decoder lane on `lane` rows, e.g. `miso`. */
   lane?: string
   /** A 1 px line above the row separates it from the previous group. */
   separator: boolean
@@ -72,15 +72,6 @@ export function layoutRows(
       group,
     })
     if (!isCollapsed(group)) {
-      if (group.kind === 'i2c') {
-        push({
-          key: `${group.key}:lane:bytes`,
-          kind: 'lane',
-          height: metrics.lane,
-          group,
-          lane: 'bytes',
-        })
-      }
       // Annotation rows: a decoder without a native presentation shows its first row on the
       // title row, the rest (and those of stacked decoders) on rows of their own.
       const annotations = annotationLanes(group)

@@ -71,7 +71,7 @@ describe('layoutRows', () => {
     layout.rows.filter((row) => row.group.key === key).map((row) => row.kind)
 
   it('follows the design row structure', () => {
-    expect(kinds('1:i2c')).toEqual(['gap', 'header', 'lane', 'trace', 'trace', 'gap'])
+    expect(kinds('1:i2c')).toEqual(['gap', 'header', 'trace', 'trace', 'gap'])
     expect(kinds('1:uart')).toEqual(['gap', 'header', 'trace', 'gap'])
     expect(kinds('1:spi')).toEqual([
       'gap',
@@ -95,13 +95,13 @@ describe('layoutRows', () => {
       top += row.height
     }
     expect(layout.height).toBe(top)
-    // I2C: 8 + 26 + 26 + 30 + 30 + 8 = 128.
-    expect(layout.rows.find((row) => row.key === '1:uart:before')?.top).toBe(128)
+    // I2C: 8 + 26 + 30 + 30 + 8 = 102.
+    expect(layout.rows.find((row) => row.key === '1:uart:before')?.top).toBe(102)
     expect(layout.rows.find((row) => row.key === '1:uart:before')?.separator).toBe(true)
   })
 
   it('finds the rows in view', () => {
     const shown = visibleRows(layout.rows, 0, 40)
-    expect(shown.map((row) => row.kind)).toEqual(['gap', 'header', 'lane'])
+    expect(shown.map((row) => row.kind)).toEqual(['gap', 'header', 'trace'])
   })
 })

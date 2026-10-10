@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { escapePieces, hex, i2cMeaningText } from './text'
+import { escapePieces, hex } from './text'
 
 describe('decoded text', () => {
   it('formats hex', () => {
@@ -18,12 +18,5 @@ describe('decoded text', () => {
       { text: 'a', escape: false },
       { text: '\\x01', escape: true },
     ])
-  })
-
-  it('describes register reads', () => {
-    const t = (key: string, params?: Record<string, unknown>) => `${key} ${JSON.stringify(params)}`
-    expect(i2cMeaningText({ type: 'readRegister', register: 4, data: [0x4f] }, 0x62, t)).toBe(
-      'decode.i2c.readRegister {"register":"04","data":"4F"}',
-    )
   })
 })

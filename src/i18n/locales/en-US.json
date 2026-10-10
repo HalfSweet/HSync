@@ -297,20 +297,13 @@
   },
   "decode": {
     "i2c": {
-      "readRegister": "Read {data} from 0x{register}",
-      "writeRegister": "Write {data} to 0x{register}",
       "write": "W",
       "read": "R",
-      "slave": "Target 0x{address}",
       "ack": "ACK",
       "nack": "NACK",
       "start": "Start",
       "repeatedStart": "Repeated start",
       "stop": "Stop",
-      "readData": "Read {data}",
-      "writeData": "Write {data}",
-      "probe": "Address 0x{address} only",
-      "transferTip": "{text}, from {time}, {span} long",
       "addressTip": "Target 0x{address}, {direction}, from {time}",
       "dataTip": "Data 0x{value}, from {time}"
     },
@@ -318,13 +311,7 @@
       "space": "Space"
     },
     "spi": {
-      "transferring": "Transfer",
-      "offsets": "Offsets {from}–{to}",
-      "unchangedSince": "Unchanged from offset {offset}",
-      "run": "{value} × {count}",
-      "byteTip": "0x{value}, from {time}",
-      "textTip": "{text}, from offset {offset}",
-      "transferTip": "SPI transfer from {time}"
+      "byteTip": "0x{value}, from {time}"
     },
     "can": {
       "noFramesInView": "No frames in view",
@@ -426,7 +413,6 @@
     "close": "Close data stream",
     "column": {
       "time": "Time ms",
-      "meaning": "Meaning",
       "wireOrder": "On the wire",
       "dataLine": "Line",
       "offset": "Offset",

@@ -300,8 +300,7 @@ fn index_rows(rows: &[StreamRow]) -> Vec<(Option<DataLine>, Vec<u32>)> {
     for (position, row) in rows.iter().enumerate() {
         let line = match row {
             StreamRow::I2c { .. } | StreamRow::UartText { .. } | StreamRow::Can { .. } => None,
-            StreamRow::Hex { line, .. } | StreamRow::Run { line, .. } => *line,
-            StreamRow::SpiText { line, .. } => Some(*line),
+            StreamRow::Hex { line, .. } => *line,
             StreamRow::Annotation { .. } => None,
             StreamRow::Note { .. } | StreamRow::Gap { .. } => continue,
         };

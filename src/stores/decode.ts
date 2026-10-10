@@ -88,9 +88,9 @@ export const useDecodeStore = defineStore('decode', () => {
   })
 
   // Lanes are fetched a view's width beyond each side, so panning shows what is at hand; one
-  // request at a time, the latest wanted once it returns. What depends on the view (SPI offsets,
-  // the I²C address, the frames beside an empty view) is worked out for the samples in view, and
-  // again once the view has rested after moving within the fetched window.
+  // request at a time, the latest wanted once it returns. What depends on the view (the frames
+  // beside an empty view) is worked out for the samples in view, and again once the view has
+  // rested after moving within the fetched window.
   let fetched: { key: string; window: SampleWindow; focus: [number, number] } | null = null
   let loading = false
   let again = false

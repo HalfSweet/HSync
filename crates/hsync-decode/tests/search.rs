@@ -47,7 +47,7 @@ fn finds_i2c_bytes_in_their_transfers() {
 }
 
 #[test]
-fn finds_text_in_both_listings() {
+fn finds_text_in_the_listings() {
     let all = presentations();
     let spi = find(&all, "1:spi");
     for mode in [StreamMode::Text, StreamMode::Hex] {
@@ -56,11 +56,13 @@ fn finds_text_in_both_listings() {
         assert!(found.iter().all(|hit| hit.row.is_some()), "{mode:?}");
         assert!(found.windows(2).all(|pair| pair[0].start <= pair[1].start));
     }
-    let text = spi.search(&needle("HOST: 239"), StreamMode::Text);
+    // Text found across hex rows is listed at the row of its first word.
+    let text = spi.search(&needle("HOST: 239"), StreamMode::Hex);
     let row = text[0].row.expect("row") as usize;
-    assert!(
-        matches!(&spi.rows(StreamMode::Text)[row], StreamRow::SpiText { text, .. } if text.starts_with("HOST: 239"))
-    );
+    let StreamRow::Hex { start, end, .. } = &spi.rows(StreamMode::Hex)[row] else {
+        panic!("a hex row");
+    };
+    assert!(*start <= text[0].start && text[0].start < *end);
     let uart = find(&all, "1:uart");
     assert_eq!(
         uart.search(&needle("dreamsourcelab"), StreamMode::Text)

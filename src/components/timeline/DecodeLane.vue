@@ -5,19 +5,18 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { shownTexts, type NumberFormat } from '@/decode/numberFormat'
 import type { DecoderView } from '@/ipc/bindings/DecoderView'
-import type { I2cMeaning } from '@/ipc/bindings/I2cMeaning'
 import type { LaneItem } from '@/ipc/bindings/LaneItem'
 import type { BusKind } from '@/timeline/groups'
 import type { Viewport } from '@/timeline/viewport'
-import { formatSpan, formatTime } from '@/utils/units'
+import { formatTime } from '@/utils/units'
 
 /**
- * One decode lane of the timeline (DESIGN.md §6.3): blocks for transfers, bytes and frames,
- * marks for I²C conditions and acknowledges, SPI text drawn character by character.
+ * One decode lane of the timeline (DESIGN.md §6.3): blocks for bytes, words and frames, marks
+ * for I²C conditions and acknowledges.
  */
 const props = defineProps<{
   bus: BusKind
-  /** `header`, `bytes`, `miso` or `mosi`. */
+  /** `header`, `miso`, `mosi` or an annotation row. */
   lane: string
   view: DecoderView | undefined
   viewport: Viewport
@@ -26,7 +25,6 @@ const props = defineProps<{
   selected: string | null
   /** Converts a sample to seconds from the trigger, for tips. */
   timeOf: (sample: number) => number
-  samplerate: number
   /** How annotation values show. */
   format: NumberFormat
 }>()
@@ -46,24 +44,6 @@ const items = computed(
 
 const hex = (value: number, digits = 2) => value.toString(16).toUpperCase().padStart(digits, '0')
 const at = (sample: number) => formatTime(props.timeOf(sample), 4, 'ms')
-const span = (from: number, to: number) =>
-  props.samplerate > 0 ? formatSpan((to - from) / props.samplerate) : ''
-
-function meaningText(meaning: I2cMeaning): string {
-  const data = 'data' in meaning ? meaning.data.map((value) => hex(value)).join(' ') : ''
-  switch (meaning.type) {
-    case 'readRegister':
-      return t('decode.i2c.readRegister', { register: hex(meaning.register), data })
-    case 'writeRegister':
-      return t('decode.i2c.writeRegister', { register: hex(meaning.register), data })
-    case 'read':
-      return t('decode.i2c.readData', { data })
-    case 'write':
-      return t('decode.i2c.writeData', { data })
-    default:
-      return t('decode.i2c.probe', { address: hex(props.view?.address ?? 0) })
-  }
-}
 
 interface Geometry {
   left: number
@@ -90,8 +70,8 @@ function geometry(start: number, end: number): Geometry {
 
 const blockId = (item: LaneItem) => `${props.decoder}:${props.lane}:${item.start}:${item.end}`
 
-/** Rendered pieces in view: blocks, marks and SPI characters. Lanes reach beyond the view, so
- * panning shows them at once; what lies wholly outside is left out. */
+/** Rendered pieces in view: blocks and marks. Lanes reach beyond the view, so panning shows
+ * them at once; what lies wholly outside is left out. */
 const pieces = computed(() => {
   const { start: origin, samplesPerPixel, width } = props.viewport
   const end = origin + width * samplesPerPixel
@@ -102,27 +82,6 @@ const pieces = computed(() => {
       const id = blockId(item)
       return { item, g, id, on: props.selected === id }
     })
-})
-
-/** SPI characters in view, with their x and whether their line is selected. */
-const characters = computed(() =>
-  pieces.value.flatMap(({ item, on }) => {
-    if (item.type !== 'spiText') return []
-    const { start: origin, samplesPerPixel, width } = props.viewport
-    return [...item.text].flatMap((ch, index) => {
-      const x = ((item.centers[index] ?? item.start) - origin) / samplesPerPixel
-      return x < -8 || x > width + 8
-        ? []
-        : [{ x, ch, control: ch === '·', on, key: `${item.start}:${index}` }]
-    })
-  }),
-)
-
-/** Character columns closer than this overlap; the lane then shows the line blocks only. */
-const crowded = computed(() => {
-  const xs = characters.value.map((c) => c.x)
-  for (let i = 1; i < xs.length; i++) if ((xs[i] ?? 0) - (xs[i - 1] ?? 0) < 7) return true
-  return false
 })
 
 const tint = computed(
@@ -171,24 +130,6 @@ function pick(item: LaneItem, id: string): void {
         :style="{ left: `${g.left}px`, width: `${g.width}px` }"
         aria-hidden="true"
       />
-      <button
-        v-else-if="item.type === 'i2cTransfer'"
-        :class="blockClass(g, on)"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :title="
-          t('decode.i2c.transferTip', {
-            text: meaningText(item.meaning),
-            time: at(item.start),
-            span: span(item.start, item.end),
-          })
-        "
-        @click="pick(item, id)"
-      >
-        <span class="min-w-0 truncate"
-          >{{ meaningText(item.meaning) }}{{ item.cut ? ' …' : '' }}</span
-        >
-      </button>
       <button
         v-else-if="item.type === 'i2cAddress'"
         :class="blockClass(g, on, 'border-i2c-mid bg-i2c-mid')"
@@ -256,42 +197,6 @@ function pick(item: LaneItem, id: string): void {
         <span class="val dim">{{ hex(item.value) }}</span>
       </button>
       <button
-        v-else-if="item.type === 'spiTransfer'"
-        :class="blockClass(g, on, 'bg-hover text-ink-2')"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :title="t('decode.spi.transferTip', { time: at(item.start) })"
-        @click="pick(item, id)"
-      >
-        <span>{{ t('decode.spi.transferring') }}</span>
-        <span class="dim tabular-nums">{{
-          t('decode.spi.offsets', { from: item.first, to: item.last })
-        }}</span>
-      </button>
-      <button
-        v-else-if="item.type === 'spiText'"
-        :class="blockClass(g, on)"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :aria-label="item.text"
-        :title="item.text"
-        @click="pick(item, id)"
-      >
-        <span v-if="crowded" class="min-w-0 truncate font-mono">{{ item.text }}</span>
-      </button>
-      <button
-        v-else-if="item.type === 'spiRun'"
-        :class="blockClass(g, on, 'bg-hover text-ink-2')"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        @click="pick(item, id)"
-      >
-        <span class="val text-ink">{{
-          t('decode.spi.run', { value: hex(item.value), count: item.count })
-        }}</span>
-        <span class="dim">{{ t('decode.spi.unchangedSince', { offset: item.since }) }}</span>
-      </button>
-      <button
         v-else-if="item.type === 'spiWord'"
         :class="blockClass(g, on)"
         :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
@@ -332,16 +237,6 @@ function pick(item: LaneItem, id: string): void {
         }}</span>
       </button>
     </template>
-    <span
-      v-for="c in crowded ? [] : characters"
-      :key="c.key"
-      class="chr"
-      :class="[c.control && 'text-spi', c.on && 'text-canvas']"
-      :style="{ left: `${c.x}px` }"
-      aria-hidden="true"
-    >
-      {{ c.ch }}
-    </span>
     <div
       v-if="empty && bus === 'can' && view"
       class="flex h-full items-center gap-2 px-3 text-small text-ink-3"
@@ -478,18 +373,5 @@ function pick(item: LaneItem, id: string): void {
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-}
-
-/* la-chr */
-.chr {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  transform: translateX(-50%);
-  font: 500 13px/1 var(--mono);
-  white-space: pre;
-  pointer-events: none;
 }
 </style>

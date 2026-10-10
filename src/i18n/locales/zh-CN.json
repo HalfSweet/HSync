@@ -297,20 +297,13 @@
   },
   "decode": {
     "i2c": {
-      "readRegister": "从 0x{register} 读出 {data}",
-      "writeRegister": "向 0x{register} 写入 {data}",
       "write": "写",
       "read": "读",
-      "slave": "从机 0x{address}",
       "ack": "ACK",
       "nack": "NACK",
       "start": "起始",
       "repeatedStart": "重复起始",
       "stop": "停止",
-      "readData": "读出 {data}",
-      "writeData": "写入 {data}",
-      "probe": "只寻址 0x{address}",
-      "transferTip": "{text}，{time} 起，共 {span}",
       "addressTip": "从机地址 0x{address}，{direction}，{time} 起",
       "dataTip": "数据 0x{value}，{time} 起"
     },
@@ -318,13 +311,7 @@
       "space": "空格"
     },
     "spi": {
-      "transferring": "传输中",
-      "offsets": "偏移 {from}–{to}",
-      "unchangedSince": "从偏移 {offset} 起没有变化",
-      "run": "{value} × {count}",
-      "byteTip": "0x{value}，{time} 起",
-      "textTip": "{text}，偏移 {offset} 起",
-      "transferTip": "SPI 传输，{time} 起"
+      "byteTip": "0x{value}，{time} 起"
     },
     "can": {
       "noFramesInView": "视口内没有帧",
@@ -426,7 +413,6 @@
     "close": "收起数据流",
     "column": {
       "time": "时间 ms",
-      "meaning": "含义",
       "wireOrder": "总线上的顺序",
       "dataLine": "数据线",
       "offset": "偏移",

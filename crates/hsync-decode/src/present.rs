@@ -1,7 +1,7 @@
 //! What the timeline and the data stream show of a decoded bus (DESIGN.md §6.3, §9).
 //!
-//! Everything here is structure without language: the UI turns meanings, notes and tokens into
-//! text with its translations.
+//! Everything here is structure without language: the UI turns notes and tokens into text with
+//! its translations. It lists what the bus carried and does not guess what it meant.
 
 use serde::Serialize;
 use std::ops::Range;
@@ -10,31 +10,6 @@ use ts_rs::TS;
 use crate::search::{Found, Needle, Searchable, Sequence};
 use crate::spec::{Bus, Decoded};
 use crate::{can, i2c, spi, uart};
-
-/// What an I²C transfer did, in the terms of a register-based target.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
-#[serde(tag = "type", rename_all = "camelCase")]
-#[ts(export)]
-pub enum I2cMeaning {
-    /// Write the register number, repeated start, read: "read 4F from 0x04".
-    ReadRegister {
-        register: u8,
-        data: Vec<u8>,
-    },
-    /// Write the register number and data: "write 12 to 0x04".
-    WriteRegister {
-        register: u8,
-        data: Vec<u8>,
-    },
-    Read {
-        data: Vec<u8>,
-    },
-    Write {
-        data: Vec<u8>,
-    },
-    /// Only the address, e.g. a bus scan.
-    Probe,
-}
 
 /// A start, repeated start or stop condition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -65,13 +40,6 @@ pub enum LaneItem {
         start: u64,
         end: u64,
     },
-    I2cTransfer {
-        start: u64,
-        end: u64,
-        meaning: I2cMeaning,
-        /// The capture ended before the stop condition.
-        cut: bool,
-    },
     I2cAddress {
         start: u64,
         end: u64,
@@ -98,29 +66,6 @@ pub enum LaneItem {
         end: u64,
         value: u16,
         error: bool,
-    },
-    SpiTransfer {
-        start: u64,
-        end: u64,
-        cut: bool,
-        /// Offsets of the first and last words in view; filled in by [`Presentation::view`].
-        first: u32,
-        last: u32,
-    },
-    /// Characters of one text line, each centred on its word.
-    SpiText {
-        start: u64,
-        end: u64,
-        text: String,
-        centers: Vec<u64>,
-    },
-    /// The same word repeated: `FF × 224`, unchanged from `since`.
-    SpiRun {
-        start: u64,
-        end: u64,
-        value: u32,
-        count: u32,
-        since: u32,
     },
     SpiWord {
         start: u64,
@@ -152,15 +97,11 @@ impl LaneItem {
     pub fn start(&self) -> u64 {
         match *self {
             Self::Dense { start, .. }
-            | Self::I2cTransfer { start, .. }
             | Self::I2cAddress { start, .. }
             | Self::I2cData { start, .. }
             | Self::I2cAck { start, .. }
             | Self::I2cCondition { start, .. }
             | Self::UartFrame { start, .. }
-            | Self::SpiTransfer { start, .. }
-            | Self::SpiText { start, .. }
-            | Self::SpiRun { start, .. }
             | Self::SpiWord { start, .. }
             | Self::CanFrame { start, .. }
             | Self::Annotation { start, .. } => start,
@@ -170,15 +111,11 @@ impl LaneItem {
     pub fn end(&self) -> u64 {
         match *self {
             Self::Dense { end, .. }
-            | Self::I2cTransfer { end, .. }
             | Self::I2cAddress { end, .. }
             | Self::I2cData { end, .. }
             | Self::I2cAck { end, .. }
             | Self::I2cCondition { end, .. }
             | Self::UartFrame { end, .. }
-            | Self::SpiTransfer { end, .. }
-            | Self::SpiText { end, .. }
-            | Self::SpiRun { end, .. }
             | Self::SpiWord { end, .. }
             | Self::CanFrame { end, .. }
             | Self::Annotation { end, .. } => end,
@@ -190,7 +127,7 @@ impl LaneItem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[ts(export)]
 pub struct LaneView {
-    /// `header` (the group title row), `bytes`, `miso` or `mosi`.
+    /// `header` (the group title row), `miso` or `mosi`.
     pub lane: String,
     pub items: Vec<LaneItem>,
 }
@@ -200,8 +137,6 @@ pub struct LaneView {
 #[ts(export)]
 pub struct DecoderView {
     pub lanes: Vec<LaneView>,
-    /// I²C: the target most transfers in view address.
-    pub address: Option<u8>,
     /// Nothing in view: where the nearest items before and after are.
     pub previous: Option<u64>,
     pub next: Option<u64>,
@@ -272,7 +207,6 @@ pub enum StreamRow {
     I2c {
         start: u64,
         end: u64,
-        meaning: I2cMeaning,
         tokens: Vec<I2cToken>,
         cut: bool,
     },
@@ -286,24 +220,6 @@ pub enum StreamRow {
         offset: u32,
         values: Vec<u32>,
         /// Bits per word.
-        bits: u8,
-    },
-    /// SPI text with the offset of its first byte.
-    SpiText {
-        start: u64,
-        end: u64,
-        line: DataLine,
-        offset: u32,
-        text: String,
-    },
-    /// A word repeated `count` times.
-    Run {
-        start: u64,
-        end: u64,
-        line: Option<DataLine>,
-        offset: u32,
-        value: u32,
-        count: u32,
         bits: u8,
     },
     Can {
@@ -339,8 +255,6 @@ impl StreamRow {
             | Self::I2c { start, .. }
             | Self::UartText { start, .. }
             | Self::Hex { start, .. }
-            | Self::SpiText { start, .. }
-            | Self::Run { start, .. }
             | Self::Can { start, .. }
             | Self::Gap { start, .. }
             | Self::Annotation { start, .. } => start,
@@ -353,8 +267,6 @@ impl StreamRow {
             | Self::I2c { end, .. }
             | Self::UartText { end, .. }
             | Self::Hex { end, .. }
-            | Self::SpiText { end, .. }
-            | Self::Run { end, .. }
             | Self::Can { end, .. }
             | Self::Gap { end, .. }
             | Self::Annotation { end, .. } => end,
@@ -362,7 +274,7 @@ impl StreamRow {
     }
 }
 
-/// Text or hex listing of UART and SPI data.
+/// Text or hex listing of UART data.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -394,10 +306,6 @@ pub struct Presentation {
     /// Byte-sized units with their spans, for counting inside a segment.
     units: Vec<(u64, u64)>,
     counts: StreamCounts,
-    /// I²C transfers by span and target, for the lane label.
-    addresses: Vec<(u64, u64, u8)>,
-    /// SPI transfers by start with their words' spans, for the offsets in view.
-    transfer_words: Vec<(u64, Vec<(u64, u64)>)>,
     search: Searchable,
 }
 
@@ -515,27 +423,6 @@ impl Lane {
     }
 }
 
-/// Characters shown for a byte in SPI text: printable ASCII, else a middle dot.
-fn shown_char(value: u32) -> char {
-    match u8::try_from(value) {
-        Ok(byte) if (0x20..0x7f).contains(&byte) => char::from(byte),
-        _ => '·',
-    }
-}
-
-fn printable(value: u32) -> bool {
-    u8::try_from(value).is_ok_and(|byte| (0x20..0x7f).contains(&byte))
-}
-
-/// Printable or a line break or tab, which text listings show as escapes.
-fn texty(value: u32) -> bool {
-    printable(value) || matches!(value, 0x09 | 0x0a | 0x0d)
-}
-
-/// Runs this long collapse into one item.
-const MIN_RUN: usize = 8;
-/// Printable stretches this long count as text.
-const MIN_TEXT: usize = 4;
 /// Words per hex row.
 const HEX_WIDTH: usize = 16;
 /// Characters per UART text row.
@@ -552,8 +439,6 @@ pub struct Snapshot<'a> {
     pub hex_rows: &'a [StreamRow],
     pub units: &'a [(u64, u64)],
     pub counts: StreamCounts,
-    pub addresses: &'a [(u64, u64, u8)],
-    pub transfer_words: &'a [(u64, Vec<(u64, u64)>)],
     /// What a search looks through.
     pub sequences: &'a [Sequence],
     pub ids: &'a [(u32, u64, u64)],
@@ -573,8 +458,6 @@ impl Presentation {
             hex_rows: &self.hex_rows,
             units: &self.units,
             counts: self.counts,
-            addresses: &self.addresses,
-            transfer_words: &self.transfer_words,
             sequences: self.search.sequences(),
             ids: self.search.ids(),
         }
@@ -623,8 +506,6 @@ impl Presentation {
                 frames: annotations.len() as u32,
                 bytes: 0,
             },
-            addresses: Vec::new(),
-            transfer_words: Vec::new(),
             search,
         }
     }
@@ -680,8 +561,7 @@ impl Presentation {
     }
 
     /// The lanes over `window` — the samples in view and some either side, fetched ahead so
-    /// panning has them at hand — with what depends on the view worked out for `focus`, the
-    /// samples in view: the SPI word offsets, the I²C address and, when no item is in view, the
+    /// panning has them at hand — with, when no item is in `focus` (the samples in view), the
     /// frames either side.
     pub fn view_around(
         &self,
@@ -692,7 +572,7 @@ impl Presentation {
         let (start, end) = (window.start, window.end);
         // Narrower than 3 px is unreadable.
         let min_width = (samples_per_pixel * 3.0).ceil() as u64;
-        let mut lanes: Vec<LaneView> = self
+        let lanes: Vec<LaneView> = self
             .lanes
             .iter()
             .map(|(name, lane)| LaneView {
@@ -700,52 +580,14 @@ impl Presentation {
                 items: lane.view(start, end, min_width),
             })
             .collect();
-        // SPI transfers name the offsets of their words in view, or in the window when they are
-        // not in view yet.
-        for item in lanes.iter_mut().flat_map(|lane| lane.items.iter_mut()) {
-            if let LaneItem::SpiTransfer {
-                start: transfer_start,
-                first,
-                last,
-                ..
-            } = item
-                && let Some((_, words)) = self
-                    .transfer_words
-                    .iter()
-                    .find(|(at, _)| at == transfer_start)
-            {
-                let within = |range: &Range<u64>| {
-                    let from = words.partition_point(|&(_, word_end)| word_end <= range.start);
-                    let to = words.partition_point(|&(word_start, _)| word_start < range.end);
-                    (to > from).then(|| (from as u32, (to - 1) as u32))
-                };
-                if let Some((from, to)) = within(&focus).or_else(|| within(&window)) {
-                    *first = from;
-                    *last = to;
-                }
-            }
-        }
         let empty = lanes.iter().all(|lane| {
             lane.items
                 .iter()
                 .all(|item| item.end() <= focus.start || item.start() >= focus.end)
         });
         let header = self.lanes.first().map(|(_, lane)| lane);
-        let address = {
-            let mut counts: std::collections::BTreeMap<u8, usize> = Default::default();
-            for &(from, to, address) in &self.addresses {
-                if from < focus.end && to > focus.start {
-                    *counts.entry(address).or_default() += 1;
-                }
-            }
-            counts
-                .into_iter()
-                .max_by_key(|&(_, count)| count)
-                .map(|(address, _)| address)
-        };
         DecoderView {
             lanes,
-            address,
             previous: if empty {
                 header.and_then(|lane| lane.previous(focus.start))
             } else {
@@ -783,11 +625,9 @@ impl Presentation {
 }
 
 fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
-    let mut header = Vec::new();
     let mut bytes = Vec::new();
     let mut rows = Vec::new();
     let mut units = Vec::new();
-    let mut addresses = Vec::new();
     let mut counts = StreamCounts::default();
     if let Some(at) = trace.cut_head {
         rows.push(StreamRow::Note {
@@ -821,9 +661,6 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
         let start = first.start;
         let end = transfer.iter().map(|item| item.end).max().unwrap_or(start);
         let mut tokens = Vec::new();
-        // Data bytes after each address byte.
-        let mut segments: Vec<(bool, Vec<u8>)> = Vec::new();
-        let mut target = None;
         for item in transfer {
             match item.kind {
                 i2c::Kind::Start => {
@@ -861,7 +698,6 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                 }
                 i2c::Kind::AddressWrite | i2c::Kind::AddressRead => {
                     let read = item.kind == i2c::Kind::AddressRead;
-                    target.get_or_insert(shown(item));
                     tokens.push(I2cToken::Address {
                         start: item.start,
                         end: item.end,
@@ -874,7 +710,6 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                         address: shown(item),
                         read,
                     });
-                    segments.push((read, Vec::new()));
                     units.push((item.start, item.end));
                     counts.bytes += 1;
                 }
@@ -889,9 +724,6 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                         end: item.end,
                         value: item.byte,
                     });
-                    if let Some((_, data)) = segments.last_mut() {
-                        data.push(item.byte);
-                    }
                     units.push((item.start, item.end));
                     counts.bytes += 1;
                 }
@@ -911,38 +743,9 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                 }
             }
         }
-        let meaning = match segments.as_slice() {
-            [(false, write), (true, read), ..] if write.len() == 1 => I2cMeaning::ReadRegister {
-                register: write[0],
-                data: read.clone(),
-            },
-            [(false, write)] if write.len() >= 2 => I2cMeaning::WriteRegister {
-                register: write[0],
-                data: write[1..].to_vec(),
-            },
-            [(true, read)] if !read.is_empty() => I2cMeaning::Read { data: read.clone() },
-            [(false, write)] if !write.is_empty() => I2cMeaning::Write {
-                data: write.clone(),
-            },
-            [(true, read), ..] => I2cMeaning::Read { data: read.clone() },
-            [(false, write), ..] if !write.is_empty() => I2cMeaning::Write {
-                data: write.clone(),
-            },
-            _ => I2cMeaning::Probe,
-        };
-        if let Some(target) = target {
-            addresses.push((start, end, target));
-        }
-        header.push(LaneItem::I2cTransfer {
-            start,
-            end,
-            meaning: meaning.clone(),
-            cut,
-        });
         rows.push(StreamRow::I2c {
             start,
             end,
-            meaning,
             tokens,
             cut,
         });
@@ -951,16 +754,11 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
     }
     Presentation {
         bus: Bus::I2c,
-        lanes: vec![
-            ("header".to_owned(), Lane::new(header)),
-            ("bytes".to_owned(), Lane::new(bytes)),
-        ],
+        lanes: vec![("header".to_owned(), Lane::new(bytes))],
         hex_rows: rows.clone(),
         text_rows: rows,
         units,
         counts,
-        addresses,
-        transfer_words: Vec::new(),
         search: Searchable::default(),
     }
 }
@@ -1034,90 +832,20 @@ fn present_uart(trace: &uart::Trace) -> Presentation {
             frames: frames.len() as u32,
             bytes: frames.len() as u32,
         },
-        addresses: Vec::new(),
-        transfer_words: Vec::new(),
         search: Searchable::default(),
     }
 }
 
-/// Splits `words` (offsets from `base`) into runs of one value, printable text and the rest.
-enum Piece {
-    Run { from: usize, to: usize },
-    Text { from: usize, to: usize },
-    Other { from: usize, to: usize },
-}
-
-fn pieces(values: &[u32], text: bool) -> Vec<Piece> {
-    let mut out = Vec::new();
-    let mut at = 0;
-    let mut other_from = None;
-    while at < values.len() {
-        let run_end = values[at..]
-            .iter()
-            .position(|&v| v != values[at])
-            .map_or(values.len(), |n| at + n);
-        let run = run_end - at >= MIN_RUN && (!text || !texty(values[at]));
-        let text_end = values[at..]
-            .iter()
-            .position(|&v| !texty(v))
-            .map_or(values.len(), |n| at + n);
-        let is_text = text && text_end - at >= MIN_TEXT;
-        if run || is_text {
-            if let Some(from) = other_from.take() {
-                out.push(Piece::Other { from, to: at });
-            }
-            if run {
-                out.push(Piece::Run {
-                    from: at,
-                    to: run_end,
-                });
-                at = run_end;
-            } else {
-                out.push(Piece::Text {
-                    from: at,
-                    to: text_end,
-                });
-                at = text_end;
-            }
-        } else {
-            other_from.get_or_insert(at);
-            at += 1;
-        }
-    }
-    if let Some(from) = other_from {
-        out.push(Piece::Other {
-            from,
-            to: values.len(),
-        });
-    }
-    out
-}
-
 fn present_spi(trace: &spi::Trace) -> Presentation {
-    let mut header = Vec::new();
-    let mut transfer_words: Vec<(u64, Vec<(u64, u64)>)> = Vec::new();
     let mut lanes: [(DataLine, Vec<LaneItem>); 2] =
         [(DataLine::Miso, Vec::new()), (DataLine::Mosi, Vec::new())];
-    let mut text_rows = Vec::new();
-    let mut hex_rows = Vec::new();
+    let mut rows = Vec::new();
     let bits = 8u8;
     for transfer in &trace.transfers {
         let words = &trace.words[transfer.words.clone()];
-        let Some(last_word) = words.last() else {
+        if words.is_empty() {
             continue;
-        };
-        let end = transfer.end.unwrap_or(last_word.end);
-        header.push(LaneItem::SpiTransfer {
-            start: transfer.start,
-            end,
-            cut: transfer.cut_head || transfer.end.is_none(),
-            first: 0,
-            last: words.len().saturating_sub(1) as u32,
-        });
-        transfer_words.push((
-            transfer.start,
-            words.iter().map(|w| (w.start, w.end)).collect(),
-        ));
+        }
         for (line, lane) in &mut lanes {
             let values: Vec<u32> = words
                 .iter()
@@ -1129,103 +857,36 @@ fn present_spi(trace: &spi::Trace) -> Presentation {
             if values.len() != words.len() {
                 continue;
             }
-            let mostly_text = values.iter().filter(|&&v| printable(v)).count() * 2 >= values.len();
-            // Lane: text lines as characters, or runs and single words.
-            if mostly_text {
-                let mut from = 0;
-                for (index, &value) in values.iter().enumerate() {
-                    if value == u32::from(b'\n') || index + 1 == values.len() {
-                        let slice = &words[from..=index];
-                        lane.push(LaneItem::SpiText {
-                            start: slice[0].start,
-                            end: slice[slice.len() - 1].end,
-                            text: values[from..=index]
-                                .iter()
-                                .map(|&v| shown_char(v))
-                                .collect(),
-                            centers: slice.iter().map(|w| (w.start + w.end) / 2).collect(),
-                        });
-                        from = index + 1;
-                    }
-                }
-            } else {
-                for piece in pieces(&values, false) {
-                    match piece {
-                        Piece::Run { from, to } => lane.push(LaneItem::SpiRun {
-                            start: words[from].start,
-                            end: words[to - 1].end,
-                            value: values[from],
-                            count: (to - from) as u32,
-                            since: from as u32,
-                        }),
-                        Piece::Text { from, to } | Piece::Other { from, to } => {
-                            for index in from..to {
-                                lane.push(LaneItem::SpiWord {
-                                    start: words[index].start,
-                                    end: words[index].end,
-                                    value: values[index],
-                                });
-                            }
-                        }
-                    }
-                }
+            lane.extend(
+                words
+                    .iter()
+                    .zip(&values)
+                    .map(|(word, &value)| LaneItem::SpiWord {
+                        start: word.start,
+                        end: word.end,
+                        value,
+                    }),
+            );
+            // Stream: 16 words a row, offsets counted within the transfer.
+            if !rows.is_empty() {
+                rows.push(StreamRow::Gap {
+                    start: transfer.start,
+                    end: transfer.start,
+                });
             }
-            // Stream rows for both modes.
-            for (mode_rows, text) in [(&mut text_rows, true), (&mut hex_rows, false)] {
-                if !mode_rows.is_empty() {
-                    mode_rows.push(StreamRow::Gap {
-                        start: transfer.start,
-                        end: transfer.start,
-                    });
-                }
-                for piece in pieces(&values, text) {
-                    match piece {
-                        Piece::Run { from, to } => mode_rows.push(StreamRow::Run {
-                            start: words[from].start,
-                            end: words[to - 1].end,
-                            line: Some(*line),
-                            offset: from as u32,
-                            value: values[from],
-                            count: (to - from) as u32,
-                            bits,
-                        }),
-                        Piece::Text { from, to } => {
-                            // One row per text line.
-                            let mut row_from = from;
-                            for index in from..to {
-                                if values[index] == u32::from(b'\n') || index + 1 == to {
-                                    mode_rows.push(StreamRow::SpiText {
-                                        start: words[row_from].start,
-                                        end: words[index].end,
-                                        line: *line,
-                                        offset: row_from as u32,
-                                        text: values[row_from..=index]
-                                            .iter()
-                                            .map(|&v| char::from_u32(v).unwrap_or('\u{fffd}'))
-                                            .collect(),
-                                    });
-                                    row_from = index + 1;
-                                }
-                            }
-                        }
-                        Piece::Other { from, to } => {
-                            let mut row_from = from;
-                            while row_from < to {
-                                // Rows align to multiples of 16 within the transfer.
-                                let row_to = ((row_from / HEX_WIDTH + 1) * HEX_WIDTH).min(to);
-                                mode_rows.push(StreamRow::Hex {
-                                    start: words[row_from].start,
-                                    end: words[row_to - 1].end,
-                                    line: Some(*line),
-                                    offset: row_from as u32,
-                                    values: values[row_from..row_to].to_vec(),
-                                    bits,
-                                });
-                                row_from = row_to;
-                            }
-                        }
-                    }
-                }
+            for (row, (chunk, values)) in words
+                .chunks(HEX_WIDTH)
+                .zip(values.chunks(HEX_WIDTH))
+                .enumerate()
+            {
+                rows.push(StreamRow::Hex {
+                    start: chunk[0].start,
+                    end: chunk[chunk.len() - 1].end,
+                    line: Some(*line),
+                    offset: (row * HEX_WIDTH) as u32,
+                    values: values.to_vec(),
+                    bits,
+                });
             }
         }
     }
@@ -1234,12 +895,12 @@ fn present_spi(trace: &spi::Trace) -> Presentation {
     Presentation {
         bus: Bus::Spi,
         lanes: vec![
-            ("header".to_owned(), Lane::new(header)),
             ("miso".to_owned(), Lane::new(miso)),
             ("mosi".to_owned(), Lane::new(mosi)),
         ],
-        text_rows,
-        hex_rows,
+        // SPI lists hex only.
+        text_rows: rows.clone(),
+        hex_rows: rows,
         units: {
             let mut units: Vec<(u64, u64)> = trace
                 .transfers
@@ -1258,8 +919,6 @@ fn present_spi(trace: &spi::Trace) -> Presentation {
             frames: 0,
             bytes: words as u32,
         },
-        addresses: Vec::new(),
-        transfer_words,
         search: Searchable::default(),
     }
 }
@@ -1318,8 +977,6 @@ fn present_can(trace: &can::Trace) -> Presentation {
             frames: trace.frames.len() as u32,
             bytes: trace.frames.iter().map(|f| f.data.len() as u32).sum(),
         },
-        addresses: Vec::new(),
-        transfer_words: Vec::new(),
         search: Searchable::default(),
     }
 }

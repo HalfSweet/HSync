@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use hsync_decode::{DataLine, I2cMeaning, LaneItem, Presentation, Spec, StreamMode, StreamRow};
+use hsync_decode::{DataLine, LaneItem, Presentation, Spec, StreamMode, StreamRow};
 
 fn demo() -> hsync_fileio::DslDocument {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -38,44 +38,28 @@ const VIEW: (u64, u64) = (46_500, 65_000);
 const SPP: f64 = (VIEW.1 - VIEW.0) as f64 / 1236.0;
 
 #[test]
-fn i2c_lanes_show_register_reads() {
+fn i2c_title_row_shows_the_bytes() {
     let all = presentations();
     let view = find(&all, "1:i2c").view(VIEW.0, VIEW.1, SPP);
-    assert_eq!(view.address, Some(0x62));
-    let header = &view.lanes[0];
+    let [header] = view.lanes.as_slice() else {
+        panic!("one lane");
+    };
     assert_eq!(header.lane, "header");
-    let meanings: Vec<&I2cMeaning> = header
+    let bytes: Vec<String> = header
         .items
         .iter()
         .filter_map(|item| match item {
-            LaneItem::I2cTransfer { meaning, .. } => Some(meaning),
+            LaneItem::I2cAddress { address, read, .. } => {
+                Some(format!("{}{address:02X}", if *read { 'R' } else { 'W' }))
+            }
+            LaneItem::I2cData { value, .. } => Some(format!("{value:02X}")),
             _ => None,
         })
         .collect();
-    assert_eq!(
-        meanings,
-        vec![
-            &I2cMeaning::ReadRegister {
-                register: 0x04,
-                data: vec![0x4F]
-            },
-            &I2cMeaning::ReadRegister {
-                register: 0x02,
-                data: vec![0x32, 0xBB]
-            },
-        ]
-    );
-    let bytes = &view.lanes[1];
-    assert!(bytes.items.iter().any(|item| matches!(
-        item,
-        LaneItem::I2cAddress {
-            address: 0x62,
-            read: true,
-            ..
-        }
-    )));
+    // Two register reads, 04 → 4F and 02 → 32 BB; BB lies past the right edge.
+    assert_eq!(bytes, ["W62", "04", "R62", "4F", "W62", "02", "R62", "32"]);
     assert!(
-        bytes
+        header
             .items
             .iter()
             .any(|item| matches!(item, LaneItem::I2cAck { ack: false, .. }))
@@ -99,56 +83,44 @@ fn uart_lane_shows_frames() {
 }
 
 #[test]
-fn spi_lanes_show_text_and_runs() {
+fn spi_lanes_show_each_word() {
     let all = presentations();
     let spi = find(&all, "1:spi");
     let view = spi.view(VIEW.0, VIEW.1, SPP);
-    let [
-        LaneItem::SpiTransfer {
-            cut: false,
-            first,
-            last,
-            ..
-        },
-    ] = view.lanes[0].items.as_slice()
-    else {
-        panic!("one transfer in view");
+    let names: Vec<&str> = view.lanes.iter().map(|lane| lane.lane.as_str()).collect();
+    assert_eq!(names, ["miso", "mosi"]);
+    let words = |lane: usize| -> Vec<u32> {
+        view.lanes[lane]
+            .items
+            .iter()
+            .map(|item| match item {
+                LaneItem::SpiWord { value, .. } => *value,
+                other => panic!("{other:?}"),
+            })
+            .collect()
     };
-    // The design's viewport shows bytes 81–160 of the transfer (it starts slightly earlier).
-    assert!(
-        (79..=81).contains(first) && (159..=161).contains(last),
-        "{first}–{last}"
-    );
-    let miso: String = view.lanes[1]
-        .items
-        .iter()
-        .filter_map(|item| match item {
-            LaneItem::SpiText { text, .. } => Some(text.clone()),
-            _ => None,
-        })
+    let miso: String = words(0)
+        .into_iter()
+        .map(|value| char::from(value as u8))
         .collect();
     assert!(miso.contains("HOST: 239.255.255.250:1900"), "{miso}");
-    assert!(matches!(
-        view.lanes[2].items.as_slice(),
-        [LaneItem::SpiRun {
-            value: 0xFF,
-            count: 224,
-            since: 16,
-            ..
-        }]
-    ));
-    // The data stream: MISO in text, then MOSI with the run folded.
-    let rows = spi.rows(StreamMode::Text);
-    assert!(rows.iter().any(|row| matches!(row, StreamRow::SpiText { text, line: DataLine::Miso, .. } if text == "HOST: 239.255.255.250:1900\r\n")));
+    let mosi = words(1);
+    assert!(mosi.len() > 16 && mosi.iter().all(|&value| value == 0xFF));
+    // The data stream lists hex, 16 words a row, in either mode.
+    let rows = spi.rows(StreamMode::Hex);
+    assert_eq!(rows, spi.rows(StreamMode::Text));
+    assert!(
+        rows.iter()
+            .all(|row| matches!(row, StreamRow::Hex { .. } | StreamRow::Gap { .. }))
+    );
     assert!(rows.iter().any(|row| matches!(
         row,
-        StreamRow::Run {
-            value: 0xFF,
-            count: 224,
-            offset: 16,
+        StreamRow::Hex {
             line: Some(DataLine::Mosi),
+            offset: 16,
+            values,
             ..
-        }
+        } if values == &[0xFF; 16]
     )));
     assert_eq!(spi.counts().transfers, 4);
     assert_eq!(spi.counts().bytes, 288);
@@ -172,7 +144,7 @@ fn zoomed_out_lanes_merge_narrow_items() {
     let capture_len = 131_072;
     // 50 px for the whole capture: a byte is narrower than 3 px.
     let view = find(&all, "1:i2c").view(0, capture_len, capture_len as f64 / 50.0);
-    let bytes = &view.lanes[1];
+    let bytes = &view.lanes[0];
     assert!(
         bytes
             .items
@@ -198,33 +170,8 @@ fn counts_bytes_inside_a_segment() {
 
 #[test]
 fn views_fetched_wide_answer_for_the_samples_in_view() {
-    let all = presentations();
-    let width = VIEW.1 - VIEW.0;
-    let window = VIEW.0 - width..VIEW.1 + width;
-
-    // The SPI transfer still names the bytes in view, not those of the whole window.
-    let spi = find(&all, "1:spi").view_around(window.clone(), VIEW.0..VIEW.1, SPP);
-    let transfer = spi.lanes[0]
-        .items
-        .iter()
-        .find_map(|item| match item {
-            LaneItem::SpiTransfer { first, last, .. } => Some((*first, *last)),
-            _ => None,
-        })
-        .expect("a transfer");
-    assert!(
-        (79..=81).contains(&transfer.0) && (159..=161).contains(&transfer.1),
-        "{transfer:?}"
-    );
-
-    // The I²C address is the one of the transfers in view.
-    let i2c = find(&all, "1:i2c");
-    assert_eq!(
-        i2c.view_around(window.clone(), VIEW.0..VIEW.1, SPP).address,
-        i2c.view(VIEW.0, VIEW.1, SPP).address
-    );
-
     // An empty view inside a window with frames still points at the frames beside it.
+    let all = presentations();
     let can = find(&all, "can-fd");
     let full = can.view(0, u64::MAX, SPP);
     let frames: Vec<(u64, u64)> = full.lanes[0]

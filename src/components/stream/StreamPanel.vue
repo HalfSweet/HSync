@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { defaultCaptureName, withExtension } from '@/composables/useFileActions'
 import { entryFormat, shownTexts } from '@/decode/numberFormat'
-import { escapePieces, hex, hexBytes, i2cMeaningText, type TextPiece } from '@/decode/text'
+import { escapePieces, hex, hexBytes, type TextPiece } from '@/decode/text'
 import { getBackend } from '@/ipc/backend'
 import { pickSavePath } from '@/ipc/dialogs'
 import type { StreamRow } from '@/ipc/bindings/StreamRow'
@@ -62,7 +62,6 @@ const bus = computed(() => stream.bus)
 const format = computed(() =>
   entryFormat(stream.decoder === null ? undefined : decode.entries[stream.decoder]),
 )
-const address = computed(() => decode.lanesOf(stream.decoder)?.address ?? null)
 
 /** "9 transfers, 4 bytes in the segment" and its variants. */
 const summary = computed(() => {
@@ -98,7 +97,6 @@ const summary = computed(() => {
 
 /** Width of the label column by bus, as the design sets it. */
 const LABEL_WIDTHS: Partial<Record<BusKind, string>> = {
-  i2c: '132px',
   spi: '36px',
   can: '64px',
   other: '120px',
@@ -109,7 +107,7 @@ const header = computed(() => {
   switch (bus.value) {
     case 'i2c':
       return {
-        label: t('stream.column.meaning'),
+        label: null,
         offset: false,
         content: t('stream.column.wireOrder'),
         chars: false,
@@ -198,7 +196,7 @@ function inSegment(row: StreamRow): boolean {
 
 interface Cell {
   text: string
-  kind: 'plain' | 'muted' | 'nack' | 'escape' | 'note' | 'run'
+  kind: 'plain' | 'muted' | 'nack' | 'escape' | 'note'
   prefix?: string
   /** The cell lies inside the segment (I²C shades byte by byte). */
   inside?: boolean
@@ -252,7 +250,6 @@ function cellsOf(row: StreamRow): Cell[] {
       return cells
     }
     case 'uartText':
-    case 'spiText':
       return textCells(escapePieces(row.text))
     case 'hex':
       return [
@@ -260,10 +257,6 @@ function cellsOf(row: StreamRow): Cell[] {
           text: row.values.map((value) => hex(value, Math.ceil(row.bits / 4))).join(' '),
           kind: 'plain',
         },
-      ]
-    case 'run':
-      return [
-        { text: t('decode.spi.run', { value: hex(row.value), count: row.count }), kind: 'run' },
       ]
     case 'can': {
       const parts = [
@@ -292,12 +285,8 @@ function cellsOf(row: StreamRow): Cell[] {
 
 function labelOf(row: StreamRow): string {
   switch (row.type) {
-    case 'i2c':
-      return i2cMeaningText(row.meaning, address.value, t) + (row.cut ? ' …' : '')
-    case 'spiText':
     case 'hex':
-    case 'run':
-      return 'line' in row && row.line ? row.line.toUpperCase() : ''
+      return row.line ? row.line.toUpperCase() : ''
     case 'can':
       return `0x${hex(row.id, row.extended ? 8 : 3)}`
     case 'annotation':
@@ -677,10 +666,6 @@ function onGripUp(): void {
 
 .cell-nack {
   font-weight: 600;
-}
-
-.cell-run {
-  color: var(--ink-2);
 }
 
 .cell-note {
