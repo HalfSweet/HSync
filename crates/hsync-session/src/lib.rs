@@ -24,8 +24,8 @@ use ts_rs::TS;
 
 pub use bins::{BINS_FORMAT_VERSION, BinsRequest, encode_bins};
 pub use decoding::{
-    DecodeSet, DecodeState, DecoderLanes, DecoderStatus, SEARCH_LIMIT, SearchHit, SearchResult,
-    StreamPage,
+    DecodeSet, DecodeState, DecoderLanes, DecoderStatus, RANGE_KEY, SEARCH_LIMIT, SearchHit,
+    SearchResult, StreamPage,
 };
 pub use error::SessionError;
 pub use files::{ExportKind, ExportRequest, ExportSource, read_text, write_text};

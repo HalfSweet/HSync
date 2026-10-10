@@ -309,3 +309,50 @@ fn display_changes_keep_the_results() {
     let after = workspace.decoding(opened.id).expect("decoders");
     assert!(Arc::ptr_eq(&before, &after), "decoded again");
 }
+
+#[test]
+fn decodes_only_the_range_of_an_entry() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let i2c = |range: Option<(u64, u64)>| {
+        let mut entry = serde_json::json!({
+            "id": "1:i2c",
+            "channel": [{"scl": 1}, {"sda": 0}],
+            "options": {},
+        });
+        if let Some((first, last)) = range {
+            entry[hsync_session::RANGE_KEY] = serde_json::json!([first, last]);
+        }
+        serde_json::json!([entry])
+    };
+    workspace
+        .set_decoders(opened.id, i2c(None), false)
+        .expect("whole");
+    decoded(&events, opened.id, 1);
+    let decoding = workspace.decoding(opened.id).expect("decoders");
+    let whole = decoding
+        .stream(0, StreamMode::Text, None, false, 0, 100)
+        .expect("rows")
+        .rows;
+    assert_eq!(whole.len(), 6);
+
+    // From just before the second transfer to the end, given last-first like DSView's cursors.
+    let first = whole[1].start() - 1;
+    workspace
+        .set_decoders(
+            opened.id,
+            i2c(Some((opened.info.sample_count - 1, first))),
+            false,
+        )
+        .expect("part");
+    decoded(&events, opened.id, 1);
+    let part = workspace
+        .decoding(opened.id)
+        .expect("decoders")
+        .stream(0, StreamMode::Text, None, false, 0, 100)
+        .expect("rows")
+        .rows;
+    assert_eq!(part.len(), 5);
+    assert_eq!(part[0].start(), whole[1].start());
+}

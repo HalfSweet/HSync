@@ -1,6 +1,7 @@
 //! Decoding the open capture: the session's decoders run in the background and their
 //! presentations answer the UI's lane and data stream queries (DESIGN.md §7.4).
 
+use std::ops::Range;
 use std::sync::Arc;
 
 use hsync_capture::LogicCapture;
@@ -132,6 +133,21 @@ struct Entry {
     id: String,
     bus: Option<Bus>,
     state: State,
+    /// The samples to decode, all of them without a range.
+    range: Option<Range<u64>>,
+}
+
+/// HSync's key for the decode range in a DSView decoder entry: the first and the last sample
+/// decoded, as DSView's start and end cursors (`DecoderOptionsDlg::update_decode_range`).
+pub const RANGE_KEY: &str = "decode range";
+
+/// The decode range of a decoder entry, as samples `first..last + 1`.
+fn entry_range(entry: &Value) -> Option<Range<u64>> {
+    let [first, last] = entry.get(RANGE_KEY)?.as_array()?.as_slice() else {
+        return None;
+    };
+    let (first, last) = (first.as_u64()?, last.as_u64()?);
+    Some(first.min(last)..first.max(last).saturating_add(1))
 }
 
 /// The decoders of one capture and their results.
@@ -198,7 +214,12 @@ impl DecodeSet {
                     (None, Some(stack)) => (Some(Bus::Other), State::Pending(Job::Python(stack))),
                     (None, None) => (None, State::Unsupported),
                 };
-                Entry { id, bus, state }
+                Entry {
+                    id,
+                    bus,
+                    state,
+                    range: entry_range(entry),
+                }
             })
             .collect();
         Arc::new(Self {
@@ -213,21 +234,27 @@ impl DecodeSet {
         self.cancel.store(true, Ordering::Relaxed);
     }
 
-    /// Runs one job over the capture.
+    /// Runs one job over the capture, or over `range` of it.
     fn decode(
         host: Option<&DecoderHost>,
         job: Job,
+        range: Option<Range<u64>>,
         capture: &Arc<RwLock<LogicCapture>>,
         cancel: &Arc<AtomicBool>,
     ) -> State {
+        let samples = |len: u64| {
+            range
+                .clone()
+                .map_or(0..len, |range| range.start.min(len)..range.end.min(len))
+        };
         let native = |spec: &Spec| {
             let capture = capture.read();
-            spec.run(&capture, 0..capture.len())
+            spec.run(&capture, samples(capture.len()))
         };
         let python = |stack: &Stack| -> Result<StackOutcome, String> {
             let host = host.ok_or("no decoder host")?;
-            let end = capture.read().len();
-            hsync_srd::run_stack(host, capture, 0..end, stack, cancel)
+            let len = capture.read().len();
+            hsync_srd::run_stack(host, capture, samples(len), stack, cancel)
                 .map_err(|error| error.to_string())
         };
         match job {
@@ -289,11 +316,13 @@ impl DecodeSet {
             let capture = Arc::clone(capture);
             let done = Arc::clone(&done);
             let id = entry.id.clone();
+            let range = entry.range.clone();
             let spawned = std::thread::Builder::new()
                 .name(format!("decode-{id}"))
                 .spawn(move || {
                     let began = std::time::Instant::now();
-                    let state = Self::decode(set.host.as_deref(), job, &capture, &set.cancel);
+                    let state =
+                        Self::decode(set.host.as_deref(), job, range, &capture, &set.cancel);
                     log::debug!(
                         "decoded {id} in {:.1} ms",
                         began.elapsed().as_secs_f64() * 1e3
