@@ -4,8 +4,8 @@
 @import './components.css';
 
 /*
- * Only design tokens exist as theme values: the default palette, type scale, radii and
- * shadows are removed so a stray `bg-red-500` or `shadow-md` does not compile.
+ * Only design tokens exist as theme values: the default palette, type scale, radii, shadows
+ * and motion curves are removed so a stray `bg-red-500` or `ease-in-out` does not compile.
  */
 @theme {
   --color-*: initial;
@@ -15,6 +15,12 @@
   --inset-shadow-*: initial;
   --drop-shadow-*: initial;
   --font-*: initial;
+  --ease-*: initial;
+  --animate-*: initial;
+
+  /* A `transition-*` utility takes the design's timing unless it names another. */
+  --default-transition-duration: var(--motion-enter);
+  --default-transition-timing-function: var(--ease-enter);
 
   /* Type scale: captions and ticks, secondary information, base text. */
   --text-caption: 11px;

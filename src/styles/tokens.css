@@ -82,6 +82,15 @@
   --h-status: 28px;
   --w-trigger-menu: 176px;
 
+  /* Motion (DESIGN.md §9.13): what appears starts fast and settles softly, what leaves goes
+     quicker and gathers speed, and a selection mark slides over with a slight overshoot. */
+  --motion-enter: 200ms;
+  --motion-exit: 120ms;
+  --motion-slide: 260ms;
+  --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-slide: cubic-bezier(0.34, 1.3, 0.64, 1);
+
   color-scheme: light;
 }
 
@@ -149,6 +158,15 @@
 @media (max-width: 640px) {
   :root {
     --lab: 132px;
+  }
+}
+
+/* With reduced motion every change still happens, only at once. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-enter: 0s;
+    --motion-exit: 0s;
+    --motion-slide: 0s;
   }
 }
 
