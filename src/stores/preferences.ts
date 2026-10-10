@@ -42,6 +42,9 @@ export const usePreferencesStore = defineStore('preferences', () => {
   /** A repeat stopped early shows what it caught instead of the last complete capture. */
   const keepStopped = useStorage('hsync.keepStopped', false)
 
+  /** Look for a newer release in the background at startup. */
+  const checkUpdates = useStorage('hsync.checkUpdates', true)
+
   // Diagnostics.
   const storedLogLevel = useStorage<string>('hsync.logLevel', 'info')
   /** Also write the log to the log file. */
@@ -88,6 +91,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     followLatest,
     quickScroll,
     keepStopped,
+    checkUpdates,
     logLevel,
     logToFile,
     resolvedTheme,

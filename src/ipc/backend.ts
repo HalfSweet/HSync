@@ -2,6 +2,8 @@ import { getVersion } from '@tauri-apps/api/app'
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { relaunch } from '@tauri-apps/plugin-process'
+import { check, type Update } from '@tauri-apps/plugin-updater'
 
 import type { BinsRequest } from './bindings/BinsRequest'
 import type { CaptureRequest } from './bindings/CaptureRequest'
@@ -23,6 +25,7 @@ import type { SearchResult } from './bindings/SearchResult'
 import type { StreamMode } from './bindings/StreamMode'
 import type { StreamPage } from './bindings/StreamPage'
 import { decodeBins, type BinsResult } from './bins'
+import type { UiError } from './errors'
 import type { LogLevel } from './logLevels'
 
 /** Stops a subscription. */
@@ -45,6 +48,17 @@ export interface StreamRequest {
 export interface DecodedEvent {
   captureId: number
   index: number
+}
+
+/** A newer release than the one running, as the update server announces it. */
+export interface AvailableUpdate {
+  version: string
+}
+
+/** How much of an update has downloaded, and of how much when the server says. */
+export interface UpdateProgress {
+  done: number
+  total: number | null
 }
 
 /** Everything the UI asks of the Rust side. Components reach it only through stores. */
@@ -124,6 +138,10 @@ export interface Backend {
   systemMemory(): Promise<number | null>
   /** The app's version. */
   appVersion(): Promise<string>
+  /** Asks the update server for a newer release; `null` when this one is the latest. */
+  updateCheck(): Promise<AvailableUpdate | null>
+  /** Downloads and installs the release the last check found, then restarts the app. */
+  updateInstall(onProgress: (progress: UpdateProgress) => void): Promise<void>
   /** The decoders of a capture and how far they are. */
   decodeList(captureId: number): Promise<DecoderStatus[]>
   /** Decode lanes of finished decoders over `start..end`. */
@@ -166,7 +184,16 @@ function progress(handler: (done: number) => void): Channel<number> {
   return channel
 }
 
+/** An updater failure carrying a {@link UiError}; the plugin reports them as English text. */
+function updateError(code: string, error: unknown): Error & UiError {
+  const detail = error instanceof Error ? error.message : String(error)
+  return Object.assign(new Error(detail), { code, params: { detail } })
+}
+
 class TauriBackend implements Backend {
+  /** The release the last update check found. */
+  private update: Update | null = null
+
   captureSummary() {
     return invoke<CaptureSummary | null>('capture_summary')
   }
@@ -295,6 +322,35 @@ class TauriBackend implements Backend {
 
   appVersion() {
     return getVersion()
+  }
+
+  async updateCheck() {
+    let found: Update | null
+    try {
+      found = await check()
+    } catch (error) {
+      throw updateError('error.update.check', error)
+    }
+    await this.update?.close()
+    this.update = found
+    return found && { version: found.version }
+  }
+
+  async updateInstall(onProgress: (progress: UpdateProgress) => void) {
+    const update = this.update
+    if (!update) throw updateError('error.update.install', 'no update to install')
+    const progress: UpdateProgress = { done: 0, total: null }
+    try {
+      // Windows quits here to run the installer, which starts the new version.
+      await update.downloadAndInstall((event) => {
+        if (event.event === 'Started') progress.total = event.data.contentLength ?? null
+        else if (event.event === 'Progress') progress.done += event.data.chunkLength
+        onProgress({ ...progress })
+      })
+    } catch (error) {
+      throw updateError('error.update.install', error)
+    }
+    await relaunch()
   }
 
   decodeList(captureId: number) {

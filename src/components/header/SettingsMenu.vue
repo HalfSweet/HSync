@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
-import { ref, shallowRef, useTemplateRef, watch } from 'vue'
+import { computed, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AboutDialog from '@/components/about/AboutDialog.vue'
@@ -16,10 +16,12 @@ import {
   THEMES,
   usePreferencesStore,
 } from '@/stores/preferences'
+import { useUpdateStore } from '@/stores/update'
 
 const { t } = useI18n()
 const text = useBackendText()
 const preferences = usePreferencesStore()
+const update = useUpdateStore()
 const open = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
 
@@ -29,8 +31,21 @@ onKeyStroke('Escape', () => (open.value = false))
 /** Languages are named in their own language. */
 const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US': 'English' }
 
-/** DSView's display options. */
-const BEHAVIOURS = ['centerTrigger', 'followLatest', 'quickScroll', 'keepStopped'] as const
+/** DSView's display options, and whether to look for updates. */
+const BEHAVIOURS = [
+  'centerTrigger',
+  'followLatest',
+  'quickScroll',
+  'keepStopped',
+  'checkUpdates',
+] as const
+
+/** The settings button's name, which tells of a newer release. */
+const buttonLabel = computed(() =>
+  update.available
+    ? t('header.settingsUpdate', { version: update.available.version })
+    : t('header.settings'),
+)
 
 /** Where the log file is; unknown in the browser preview, which has none. */
 const logFile = shallowRef<string | null>(null)
@@ -65,14 +80,15 @@ async function revealLog(): Promise<void> {
 <template>
   <div ref="root" class="relative">
     <button
-      class="btn w-8 justify-center p-0"
-      :aria-label="t('header.settings')"
-      :title="t('header.settings')"
+      class="relative btn w-8 justify-center p-0"
+      :aria-label="buttonLabel"
+      :title="buttonLabel"
       aria-haspopup="dialog"
       :aria-expanded="open"
       @click="open = !open"
     >
       <AppIcon name="settings" />
+      <i v-if="update.available" class="absolute top-1 right-1 size-1.5 rounded-full bg-ink" />
     </button>
     <div
       v-if="open"
@@ -176,9 +192,14 @@ async function revealLog(): Promise<void> {
           text.error(revealError)
         }}</span>
       </div>
-      <button class="btn-ghost h-[26px] self-start" @click="showAbout">
-        {{ t('settings.about') }}
-      </button>
+      <div class="flex items-center gap-2">
+        <button class="btn-ghost h-[26px]" @click="showAbout">
+          {{ t('settings.about') }}
+        </button>
+        <span v-if="update.available" class="text-caption text-ink-2 tabular-nums">{{
+          t('settings.updateAvailable', { version: update.available.version })
+        }}</span>
+      </div>
     </div>
     <AboutDialog v-if="about" @close="about = false" />
   </div>

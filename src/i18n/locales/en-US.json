@@ -68,7 +68,8 @@
       "pressEnter": "Press Enter"
     },
     "export": "Export",
-    "settings": "Settings"
+    "settings": "Settings",
+    "settingsUpdate": "Settings (version {version} available)"
   },
   "file": {
     "filter": "DSView capture",
@@ -527,7 +528,8 @@
       "centerTrigger": "Centre the view on the trigger",
       "followLatest": "Follow the latest data while capturing",
       "quickScroll": "Keep scrolling after a quick drag",
-      "keepStopped": "Show the latest data when a repeat stops"
+      "keepStopped": "Show the latest data when a repeat stops",
+      "checkUpdates": "Check for updates at startup"
     },
     "diagnostics": {
       "label": "Diagnostics",
@@ -541,7 +543,8 @@
       "file": "Write a log file",
       "reveal": "Show in folder"
     },
-    "about": "About HSync…"
+    "about": "About HSync…",
+    "updateAvailable": "Version {version} available"
   },
   "units": {
     "ns": "nanoseconds",
@@ -596,12 +599,26 @@
       "python": "The decoder runtime failed: {detail}",
       "unknown": "No decoder {id}",
       "invalid": "Decoder {id} cannot be used: {detail}"
+    },
+    "update": {
+      "check": "Could not check for updates: {detail}",
+      "install": "Could not update: {detail}"
     }
   },
   "about": {
     "title": "About HSync",
     "tagline": "A logic analyzer host",
     "version": "Version {version}",
+    "update": {
+      "check": "Check for updates",
+      "checking": "Checking for updates…",
+      "latest": "HSync is up to date",
+      "available": "Version {version} is available",
+      "install": "Download and restart",
+      "downloading": "Downloading {percent}%",
+      "downloadingUnsized": "Downloading…",
+      "restarting": "Restarting…"
+    },
     "license": "HSync is free software, released under the GPL-3.0-or-later license.",
     "credits": "Device drivers and protocol decoders are ported from DreamSourceLab’s DSView (libsigrok4DSL, libsigrokdecode4DSL, GPL); the DSLogic firmware and FPGA bitstreams ship under the MIT license; the IBM Plex fonts under the SIL OFL 1.1.",
     "close": "Close"

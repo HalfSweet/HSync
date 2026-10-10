@@ -326,6 +326,16 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve('dev')
     },
 
+    async updateCheck() {
+      // `?update=<version>` announces a release, to work on the update UI in a browser.
+      const version = new URLSearchParams(window.location.search).get('update')
+      return Promise.resolve(version ? { version } : null)
+    },
+
+    async updateInstall() {
+      return Promise.reject(uiError('error.app.unavailableInBrowser'))
+    },
+
     async systemMemory() {
       // Chromium tells a rough figure in GiB; other browsers nothing.
       const gib = (navigator as Navigator & { deviceMemory?: number }).deviceMemory

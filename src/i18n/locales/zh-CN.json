@@ -68,7 +68,8 @@
       "pressEnter": "回车查找"
     },
     "export": "导出",
-    "settings": "设置"
+    "settings": "设置",
+    "settingsUpdate": "设置（有新版本 {version}）"
   },
   "file": {
     "filter": "DSView 采集文件",
@@ -527,7 +528,8 @@
       "centerTrigger": "触发位置自动居中显示",
       "followLatest": "采集时自动滚动到最新数据",
       "quickScroll": "快速拖动后波形继续滚动",
-      "keepStopped": "重复模式下停止后显示最新数据"
+      "keepStopped": "重复模式下停止后显示最新数据",
+      "checkUpdates": "启动时检查更新"
     },
     "diagnostics": {
       "label": "诊断",
@@ -541,7 +543,8 @@
       "file": "写入日志文件",
       "reveal": "在文件夹中显示"
     },
-    "about": "关于 HSync…"
+    "about": "关于 HSync…",
+    "updateAvailable": "有新版本 {version}"
   },
   "units": {
     "ns": "纳秒",
@@ -596,12 +599,26 @@
       "python": "解码器运行环境出错：{detail}",
       "unknown": "没有解码器 {id}",
       "invalid": "解码器 {id} 无法使用：{detail}"
+    },
+    "update": {
+      "check": "检查更新失败：{detail}",
+      "install": "更新失败：{detail}"
     }
   },
   "about": {
     "title": "关于 HSync",
     "tagline": "通用逻辑分析仪上位机",
     "version": "版本 {version}",
+    "update": {
+      "check": "检查更新",
+      "checking": "正在检查更新…",
+      "latest": "已是最新版本",
+      "available": "可更新到 {version}",
+      "install": "下载并重启",
+      "downloading": "正在下载 {percent}%",
+      "downloadingUnsized": "正在下载…",
+      "restarting": "正在重启…"
+    },
     "license": "HSync 是自由软件，以 GPL-3.0-or-later 许可发布。",
     "credits": "设备驱动与协议解码移植自 DreamSourceLab 的 DSView（libsigrok4DSL、libsigrokdecode4DSL，GPL）；DSLogic 固件与 FPGA 位流以 MIT 许可随附；界面字体 IBM Plex 以 SIL OFL 1.1 许可。",
     "close": "关闭"

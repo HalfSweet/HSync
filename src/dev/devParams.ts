@@ -8,6 +8,7 @@
  *   &trig=0:fall,1:high  trigger conditions by channel index
  *   &autocapture=1       start a capture once a device is open
  *   &stream=0            open the data stream on decoder 0  &streamMode=hex
+ *   &update=0.3.0        the mock backend announces this release, found at startup
  */
 import { nextTick, watch } from 'vue'
 
@@ -17,6 +18,7 @@ import { useChannelsStore } from '@/stores/channels'
 import { useDeviceStore } from '@/stores/device'
 import { useStreamStore } from '@/stores/stream'
 import { useTriggerStore } from '@/stores/trigger'
+import { useUpdateStore } from '@/stores/update'
 import { DENSITIES, LOCALE_PREFERENCES, THEMES, usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 
@@ -44,6 +46,8 @@ export function applyDevParams(search = window.location.search): void {
   if (density) preferences.density = density
   const locale = oneOf(LOCALE_PREFERENCES, params.get('lang'))
   if (locale) preferences.locale = locale
+  // Development builds skip the check at startup; this one finds what the mock announces.
+  if (params.has('update')) void useUpdateStore().check(true)
 
   for (const pair of (params.get('trig') ?? '').split(',').filter(Boolean)) {
     const [index, condition] = pair.split(':')
