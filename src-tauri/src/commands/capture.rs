@@ -1,15 +1,22 @@
 //! Opening captures and querying their samples.
 
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use hsync_core::{ChannelIndex, UiError};
-use hsync_session::{BinsRequest, CaptureSummary, Direction, PulseInfo, encode_bins};
+use hsync_session::{
+    BinsRequest, CaptureRequest, CaptureSummary, Direction, EventSink, PulseInfo, SessionEvent,
+    encode_bins,
+};
 use tauri::ipc::Response;
 use tauri::path::BaseDirectory;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
-use super::{CommandResult, task_failed};
+use super::{CommandResult, blocking};
 use crate::state::AppState;
+
+/// Event with the [`hsync_session::LiveStatus`] of a capture taken with a device.
+pub const LIVE_EVENT: &str = "capture://live";
 
 /// Location of the demo capture among the bundled resources.
 const DEMO_CAPTURE: &str = "demo/protocol.dsl";
@@ -46,13 +53,40 @@ async fn open(
     + Send
     + 'static,
 ) -> CommandResult<CaptureSummary> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let state = app.state::<AppState>();
-        let mut workspace = state.workspace.lock();
-        load(&mut workspace).map_err(|error| UiError::from(&error))
+    blocking(app, move |state| {
+        if state.instrument.lock().is_capturing() {
+            return Err(hsync_session::SessionError::Busy);
+        }
+        load(&mut state.workspace.lock())
     })
     .await
-    .map_err(task_failed)?
+}
+
+/// Starts a capture on the open device. The new capture replaces the open one at once and
+/// fills while [`LIVE_EVENT`]s report its progress.
+#[tauri::command]
+pub async fn capture_start(
+    app: AppHandle,
+    request: CaptureRequest,
+) -> CommandResult<CaptureSummary> {
+    let emitter = app.clone();
+    let events: EventSink = Arc::new(move |event| match event {
+        SessionEvent::Live(status) => {
+            let _ = emitter.emit(LIVE_EVENT, status);
+        }
+    });
+    blocking(app, move |state| {
+        let mut instrument = state.instrument.lock();
+        let mut workspace = state.workspace.lock();
+        instrument.start(&mut workspace, request, events)
+    })
+    .await
+}
+
+/// Stops the running capture; it ends with what it captured so far.
+#[tauri::command]
+pub fn capture_stop(state: State<'_, AppState>) {
+    state.instrument.lock().stop();
 }
 
 /// Summarises channels over a sample range in the binary layout of DESIGN.md §5.4.
