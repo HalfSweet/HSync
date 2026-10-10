@@ -382,6 +382,7 @@ impl Instrument {
             source,
             LogicCapture::new(samplerate, channels),
             request.hold,
+            open.device.preset(),
         );
         let (summary, capture) = (live.summary, live.samples);
         let acquisition = Arc::new(Mutex::new(Some(acquisition)));

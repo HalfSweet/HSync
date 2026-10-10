@@ -113,6 +113,29 @@ fn captures_keep_the_decoders_and_decode_when_complete() {
 }
 
 #[test]
+fn a_first_demo_capture_brings_the_decoders_of_the_protocol_capture() {
+    let (mut workspace, events) = workspace();
+    let mut instrument = Instrument::new(DeviceManager::new(vec![Arc::new(DemoDriver::new(
+        Some(demo_path()),
+    ))]));
+    instrument.scan();
+    instrument.open("virtual-demo").expect("demo device");
+    let sink = Arc::new(|_event: SessionEvent| {});
+    let summary = instrument
+        .start(&mut workspace, CaptureRequest::default(), sink)
+        .expect("start");
+    assert_eq!(summary.channels[1].name, "SCL");
+    assert!(
+        summary.decoders.is_some(),
+        "the protocol decoders come along"
+    );
+    decoded(&events, summary.id, 4);
+    let statuses = workspace.decoding(summary.id).expect("decoders").statuses();
+    assert!(statuses.iter().all(|s| s.state == DecodeState::Done));
+    assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(6));
+}
+
+#[test]
 fn replaces_the_decoders_and_decodes_again() {
     let (mut workspace, events) = workspace();
     let opened = workspace.open_demo(&demo_path()).expect("demo");
