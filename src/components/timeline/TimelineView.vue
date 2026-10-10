@@ -22,6 +22,7 @@ import type { FrameDescriptor, RenderTokens, TraceDraw } from '@/render/types'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDecodeStore } from '@/stores/decode'
+import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
@@ -49,6 +50,7 @@ const capture = useCaptureStore()
 const channels = useChannelsStore()
 const decode = useDecodeStore()
 const stream = useStreamStore()
+const finder = useSearchStore()
 const preferences = usePreferencesStore()
 const view = useViewStore()
 const metrics = useRowMetrics()
@@ -83,15 +85,28 @@ function pickBlock(block: { id: string; start: number; end: number }, decoder: n
   stream.select(decoder)
 }
 
-/** The data stream row under the pointer, banded across the timeline. */
-const hotBand = computed(() => {
-  const hot = stream.hot
-  if (!hot) return null
+/** `start..end` in track pixels, clipped to the view and at least 2 px wide. */
+function bandOf(span: { start: number; end: number } | null) {
+  if (!span) return null
   const { start, samplesPerPixel, width } = view.viewport
-  const left = (hot.start - start) / samplesPerPixel
-  const right = (hot.end - start) / samplesPerPixel
+  const left = (span.start - start) / samplesPerPixel
+  const right = (span.end - start) / samplesPerPixel
   if (right < 0 || left > width) return null
   return { left: Math.max(0, left), width: Math.max(2, Math.min(width, right) - Math.max(0, left)) }
+}
+
+/** The data stream row under the pointer, banded across the timeline. */
+const hotBand = computed(() => bandOf(stream.hot))
+
+/** The search hit shown, or where the level pattern was found. */
+const findBand = computed(() => {
+  const mark = finder.mark
+  const band = bandOf(mark)
+  if (!band || !mark) return null
+  // A pattern marks one sample: a line centred on it.
+  return mark.start === mark.end
+    ? { ...band, left: band.left - 1, line: true }
+    : { ...band, line: false }
 })
 
 /** The I²C bytes lane names the target most transfers in view address. */
@@ -469,6 +484,21 @@ function onWheel(event: WheelEvent): void {
           <div class="sticky left-0 z-[3] w-(--lab) flex-none border-r border-line bg-chrome" />
         </div>
 
+        <div
+          v-if="findBand"
+          class="pointer-events-none absolute inset-y-0 right-0 left-(--lab) z-[2] overflow-hidden"
+          aria-hidden="true"
+        >
+          <div
+            class="absolute inset-y-0"
+            :class="
+              findBand.line
+                ? 'bg-ink'
+                : 'bg-[color-mix(in_srgb,var(--find-strong)_45%,transparent)] shadow-[inset_1px_0_0_var(--ink-3),inset_-1px_0_0_var(--ink-3)]'
+            "
+            :style="{ left: `${findBand.left}px`, width: `${findBand.width}px` }"
+          />
+        </div>
         <div
           v-if="hotBand"
           class="pointer-events-none absolute inset-y-0 right-0 left-(--lab) z-[2]"

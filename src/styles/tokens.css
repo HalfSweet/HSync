@@ -22,6 +22,9 @@
   --veil: rgb(23 27 31 / 0.05);
   --hover: rgb(23 27 31 / 0.06);
   --sel: rgb(23 27 31 / 0.12);
+  /* Search hits, and the one shown */
+  --find: #fbf0c4;
+  --find-strong: #f3d36a;
   /* Problems the user must notice: failed captures, lost data, unplugged devices */
   --alert: #b3261e;
   --alert-wash: #fcebe9;
@@ -97,6 +100,8 @@
   --veil: rgb(233 237 240 / 0.06);
   --hover: rgb(233 237 240 / 0.08);
   --sel: rgb(233 237 240 / 0.18);
+  --find: #3a3215;
+  --find-strong: #6e5b16;
   --alert: #ff8a80;
   --alert-wash: #3a1d1b;
 

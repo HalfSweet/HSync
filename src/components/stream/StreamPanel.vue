@@ -9,6 +9,7 @@ import { getBackend } from '@/ipc/backend'
 import type { StreamRow } from '@/ipc/bindings/StreamRow'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
+import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
 import type { BusKind } from '@/timeline/groups'
@@ -19,6 +20,7 @@ const capture = useCaptureStore()
 const decode = useDecodeStore()
 const stream = useStreamStore()
 const view = useViewStore()
+const finder = useSearchStore()
 const { copy, copied } = useClipboard({ legacy: true })
 
 const ROW = 20
@@ -119,6 +121,34 @@ const header = computed(() => {
   }
 })
 
+/** Search hits of the decoder listed, in time order. */
+const decoderHits = computed(() =>
+  (finder.result?.hits ?? []).filter((hit) => hit.decoder === stream.decoder),
+)
+
+/** Whether `row` lists a search hit: `current` for the one shown. */
+function findOf(row: StreamRow): 'current' | 'hit' | null {
+  if (row.type === 'gap' || row.type === 'note') return null
+  const hits = decoderHits.value
+  const line = 'line' in row ? row.line : null
+  let lo = 0
+  let hi = hits.length
+  while (lo < hi) {
+    const mid = (lo + hi) >>> 1
+    if ((hits[mid]?.start ?? 0) < row.start) lo = mid + 1
+    else hi = mid
+  }
+  let found: 'hit' | null = null
+  for (let at = lo; at < hits.length; at++) {
+    const hit = hits[at]
+    if (!hit || hit.start >= row.end) break
+    if (hit.line !== line) continue
+    if (hit === finder.hit) return 'current'
+    found = 'hit'
+  }
+  return found
+}
+
 // Virtual list: only the rows in sight, and a few more.
 const visible = computed(() => {
   const first = Math.max(0, Math.floor(scrollTop.value / ROW) - OVERSCAN)
@@ -126,10 +156,13 @@ const visible = computed(() => {
     stream.total,
     Math.ceil((scrollTop.value + listHeight.value) / ROW) + OVERSCAN,
   )
-  const rows: { index: number; row: StreamRow | undefined }[] = []
+  const rows: { index: number; row: StreamRow | undefined; find: 'current' | 'hit' | null }[] = []
   // Reading `pages` makes the list update as pages arrive.
   void stream.pages
-  for (let index = first; index < last; index++) rows.push({ index, row: stream.row(index) })
+  for (let index = first; index < last; index++) {
+    const row = stream.row(index)
+    rows.push({ index, row, find: row ? findOf(row) : null })
+  }
   return rows
 })
 
@@ -281,6 +314,29 @@ watch(
     clearTimeout(settle)
     if (!segment || stream.onlySegment) return
     settle = setTimeout(() => void scrollToSample(segment[0]), 250)
+  },
+)
+
+// The search hit shown scrolls into view, one row below the top, once its decoder is listed.
+const pendingRow = shallowRef<number | null>(null)
+watch(
+  () => finder.hit,
+  (hit) => (pendingRow.value = hit?.row ?? null),
+  { immediate: true },
+)
+watch(
+  () => [pendingRow.value, stream.total, stream.decoder, stream.onlySegment] as const,
+  async ([row, total, decoder, onlySegment]) => {
+    const hit = finder.hit
+    if (row === null || !hit || hit.decoder !== decoder || onlySegment || total <= row) return
+    pendingRow.value = null
+    await nextTick()
+    const box = list.value
+    if (!box) return
+    // Rows start below the sticky header, which is one row high.
+    const top = (row + 1) * ROW
+    const shown = top >= box.scrollTop + ROW && top + ROW <= box.scrollTop + box.clientHeight
+    if (!shown) box.scrollTo({ top: Math.max(0, (row - 1) * ROW) })
   },
 )
 
@@ -444,12 +500,16 @@ function onGripUp(): void {
         <span v-if="header.chars" class="font-sans">{{ t('stream.column.characters') }}</span>
       </div>
       <div class="relative" :style="{ height: `${stream.total * ROW}px` }">
-        <template v-for="{ index, row } in visible" :key="index">
+        <template v-for="{ index, row, find } in visible" :key="index">
           <div
             v-if="row"
             class="absolute inset-x-0 flex h-5 gap-4 px-4"
             :class="[
-              inSegment(row) && 'bg-sel',
+              find === 'current'
+                ? 'bg-find-strong'
+                : find === 'hit'
+                  ? 'bg-find'
+                  : inSegment(row) && 'bg-sel',
               row.type !== 'gap' && row.type !== 'note' && 'cursor-pointer hover:bg-hover',
             ]"
             :style="{ top: `${index * ROW}px` }"

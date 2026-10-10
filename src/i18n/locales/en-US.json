@@ -51,7 +51,15 @@
     },
     "search": {
       "aria": "Search decoded data",
-      "placeholder": "Search values or text, e.g. 4F, HOST"
+      "placeholder": "Search values or text, e.g. 4F, HOST",
+      "tip": "Decoded data: hex (4F, 0x4F, 4F 32) or text (HOST). Level pattern: D3=R D5=1 (0 low, 1 high, R rising, F falling, C either edge, X any). Enter for the next, Shift+Enter for the previous, Esc to clear",
+      "none": "No matches",
+      "count": "{count} found",
+      "position": "{current} of {count}",
+      "unknownChannel": "No channel {name}",
+      "noCondition": "Nothing to find",
+      "noMore": "No more",
+      "pressEnter": "Press Enter"
     },
     "export": "Export",
     "settings": "Settings"

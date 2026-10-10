@@ -8,8 +8,10 @@ import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
 import { useFileActions } from '@/composables/useFileActions'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
+import { useSearchStore } from '@/stores/search'
 import { summarizeTriggers } from '@/timeline/triggerSummary'
 import { isCommand } from '@/utils/keys'
+import { formatTime } from '@/utils/units'
 
 import AcquisitionMenu from './AcquisitionMenu.vue'
 import CaptureButton from './CaptureButton.vue'
@@ -20,6 +22,7 @@ import SettingsMenu from './SettingsMenu.vue'
 const { t } = useI18n()
 const capture = useCaptureStore()
 const channels = useChannelsStore()
+const finder = useSearchStore()
 const search = useTemplateRef<HTMLInputElement>('search')
 
 const trigger = computed(() => summarizeTriggers(channels.armed))
@@ -45,6 +48,43 @@ onKeyStroke(
     void (isCommand(event, 'o') ? files.open() : files.save())
   },
 )
+
+/** What the search found, at the right end of the box. */
+const searchNote = computed<{ text: string; alert: boolean } | null>(() => {
+  const note = (text: string, alert = false) => ({ text, alert })
+  if (finder.kind === 'decode') {
+    const result = finder.result
+    if (!result) return null
+    const total = result.hits.length
+    if (total === 0) return note(t('header.search.none'))
+    const count = result.truncated ? `${total}+` : String(total)
+    return finder.current === null
+      ? note(t('header.search.count', { count }))
+      : note(t('header.search.position', { current: finder.current + 1, count }))
+  }
+  if (finder.kind === 'pattern') {
+    const parsed = finder.pattern
+    if (parsed?.kind === 'unknownChannel') {
+      return note(t('header.search.unknownChannel', { name: parsed.name }), true)
+    }
+    if (parsed?.conditions.length === 0) return note(t('header.search.noCondition'))
+    if (finder.exhausted) return note(t('header.search.noMore'))
+    if (finder.found !== null) return note(formatTime(capture.timeOf(finder.found), 4))
+    return note(t('header.search.pressEnter'))
+  }
+  return null
+})
+
+function onSearchKey(event: KeyboardEvent): void {
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    void finder.step(!event.shiftKey)
+  } else if (event.key === 'Escape') {
+    event.preventDefault()
+    finder.clear()
+    search.value?.blur()
+  }
+}
 
 // `/` focuses the search box from anywhere but text fields (DESIGN.md §9.8).
 onKeyStroke('/', (event) => {
@@ -98,12 +138,23 @@ onKeyStroke('/', (event) => {
       <AppIcon name="search" />
       <input
         ref="search"
+        v-model="finder.query"
         type="search"
         class="min-w-0 flex-1 border-0 bg-transparent p-0 text-body text-ink outline-none"
         :aria-label="t('header.search.aria')"
         :placeholder="t('header.search.placeholder')"
+        :title="t('header.search.tip')"
+        @keydown="onSearchKey"
       />
+      <span
+        v-if="searchNote"
+        class="flex-none text-caption whitespace-nowrap tabular-nums"
+        :class="searchNote.alert ? 'text-alert' : 'text-ink-3'"
+        aria-live="polite"
+        >{{ searchNote.text }}</span
+      >
       <kbd
+        v-else
         class="min-w-5 flex-none rounded-4 border border-line-2 px-1 text-center font-sans text-caption leading-[18px] text-ink-3"
       >
         /

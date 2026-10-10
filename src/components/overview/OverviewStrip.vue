@@ -7,6 +7,7 @@ import { getBackend } from '@/ipc/backend'
 import type { DecoderLanes } from '@/ipc/bindings/DecoderLanes'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
+import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
 import { overviewTicks } from '@/timeline/ticks'
@@ -20,12 +21,20 @@ const { width } = useElementSize(strip)
 
 const decode = useDecodeStore()
 const stream = useStreamStore()
+const finder = useSearchStore()
 
 /** The data stream row under the pointer. */
 const hot = computed(() => {
   const row = stream.hot
   if (!row) return null
   return { left: percent(row.start), width: percent(row.end) - percent(row.start) }
+})
+
+/** The search hit shown, or where the level pattern was found. */
+const found = computed(() => {
+  const mark = finder.mark
+  if (!mark) return null
+  return { left: percent(mark.start), width: percent(mark.end) - percent(mark.start) }
 })
 
 const percent = (sample: number) => (capture.extent > 0 ? (sample / capture.extent) * 100 : 0)
@@ -161,6 +170,12 @@ function onWheel(event: WheelEvent): void {
         class="pointer-events-none absolute h-[5px] rounded-[1.5px] opacity-62"
         :class="band.color"
         :style="{ top: `${band.top}px`, left: `${band.left}%`, width: `${band.width}%` }"
+        aria-hidden="true"
+      />
+      <i
+        v-if="found"
+        class="pointer-events-none absolute top-0 bottom-[15px] z-[1] -ml-px bg-find-strong shadow-[inset_1px_0_0_var(--ink),inset_-1px_0_0_var(--ink)]"
+        :style="{ left: `${found.left}%`, width: `max(${found.width}%, 3px)` }"
         aria-hidden="true"
       />
       <i

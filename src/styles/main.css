@@ -49,6 +49,8 @@
   --color-veil: var(--veil);
   --color-hover: var(--hover);
   --color-sel: var(--sel);
+  --color-find: var(--find);
+  --color-find-strong: var(--find-strong);
   --color-alert: var(--alert);
   --color-alert-wash: var(--alert-wash);
 

@@ -51,7 +51,15 @@
     },
     "search": {
       "aria": "搜索解码结果",
-      "placeholder": "搜索数值或文本，如 4F、HOST"
+      "placeholder": "搜索数值或文本，如 4F、HOST",
+      "tip": "解码结果：十六进制（4F、0x4F、4F 32）或文本（HOST）。电平模式：D3=R D5=1（0 低、1 高、R 上升沿、F 下降沿、C 任意沿、X 不关心）。回车下一处，Shift+回车上一处，Esc 清空",
+      "none": "无结果",
+      "count": "{count} 处",
+      "position": "{current}/{count}",
+      "unknownChannel": "没有通道 {name}",
+      "noCondition": "没有要找的条件",
+      "noMore": "没有更多",
+      "pressEnter": "回车查找"
     },
     "export": "导出",
     "settings": "设置"
