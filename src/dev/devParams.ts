@@ -6,12 +6,14 @@
  *   &view=1860-2600      µs after the trigger shown on the timeline
  *   &segment=1910-2450   µs after the trigger marked as A–B
  *   &trig=0:fall,1:high  trigger conditions by channel index
+ *   &autocapture=1       start a capture once a device is open
  */
 import { nextTick, watch } from 'vue'
 
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
+import { useDeviceStore } from '@/stores/device'
 import { DENSITIES, LOCALE_PREFERENCES, THEMES, usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 
@@ -44,6 +46,23 @@ export function applyDevParams(search = window.location.search): void {
     const [index, condition] = pair.split(':')
     const valid = oneOf(CONDITIONS, condition ?? null)
     if (valid && index !== undefined) channels.setTrigger(Number(index), valid)
+  }
+
+  if (params.get('autocapture') === '1') {
+    const device = useDeviceStore()
+    const stop = watch(
+      () => device.state,
+      (state) => {
+        if (!state) return
+        void nextTick(() => stop())
+        void capture.start({
+          triggers: channels.armed.map(({ index, condition }) => [index, condition]),
+          triggerPosition: channels.triggerPosition,
+          instant: false,
+        })
+      },
+      { immediate: true },
+    )
   }
 
   const shown = range(params.get('view'))
