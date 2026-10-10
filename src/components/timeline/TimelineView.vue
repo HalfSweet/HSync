@@ -505,6 +505,18 @@ useEventListener(document, 'keydown', (event: KeyboardEvent) => {
   event.preventDefault()
 })
 
+// Trackpads send several wheel events a frame: gather them and move the view once per frame.
+const wheel = { pan: 0, zoom: 1, anchor: 0, frame: 0 }
+
+function applyWheel(): void {
+  wheel.frame = 0
+  if (wheel.zoom !== 1) view.zoom(wheel.zoom, wheel.anchor)
+  if (wheel.pan !== 0) view.pan(wheel.pan)
+  wheel.zoom = 1
+  wheel.pan = 0
+}
+onBeforeUnmount(() => cancelAnimationFrame(wheel.frame))
+
 function onWheel(event: WheelEvent): void {
   stopFling()
   const rows = rowsElement.value?.getBoundingClientRect()
@@ -516,11 +528,15 @@ function onWheel(event: WheelEvent): void {
   const scale = event.deltaMode === 1 ? 16 : 1
   if (event.ctrlKey || event.metaKey) {
     event.preventDefault()
-    view.zoom(Math.exp(-event.deltaY * scale * 0.002), x)
+    wheel.zoom *= Math.exp(-event.deltaY * scale * 0.002)
+    wheel.anchor = x
   } else if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
     event.preventDefault()
-    view.pan((event.shiftKey && event.deltaX === 0 ? event.deltaY : event.deltaX) * scale)
+    wheel.pan += (event.shiftKey && event.deltaX === 0 ? event.deltaY : event.deltaX) * scale
+  } else {
+    return
   }
+  wheel.frame ||= requestAnimationFrame(applyWheel)
 }
 </script>
 
