@@ -72,6 +72,17 @@ impl ChunkedWords {
         self.chunks.len()
     }
 
+    /// Drops the first `count` chunks, which must be full; word `i` becomes word
+    /// `i - count · CHUNK_WORDS`.
+    pub(crate) fn drop_front_chunks(&mut self, count: usize) {
+        debug_assert!(
+            count * CHUNK_WORDS <= self.len,
+            "only full chunks are dropped"
+        );
+        self.chunks.drain(..count.min(self.chunks.len()));
+        self.len = self.len.saturating_sub(count * CHUNK_WORDS);
+    }
+
     pub(crate) fn truncate(&mut self, len: usize) {
         if len >= self.len {
             return;

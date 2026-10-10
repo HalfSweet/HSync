@@ -72,6 +72,20 @@ impl Model {
         count
     }
 
+    /// The samples from `from` on.
+    fn after(&self, from: u64) -> Self {
+        Self {
+            first: self.sample(from),
+            edges: self
+                .edges
+                .iter()
+                .filter(|&&edge| edge > from)
+                .map(|&edge| edge - from)
+                .collect(),
+            len: self.len - from,
+        }
+    }
+
     /// Whole words of the samples, padded with the last level.
     fn words(&self) -> Vec<u64> {
         let count = self.len.div_ceil(64) as usize;
@@ -285,4 +299,148 @@ proptest! {
         let counted = data.count_edges(0, to - from);
         prop_assert_eq!(counted.rising + counted.falling, inside);
     }
+}
+
+/// Every query of `channel` against `model`, probing `probes` and the ends.
+fn assert_matches(channel: &ChannelData, model: &Model, probes: &[u64]) {
+    assert_eq!(channel.len(), model.len);
+    let ends = [0, model.len.saturating_sub(1)];
+    for &index in probes
+        .iter()
+        .map(|probe| probe % model.len)
+        .chain(ends)
+        .collect::<Vec<_>>()
+        .iter()
+    {
+        assert_eq!(channel.sample(index), model.sample(index), "sample {index}");
+        assert_eq!(
+            channel.next_change(index),
+            model.next_change(index),
+            "next {index}"
+        );
+        assert_eq!(
+            channel.prev_change(index),
+            model.prev_change(index),
+            "prev {index}"
+        );
+    }
+    assert_eq!(
+        channel.count_edges(0, model.len),
+        model.count_edges(0, model.len)
+    );
+    let bins = 97.min(model.len as usize);
+    assert_eq!(
+        channel.bins(0, model.len, bins),
+        model.bins(0, model.len, bins)
+    );
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    #[test]
+    fn dropping_the_front_keeps_the_rest(
+        runs in runs(),
+        drops in prop::collection::vec(0.0f64..0.6, 1..4),
+        appended in prop::collection::vec(any::<u64>(), 0..40),
+        probes in prop::collection::vec(any::<u64>(), 24),
+    ) {
+        let model = Model::from_runs(&runs);
+        // Whole words only, so more can be appended afterwards.
+        let words = model.words();
+        let mut channel = ChannelData::new();
+        channel.append_words(&words);
+        // `words` pads the last word with the last level, which adds no edges.
+        let mut expected = Model { len: words.len() as u64 * 64, ..model };
+        for share in drops {
+            let samples = ((expected.len as f64 * share) as u64) / 64 * 64;
+            channel.drop_front(samples);
+            expected = expected.after(samples);
+        }
+        prop_assume!(expected.len > 0);
+        assert_matches(&channel, &expected, &probes);
+
+        // Appending goes on after the dropped samples.
+        channel.append_words(&appended);
+        let mut grown = ChannelData::new();
+        for index in 0..channel.word_count() - appended.len() {
+            grown.append_words(&[channel.word(index)]);
+        }
+        grown.append_words(&appended);
+        prop_assert_eq!(channel.len(), grown.len());
+        for index in probes.iter().map(|probe| probe % grown.len()) {
+            prop_assert_eq!(channel.sample(index), grown.sample(index));
+            prop_assert_eq!(channel.next_change(index), grown.next_change(index));
+            prop_assert_eq!(channel.prev_change(index), grown.prev_change(index));
+        }
+
+        // Compacting changes nothing but the storage.
+        let mut compact = channel.clone();
+        compact.compact();
+        prop_assert!(compact.is_compact());
+        prop_assert_eq!(compact.len(), channel.len());
+        for index in probes.iter().map(|probe| probe % grown.len()) {
+            prop_assert_eq!(compact.sample(index), channel.sample(index));
+            prop_assert_eq!(compact.prev_change(index), channel.prev_change(index));
+        }
+    }
+}
+
+#[test]
+fn dropping_whole_chunks_frees_them() {
+    // Three chunks of a busy signal, then a burst after a quiet stretch.
+    let busy: Vec<(bool, u64)> = (0..3 * CHUNK_SAMPLES / 4096)
+        .map(|run| (run % 2 == 0, 4096))
+        .chain([(true, 1000), (false, 7), (true, 50_000)])
+        .collect();
+    let model = Model::from_runs(&busy);
+    let mut channel = model.channel(usize::MAX);
+    assert!(channel.heap_bytes() >= 3 * 2 * 1024 * 1024);
+
+    let drop = 2 * CHUNK_SAMPLES + 64 * 100;
+    channel.drop_front(drop);
+    assert!(!channel.is_compact());
+    assert!(
+        channel.heap_bytes() <= 2 * 2 * 1024 * 1024,
+        "{} bytes left",
+        channel.heap_bytes()
+    );
+    let rest = model.after(drop);
+    assert_matches(
+        &channel,
+        &rest,
+        &[1, 4095, 4096, CHUNK_SAMPLES / 2, CHUNK_SAMPLES - 6400],
+    );
+    let pulse = channel.pulse(10).expect("in range");
+    assert_eq!((pulse.start, pulse.start_is_edge), (0, false));
+
+    // A whole number of chunks dropped later lines the storage up by itself.
+    channel.drop_front(CHUNK_SAMPLES - 64 * 100);
+    assert!(channel.is_compact());
+    assert_matches(
+        &channel,
+        &model.after(3 * CHUNK_SAMPLES),
+        &[3, 900, 1006, 1007, 20_000],
+    );
+}
+
+#[test]
+fn captures_drop_their_oldest_samples_and_trigger() {
+    let model = Model::from_runs(&[(false, 640), (true, 640), (false, 640)]);
+    let mut capture = LogicCapture::new(1_000_000, [0, 2]);
+    for index in [0, 2] {
+        *capture.channel_mut(index).expect("channel") = model.channel(usize::MAX);
+    }
+    capture.set_trigger(Some(700), Some(1_700_000_000_000));
+    capture.drop_front(640);
+    assert_eq!(capture.len(), 1280);
+    assert_eq!(capture.trigger_sample(), Some(60));
+    assert!(capture.channel(2).expect("channel").sample(0));
+    capture.drop_front(128);
+    assert_eq!(capture.trigger_sample(), None);
+    capture.compact();
+    assert_eq!(
+        capture.channel(0).expect("channel").next_change(0),
+        Some(512)
+    );
 }

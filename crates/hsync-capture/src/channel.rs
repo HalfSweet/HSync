@@ -44,11 +44,14 @@ pub struct Pulse {
 /// Bit-packed samples of one channel with summaries for fast searches.
 ///
 /// Sample `i` is bit `i % 64` of word `i / 64`. Words are appended whole; [`Self::truncate`]
-/// can end the channel inside a word.
+/// can end the channel inside a word, and [`Self::drop_front`] can forget whole words at its
+/// start, as loop captures do.
 #[derive(Debug, Default, Clone)]
 pub struct ChannelData {
     words: ChunkedWords,
     summary: Summary,
+    /// Stored words before sample 0: dropped from the front, held until their chunk goes.
+    head: usize,
     len: SampleIndex,
 }
 
@@ -107,7 +110,7 @@ impl ChannelData {
         if len >= self.len {
             return;
         }
-        let words = usize::try_from(len.div_ceil(64)).unwrap_or(usize::MAX);
+        let words = self.head + usize::try_from(len.div_ceil(64)).unwrap_or(usize::MAX);
         self.words.truncate(words);
         self.len = len;
         let valid = match len % 64 {
@@ -127,12 +130,17 @@ impl ChannelData {
     /// Panics if `index` is out of range.
     pub fn sample(&self, index: SampleIndex) -> bool {
         assert!(index < self.len, "sample {index} out of {}", self.len);
-        self.words.get((index / 64) as usize) >> (index % 64) & 1 != 0
+        self.stored((index / 64) as usize) >> (index % 64) & 1 != 0
+    }
+
+    /// Word `index` counted from sample 0, as stored.
+    fn stored(&self, index: usize) -> u64 {
+        self.words.get(self.head + index)
     }
 
     /// Number of 64-sample words, counting a partly filled last one.
     pub fn word_count(&self) -> usize {
-        self.words.len()
+        self.words.len() - self.head
     }
 
     /// Word `index`: sample `64 · index + j` is bit `j`. Bits past the end of the channel are
@@ -143,11 +151,11 @@ impl ChannelData {
     /// Panics if `index` is out of range.
     pub fn word(&self, index: usize) -> u64 {
         assert!(
-            index < self.words.len(),
+            index < self.word_count(),
             "word {index} out of {}",
-            self.words.len()
+            self.word_count()
         );
-        self.words.get(index)
+        self.stored(index)
     }
 
     /// Mask of the valid samples in word `word`.
@@ -170,12 +178,12 @@ impl ChannelData {
         } else {
             !0u64 << (index % 64 + 1)
         };
-        let differing = flip(self.words.get(word)) & after & self.valid_mask(word);
+        let differing = flip(self.stored(word)) & after & self.valid_mask(word);
         if differing != 0 {
             return Some(word as u64 * 64 + u64::from(differing.trailing_zeros()));
         }
-        let next = self.summary.next_word_not(word + 1, level)?;
-        let differing = flip(self.words.get(next)) & self.valid_mask(next);
+        let next = self.summary.next_word_not(self.head + word + 1, level)? - self.head;
+        let differing = flip(self.stored(next)) & self.valid_mask(next);
         debug_assert_ne!(differing, 0, "summary points at a uniform word");
         Some(next as u64 * 64 + u64::from(differing.trailing_zeros()))
     }
@@ -189,12 +197,16 @@ impl ChannelData {
         let flip = |word: u64| if level { !word } else { word };
         let word = (index / 64) as usize;
         let before = (1u64 << (index % 64)) - 1;
-        let differing = flip(self.words.get(word)) & before;
+        let differing = flip(self.stored(word)) & before;
         if differing != 0 {
             return Some(word as u64 * 64 + 63 - u64::from(differing.leading_zeros()));
         }
-        let prev = self.summary.prev_word_not(word.checked_sub(1)?, level)?;
-        let differing = flip(self.words.get(prev)) & self.valid_mask(prev);
+        // Words before sample 0 that are still stored do not count.
+        let prev = self
+            .summary
+            .prev_word_not(self.head + word.checked_sub(1)?, level)?
+            .checked_sub(self.head)?;
+        let differing = flip(self.stored(prev)) & self.valid_mask(prev);
         debug_assert_ne!(differing, 0, "summary points at a uniform word");
         Some(prev as u64 * 64 + 63 - u64::from(differing.leading_zeros()))
     }
@@ -278,7 +290,7 @@ impl ChannelData {
             let word = (at / 64) as usize;
             let bit = at % 64;
             // Count every transition left in this word in one go.
-            let value = self.words.get(word);
+            let value = self.stored(word);
             let previous = (value << 1) | u64::from(level);
             let transitions = (value ^ previous) & (!0u64 << bit) & self.valid_mask(word);
             let limit = if end / 64 == word as u64 {
@@ -296,13 +308,63 @@ impl ChannelData {
         count
     }
 
+    /// Forgets the first `samples` samples, a multiple of 64 within the channel: sample `i`
+    /// becomes sample `i - samples`. Their memory goes once a whole chunk of them has.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `samples` is not a multiple of 64 or exceeds the channel.
+    pub fn drop_front(&mut self, samples: SampleIndex) {
+        assert!(
+            samples.is_multiple_of(64) && samples <= self.len,
+            "cannot drop {samples} of {} samples",
+            self.len
+        );
+        self.head += usize::try_from(samples / 64).unwrap_or(usize::MAX);
+        self.len -= samples;
+        let chunks = self.head / CHUNK_WORDS;
+        if chunks > 0 {
+            self.words.drop_front_chunks(chunks);
+            self.summary.drop_front_chunks(chunks);
+            self.head -= chunks * CHUNK_WORDS;
+        }
+    }
+
+    /// Whether the chunks line up with the samples, as [`Self::chunk`] needs.
+    pub fn is_compact(&self) -> bool {
+        self.head == 0
+    }
+
+    /// Lines the chunks up with the samples again after [`Self::drop_front`], copying them.
+    pub fn compact(&mut self) {
+        if self.head == 0 {
+            return;
+        }
+        const BATCH: usize = 1 << 16;
+        let words = self.word_count();
+        let mut fresh = Self::new();
+        let mut batch = Vec::with_capacity(BATCH.min(words));
+        for first in (0..words).step_by(BATCH) {
+            batch.clear();
+            batch.extend((first..(first + BATCH).min(words)).map(|index| self.stored(index)));
+            fresh.append_words(&batch);
+        }
+        fresh.truncate(self.len);
+        *self = fresh;
+    }
+
     /// Number of 2 MiB chunks backing the channel.
     pub fn chunk_count(&self) -> usize {
         self.words.chunk_count()
     }
 
     /// Contents of chunk `index`; the last chunk may be shorter than a full chunk.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless the channel [is compact](Self::is_compact).
     pub fn chunk(&self, index: usize) -> ChunkView<'_> {
+        assert!(self.is_compact(), "chunks do not line up with the samples");
         self.words.chunk(index)
     }
 

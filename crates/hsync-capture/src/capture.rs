@@ -164,6 +164,29 @@ impl LogicCapture {
         out
     }
 
+    /// Forgets the first `samples` samples of every channel, a multiple of 64, as loop
+    /// captures do once they hold their limit. A trigger among them is forgotten too.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `samples` is not a multiple of 64 or exceeds the capture.
+    pub fn drop_front(&mut self, samples: SampleIndex) {
+        for (_, data) in &mut self.channels {
+            data.drop_front(samples);
+        }
+        self.trigger_sample = self
+            .trigger_sample
+            .and_then(|sample| sample.checked_sub(samples));
+    }
+
+    /// Lines the chunks of every channel up with its samples again after
+    /// [`Self::drop_front`], one channel at a time.
+    pub fn compact(&mut self) {
+        for (_, data) in &mut self.channels {
+            data.compact();
+        }
+    }
+
     /// Shortens every channel to `len` samples.
     pub fn truncate(&mut self, len: SampleIndex) {
         for (_, data) in &mut self.channels {

@@ -9,6 +9,11 @@
 /// Number of summary levels; level 3 units span `2^24` samples, one storage chunk.
 pub(crate) const LEVELS: usize = 4;
 
+const _: () = assert!(
+    1u64 << (6 * LEVELS) == crate::words::CHUNK_SAMPLES,
+    "a top-level unit spans one chunk"
+);
+
 #[derive(Debug, Default, Clone)]
 struct Level {
     mixed: Vec<u64>,
@@ -125,6 +130,33 @@ impl Summary {
                 current.set(block, mixed, high);
             }
             (lo, hi) = (block_lo, block_hi);
+        }
+    }
+
+    /// Forgets the first `count` chunks' worth of words, which must be full: word `i` becomes
+    /// word `i - count · CHUNK_WORDS`.
+    pub(crate) fn drop_front_chunks(&mut self, count: usize) {
+        if count == 0 {
+            return;
+        }
+        // Below the top, a chunk covers whole blocks of units: drop them.
+        for depth in 0..LEVELS - 1 {
+            let units = 1usize << (6 * (LEVELS - 1 - depth));
+            let level = &mut self.levels[depth];
+            let blocks = (units / 64 * count).min(level.mixed.len());
+            level.mixed.drain(..blocks);
+            level.high.drain(..blocks);
+            level.units = level.units.saturating_sub(units * count);
+        }
+        // The top level has one unit per chunk: build it again from the level below.
+        let units = self.levels[LEVELS - 2].units.div_ceil(64);
+        let top = &mut self.levels[LEVELS - 1];
+        top.mixed.clear();
+        top.high.clear();
+        top.ensure_units(units);
+        for block in 0..units {
+            let (mixed, high) = self.levels[LEVELS - 2].fold(block);
+            self.levels[LEVELS - 1].set(block, mixed, high);
         }
     }
 
