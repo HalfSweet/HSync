@@ -113,7 +113,7 @@ HSync looks for a new version each time it starts (turn this off under **Setting
 ## Getting started
 
 1. **Open a device.** Connect your DSLogic and choose it from the device menu at the top left. The first time, HSync loads the device's firmware, which takes a few seconds. Without hardware, you're on the **Demo device**.
-2. **Set up the capture.** The button next to the device menu shows the sample rate, duration and channel count; click it to change them. **Device options…** at the bottom of the device menu holds the operation mode (Buffer or Stream), the threshold, the filter and the clock.
+2. **Set up the capture.** The button next to the device menu shows the sample rate, duration and channel count; click it to change them and the device's options: the operation mode (Buffer or Stream), the threshold, the filter and the clock.
 3. **Set a trigger** (optional). Click the trigger slot to the right of a channel's name and pick an edge or a level. **Trigger** in the top bar has the trigger position, stage triggers and serial triggers.
 4. **Capture.** Press **Capture**. The arrow beside it switches between **Single**, **Repeat** and **Loop**, or starts an **Instant** capture that ignores the trigger.
 5. **Decode.** Click **Add decoder**, search for a protocol and choose its channels. Open the **Data stream** from the status bar to list everything it decoded.
