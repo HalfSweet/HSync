@@ -405,8 +405,30 @@ pub struct Annotation {
     pub class: u32,
     /// Its row among the decoder's annotation rows.
     pub row: u32,
-    /// From the longest to the shortest.
+    /// From the longest to the shortest, as the decoder put them: `{$}` stands for `value`.
     pub texts: Vec<String>,
+    /// DSView's number to show in the user's format, in hex digits (`'@4F'` or an integer).
+    pub value: Option<String>,
+}
+
+impl Annotation {
+    /// The texts to show: `{$}` replaced by the value, or the value alone without texts.
+    pub fn shown(&self) -> Vec<String> {
+        let value = self.value.as_deref();
+        let texts: Vec<String> = self
+            .texts
+            .iter()
+            .map(|text| match value {
+                Some(value) => text.replace("{$}", value),
+                None => text.clone(),
+            })
+            .collect();
+        if texts.is_empty() {
+            value.map(str::to_owned).into_iter().collect()
+        } else {
+            texts
+        }
+    }
 }
 
 /// Items of one lane, sorted by start, with the running maximum of their ends.
@@ -562,20 +584,21 @@ impl Presentation {
         let mut stream = Vec::with_capacity(annotations.len());
         let mut units = Vec::with_capacity(annotations.len());
         for annotation in &annotations {
+            let texts = annotation.shown();
+            stream.push(StreamRow::Annotation {
+                start: annotation.start,
+                end: annotation.end,
+                row: annotation.row,
+                text: texts.first().cloned().unwrap_or_default(),
+            });
             if let Some((_, items)) = lanes.get_mut(annotation.row as usize) {
                 items.push(LaneItem::Annotation {
                     start: annotation.start,
                     end: annotation.end,
                     class: annotation.class,
-                    texts: annotation.texts.clone(),
+                    texts,
                 });
             }
-            stream.push(StreamRow::Annotation {
-                start: annotation.start,
-                end: annotation.end,
-                row: annotation.row,
-                text: annotation.texts.first().cloned().unwrap_or_default(),
-            });
             units.push((annotation.start, annotation.end));
         }
         units.sort_unstable();
@@ -611,7 +634,7 @@ impl Presentation {
                     start: annotation.start,
                     end: annotation.end,
                     class: annotation.class,
-                    texts: annotation.texts,
+                    texts: annotation.shown(),
                 });
             }
         }

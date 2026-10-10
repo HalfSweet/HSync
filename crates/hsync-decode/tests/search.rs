@@ -138,6 +138,7 @@ fn presents_and_searches_plain_annotations() {
         class: row,
         row,
         texts: vec![text.to_owned(), text[..1].to_owned()],
+        value: None,
     };
     let rows = ["bits".to_owned(), "fields".to_owned()];
     let presentation = Presentation::annotations(
