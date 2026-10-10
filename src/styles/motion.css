@@ -2,6 +2,9 @@
  * Motion (DESIGN.md §9.13). Vue's <Transition> and <TransitionGroup> put these classes on what
  * appears and leaves; the timing comes from the motion tokens, which reduced motion zeroes.
  * Whatever is on its way out no longer takes the pointer.
+ *
+ * The states things come from and go to only hold where motion is allowed: Vue keeps them on for
+ * a frame or two whatever the duration, which would otherwise hide a menu as it opens.
  */
 
 /* pop: a menu or popover grows out of the control that opened it. Its `origin-*` class names
@@ -19,10 +22,12 @@
     transform var(--motion-exit) var(--ease-exit);
 }
 
-.pop-enter-from,
-.pop-leave-to {
-  opacity: 0;
-  transform: scale(0.96);
+@media (prefers-reduced-motion: no-preference) {
+  .pop-enter-from,
+  .pop-leave-to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
 }
 
 /* dialog: the veil fades in and the dialog on it rises into place. */
@@ -43,14 +48,16 @@
   transition: transform var(--motion-exit) var(--ease-exit);
 }
 
-.dialog-enter-from,
-.dialog-leave-to {
-  opacity: 0;
-}
+@media (prefers-reduced-motion: no-preference) {
+  .dialog-enter-from,
+  .dialog-leave-to {
+    opacity: 0;
+  }
 
-.dialog-enter-from > [role='dialog'],
-.dialog-leave-to > [role='dialog'] {
-  transform: translateY(8px) scale(0.98);
+  .dialog-enter-from > [role='dialog'],
+  .dialog-leave-to > [role='dialog'] {
+    transform: translateY(8px) scale(0.98);
+  }
 }
 
 /* drawer: the data stream panel slides up out of the bottom of the work area, which clips it.
@@ -74,9 +81,11 @@
   transition: transform var(--motion-exit) var(--ease-exit);
 }
 
-.drawer-enter-from,
-.drawer-leave-to {
-  transform: translateY(100%);
+@media (prefers-reduced-motion: no-preference) {
+  .drawer-enter-from,
+  .drawer-leave-to {
+    transform: translateY(100%);
+  }
 }
 
 /*
@@ -152,10 +161,12 @@
     transform var(--motion-exit) var(--ease-exit);
 }
 
-.item-enter-from,
-.item-leave-to {
-  opacity: 0;
-  transform: scale(0.92);
+@media (prefers-reduced-motion: no-preference) {
+  .item-enter-from,
+  .item-leave-to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
 }
 
 /* An entry on its way in or out keeps its own fade, even if the list moved it meanwhile. */
