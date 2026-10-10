@@ -378,8 +378,13 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       if (enabled.length === 0) return Promise.reject(uiError('error.device.invalidRequest'))
       const limit = Math.ceil(device.limit / 1024) * 1024
       const total = Math.min(limit, data.sampleCount)
+      if (request.advanced && !device.state().trigger.advanced) {
+        return Promise.reject(uiError('error.device.invalidRequest'))
+      }
       const waits =
-        !request.instant && request.triggers.some(([, condition]) => condition !== 'none')
+        !request.instant &&
+        (request.advanced !== null ||
+          request.triggers.some(([, condition]) => condition !== 'none'))
       lastId += 1
       device.capturing = true
       const names = new Map(data.channels.map(({ index, name }) => [index, name]))

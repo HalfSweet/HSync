@@ -10,6 +10,14 @@ import type { OptionValue } from '../bindings/OptionValue'
 
 export const DEMO_ID = 'virtual-demo'
 
+/**
+ * `?mocktrigger=advanced` lets the mock demo device offer multi-stage and serial triggers, as a
+ * DSLogic in Buffer mode does, to work on the trigger panel in a browser.
+ */
+const ADVANCED_TRIGGERS =
+  typeof location !== 'undefined' &&
+  new URLSearchParams(location.search).get('mocktrigger') === 'advanced'
+
 /** Sample rates of `hsync-demo`. */
 const SAMPLERATES = [
   1_000, 2_000, 5_000, 10_000, 20_000, 50_000, 100_000, 200_000, 500_000, 1_000_000, 2_000_000,
@@ -87,6 +95,7 @@ export class MockDemoDevice {
       channelCount: 16,
       enabledChannels: [...this.enabled].sort((a, b) => a - b),
       capturing: this.capturing,
+      trigger: { maxPosition: 90, advanced: ADVANCED_TRIGGERS },
     }
   }
 
