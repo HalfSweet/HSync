@@ -3,12 +3,14 @@ import { onMounted } from 'vue'
 
 import AppShell from '@/components/AppShell.vue'
 import { useRootPreferences } from '@/composables/useRootPreferences'
+import { useWindowTitle } from '@/composables/useWindowTitle'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useDeviceStore } from '@/stores/device'
 import { useSessionStore } from '@/stores/session'
 
 useRootPreferences()
+useWindowTitle()
 const capture = useCaptureStore()
 const device = useDeviceStore()
 const decode = useDecodeStore()

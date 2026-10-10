@@ -315,6 +315,11 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.reject(uiError('error.app.unavailableInBrowser'))
     },
 
+    async setTitle(title: string) {
+      document.title = title
+      return Promise.resolve()
+    },
+
     async decodeList(captureId: number) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))

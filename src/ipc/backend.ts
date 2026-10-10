@@ -1,5 +1,6 @@
 import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 import type { BinsRequest } from './bindings/BinsRequest'
 import type { CaptureRequest } from './bindings/CaptureRequest'
@@ -116,6 +117,8 @@ export interface Backend {
   logFile(): Promise<string | null>
   /** Shows the log file in the system's file manager. */
   revealLog(): Promise<void>
+  /** Titles the window. */
+  setTitle(title: string): Promise<void>
   /** The decoders of a capture and how far they are. */
   decodeList(captureId: number): Promise<DecoderStatus[]>
   /** Decode lanes of finished decoders over `start..end`. */
@@ -272,6 +275,10 @@ class TauriBackend implements Backend {
 
   revealLog() {
     return invoke<void>('log_reveal')
+  }
+
+  setTitle(title: string) {
+    return getCurrentWindow().setTitle(title)
   }
 
   decodeList(captureId: number) {
