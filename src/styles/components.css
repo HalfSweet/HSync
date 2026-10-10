@@ -77,9 +77,9 @@
   }
 }
 
-/* Behind a dialog or the settings page: the interface, blurred and veiled. */
+/* Behind a dialog or the settings page: the interface, blurred and dimmed. */
 @utility modal-veil {
-  background: var(--veil);
+  background: var(--scrim);
   backdrop-filter: blur(var(--veil-blur));
 }
 

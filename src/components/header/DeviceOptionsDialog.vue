@@ -64,7 +64,7 @@ function current(option: OptionState): string {
       aria-modal="true"
       :aria-label="title"
       tabindex="-1"
-      class="flex max-h-[80vh] w-[min(440px,calc(100vw-32px))] flex-col rounded-6 border border-ink bg-raise text-small outline-none"
+      class="flex max-h-[80vh] w-[min(440px,calc(100vw-32px))] flex-col rounded-6 bg-raise text-small outline-none"
     >
       <header class="flex h-10 items-center justify-between border-b border-line pr-2 pl-4">
         <h2 class="font-medium">{{ title }}</h2>

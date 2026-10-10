@@ -259,7 +259,7 @@ const locked = computed(() => capture.running)
       aria-modal="true"
       :aria-label="title"
       tabindex="-1"
-      class="flex max-h-[88vh] w-[min(520px,calc(100vw-32px))] flex-col rounded-6 border border-ink bg-raise text-small outline-none"
+      class="flex max-h-[88vh] w-[min(520px,calc(100vw-32px))] flex-col rounded-6 bg-raise text-small outline-none"
     >
       <header
         class="flex h-10 flex-none items-center justify-between border-b border-line pr-2 pl-4"
