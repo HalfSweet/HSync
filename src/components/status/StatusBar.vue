@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import SegmentMeasure from '@/components/status/SegmentMeasure.vue'
 import { useBackendText } from '@/composables/useBackendText'
 import { useCaptureStore } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
@@ -95,6 +96,7 @@ const perDivision = computed(() =>
     <span v-if="capture.summary" class="text-ink-3 tabular-nums">
       {{ t('status.samples', { count: formatCount(capture.sampleCount, locale) }) }}
     </span>
+    <SegmentMeasure />
     <div class="flex-1" />
     <span v-if="device.arrival" role="status" class="inline-flex items-center gap-1.5">
       <span class="text-ink">{{

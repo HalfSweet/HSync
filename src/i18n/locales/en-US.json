@@ -216,6 +216,16 @@
   "selection": {
     "outsideViewport": "Extends beyond view"
   },
+  "measure": {
+    "segment": "Segment {duration}",
+    "tip": "Edges of each channel in the segment",
+    "title": "Edges in the segment",
+    "range": "{from} – {to} ms",
+    "channel": "Channel",
+    "rising": "Rising",
+    "falling": "Falling",
+    "edges": "Edges"
+  },
   "decode": {
     "i2c": {
       "readRegister": "Read {data} from 0x{register}",

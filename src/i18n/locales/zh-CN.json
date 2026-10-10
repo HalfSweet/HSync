@@ -216,6 +216,16 @@
   "selection": {
     "outsideViewport": "延伸到视口外"
   },
+  "measure": {
+    "segment": "选段 {duration}",
+    "tip": "选段内各通道的边沿数",
+    "title": "选段内的边沿",
+    "range": "{from} – {to} ms",
+    "channel": "通道",
+    "rising": "上升沿",
+    "falling": "下降沿",
+    "edges": "边沿"
+  },
   "decode": {
     "i2c": {
       "readRegister": "从 0x{register} 读出 {data}",
