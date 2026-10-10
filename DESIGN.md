@@ -10,7 +10,7 @@ This document specifies how the HSync interface looks and behaves: layout, desig
 - **Know where you are**: an overview strip, plus a scale with the trigger point at zero.
 - **Triggers set per channel**: each channel has one trigger slot, and its condition is drawn on its own row.
 - **Single window**: no side panels, no modes to switch into first.
-- **Flat**: no gradients, shadows or glows; hierarchy comes only from fill shades and 1 px lines.
+- **Flat**: no gradients, shadows or glows, and no outline around buttons, fields, menus, popovers or dialogs; hierarchy comes only from fill shades, and 1 px lines only divide.
 
 ## 2. Layout
 
@@ -44,9 +44,13 @@ The palette is restrained: fills and text are near-neutral greys with a hint of 
 | -------------------------- | -------------------------------------------------------------- | --------------------- | --------------------- |
 | `--canvas`                 | Trace area fill                                                | `#FCFDFE`             | `#0F1112`             |
 | `--chrome`                 | Top bar, label column and status bar fill                      | `#F3F5F6`             | `#161718`             |
-| `--raise`                  | Button, menu and dialog fill                                   | `#FFFFFF`             | `#1E1F21`             |
+| `--raise`                  | Dialog fill                                                    | `#FFFFFF`             | `#1E1F21`             |
+| `--menu`                   | Menu and popover fill, a shade apart from what lies behind     | `#E9EBED`             | `#252729`             |
+| `--control`                | Button and field fill                                          | ink 6%                | ink 7%                |
+| `--control-hover`          | Button and field fill under the pointer                        | ink 10%               | ink 12%               |
+| `--control-on`             | Selected option of a segmented control, enabled channel        | `#FFFFFF`             | `#484A4E`             |
 | `--line`                   | Dividers                                                       | `#E0E1E3`             | `#242527`             |
-| `--line-2`                 | Control borders                                                | `#C8CBCD`             | `#37393C`             |
+| `--line-2`                 | Dividers inside menus, rules between values                    | `#C8CBCD`             | `#37393C`             |
 | `--ink`                    | Primary text, selected-state fill                              | `#191B1D`             | `#EAEBEC`             |
 | `--ink-2`                  | Secondary text                                                 | `#4D5054`             | `#B9BBBD`             |
 | `--ink-3`                  | Caption text                                                   | `#63666B`             | `#96989B`             |
@@ -155,7 +159,7 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 - **Ruler**: sticky at the top, with the unit in the bottom-left corner ("ms", relative to the trigger point). Major ticks carry numbers, minor ticks do not; steps follow the 1-2-5 sequence. The label column stays still during horizontal scrolling.
 - **Groups**: each group has one group header row (`--h-lane` high), then its decode lanes, then its trace rows. The group header holds an expand arrow, an 8 px square in the bus colour, the group name (bold), the "Decoder settings" and "Show all decoded results in the data stream" buttons that appear only on hover, and meta information on the right ("100 kHz", "115200 8N1", with an explanatory `title`). Groups are separated by a 1 px divider plus `--gap` padding. The "Other channels" group uses a hollow square with a 1 px outline and shows the channel count on the right.
 - **Channel rows**: the label column holds, in order, a 7 px dot in the channel colour, the name, the channel number (`D0`, 11 px monospace, `--ink-3`) and the trigger slot. Narrow rows are for SPI lines, CAN and "Other channels". Channels in a decoder group show their role (SDA, RX…); a channel with a name of its own shows the name, and the role moves before the channel number (`SCL D1`).
-- **Channel settings**: clicking the dot, double-clicking the name or right-clicking opens them; they change the name and colour. The name is saved when the settings close (Enter or a click elsewhere), and Esc discards it; a colour takes effect as soon as it is clicked.
+- **Channel settings**: clicking the dot, double-clicking the name or right-clicking opens them; they change the name and colour, and the chosen colour sits on a `--sel` disc. The name is saved when the settings close (Enter or a click elsewhere), and Esc discards it; a colour takes effect as soon as it is clicked.
 
 ### 6.2 Traces
 
@@ -201,7 +205,7 @@ When the system asks for reduced motion, all three durations are 0. Tailwind's b
 ### 7.1 Per channel
 
 - At the far right of the label column is the "Trig" column (the ruler row reads "Trig", with a tooltip). Each channel row has a 20 × 16 px trigger slot (`min(16px, --h-trc − 2px)` high on narrow rows); group header rows have none.
-- Without a condition, the slot is a short dash (`--trace-2`); with one, it is a small `--ink` tile holding the condition glyph in `--canvas`. The hover fill is `--hover`; while the menu is open, a 1.5 px `--ink` outer frame is added.
+- Without a condition, the slot is a short dash (`--trace-2`); with one, it is a small `--ink` tile holding the condition glyph in `--canvas`. The hover fill is `--hover`, and an empty slot keeps it while its menu is open.
 - Clicking a trigger slot opens a 176 px wide menu to the right of the label column, level with the row. Its title is "Trigger on XX" (with the channel-colour dot); its six items are, in order, None, Rising edge, Falling edge, Any edge, High level and Low level, with a check mark on the current one; at the bottom is the note "With conditions on several channels, all must hold at once". For rows near the bottom, the menu moves up until it fits.
 - The menu closes when an item is chosen, on Esc, on a press outside the menu, when the timeline scrolls, or when the same trigger slot is clicked again. When it is opened from the keyboard, focus lands on the current item and the up and down arrow keys move it; on closing, focus returns to the trigger slot.
 - Disabled channels cannot have a trigger; their trigger slots are greyed out.
@@ -240,7 +244,7 @@ The top bar's "Trigger" button opens a 480 px wide panel:
 ## 9. Data stream panel
 
 - **Opening and closing**: the panel sits below the timeline and is closed by default; it slides in from, and out to, the bottom edge of the workspace. It opens from the "Data stream" button at the left end of the status bar, and from the button that appears on hover in a group header (which opens that decoder; a second click closes it). A segment does not open it automatically. Its top edge can be dragged to change its height (minimum 80 px), and the timeline keeps at least 180 px.
-- **Header** (33 px): on the left, the decoder tabs; the current tab has `--ink` text and a 2 px `--ink` line beneath, which slides under the new tab on switching; then a one-line summary ("9 transfers, 4 bytes in segment"). On the right, in order: "Text / Hex" (UART only), "All / Segment", Copy, Export (CSV / text) and Close. Segmented controls are 22 px high; the selected option has a `--raise` fill and a 1 px `--line-2` outline.
+- **Header** (33 px): on the left, the decoder tabs; the current tab has `--ink` text and a 2 px `--ink` line beneath, which slides under the new tab on switching; then a one-line summary ("9 transfers, 4 bytes in segment"). On the right, in order: "Text / Hex" (UART only), "All / Segment", Copy, Export (CSV / text) and Close. Segmented controls are 22 px high; the selected option has a `--control-on` fill.
 - **List**: 12 px monospace, 20 px rows, fixed header; the first column is the time (ms, four decimals, relative to the trigger point).
   - **I²C**: one row per transfer, listing what was "On the wire" (`S`, `W62`, data bytes, `Sr`, `R62`, data bytes, `N`, `P`; acknowledged bytes are not marked, and only `N` is written).
   - **UART**: in Text mode, rows break at line feeds, at most 80 columns per row, and `\r` `\n` `\t` are written as escapes in the caption colour; in Hex mode, each row holds 16 bytes, with the matching characters on the right.
@@ -264,7 +268,7 @@ The top bar's "Trigger" button opens a 480 px wide panel:
 - **Device options**: a form generated from the options the device provides (switches, drop-downs, numbers); sample rate and duration live in the top bar's acquisition settings. During a capture the form is read-only, with an explanation.
 - **Add / edit decoder**: a searchable decoder list, channel mapping, options (one group per stacked decoder), decode range (Whole capture / Segment) and display (number base, showing or hiding annotation rows); when editing, the decoder can be removed.
 - **Export**: format (DSView capture, CSV table, VCD waveform, sigrok session, Raw binary, each with a one-line description; CSV can write one row per sample), range (Whole capture / Segment) and channels (All / None); the save location is chosen after confirming.
-- **Settings page**: 760 × 560 px, shrinking in small windows. A 176 px side bar on the left (`--chrome` fill) lists Appearance, Behaviour and Diagnostics, with About set apart at its foot; the selected section has a `--raise` fill and an outline like a segmented control's, which slides to the next section. When an update is available, a `--ink` dot sits at the right of About, and its tip and screen reader text read "Version x available". The current section fills the right, labels on the left and controls on the right:
+- **Settings page**: 760 × 560 px, shrinking in small windows. A 176 px side bar on the left (`--chrome` fill) lists Appearance, Behaviour and Diagnostics, with About set apart at its foot; the selected section has a `--control-on` fill like a segmented control's, which slides to the next section. When an update is available, a `--ink` dot sits at the right of About, and its tip and screen reader text read "Version x available". The current section fills the right, labels on the left and controls on the right:
   - **Appearance**: Theme (System / Light / Dark), Density (Comfortable / Compact), Graphics acceleration (Auto / Off, with the renderer in use named below) and Language (System / `简体中文` / `English`), all segmented controls.
   - **Behaviour**: "Centre the view on the trigger" (on), "Follow the latest data while capturing" (on), "Keep scrolling after a quick drag" (on: when a drag is released faster than 0.5 px/ms, panning continues with exponential decay until a press or the wheel stops it), "Show the latest data when a repeat stops" (off), "Check for updates at startup" (on: checks once in the background after startup, and a failure stays silent). The first three have no effect while zoomed to fit.
   - **Diagnostics**: log level, "Write a log file", "Show in folder".
