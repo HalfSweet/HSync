@@ -29,8 +29,8 @@
     "active": true,
     "targets": "all",
     "category": "DeveloperTool",
-    "shortDescription": "Logic analyzer host application",
-    "longDescription": "HSync is a modern logic analyzer host application compatible with DreamSourceLab DSLogic devices and DSView capture files.",
+    "shortDescription": "Logic analyzer app for DreamSourceLab DSLogic",
+    "longDescription": "HSync is a modern logic analyzer app for DreamSourceLab DSLogic devices: capture, trigger, decode and measure, and open and save DSView capture files.",
     "license": "GPL-3.0-or-later",
     "icon": [
       "icons/32x32.png",
