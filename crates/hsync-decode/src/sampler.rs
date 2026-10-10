@@ -84,6 +84,12 @@ impl<'a> Sampler<'a> {
         }
     }
 
+    /// Continues from a previous sampler's last match, as `samplenum` was after it.
+    pub fn resume(mut self, current: Option<u64>) -> Self {
+        self.current = current;
+        self
+    }
+
     /// Samples the sampler walks through.
     pub fn len(&self) -> u64 {
         self.end
