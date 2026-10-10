@@ -30,7 +30,7 @@ export function readRenderTokens(root: Element = document.documentElement): Rend
   const wires = Array.from({ length: 8 }, (_, index) => get(`--w${index}`))
   // Byte blocks are `--bk` times as opaque as the wash of their colour.
   const strength = Number.parseFloat(get('--bk'))
-  const blockScale = Number.isFinite(strength) ? strength : 3.4
+  const blockScale = Number.isFinite(strength) ? strength : 2.6
   return {
     grid: get('--grid'),
     wires,
