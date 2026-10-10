@@ -495,8 +495,7 @@ function onGripUp(): void {
           :key="tab.index"
           role="tab"
           :aria-selected="tab.index === stream.decoder"
-          class="inline-flex items-center gap-1.5 px-2.5 text-small font-medium whitespace-nowrap text-ink-2 hover:text-ink"
-          :class="tab.index === stream.decoder && 'text-ink'"
+          class="inline-flex items-center gap-1.5 px-2.5 text-small font-medium whitespace-nowrap text-ink-2 hover:text-ink aria-selected:text-ink"
           @click="stream.decoder = tab.index"
         >
           <i class="size-2 rounded-2" :class="tab.square" />
