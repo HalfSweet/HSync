@@ -38,7 +38,7 @@ function stateOf(driver: string): DeviceState {
     channelCount: 16,
     enabledChannels: [0, 1],
     capturing: false,
-    trigger: { maxPosition: 90, advanced: false },
+    trigger: { maxPosition: 90, advanced: false, advancedOtherMode: false },
     canLoop: false,
     hardwareDepth: null,
   }

@@ -567,6 +567,7 @@ impl Device for DslogicDevice {
             return TriggerCaps {
                 max_position: 1,
                 advanced: false,
+                advanced_other_mode: self.profile.has(caps::BUF),
             };
         }
         let depth = channel_depth(self.profile, self.settings.enabled_count());
@@ -580,6 +581,7 @@ impl Device for DslogicDevice {
         TriggerCaps {
             max_position,
             advanced: true,
+            advanced_other_mode: false,
         }
     }
 

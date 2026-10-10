@@ -20,7 +20,7 @@ import { useDeviceStore } from './device'
 export type TriggerRequest = Omit<CaptureRequest, 'looping' | 'hold' | 'keepStopped' | 'preset'>
 
 /** What a trigger can do without a device to ask: simple triggers up to 90 %, as DSView. */
-const DEFAULT_CAPS: TriggerCaps = { maxPosition: 90, advanced: false }
+const DEFAULT_CAPS: TriggerCaps = { maxPosition: 90, advanced: false, advancedOtherMode: false }
 
 /**
  * The trigger panel's settings (DESIGN.md §7.2): the trigger position, and a

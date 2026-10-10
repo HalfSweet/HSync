@@ -20,6 +20,9 @@ pub struct TriggerCaps {
     pub max_position: u8,
     /// Multi-stage and serial triggers are available.
     pub advanced: bool,
+    /// Multi-stage and serial triggers come with another operation mode (DSLogic's Buffer
+    /// mode); without it the device has simple triggers only.
+    pub advanced_other_mode: bool,
 }
 
 impl Default for TriggerCaps {
@@ -28,6 +31,7 @@ impl Default for TriggerCaps {
         Self {
             max_position: 90,
             advanced: false,
+            advanced_other_mode: false,
         }
     }
 }

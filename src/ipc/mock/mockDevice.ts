@@ -96,7 +96,7 @@ export class MockDemoDevice {
       channelCount: 16,
       enabledChannels: [...this.enabled].sort((a, b) => a - b),
       capturing: this.capturing,
-      trigger: { maxPosition: 90, advanced: ADVANCED_TRIGGERS },
+      trigger: { maxPosition: 90, advanced: ADVANCED_TRIGGERS, advancedOtherMode: false },
       canLoop: true,
       hardwareDepth: null,
     }
