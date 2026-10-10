@@ -108,7 +108,7 @@ The firmware, the protocol decoders and the Python they run on are all included;
 
 ### Updates
 
-HSync looks for a new version each time it starts (turn this off under **Settings → Behaviour**). When one is out, a dot appears on the settings button: open **Settings → About HSync…** and click **Download and restart**.
+HSync looks for a new version each time it starts (turn this off under **Settings → Behaviour**). When one is out, a dot appears on the settings button: open **Settings → About** and click **Download and restart**.
 
 ## Getting started
 
