@@ -11,6 +11,8 @@
   --canvas: #fcfdfe;
   --chrome: #f3f5f6;
   --raise: #ffffff;
+  /* Menus and popovers: nothing dims behind them, so their fill alone sets them apart */
+  --menu: #e9ebed;
   /* Buttons and fields, filled rather than outlined; the selected face of a segmented control */
   --control: rgb(25 27 29 / 0.06);
   --control-hover: rgb(25 27 29 / 0.1);
@@ -106,6 +108,7 @@
   --canvas: #0f1112;
   --chrome: #161718;
   --raise: #1e1f21;
+  --menu: #252729;
   --control: rgb(234 235 236 / 0.07);
   --control-hover: rgb(234 235 236 / 0.12);
   --control-on: #484a4e;

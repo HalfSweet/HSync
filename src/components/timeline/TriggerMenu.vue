@@ -50,7 +50,7 @@ function onKeydown(event: KeyboardEvent): void {
     ref="menu"
     role="menu"
     :aria-label="t('trigger.menuTitle', { channel })"
-    class="absolute z-[8] w-(--w-trigger-menu) origin-top-left rounded-6 border border-ink bg-raise p-1 text-small"
+    class="absolute z-[8] w-(--w-trigger-menu) origin-top-left rounded-6 bg-menu p-1 text-small"
     :style="{ left: 'calc(var(--lab) + 4px)', top: `${top}px` }"
     @keydown="onKeydown"
   >
@@ -74,7 +74,7 @@ function onKeydown(event: KeyboardEvent): void {
       <span>{{ t(`trigger.condition.${option}`) }}</span>
       <AppIcon v-if="option === condition" name="check" class="ml-auto" />
     </button>
-    <div class="mt-1 border-t border-line px-2 pt-1.5 pb-1 text-caption text-ink-3">
+    <div class="mt-1 border-t border-line-2 px-2 pt-1.5 pb-1 text-caption text-ink-3">
       {{ t('trigger.note') }}
     </div>
   </div>

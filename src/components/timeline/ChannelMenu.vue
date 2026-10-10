@@ -62,7 +62,7 @@ async function rename(): Promise<void> {
     ref="root"
     role="dialog"
     :aria-label="t('channelMenu.title', { channel: `D${channel.index}` })"
-    class="fixed z-30 flex w-60 origin-top-left flex-col gap-2.5 rounded-6 border border-ink bg-raise p-3 text-small"
+    class="fixed z-30 flex w-60 origin-top-left flex-col gap-2.5 rounded-6 bg-menu p-3 text-small"
     :style="position"
   >
     <div class="flex items-center gap-2">

@@ -122,7 +122,7 @@ function toggleChannel(channel: number): void {
         v-if="open"
         role="dialog"
         :aria-label="label"
-        class="absolute top-full left-0 z-20 mt-1 flex w-[360px] origin-top-left flex-col gap-3 rounded-6 border border-ink bg-raise p-3 text-small"
+        class="absolute top-full left-0 z-20 mt-1 flex w-[360px] origin-top-left flex-col gap-3 rounded-6 bg-menu p-3 text-small"
       >
         <p v-if="!device.state" class="text-ink-3">{{ t('header.acquisition.noDevice') }}</p>
         <template v-else>

@@ -150,7 +150,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
         v-if="open"
         role="dialog"
         :aria-label="t('triggerPanel.title')"
-        class="absolute top-full left-0 z-20 mt-1 flex w-[480px] max-w-[calc(100vw-32px)] origin-top-left flex-col gap-3 overflow-x-auto rounded-6 border border-ink bg-raise p-3 text-small"
+        class="absolute top-full left-0 z-20 mt-1 flex w-[480px] max-w-[calc(100vw-32px)] origin-top-left flex-col gap-3 overflow-x-auto rounded-6 bg-menu p-3 text-small"
       >
         <AnimatedHeight>
           <fieldset :disabled="locked" class="flex flex-col gap-3">
@@ -196,7 +196,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
               {{ t('triggerPanel.positionMax', { max: trigger.caps.maxPosition }) }}
             </p>
 
-            <div class="border-t border-line" />
+            <div class="border-t border-line-2" />
 
             <!-- Simple: the conditions set on the timeline. -->
             <div v-if="trigger.activeMode === 'simple'" class="rise-in flex flex-col gap-3">

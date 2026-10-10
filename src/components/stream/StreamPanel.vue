@@ -552,7 +552,7 @@ function onGripUp(): void {
             <div
               v-if="exportMenu"
               role="menu"
-              class="absolute right-0 bottom-full z-20 mb-1 flex w-44 origin-bottom-right flex-col rounded-6 border border-ink bg-raise p-1 text-small"
+              class="absolute right-0 bottom-full z-20 mb-1 flex w-44 origin-bottom-right flex-col rounded-6 bg-menu p-1 text-small"
             >
               <button
                 v-for="kind in ['csv', 'text'] as const"

@@ -66,7 +66,7 @@ function instant(): void {
         v-if="open"
         role="menu"
         :aria-label="t('header.capture.more')"
-        class="absolute top-full right-0 z-20 mt-1 flex w-64 origin-top-right flex-col rounded-6 border border-ink bg-raise p-1 text-small"
+        class="absolute top-full right-0 z-20 mt-1 flex w-64 origin-top-right flex-col rounded-6 bg-menu p-1 text-small"
       >
         <button
           v-for="mode in MODES"
@@ -106,7 +106,7 @@ function instant(): void {
           />
           <span>{{ t('header.capture.seconds') }}</span>
         </label>
-        <div class="my-1 border-t border-line" />
+        <div class="my-1 border-t border-line-2" />
         <button
           role="menuitem"
           class="flex min-h-[30px] w-full items-center gap-2 rounded-4 px-2 py-1 text-left hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"

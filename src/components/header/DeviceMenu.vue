@@ -97,7 +97,7 @@ function loadSession(): void {
         v-if="open"
         role="menu"
         :aria-label="t('header.device.listTitle')"
-        class="absolute top-full left-0 z-20 mt-1 flex w-72 origin-top-left flex-col rounded-6 border border-ink bg-raise p-1 text-small"
+        class="absolute top-full left-0 z-20 mt-1 flex w-72 origin-top-left flex-col rounded-6 bg-menu p-1 text-small"
       >
         <div class="flex h-6 items-center justify-between px-2 text-caption text-ink-3">
           <span>{{ t('header.device.listTitle') }}</span>
@@ -133,7 +133,7 @@ function loadSession(): void {
             <AppIcon v-if="entry.id === device.state?.info.id" name="check" />
           </button>
         </TransitionGroup>
-        <div class="my-1 border-t border-line" />
+        <div class="my-1 border-t border-line-2" />
         <button
           role="menuitem"
           class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55"

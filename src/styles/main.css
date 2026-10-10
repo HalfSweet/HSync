@@ -45,6 +45,7 @@
   --color-canvas: var(--canvas);
   --color-chrome: var(--chrome);
   --color-raise: var(--raise);
+  --color-menu: var(--menu);
   --color-control: var(--control);
   --color-control-hover: var(--control-hover);
   --color-control-on: var(--control-on);
