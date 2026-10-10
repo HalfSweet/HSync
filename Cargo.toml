@@ -12,6 +12,7 @@ publish = false
 
 [workspace.dependencies]
 crossbeam-channel = "0.5.17"
+fst-writer = "0.3.1"
 futures-lite = "2.6.1"
 log = "0.4.34"
 nusb = "0.2.7"

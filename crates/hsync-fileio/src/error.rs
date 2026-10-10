@@ -32,6 +32,9 @@ pub enum FileError {
     /// The user cancelled the write.
     #[error("cancelled")]
     Cancelled,
+    /// Writing an FST file failed.
+    #[error("fst: {0}")]
+    Fst(#[from] fst_writer::FstWriteError),
     /// An embedded JSON document is malformed.
     #[error("invalid json in {entry}: {source}")]
     Json {
@@ -64,6 +67,9 @@ impl From<&FileError> for UiError {
                 UiError::new("error.file.corrupt").with("detail", entry.as_str())
             }
             FileError::Cancelled => UiError::new("error.file.cancelled"),
+            FileError::Fst(error) => {
+                UiError::new("error.file.io").with("detail", error.to_string())
+            }
         }
     }
 }
