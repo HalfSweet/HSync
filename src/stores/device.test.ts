@@ -28,6 +28,7 @@ function stateOf(device: DeviceSummary): DeviceState {
     channelCount: 16,
     enabledChannels: [],
     capturing: false,
+    trigger: { maxPosition: 90, advanced: false },
   }
 }
 
