@@ -3,5 +3,9 @@
 
 #![forbid(unsafe_code)]
 
+pub mod boot;
 pub mod profiles;
+pub mod protocol;
 pub mod setting;
+
+pub use boot::FirmwareDir;
