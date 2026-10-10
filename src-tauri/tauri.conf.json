@@ -27,7 +27,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["app", "dmg", "nsis", "appimage", "deb", "rpm"],
     "category": "DeveloperTool",
     "shortDescription": "Logic analyzer app for DreamSourceLab DSLogic",
     "longDescription": "HSync is a modern logic analyzer app for DreamSourceLab DSLogic devices: capture, trigger, decode and measure, and open and save DSView capture files.",
