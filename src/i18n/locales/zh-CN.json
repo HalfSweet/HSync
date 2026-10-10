@@ -364,7 +364,12 @@
       "no": "否",
       "active-low": "低电平有效",
       "active-high": "高电平有效"
-    }
+    },
+    "search": "在 {count} 个解码器中查找",
+    "noMatch": "没有匹配的解码器",
+    "stacksOn": "叠加在下层解码器上：{chain}",
+    "noStack": "找不到它所需的下层解码器",
+    "optionsOf": "{name} 的选项"
   },
   "stream": {
     "title": "数据流",

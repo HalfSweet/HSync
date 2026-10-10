@@ -364,7 +364,12 @@
       "no": "No",
       "active-low": "Active low",
       "active-high": "Active high"
-    }
+    },
+    "search": "Search {count} decoders",
+    "noMatch": "No decoder matches",
+    "stacksOn": "Stacked on: {chain}",
+    "noStack": "The decoder it needs below cannot be found",
+    "optionsOf": "{name} options"
   },
   "stream": {
     "title": "Data stream",

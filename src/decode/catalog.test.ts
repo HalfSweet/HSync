@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildEntry, decoderSpec, entryChannels, specFromInfo } from './catalog'
+import {
+  buildEntry,
+  decoderSpec,
+  entryChannels,
+  entryStack,
+  specFromInfo,
+  stackFor,
+} from './catalog'
 
 describe('decoder catalog', () => {
   it('builds DSView entries', () => {
@@ -42,5 +49,37 @@ describe('catalog entries', () => {
       { id: 'pwr', name: 'PWR', required: false, desc: '1-Wire power supply pin' },
     ])
     expect(spec.options.map((option) => option.kind)).toEqual(['choice', 'number', 'text'])
+  })
+})
+
+describe('decoder stacks', () => {
+  const i2c = { ...specFromInfoLike('1:i2c', ['logic'], ['i2c']) }
+  const lightI2c = { ...specFromInfoLike('0:i2c', ['logic'], ['i2c']) }
+  const eeprom = { ...specFromInfoLike('eeprom24xx', ['i2c'], []) }
+  const lonely = { ...specFromInfoLike('lonely', ['nothing'], []) }
+
+  function specFromInfoLike(id: string, inputs: string[], outputs: string[]) {
+    return {
+      id,
+      label: id,
+      bus: 'other' as const,
+      roles: [],
+      options: [{ id: 'level', kind: 'number' as const, default: 1, step: 1 }],
+      inputs,
+      outputs,
+    }
+  }
+
+  it('sits a decoder on the one it reads, skipping light variants', () => {
+    const catalog = [lightI2c, i2c, eeprom, lonely]
+    expect(stackFor(eeprom, catalog)?.map((spec) => spec.id)).toEqual(['1:i2c', 'eeprom24xx'])
+    expect(stackFor(i2c, catalog)?.map((spec) => spec.id)).toEqual(['1:i2c'])
+    expect(stackFor(lonely, catalog)).toBeNull()
+  })
+
+  it('stores the stacked decoders with their options', () => {
+    const entry = buildEntry(i2c, {}, {}, [{ spec: eeprom, options: { level: 3 } }])
+    expect(entry['stacked decoders']).toEqual([{ id: 'eeprom24xx', options: { level: 3 } }])
+    expect(entryStack(entry)).toEqual([{ id: 'eeprom24xx', options: { level: 3 } }])
   })
 })

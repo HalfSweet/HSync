@@ -100,7 +100,8 @@ export const DECODERS: readonly DecoderSpec[] = [
         id: 'address_format',
         kind: 'choice',
         values: ['shifted', 'unshifted'],
-        default: 'shifted',
+        // DSView's 1:i2c shows 8-bit addresses unless told otherwise.
+        default: 'unshifted',
       },
     ],
   },
@@ -191,21 +192,53 @@ export function decoderSpec(
   return catalog.find((spec) => spec.id === id)
 }
 
+/**
+ * The stack a decoder needs, bottom first, as DSView's protocol dock builds it: a decoder that
+ * does not read logic sits on one whose first output is its first input, skipping the light
+ * `0:` variants. `null` when no such chain reaches the logic.
+ */
+export function stackFor(spec: DecoderSpec, catalog: readonly DecoderSpec[]): DecoderSpec[] | null {
+  const chain = [spec]
+  for (let depth = 0; depth < 8; depth++) {
+    const input = chain[0]?.inputs?.[0]
+    if (!input || input === 'logic') return chain
+    const below = catalog.find(
+      (one) => one.outputs?.[0] === input && (!one.id.startsWith('0:') || one.id === input),
+    )
+    if (!below) return null
+    chain.unshift(below)
+  }
+  return null
+}
+
 /** A decoder as DSView stores it in a capture's `decoders` list. */
 export interface DecoderEntry {
   id: string
   label: string
   channel: Record<string, number>[]
   options: Record<string, string | number>
-  'stacked decoders': unknown[]
+  'stacked decoders': { id: string; options: Record<string, string | number> }[]
   version: number
 }
 
-/** Builds the entry for `spec` with channels by role and options by id. */
+function optionValues(
+  spec: DecoderSpec,
+  options: Record<string, string | number>,
+): Record<string, string | number> {
+  return Object.fromEntries(
+    spec.options.map((option) => [option.id, options[option.id] ?? option.default]),
+  )
+}
+
+/**
+ * Builds the entry for `spec` with channels by role and options by id, and the decoders
+ * `stacked` on it with theirs.
+ */
 export function buildEntry(
   spec: DecoderSpec,
   channels: Record<string, number | null>,
   options: Record<string, string | number>,
+  stacked: readonly { spec: DecoderSpec; options: Record<string, string | number> }[] = [],
 ): DecoderEntry {
   return {
     id: spec.id,
@@ -214,12 +247,33 @@ export function buildEntry(
       const index = channels[role.id]
       return index === null || index === undefined ? [] : [{ [role.id]: index }]
     }),
-    options: Object.fromEntries(
-      spec.options.map((option) => [option.id, options[option.id] ?? option.default]),
-    ),
-    'stacked decoders': [],
+    options: optionValues(spec, options),
+    'stacked decoders': stacked.map((layer) => ({
+      id: layer.spec.id,
+      options: optionValues(layer.spec, layer.options),
+    })),
     version: 2,
   }
+}
+
+/** Ids and options of the decoders stacked in a stored entry. */
+export function entryStack(entry: unknown): { id: string; options: Record<string, unknown> }[] {
+  const stacked = (entry as { 'stacked decoders'?: unknown })['stacked decoders']
+  return (Array.isArray(stacked) ? stacked : []).flatMap((layer) => {
+    if (typeof layer !== 'object' || layer === null) return []
+    const { id, options } = layer as { id?: unknown; options?: unknown }
+    return typeof id === 'string'
+      ? [
+          {
+            id,
+            options:
+              typeof options === 'object' && options !== null
+                ? (options as Record<string, unknown>)
+                : {},
+          },
+        ]
+      : []
+  })
 }
 
 /** Channels by role of a stored entry. */
