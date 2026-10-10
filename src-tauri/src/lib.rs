@@ -106,6 +106,7 @@ pub fn run() {
             commands::files::capture_export,
             commands::files::capture_save,
             commands::files::file_cancel,
+            commands::files::text_save,
             commands::decode::decode_set,
             commands::device::device_list,
             commands::device::device_open,

@@ -71,6 +71,16 @@ pub async fn capture_export(
     .await
 }
 
+/// Writes text the UI composed, such as the data stream as listed.
+#[tauri::command]
+pub async fn text_save(app: AppHandle, path: PathBuf, text: String) -> CommandResult<()> {
+    blocking(app, move |_| {
+        log::info!("writing {} bytes of text to {}", text.len(), path.display());
+        hsync_session::write_text(&path, &text)
+    })
+    .await
+}
+
 /// Stops the save or export under way; it fails as cancelled and leaves no file.
 #[tauri::command]
 pub fn file_cancel(state: State<'_, AppState>) {
