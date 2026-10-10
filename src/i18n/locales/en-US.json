@@ -282,9 +282,6 @@
     "sameSample": "Both edges on one sample",
     "hint": "Click another edge to finish, Esc to cancel"
   },
-  "selection": {
-    "outsideViewport": "Extends beyond view"
-  },
   "measure": {
     "segment": "Segment {duration}",
     "tip": "Edges of each channel in the segment",

@@ -282,9 +282,6 @@
     "sameSample": "两个边沿在同一采样点",
     "hint": "单击另一个边沿完成测量，Esc 取消"
   },
-  "selection": {
-    "outsideViewport": "延伸到画面外"
-  },
   "measure": {
     "segment": "选段 {duration}",
     "tip": "选段内各通道的边沿数",
