@@ -207,6 +207,19 @@ pub fn write_text(path: &Path, text: &str) -> Result<(), SessionError> {
     Ok(())
 }
 
+/// Reads a text file the UI asked for, such as a session; at most `limit` bytes.
+pub fn read_text(path: &Path, limit: u64) -> Result<String, SessionError> {
+    let size = std::fs::metadata(path)
+        .map_err(hsync_fileio::FileError::from)?
+        .len();
+    if size > limit {
+        return Err(SessionError::File(hsync_fileio::FileError::Io(
+            std::io::Error::other(format!("{size} bytes is more than {limit}")),
+        )));
+    }
+    Ok(std::fs::read_to_string(path).map_err(hsync_fileio::FileError::from)?)
+}
+
 /// Channels a DSView decoder entry uses.
 fn decoder_channels(entry: &serde_json::Value) -> Vec<ChannelIndex> {
     entry

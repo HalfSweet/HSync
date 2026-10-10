@@ -142,7 +142,11 @@ fn cancelling_leaves_no_file() {
 fn writes_text_files() {
     let path = temp("stream.csv");
     hsync_session::write_text(&path, "a,b\n1,2\n").expect("write");
-    assert_eq!(std::fs::read_to_string(&path).expect("read"), "a,b\n1,2\n");
+    assert_eq!(
+        hsync_session::read_text(&path, 1 << 20).expect("read"),
+        "a,b\n1,2\n"
+    );
+    assert!(hsync_session::read_text(&path, 3).is_err());
     let _ = std::fs::remove_file(path);
 }
 
