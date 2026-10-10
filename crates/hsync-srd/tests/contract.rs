@@ -99,7 +99,7 @@ fn keeps_dsviews_contract() {
     let outcome = run_stack(
         &host,
         &capture,
-        10,
+        0..10,
         &stack,
         &Arc::new(AtomicBool::new(false)),
     )
@@ -122,6 +122,37 @@ fn keeps_dsviews_contract() {
             // B reads low: the second condition holds at 6, mask 0b10; 7 is the value.
             (6, 6, vec!["m=07".into(), "m=2".into()]),
             // end() learns where the samples ended.
+            (10, 10, vec!["end".into()]),
+        ]
+    );
+
+    // From a start sample, as DSView decodes from its start cursor: the first wait answers it,
+    // and an edge right there does not count, its levels being its own predecessors.
+    let from = |start: u64| -> Vec<(u64, u64, Vec<String>)> {
+        let outcome = run_stack(
+            &host,
+            &capture,
+            start..10,
+            &stack,
+            &Arc::new(AtomicBool::new(false)),
+        )
+        .expect("run");
+        outcome.layers[0]
+            .annotations
+            .iter()
+            .map(|annotation| (annotation.start, annotation.end, annotation.shown()))
+            .collect()
+    };
+    let one = from(1);
+    assert_eq!(
+        one[0],
+        (1, 1, vec!["first".into(), "1".into(), "255".into()])
+    );
+    assert_eq!(one[1], (2, 5, vec!["4F".into()]));
+    assert_eq!(
+        from(2),
+        [
+            (2, 2, vec!["first".into(), "2".into(), "255".into()]),
             (10, 10, vec!["end".into()]),
         ]
     );

@@ -39,7 +39,7 @@ fn python_i2c_and_its_eeprom_decode_the_demo() {
     let outcome = run_stack(
         &host,
         &capture,
-        len,
+        0..len,
         &stack,
         &Arc::new(AtomicBool::new(false)),
     )
@@ -73,7 +73,7 @@ fn python_uart_reads_the_demo_text() {
     let outcome = run_stack(
         &host,
         &capture,
-        len,
+        0..len,
         &stack,
         &Arc::new(AtomicBool::new(false)),
     )

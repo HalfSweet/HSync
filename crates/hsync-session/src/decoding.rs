@@ -227,7 +227,7 @@ impl DecodeSet {
         let python = |stack: &Stack| -> Result<StackOutcome, String> {
             let host = host.ok_or("no decoder host")?;
             let end = capture.read().len();
-            hsync_srd::run_stack(host, capture, end, stack, cancel)
+            hsync_srd::run_stack(host, capture, 0..end, stack, cancel)
                 .map_err(|error| error.to_string())
         };
         match job {

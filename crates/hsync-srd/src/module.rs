@@ -36,7 +36,9 @@ pyo3::create_exception!(
 #[derive(Debug)]
 pub(crate) struct Instance {
     pub capture: Arc<RwLock<LogicCapture>>,
-    /// Samples to decode.
+    /// The first sample to decode.
+    pub first: u64,
+    /// The sample after the last one to decode.
     pub end: u64,
     /// The capture channel of each decoder channel (required, then optional), if given; empty
     /// for a stacked decoder.
@@ -168,7 +170,9 @@ fn scan(instance: &mut Instance, wanted: &[Wanted]) -> Option<(u64, u64, Vec<u8>
                 .collect()
         })
         .collect();
-    let mut sampler = Sampler::new(channels, instance.end).resume(instance.current);
+    let mut sampler = Sampler::new(channels, instance.end)
+        .from(instance.first)
+        .resume(instance.current);
     let found = sampler.wait(&terms);
     instance.current = Some(sampler.samplenum());
     let found = found?;

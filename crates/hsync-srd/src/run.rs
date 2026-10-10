@@ -2,6 +2,7 @@
 //! the capture, and the decoders stacked on it, each fed by the one below.
 
 use std::collections::BTreeMap;
+use std::ops::Range;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 
@@ -172,11 +173,12 @@ fn describe_error(py: Python<'_>, error: &PyErr) -> (String, String) {
     (message, detail)
 }
 
-/// Runs `stack` over the first `end` samples of `capture`. `cancel` stops it at the next wait.
+/// Runs `stack` over `samples` of `capture` (DSView's decode start and end), as
+/// `srd_session_send` does from the start sample on. `cancel` stops it at the next wait.
 pub fn run_stack(
     host: &DecoderHost,
     capture: &Arc<RwLock<LogicCapture>>,
-    end: u64,
+    samples: Range<u64>,
     stack: &Stack,
     cancel: &Arc<AtomicBool>,
 ) -> Result<StackOutcome, SrdError> {
@@ -233,7 +235,8 @@ pub fn run_stack(
                     })?;
                 *base.borrow().instance.lock() = Some(Instance {
                     capture: Arc::clone(capture),
-                    end,
+                    first: samples.start,
+                    end: samples.end,
                     slots,
                     current: None,
                     outputs: Vec::new(),
@@ -277,7 +280,7 @@ pub fn run_stack(
         // DSView's end() hooks, after a complete run: the bottom decoder learns where the
         // samples ended, then each decoder above it in turn.
         if error.is_none() && !cancel.load(std::sync::atomic::Ordering::Relaxed) {
-            bottom.setattr("last_samplenum", end)?;
+            bottom.setattr("last_samplenum", samples.end)?;
             for object in &instances {
                 if !object.hasattr("end")? {
                     continue;
