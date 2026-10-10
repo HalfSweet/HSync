@@ -19,7 +19,7 @@ From top to bottom, the window has five parts:
 - The first time you open a DSLogic, HSync loads the firmware and FPGA bitstream onto it automatically; this takes a few seconds.
 - If you plug in a DSLogic while the demo device is open, the status bar shows "… connected"; click **Switch** to use it. If a loose USB cable makes the device drop out briefly and it reappears within two seconds, HSync reopens it automatically and restores its settings.
 - If a USB 3.0 model is plugged into a USB 2.0 port, the status bar reminds you to move it to a USB 3.0 port; otherwise Stream mode's speed is limited.
-- **Device options…** at the bottom of the device menu covers the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**) and, for Buffer mode, what happens **When stopped**.
+- The device's options sit in the acquisition settings (below): the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**) and, for Buffer mode, what happens **When stopped**.
 - HSync remembers the settings of each kind of device and restores them the next time you open it: the device options, enabled channels, triggers, channel colours and capture mode at once, the channel names and decoders with the first capture after it opens. Showing a file or another device's capture leaves the names and decoders remembered for this device alone; removing every decoder is remembered too.
 
 ## Acquisition settings
@@ -27,9 +27,10 @@ From top to bottom, the window has five parts:
 Click the sample rate │ duration │ channels button in the top bar:
 
 - **Sample rate** and **Duration**: durations are listed in a 1-2-5 sequence. When you change the sample rate, the duration stays as close as possible to what it was.
-- In Buffer mode, durations longer than the device memory can hold are marked **RLE**. Choosing one turns on RLE compression automatically (RLE must be allowed in **Device options…**).
+- In Buffer mode, durations longer than the device memory can hold are marked **RLE**. Choosing one turns on RLE compression automatically (**RLE compression** must be allowed in the device options beside the lists).
 - If the selected capture needs more than half of this computer's memory, the pop-up warns you to shorten the duration or use fewer channels.
 - **Channels**: click a channel number to enable or disable it.
+- Beside the lists (below them in a narrow window) are the device's other options, listed under [Devices](#devices). While a capture runs they cannot be changed.
 
 ## Capturing
 

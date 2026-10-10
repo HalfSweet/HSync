@@ -4,7 +4,6 @@
   },
   "header": {
     "device": {
-      "options": "设备选项…",
       "unsupported": "暂不支持",
       "select": "选择设备",
       "none": "没有找到设备",
@@ -28,7 +27,8 @@
       "samples": "{count} 个采样点",
       "noDevice": "先选择设备",
       "rle": "RLE",
-      "tooLarge": "这次采集约需 {size} 内存，超过本机内存的一半，可能无法完成；请缩短时长或减少通道"
+      "tooLarge": "这次采集约需 {size} 内存，超过本机内存的一半，可能无法完成；请缩短时长或减少通道",
+      "locked": "采集进行中，停止后才能修改"
     },
     "trigger": {
       "label": "触发",
@@ -118,11 +118,6 @@
   },
   "device": {
     "demo": "演示设备",
-    "dialog": {
-      "title": "{device} 的选项",
-      "close": "关闭",
-      "locked": "采集进行中，停止后才能修改"
-    },
     "option": {
       "operationMode": "运行模式",
       "channelMode": "通道模式",

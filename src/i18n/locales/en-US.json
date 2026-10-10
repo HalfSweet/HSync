@@ -4,7 +4,6 @@
   },
   "header": {
     "device": {
-      "options": "Device options…",
       "unsupported": "Not supported yet",
       "select": "Select device",
       "none": "No devices found",
@@ -28,7 +27,8 @@
       "samples": "{count} samples",
       "noDevice": "Select a device first",
       "rle": "RLE",
-      "tooLarge": "This capture needs about {size} of memory, over half of this machine’s, and may not finish; shorten it or use fewer channels"
+      "tooLarge": "This capture needs about {size} of memory, over half of this machine’s, and may not finish; shorten it or use fewer channels",
+      "locked": "A capture is running; stop it to make changes"
     },
     "trigger": {
       "label": "Trigger",
@@ -118,11 +118,6 @@
   },
   "device": {
     "demo": "Demo device",
-    "dialog": {
-      "title": "{device} options",
-      "close": "Close",
-      "locked": "A capture is running; stop it to change options"
-    },
     "option": {
       "operationMode": "Operation mode",
       "channelMode": "Channel mode",

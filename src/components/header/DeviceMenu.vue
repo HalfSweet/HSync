@@ -11,14 +11,11 @@ import { useCaptureStore } from '@/stores/capture'
 import { DEMO_DRIVER, useDeviceStore } from '@/stores/device'
 import { commandLabel } from '@/utils/keys'
 
-import DeviceOptionsDialog from './DeviceOptionsDialog.vue'
-
 /** The device picker of the top bar (DESIGN.md §4). */
 const { t } = useI18n()
 const device = useDeviceStore()
 const capture = useCaptureStore()
 const open = ref(false)
-const showOptions = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
 const files = useFileActions()
 
@@ -62,11 +59,6 @@ async function pick(entry: DeviceSummary): Promise<void> {
   if (!selectable(entry) || capture.running) return
   open.value = false
   if (entry.id !== device.state?.info.id) await device.open(entry.id)
-}
-
-function openOptions(): void {
-  open.value = false
-  showOptions.value = true
 }
 
 function openFile(): void {
@@ -151,18 +143,7 @@ function loadSession(): void {
         >
           <span class="flex-1 text-left">{{ t('file.loadSession') }}</span>
         </button>
-        <button
-          role="menuitem"
-          class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55"
-          :disabled="!device.state"
-          @click="openOptions"
-        >
-          {{ t('header.device.options') }}
-        </button>
       </div>
-    </Transition>
-    <Transition name="dialog">
-      <DeviceOptionsDialog v-if="showOptions" @close="showOptions = false" />
     </Transition>
   </div>
 </template>
