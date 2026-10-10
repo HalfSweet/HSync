@@ -318,6 +318,24 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve(result && running ? { hits: [], truncated: false } : result)
     },
 
+    async edgeCounts(captureId, from, to, indices) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      const unknown = indices.find((index) => !channels.has(index))
+      if (unknown !== undefined)
+        return Promise.reject(uiError('error.session.unknownChannel', { channel: unknown }))
+      const [low, high] = [Math.min(from, to), Math.max(from, to)]
+      return Promise.resolve(
+        indices.flatMap((index) => {
+          const data = channels.get(index)
+          if (!data) return []
+          const inside = data.edges.filter((edge) => edge > low && edge <= high)
+          const rising = inside.filter((edge) => data.sample(edge)).length
+          return [{ channel: index, rising, falling: inside.length - rising }]
+        }),
+      )
+    },
+
     async find(captureId, conditions: PatternCondition[], sample, direction) {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))

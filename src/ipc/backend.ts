@@ -4,6 +4,7 @@ import { listen } from '@tauri-apps/api/event'
 import type { BinsRequest } from './bindings/BinsRequest'
 import type { CaptureRequest } from './bindings/CaptureRequest'
 import type { CaptureSummary } from './bindings/CaptureSummary'
+import type { ChannelEdges } from './bindings/ChannelEdges'
 import type { DecoderLanes } from './bindings/DecoderLanes'
 import type { DecoderStatus } from './bindings/DecoderStatus'
 import type { DeviceState } from './bindings/DeviceState'
@@ -58,6 +59,13 @@ export interface Backend {
   ): Promise<number | null>
   /** Median samples between rising edges: the period of the clock a channel carries. */
   clockPeriod(captureId: number, channel: number): Promise<number | null>
+  /** Rising and falling edges of channels from sample `from` to sample `to`. */
+  edgeCounts(
+    captureId: number,
+    from: number,
+    to: number,
+    channels: number[],
+  ): Promise<ChannelEdges[]>
   /** The nearest place from `sample` on (or back from it) where a level pattern holds. */
   find(
     captureId: number,
@@ -140,6 +148,10 @@ class TauriBackend implements Backend {
 
   clockPeriod(captureId: number, channel: number) {
     return invoke<number | null>('capture_clock_period', { captureId, channel })
+  }
+
+  edgeCounts(captureId: number, from: number, to: number, channels: number[]) {
+    return invoke<ChannelEdges[]>('capture_edges', { captureId, from, to, channels })
   }
 
   find(captureId: number, conditions: PatternCondition[], sample: number, direction: Direction) {

@@ -51,6 +51,18 @@ describe('createMockBackend', () => {
     expect(await backend.clockPeriod(summary.id, 12)).toBe(19)
   })
 
+  it('counts edges within a segment like the Rust session', async () => {
+    const backend = createMockBackend()
+    const summary = await backend.openDemo()
+    // SCL (D1) starts high; its first edge falls at 45 479.
+    expect(await backend.edgeCounts(summary.id, 0, 45_479, [1])).toEqual([
+      { channel: 1, rising: 0, falling: 1 },
+    ])
+    expect(await backend.edgeCounts(summary.id, 45_478, 0, [1])).toEqual([
+      { channel: 1, rising: 0, falling: 0 },
+    ])
+  })
+
   it('rejects queries for replaced captures', async () => {
     const backend = createMockBackend()
     const first = await backend.openDemo()
