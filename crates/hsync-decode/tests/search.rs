@@ -77,3 +77,53 @@ fn finds_can_identifiers() {
     assert_eq!(found.len(), 3);
     assert!(found.iter().all(|hit| hit.row.is_some()));
 }
+
+#[test]
+fn level_patterns_find_the_i2c_start_conditions() {
+    use hsync_capture::{PatternCondition, PatternLevel};
+    use hsync_decode::Decoded;
+    use hsync_decode::i2c::Kind;
+
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../src-tauri/resources/demo/protocol.dsl");
+    let document = hsync_fileio::read_dsl_file(&path).expect("demo capture");
+    let decoders = document.decoders.expect("decoders");
+    let spec = decoders
+        .as_array()
+        .expect("list")
+        .iter()
+        .filter_map(Spec::from_dsview)
+        .find(|spec| spec.id == "1:i2c")
+        .expect("i2c");
+    let Some(Decoded::I2c { trace, .. }) = spec.run(&document.capture, document.capture.len())
+    else {
+        panic!("an I2C trace");
+    };
+    let expected: Vec<u64> = trace
+        .items
+        .iter()
+        .filter(|item| matches!(item.kind, Kind::Start | Kind::RepeatedStart))
+        .map(|item| item.start)
+        .collect();
+    // SDA (D0) falls while SCL (D1) is high.
+    let pattern = [
+        PatternCondition {
+            channel: 0,
+            level: PatternLevel::Falling,
+        },
+        PatternCondition {
+            channel: 1,
+            level: PatternLevel::High,
+        },
+    ];
+    let mut found = Vec::new();
+    let mut from = 0;
+    while let Some(at) = document.capture.find_pattern(&pattern, from, true) {
+        found.push(at);
+        from = at + 1;
+    }
+    assert_eq!(found, expected);
+    // And back from the end.
+    let last = document.capture.find_pattern(&pattern, u64::MAX, false);
+    assert_eq!(last, expected.last().copied());
+}
