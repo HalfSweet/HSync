@@ -1,3 +1,5 @@
+use std::sync::atomic::AtomicBool;
+
 use hsync_driver::WatchHandle;
 use hsync_session::{Instrument, Workspace};
 use parking_lot::Mutex;
@@ -12,6 +14,8 @@ pub struct AppState {
     pub instrument: Mutex<Instrument>,
     /// Keeps the USB hotplug watch alive.
     pub hotplug: Mutex<Option<WatchHandle>>,
+    /// Asks the save or export under way to stop.
+    pub file_cancel: AtomicBool,
 }
 
 impl AppState {
@@ -20,6 +24,7 @@ impl AppState {
             workspace: Mutex::new(workspace),
             instrument: Mutex::new(instrument),
             hotplug: Mutex::new(None),
+            file_cancel: AtomicBool::new(false),
         }
     }
 }
