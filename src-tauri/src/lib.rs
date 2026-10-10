@@ -57,8 +57,10 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
             );
         }
     });
+    let mut workspace = Workspace::with_events(events);
+    workspace.set_decoder_host(Arc::clone(&decoders));
     app.manage(AppState::new(
-        Workspace::with_events(events),
+        workspace,
         Instrument::new(manager.clone()),
         decoders,
     ));
