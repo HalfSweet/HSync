@@ -559,6 +559,8 @@
       "firmwareMissing": "缺少固件文件 {file}",
       "firmwareIncompatible": "设备固件版本不兼容（{version}）",
       "restarting": "设备正在重启",
+      "firmwareUpdate": "请先用 {tool} 更新设备固件",
+      "fault": "设备状态异常，请重新插拔后再试",
       "busy": "设备正被其他程序使用",
       "noDriver": "没有可用的 USB 驱动，Windows 需要为设备安装 WinUSB",
       "timeout": "设备没有响应：{detail}",
@@ -566,6 +568,8 @@
       "invalidRequest": "设备不接受这项设置：{detail}",
       "unsupported": "暂不支持这台设备",
       "overflow": "USB 带宽不足，采集已中止。请降低采样率或减少通道",
+      "memoryFull": "压缩后的数据超出了设备内存，采集已中止。请缩短采集时长",
+      "rleOverrun": "信号变化太快，来不及压缩，采集已中止。请选择不超出设备内存的时长",
       "detached": "设备已断开",
       "lost": "与设备的连接中断"
     },

@@ -559,6 +559,8 @@
       "firmwareMissing": "Firmware file {file} is missing",
       "firmwareIncompatible": "Incompatible device firmware ({version})",
       "restarting": "The device is restarting",
+      "firmwareUpdate": "Update the device firmware with {tool} first",
+      "fault": "The device reported a fault. Unplug it and plug it in again",
       "busy": "Another program is using the device",
       "noDriver": "No usable USB driver; on Windows, install WinUSB for the device",
       "timeout": "The device did not respond: {detail}",
@@ -566,6 +568,8 @@
       "invalidRequest": "The device does not accept this setting: {detail}",
       "unsupported": "This device is not supported yet",
       "overflow": "USB bandwidth exceeded, so the capture stopped. Lower the sample rate or use fewer channels",
+      "memoryFull": "The compressed samples outgrew the device memory, so the capture stopped. Choose a shorter duration",
+      "rleOverrun": "The signals changed too fast to compress, so the capture stopped. Choose a duration that fits the device memory",
       "detached": "The device was disconnected",
       "lost": "The connection to the device was lost"
     },
