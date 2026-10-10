@@ -28,8 +28,8 @@ export interface TraceDraw {
   cells: Uint8Array
   /** Column runs drawn as blocks, ascending and apart. */
   blocks: readonly ColumnRun[]
-  /** A clock: its idle level runs through its blocks. */
-  clock: boolean
+  /** Whether high stretches get the wash: not on a line busy in view. */
+  wash: boolean
 }
 
 export interface FrameDescriptor {

@@ -91,7 +91,7 @@ export function frameRects(
       trace.cells,
       (column) => frame.trackLeft + sampleToX(frame.view, binStart(bins, column)),
       trace.blocks,
-      trace.clock,
+      trace.wash,
     )
     const wash = parseColor(tokens.washes[trace.wire] ?? tokens.grid)
     for (const [from, to] of shape.washes) {

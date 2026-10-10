@@ -1,8 +1,8 @@
 /**
  * The shape of one trace from its column cells: a polyline between the high and low levels, the
  * spans of high level that get the wash, and blocks where the trace changes too often to draw
- * edge by edge (DESIGN.md §9.6: SPI clocks and data become byte blocks). Neighbouring columns
- * with the same level merge, so the shape has as many segments as there are transitions in view.
+ * edge by edge (DESIGN.md §6.3), outlined at both levels. Neighbouring columns with the same
+ * level merge, so the shape has as many segments as there are transitions in view.
  */
 import { CELL_EMPTY, CELL_FIRST_HIGH, CELL_LAST_HIGH, CELL_TRANSITION } from '@/ipc/bins'
 
@@ -70,22 +70,25 @@ export function changingIn(cells: Uint8Array, runs: readonly ColumnRun[]): [numb
     .map(([from, to]) => [from, to])
 }
 
-/** Quiet columns a run of edges may span: edges closer than 2 CSS pixels cannot be told apart. */
+/** Quiet columns a run of edges may span: edges closer than 3 CSS pixels are not worth telling
+ * apart; a UART frame or an I²C burst becomes one block. */
 export function denseGap(dpr: number): number {
-  return Math.max(1, Math.round(2 * dpr) - 1)
+  return Math.max(1, Math.round(3 * dpr) - 1)
 }
 
 /**
+ * Blocks are outlined at both levels and both ends.
+ *
  * @param cells one byte per column, see `hsync_capture::cell`
  * @param x the x of a column's left edge; `x(cells.length)` is the right edge of the last column
  * @param blocks column runs to draw as blocks, ascending and apart
- * @param through draw the level a block starts and ends on through it, as a clock's idle line
+ * @param wash whether high stretches get the wash; a busy line is clearer as lines and blocks
  */
 export function traceShape(
   cells: Uint8Array,
   x: (column: number) => number,
   blocks: readonly ColumnRun[] = [],
-  through = false,
+  wash = true,
 ): TraceShape {
   const path: ShapeCommand[] = []
   const washes: [number, number][] = []
@@ -103,6 +106,11 @@ export function traceShape(
   let washFrom: number | null = level ? x(0) : null
   path.push(['M', x(0), level])
 
+  const closeWash = (at: number) => {
+    if (washFrom !== null && wash) washes.push([washFrom, at])
+    washFrom = null
+  }
+
   const lineTo = (at: number, high: boolean) => {
     const last = path.at(-1)
     if (last?.[1] !== at || last[2] !== high) path.push(['L', at, high])
@@ -112,10 +120,7 @@ export function traceShape(
     lineTo(at, level)
     path.push(['L', at, high])
     if (high) washFrom = at
-    else if (washFrom !== null) {
-      washes.push([washFrom, at])
-      washFrom = null
-    }
+    else closeWash(at)
     level = high
   }
 
@@ -130,14 +135,20 @@ export function traceShape(
       const left = x(column)
       const right = x(to)
       const after = ((cells[to - 1] ?? 0) & CELL_LAST_HIGH) !== 0
+      closeWash(left)
       lineTo(left, level)
-      if (washFrom !== null) {
-        washes.push([washFrom, left])
-        washFrom = null
-      }
+      // The outline: the left end, both levels, the right end.
+      path.push(
+        ['L', left, !level],
+        ['M', left, true],
+        ['L', right, true],
+        ['M', left, false],
+        ['L', right, false],
+        ['M', right, true],
+        ['L', right, false],
+        ['M', right, after],
+      )
       spans.push([left, right])
-      if (through && after === level) path.push(['L', right, level])
-      else path.push(['M', right, after])
       level = after
       if (level) washFrom = right
       column = to
@@ -151,17 +162,14 @@ export function traceShape(
       const last = (cell & CELL_LAST_HIGH) !== 0
       path.push(['L', at, level], ['L', at, !level], ['M', at, last])
       if (last && !level) washFrom = at
-      else if (!last && level && washFrom !== null) {
-        washes.push([washFrom, at])
-        washFrom = null
-      }
+      else if (!last && level) closeWash(at)
       level = last
     }
     column += 1
   }
   const right = x(end)
   lineTo(right, level)
-  if (washFrom !== null) washes.push([washFrom, right])
+  closeWash(right)
   return { path, washes, blocks: spans }
 }
 

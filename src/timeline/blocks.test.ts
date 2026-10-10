@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { CELL_FIRST_HIGH, CELL_LAST_HIGH, CELL_TRANSITION } from '@/ipc/bins'
 
-import { isClockRole, traceBlocks } from './blocks'
+import { blockWidth, traceBlocks } from './blocks'
 import type { ChannelGroup } from './groups'
 
 const T = CELL_TRANSITION
@@ -23,11 +23,6 @@ const spi: ChannelGroup = {
 }
 
 describe('trace blocks', () => {
-  it('know clock roles', () => {
-    expect(['clk', 'scl', 'sck', 'tck', 'swclk', 'bck', 'clock'].every(isClockRole)).toBe(true)
-    expect(['sda', 'miso', 'rx', 'cs', undefined].some(isClockRole)).toBe(false)
-  })
-
   it('give SPI data lines the bytes of their clock in which they change', () => {
     const cells = new Map<number, Uint8Array>([
       // Two bursts of clock edges.
@@ -44,5 +39,17 @@ describe('trace blocks', () => {
     ])
     expect(miso && traceBlocks(miso, spi, of)).toEqual([[1, 4]])
     expect(mosi && traceBlocks(mosi, spi, of)).toEqual([])
+  })
+
+  it('measure the blocks in view', () => {
+    const x = (column: number) => column * 2
+    const blocks = [
+      [1, 4],
+      [10, 20],
+    ] as const
+    // 6 px of the first block, and the 10 px of the second within 0..30.
+    expect(blockWidth(blocks, x, 0, 30)).toBe(16)
+    expect(blockWidth(blocks, x, 30, 60)).toBe(10)
+    expect(blockWidth(blocks, x, 50, 60)).toBe(0)
   })
 })

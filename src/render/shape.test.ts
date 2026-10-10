@@ -49,7 +49,7 @@ describe('traceShape', () => {
     expect(traceShape(Uint8Array.of(CELL_EMPTY), x).path).toEqual([])
   })
 
-  it('draws a dense burst as a block, the line resuming on its far side', () => {
+  it('draws a dense burst as an outlined block, the line resuming on its far side', () => {
     const T = CELL_TRANSITION
     // Low, a burst of three busy columns ending high, then high.
     const cells = Uint8Array.of(0, T, T | CELL_LAST_HIGH, HIGH | T, HIGH)
@@ -58,23 +58,32 @@ describe('traceShape', () => {
     expect(shape.path).toEqual([
       ['M', 0, false],
       ['L', 10, false],
+      // The block's outline: left end, top, bottom, right end.
+      ['L', 10, true],
+      ['M', 10, true],
+      ['L', 40, true],
+      ['M', 10, false],
+      ['L', 40, false],
+      ['M', 40, true],
+      ['L', 40, false],
       ['M', 40, true],
       ['L', 50, true],
     ])
     expect(shape.washes).toEqual([[40, 50]])
   })
 
-  it("runs a clock's idle line through its blocks", () => {
+  it('leaves the wash off when asked, as for a busy line', () => {
     const T = CELL_TRANSITION
-    const cells = Uint8Array.of(0, T, T, T, 0)
-    const shape = traceShape(cells, x, [[1, 4]], true)
-    expect(shape.path).toEqual([
-      ['M', 0, false],
-      ['L', 10, false],
-      ['L', 40, false],
-      ['L', 50, false],
+    // High, a burst, high, low, a high pulse, low.
+    const cells = Uint8Array.of(HIGH, HIGH, T | HIGH, T | HIGH, HIGH, 0, HIGH, HIGH, 0)
+    expect(traceShape(cells, x, [[2, 4]]).washes).toEqual([
+      [0, 20],
+      [40, 50],
+      [60, 80],
     ])
-    expect(shape.blocks).toEqual([[10, 40]])
+    const busy = traceShape(cells, x, [[2, 4]], false)
+    expect(busy.washes).toEqual([])
+    expect(busy.blocks).toEqual([[20, 40]])
   })
 })
 

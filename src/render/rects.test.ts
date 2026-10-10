@@ -39,7 +39,7 @@ describe('waveform rectangles', () => {
           narrow: false,
           cells: new Uint8Array([0, high, high | CELL_TRANSITION, 0]),
           blocks: [],
-          clock: false,
+          wash: true,
         },
       ],
     }

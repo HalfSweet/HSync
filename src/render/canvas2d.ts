@@ -73,7 +73,7 @@ export class Canvas2DRenderer implements WaveformRenderer {
       trace.cells,
       (column) => frame.trackLeft + sampleToX(frame.view, binStart(bins, column)),
       trace.blocks,
-      trace.clock,
+      trace.wash,
     )
 
     const wash = new Path2D()

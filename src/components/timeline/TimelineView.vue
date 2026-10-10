@@ -13,7 +13,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useRowMetrics } from '@/composables/useRowMetrics'
 import { getBackend } from '@/ipc/backend'
-import type { BinsResult } from '@/ipc/bins'
+import { binStart, type BinsResult } from '@/ipc/bins'
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { Canvas2DRenderer } from '@/render/canvas2d'
@@ -33,13 +33,13 @@ import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
 import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/timeline/fling'
 import { denseGap } from '@/render/shape'
-import { isClockRole, traceBlocks } from '@/timeline/blocks'
+import { BUSY_WIDTH, blockWidth, traceBlocks } from '@/timeline/blocks'
 import { keyTakenElsewhere, timelineAction } from '@/timeline/keys'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
 import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
-import { viewportEnd, xToSample } from '@/timeline/viewport'
+import { sampleToX, viewportEnd, xToSample } from '@/timeline/viewport'
 import { formatFrequency, formatTime } from '@/utils/units'
 
 import ChannelLabel from './ChannelLabel.vue'
@@ -310,6 +310,7 @@ const frame = computed<FrameDescriptor>(() => {
   const { width, height } = client.value
   const ruler = metrics.value.ruler
   const top = scroll.value.top
+  const trackLeft = metrics.value.label - scroll.value.left
   const result = bins.value
   const traces: TraceDraw[] = []
   const cellsOf = (index: number) => result?.channels.get(index)
@@ -319,21 +320,26 @@ const frame = computed<FrameDescriptor>(() => {
     if (y + row.height <= ruler || y >= height) continue
     const cells = cellsOf(row.channel.index)
     if (!cells) continue
+    const blocks = traceBlocks(row.channel, row.group, cellsOf, denseGap(pixelRatio.value))
+    // A line busy in view reads better as lines and blocks than with the wash between them.
+    const columnX = (column: number) =>
+      trackLeft + sampleToX(view.viewport, binStart(result, column))
+    const busy = blockWidth(blocks, columnX, trackLeft, trackLeft + view.viewport.width)
     traces.push({
       top: y,
       height: row.height,
       wire: row.channel.wire,
       narrow: row.kind === 'trace-narrow',
       cells,
-      blocks: traceBlocks(row.channel, row.group, cellsOf, denseGap(pixelRatio.value)),
-      clock: isClockRole(row.channel.role),
+      blocks,
+      wash: busy < BUSY_WIDTH,
     })
   }
   return {
     width,
     height,
     dpr: pixelRatio.value,
-    trackLeft: metrics.value.label - scroll.value.left,
+    trackLeft,
     clipTop: ruler,
     view: view.viewport,
     grid: view.ruler.ticks.filter((tick) => tick.major).map((tick) => tick.x),
