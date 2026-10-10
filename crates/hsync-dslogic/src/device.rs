@@ -168,7 +168,9 @@ impl DslogicDevice {
         firmware: FirmwareDir,
         id: String,
     ) -> Result<Self, DriverError> {
+        log::debug!("{}: reading the firmware version", profile.model);
         let (major, minor) = ctl.firmware_version()?;
+        log::debug!("{}: firmware {major}.{minor}", profile.model);
         if major != REQUIRED_FIRMWARE_MAJOR {
             return Err(DriverError::FirmwareIncompatible(format!(
                 "{major}.{minor}"
@@ -176,12 +178,14 @@ impl DslogicDevice {
         }
         let settings = Settings::defaults(profile);
         let status = ctl.hw_status()?;
+        log::debug!("{}: hardware status {status:#04x}", profile.model);
         if status & crate::protocol::status::FPGA_DONE == 0 {
             let bitstream = firmware.load(bitstream_name(profile, settings.threshold))?;
             boot::configure_fpga(&ctl, &bitstream)?;
         } else {
             boot::clear_control(&ctl)?;
             let hdl = ctl.hdl_version()?;
+            log::debug!("{}: FPGA logic version {hdl:#04x}", profile.model);
             if hdl != REQUIRED_HDL_VERSION {
                 return Err(DriverError::FirmwareIncompatible(format!("HDL {hdl:#04x}")));
             }

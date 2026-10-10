@@ -221,6 +221,11 @@ fn parse_header(data: &[u8], expected_len: usize) -> Option<Header> {
     let real_pos = word(4)?;
     let remain = (u64::from(word(16)?) << 32) | u64::from(word(12)?);
     let triggered = word(20)? & 1 != 0;
+    log::debug!(
+        "trigger header: real_pos {real_pos}, ram_saddr {:#x}, remain {remain}, status {:#x}",
+        word(8)?,
+        word(20)?
+    );
     Some(Header {
         trigger: triggered.then_some(u64::from(real_pos)),
         remain,
