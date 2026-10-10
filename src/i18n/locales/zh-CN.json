@@ -12,7 +12,10 @@
       "needsFirmware": "打开时下载固件",
       "speedTooLow": "USB 端口速度过低",
       "rescan": "重新扫描",
-      "listTitle": "设备"
+      "listTitle": "设备",
+      "arrived": "发现 {device}",
+      "switch": "切换",
+      "dismiss": "忽略"
     },
     "acquisition": {
       "aria": "采集设置：采样率 {rate}，时长 {duration}，{channels} 个通道",

@@ -1,0 +1,107 @@
+import { createPinia, setActivePinia } from 'pinia'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { DeviceState } from '@/ipc/bindings/DeviceState'
+import type { DeviceSummary } from '@/ipc/bindings/DeviceSummary'
+
+import { useDeviceStore } from './device'
+
+const demo: DeviceSummary = {
+  id: 'virtual-demo',
+  driver: 'virtual-demo',
+  vendor: 'HSync',
+  model: 'Demo',
+  status: 'ready',
+}
+const dslogic: DeviceSummary = {
+  id: 'DSLogic:1-2',
+  driver: 'DSLogic',
+  vendor: 'DreamSourceLab',
+  model: 'DSLogic Plus',
+  status: 'ready',
+}
+
+function stateOf(device: DeviceSummary): DeviceState {
+  return {
+    info: { ...device, firmware: null, usbSpeed: null },
+    options: [],
+    channelCount: 16,
+    enabledChannels: [],
+    capturing: false,
+  }
+}
+
+const backend = {
+  list: [demo] as DeviceSummary[],
+  onDevices: null as ((devices: DeviceSummary[]) => void) | null,
+  onDeviceState: null as ((state: DeviceState | null) => void) | null,
+  opened: [] as string[],
+}
+
+vi.mock('@/ipc/backend', () => ({
+  getBackend: () =>
+    Promise.resolve({
+      deviceList: () => Promise.resolve(backend.list),
+      deviceState: () => Promise.resolve(null),
+      deviceOpen: (id: string) => {
+        backend.opened.push(id)
+        const device = backend.list.find((candidate) => candidate.id === id)
+        return device ? Promise.resolve(stateOf(device)) : Promise.reject(new Error(id))
+      },
+      onDevices: (handler: (devices: DeviceSummary[]) => void) => {
+        backend.onDevices = handler
+        return Promise.resolve(() => undefined)
+      },
+      onDeviceState: (handler: (state: DeviceState | null) => void) => {
+        backend.onDeviceState = handler
+        return Promise.resolve(() => undefined)
+      },
+    }),
+}))
+
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+describe('device store', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    backend.list = [demo]
+    backend.opened = []
+  })
+
+  it('opens hardware before the demo device', async () => {
+    backend.list = [demo, dslogic]
+    const store = useDeviceStore()
+    await store.init()
+    expect(store.state?.info.id).toBe(dslogic.id)
+  })
+
+  it('offers hardware plugged in while the demo device is open', async () => {
+    const store = useDeviceStore()
+    await store.init()
+    expect(store.state?.info.id).toBe(demo.id)
+    backend.list = [demo, dslogic]
+    backend.onDevices?.(backend.list)
+    await settle()
+    expect(store.arrival?.id).toBe(dslogic.id)
+    expect(store.state?.info.id).toBe(demo.id)
+    await store.acceptArrival()
+    expect(store.state?.info.id).toBe(dslogic.id)
+    expect(store.arrival).toBeNull()
+  })
+
+  it('falls back to the demo device when the open device goes away', async () => {
+    backend.list = [demo, dslogic]
+    const store = useDeviceStore()
+    await store.init()
+    backend.list = [demo]
+    backend.onDevices?.(backend.list)
+    backend.onDeviceState?.(null)
+    await settle()
+    expect(store.state?.info.id).toBe(demo.id)
+    // Plugged back in with nothing but the demo open: offered again.
+    backend.list = [demo, dslogic]
+    backend.onDevices?.(backend.list)
+    await settle()
+    expect(store.arrival?.id).toBe(dslogic.id)
+  })
+})

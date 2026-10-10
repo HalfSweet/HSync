@@ -12,7 +12,10 @@
       "needsFirmware": "Loads firmware when opened",
       "speedTooLow": "USB port too slow",
       "rescan": "Scan again",
-      "listTitle": "Devices"
+      "listTitle": "Devices",
+      "arrived": "{device} connected",
+      "switch": "Switch",
+      "dismiss": "Dismiss"
     },
     "acquisition": {
       "aria": "Acquisition: sample rate {rate}, duration {duration}, {channels} channels",

@@ -21,6 +21,8 @@ function integer(option: OptionState | undefined): number | null {
 export const useDeviceStore = defineStore('device', () => {
   const devices = shallowRef<DeviceSummary[]>([])
   const state = shallowRef<DeviceState | null>(null)
+  /** Hardware plugged in while the demo device was open, offered as a switch. */
+  const arrival = shallowRef<DeviceSummary | null>(null)
   /** Id of the device being opened; firmware uploads make this take seconds. */
   const opening = shallowRef<string | null>(null)
   const error = shallowRef<UiError | null>(null)
@@ -67,14 +69,50 @@ export const useDeviceStore = defineStore('device', () => {
     return attempt(async () => (await getBackend()).deviceSetChannel(channel, enabled))
   }
 
+  /** Opens the demo device, so there is always something to capture with. */
+  async function openDemo(): Promise<void> {
+    const demo = devices.value.find(
+      (device) => device.driver === DEMO_DRIVER && device.status === 'ready',
+    )
+    if (demo) await open(demo.id)
+  }
+
+  /** A new device list: hardware that just appeared is opened, or offered over the demo. */
+  async function receiveDevices(found: DeviceSummary[]): Promise<void> {
+    const known = new Set(devices.value.map((device) => device.id))
+    devices.value = found
+    if (arrival.value && !found.some((device) => device.id === arrival.value?.id))
+      arrival.value = null
+    const newcomer = found.find(
+      (device) =>
+        !known.has(device.id) && device.status !== 'unsupported' && device.driver !== DEMO_DRIVER,
+    )
+    if (!newcomer || newcomer.status === 'speedTooLow') return
+    if (!state.value) await open(newcomer.id)
+    else if (isDemo.value) arrival.value = newcomer
+  }
+
+  /** Takes up the offered hardware. */
+  async function acceptArrival(): Promise<void> {
+    const offered = arrival.value
+    arrival.value = null
+    if (offered) await open(offered.id)
+  }
+
+  function dismissArrival(): void {
+    arrival.value = null
+  }
+
   /** Follows device changes and opens a device: the open one, else hardware, else the demo. */
   async function init(): Promise<void> {
     const backend = await getBackend()
     await backend.onDevices((found) => {
-      devices.value = found
+      void receiveDevices(found)
     })
+    // The open device went away: fall back to the demo device.
     await backend.onDeviceState((changed) => {
       state.value = changed
+      if (!changed) void openDemo()
     })
     await refresh()
     state.value = await backend.deviceState()
@@ -87,6 +125,7 @@ export const useDeviceStore = defineStore('device', () => {
   return {
     devices,
     state,
+    arrival,
     opening,
     error,
     samplerate,
@@ -98,6 +137,8 @@ export const useDeviceStore = defineStore('device', () => {
     open,
     setOption,
     setChannel,
+    acceptArrival,
+    dismissArrival,
     init,
   }
 })

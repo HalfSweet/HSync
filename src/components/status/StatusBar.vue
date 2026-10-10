@@ -88,6 +88,17 @@ const perDivision = computed(() =>
       {{ t('status.samples', { count: formatCount(capture.sampleCount, locale) }) }}
     </span>
     <div class="flex-1" />
+    <span v-if="device.arrival" role="status" class="inline-flex items-center gap-1.5">
+      <span class="text-ink">{{
+        t('header.device.arrived', { device: device.arrival.model })
+      }}</span>
+      <button class="btn-ghost h-[22px]" @click="device.acceptArrival()">
+        {{ t('header.device.switch') }}
+      </button>
+      <button class="btn-ghost h-[22px]" @click="device.dismissArrival()">
+        {{ t('header.device.dismiss') }}
+      </button>
+    </span>
     <div class="flex items-center gap-0.5">
       <button
         class="btn-icon"
