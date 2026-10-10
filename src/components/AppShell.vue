@@ -25,6 +25,8 @@ const decode = useDecodeStore()
       </main>
     </div>
     <StatusBar />
-    <DecoderDialog v-if="decode.editor" />
+    <Transition name="dialog">
+      <DecoderDialog v-if="decode.editor" />
+    </Transition>
   </div>
 </template>

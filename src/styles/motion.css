@@ -24,3 +24,31 @@
   opacity: 0;
   transform: scale(0.96);
 }
+
+/* dialog: the veil fades in and the dialog on it rises into place. */
+.dialog-enter-active {
+  transition: opacity var(--motion-enter) var(--ease-enter);
+}
+
+.dialog-leave-active {
+  pointer-events: none;
+  transition: opacity var(--motion-exit) var(--ease-exit);
+}
+
+.dialog-enter-active > [role='dialog'] {
+  transition: transform var(--motion-enter) var(--ease-enter);
+}
+
+.dialog-leave-active > [role='dialog'] {
+  transition: transform var(--motion-exit) var(--ease-exit);
+}
+
+.dialog-enter-from,
+.dialog-leave-to {
+  opacity: 0;
+}
+
+.dialog-enter-from > [role='dialog'],
+.dialog-leave-to > [role='dialog'] {
+  transform: translateY(8px) scale(0.98);
+}

@@ -152,6 +152,8 @@ function loadSession(): void {
         </button>
       </div>
     </Transition>
-    <DeviceOptionsDialog v-if="showOptions" @close="showOptions = false" />
+    <Transition name="dialog">
+      <DeviceOptionsDialog v-if="showOptions" @close="showOptions = false" />
+    </Transition>
   </div>
 </template>

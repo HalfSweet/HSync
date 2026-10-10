@@ -203,6 +203,8 @@ async function revealLog(): Promise<void> {
         </div>
       </div>
     </Transition>
-    <AboutDialog v-if="about" @close="about = false" />
+    <Transition name="dialog">
+      <AboutDialog v-if="about" @close="about = false" />
+    </Transition>
   </div>
 </template>

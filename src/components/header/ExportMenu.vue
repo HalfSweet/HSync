@@ -83,6 +83,8 @@ function saveSession(): void {
         </button>
       </div>
     </Transition>
-    <ExportDialog v-if="showDialog" @close="showDialog = false" />
+    <Transition name="dialog">
+      <ExportDialog v-if="showDialog" @close="showDialog = false" />
+    </Transition>
   </div>
 </template>
