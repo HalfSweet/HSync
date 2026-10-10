@@ -162,6 +162,15 @@ fn annotation_lanes(layers: &[LayerResult]) -> (Vec<AnnotationLane>, Vec<Annotat
     (lanes, annotations)
 }
 
+/// Why a stack fell short: the error that stopped it, or that of a decoder stacked on top.
+fn failure(outcome: &StackOutcome) -> Option<String> {
+    outcome
+        .error
+        .as_ref()
+        .map(ToString::to_string)
+        .or_else(|| outcome.layers.iter().find_map(|layer| layer.error.clone()))
+}
+
 impl DecodeSet {
     /// Entries for DSView's `decoders` list, not run yet. Without `host` only the native
     /// decoders run, and stacked decoders are left out.
@@ -237,11 +246,9 @@ impl DecodeSet {
                         let names: Vec<String> =
                             lanes.iter().map(|lane| lane.lane.clone()).collect();
                         presentation.append_lanes(&names, annotations);
-                        match outcome.error {
+                        match failure(&outcome) {
                             None => State::Done(Arc::new(presentation), lanes),
-                            Some(error) => {
-                                State::Failed(Arc::new(presentation), lanes, error.to_string())
-                            }
+                            Some(error) => State::Failed(Arc::new(presentation), lanes, error),
                         }
                     }
                     Err(error) => State::Failed(Arc::new(presentation), Vec::new(), error),
@@ -252,9 +259,9 @@ impl DecodeSet {
                     let (lanes, annotations) = annotation_lanes(&outcome.layers);
                     let names: Vec<String> = lanes.iter().map(|lane| lane.lane.clone()).collect();
                     let presentation = Arc::new(Presentation::annotations(&names, annotations));
-                    match outcome.error {
+                    match failure(&outcome) {
                         None => State::Done(presentation, lanes),
-                        Some(error) => State::Failed(presentation, lanes, error.to_string()),
+                        Some(error) => State::Failed(presentation, lanes, error),
                     }
                 }
                 Err(error) if error.contains("required channel") => State::MissingChannels,
