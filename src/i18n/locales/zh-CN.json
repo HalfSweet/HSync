@@ -163,7 +163,7 @@
     "whole": "全程",
     "trigger": "触发",
     "start": "起点",
-    "viewport": "当前视口 {from} – {to}"
+    "viewport": "正在查看 {from} – {to}"
   },
   "ruler": {
     "addDecoder": "添加协议解码",
@@ -171,7 +171,7 @@
     "triggerColumnTip": "每个通道各设各的触发条件，在通道所在的行里设置",
     "unitTip": "相对触发点的时间，单位{unit}",
     "dragTip": "在标尺上拖动，选出一段",
-    "outsideViewport": "延伸到视口外"
+    "outsideViewport": "延伸到画面外"
   },
   "group": {
     "toggle": "展开或收起 {name}",
@@ -274,7 +274,7 @@
     "pulseOpen": "{level} ≥ {width}",
     "period": "周期 {period}，{frequency}，占空比 {duty}",
     "bits": "约 {count} 位",
-    "outsideViewport": "延伸到视口外"
+    "outsideViewport": "延伸到画面外"
   },
   "edgeMeasure": {
     "delta": "Δt {time}",
@@ -283,7 +283,7 @@
     "hint": "单击另一个边沿完成测量，Esc 取消"
   },
   "selection": {
-    "outsideViewport": "延伸到视口外"
+    "outsideViewport": "延伸到画面外"
   },
   "measure": {
     "segment": "选段 {duration}",
@@ -314,7 +314,7 @@
       "byteTip": "0x{value}，{time} 起"
     },
     "can": {
-      "noFramesInView": "视口内没有帧",
+      "noFramesInView": "画面内没有帧",
       "previous": "上一帧",
       "next": "下一帧",
       "length": "{count} 个字节",

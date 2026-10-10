@@ -163,7 +163,7 @@
     "whole": "Capture",
     "trigger": "Trigger",
     "start": "Start",
-    "viewport": "Viewport {from} – {to}"
+    "viewport": "Showing {from} – {to}"
   },
   "ruler": {
     "addDecoder": "Add decoder",
