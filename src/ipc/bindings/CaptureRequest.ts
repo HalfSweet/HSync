@@ -25,4 +25,13 @@ advanced: AdvancedTrigger | null,
 /**
  * Capture until stopped, keeping the newest samples up to the sample limit.
  */
-looping: boolean, };
+looping: boolean, 
+/**
+ * Keep the shown capture shown until this one has ended, as repeated captures do.
+ */
+hold: boolean, 
+/**
+ * A held-behind capture stopped early replaces the shown one all the same (DSView's
+ * "update the latest data when stopped in repeat mode"); otherwise it is dropped.
+ */
+keepStopped: boolean, };

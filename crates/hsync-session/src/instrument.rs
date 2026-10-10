@@ -16,7 +16,7 @@ use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{CaptureSource, CaptureSummary, SessionError, Workspace};
+use crate::{CaptureSource, CaptureSummary, SessionError, Verdict, Workspace};
 
 /// How long a device may take to come back after receiving its firmware.
 const RESTART_TIMEOUT: Duration = Duration::from_secs(8);
@@ -60,6 +60,11 @@ pub struct CaptureRequest {
     pub advanced: Option<AdvancedTrigger>,
     /// Capture until stopped, keeping the newest samples up to the sample limit.
     pub looping: bool,
+    /// Keep the shown capture shown until this one has ended, as repeated captures do.
+    pub hold: bool,
+    /// A held-behind capture stopped early replaces the shown one all the same (DSView's
+    /// "update the latest data when stopped in repeat mode"); otherwise it is dropped.
+    pub keep_stopped: bool,
 }
 
 /// Where a running capture is.
@@ -370,7 +375,11 @@ impl Instrument {
             driver: info.driver,
             model: info.model,
         };
-        let live = workspace.begin_live(source, LogicCapture::new(samplerate, channels));
+        let live = workspace.begin_live(
+            source,
+            LogicCapture::new(samplerate, channels),
+            request.hold,
+        );
         let (summary, capture) = (live.summary, live.samples);
         let acquisition = Arc::new(Mutex::new(Some(acquisition)));
         let ended = Arc::new(std::sync::atomic::AtomicBool::new(false));
@@ -395,6 +404,8 @@ impl Instrument {
         let ingest = Ingest {
             capture,
             looping,
+            verdict: live.verdict,
+            keep_stopped: request.keep_stopped,
             decode: Some(live.decode),
             packets,
             acquisition: Arc::clone(&acquisition),
@@ -430,6 +441,10 @@ struct Ingest {
     capture: Arc<RwLock<LogicCapture>>,
     /// Keep only the newest `status.limit` samples.
     looping: bool,
+    /// For a capture taken behind a held one: where to say whether it replaces it.
+    verdict: Option<Verdict>,
+    /// Replace the held capture even when stopped early.
+    keep_stopped: bool,
     /// Decodes the capture once it is complete.
     decode: Option<Box<dyn FnOnce() + Send>>,
     packets: Receiver<Packet>,
@@ -524,9 +539,16 @@ impl Ingest {
         self.status.phase = LivePhase::Ended;
         self.status.end = Some(end);
         self.status.error = error;
+        // Decided before anyone hears of the end, so the workspace already shows the outcome.
+        let shown = end != EndKind::Stopped || self.keep_stopped;
+        if let Some(verdict) = &self.verdict {
+            let _ = verdict.set(shown);
+        }
         self.ended.store(true, std::sync::atomic::Ordering::Release);
         self.emit();
-        if let Some(decode) = self.decode.take() {
+        if (self.verdict.is_none() || shown)
+            && let Some(decode) = self.decode.take()
+        {
             decode();
         }
     }

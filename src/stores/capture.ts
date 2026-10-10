@@ -183,7 +183,14 @@ export const useCaptureStore = defineStore('capture', () => {
     lastRequest = request
     try {
       const looping = mode.value === 'loop' && canLoop.value
-      const started = await (await getBackend()).captureStart({ ...request, looping })
+      const started = await (
+        await getBackend()
+      ).captureStart({
+        ...request,
+        looping,
+        hold: false,
+        keepStopped: false,
+      })
       summary.value = started
       status.value = 'ready'
       // A status may have arrived before the summary did.

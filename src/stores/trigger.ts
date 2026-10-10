@@ -17,7 +17,7 @@ import { useChannelsStore } from './channels'
 import { useDeviceStore } from './device'
 
 /** What the trigger decides of a capture request; the capture store adds how to capture. */
-export type TriggerRequest = Omit<CaptureRequest, 'looping'>
+export type TriggerRequest = Omit<CaptureRequest, 'looping' | 'hold' | 'keepStopped'>
 
 /** What a trigger can do without a device to ask: simple triggers up to 90 %, as DSView. */
 const DEFAULT_CAPS: TriggerCaps = { maxPosition: 90, advanced: false }

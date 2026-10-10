@@ -97,6 +97,8 @@ fn waits_for_the_trigger() {
         instant: false,
         advanced: None,
         looping: false,
+        hold: false,
+        keep_stopped: false,
     };
     let summary = instrument
         .start(&mut workspace, request, sink)
@@ -160,6 +162,72 @@ fn loops_until_stopped_keeping_the_newest_samples() {
                 "D{channel} sample {sample}"
             );
         }
+    }
+}
+
+/// Takes a capture to completion and returns its id.
+fn complete(instrument: &mut Instrument, workspace: &mut Workspace) -> u64 {
+    let (sink, statuses) = events();
+    let summary = instrument
+        .start(workspace, CaptureRequest::default(), sink)
+        .expect("start");
+    until_ended(&statuses);
+    summary.id
+}
+
+#[test]
+fn repeated_captures_hold_the_shown_one_until_they_complete() {
+    let mut instrument = instrument();
+    let mut workspace = Workspace::new();
+    let first = complete(&mut instrument, &mut workspace);
+
+    let (sink, statuses) = events();
+    let hold = CaptureRequest {
+        hold: true,
+        ..CaptureRequest::default()
+    };
+    let second = instrument
+        .start(&mut workspace, hold, sink)
+        .expect("start")
+        .id;
+    assert_eq!(workspace.summary().expect("shown").id, first);
+    assert!(workspace.capture(second).is_ok(), "the capture behind");
+    until_ended(&statuses);
+    assert_eq!(workspace.summary().expect("shown").id, second);
+
+    // The next capture drops the one it replaced.
+    let third = complete(&mut instrument, &mut workspace);
+    assert_eq!(workspace.summary().expect("shown").id, third);
+    assert!(workspace.capture(first).is_err());
+}
+
+#[test]
+fn a_held_back_capture_stopped_early_is_dropped_unless_kept() {
+    for keep_stopped in [false, true] {
+        let mut instrument = instrument();
+        let mut workspace = Workspace::new();
+        let first = complete(&mut instrument, &mut workspace);
+        instrument
+            .set_option(OptionKey::Samplerate, &OptionValue::Integer(1_000))
+            .expect("slow rate");
+        let (sink, statuses) = events();
+        let request = CaptureRequest {
+            hold: true,
+            keep_stopped,
+            ..CaptureRequest::default()
+        };
+        let second = instrument
+            .start(&mut workspace, request, sink)
+            .expect("start")
+            .id;
+        instrument.stop();
+        let last = until_ended(&statuses).pop().expect("status");
+        assert_eq!(last.end, Some(EndKind::Stopped));
+        let shown = workspace.summary().expect("shown").id;
+        assert_eq!(shown, if keep_stopped { second } else { first });
+        // Whatever is shown stays usable.
+        assert!(workspace.capture(shown).is_ok());
+        assert!(workspace.decoding(shown).is_ok());
     }
 }
 

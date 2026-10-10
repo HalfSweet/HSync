@@ -14,7 +14,7 @@ mod instrument;
 
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use hsync_capture::{CaptureInfo, LogicCapture};
 use hsync_core::{ChannelIndex, SampleIndex};
@@ -136,12 +136,29 @@ struct OpenCapture {
     driver: String,
     /// The `session` document of a capture read from a file, kept when saving it again.
     session: Option<serde_json::Value>,
+    /// For a capture taken behind a held one: whether it replaces it, once it has ended.
+    verdict: Option<Verdict>,
 }
+
+impl OpenCapture {
+    /// Whether this capture is shown rather than the capture held in front of it.
+    fn replaces_held(&self) -> bool {
+        self.verdict
+            .as_ref()
+            .is_none_or(|verdict| verdict.get() == Some(&true))
+    }
+}
+
+/// Whether a capture taken behind a held one replaces it; set when the capture ends.
+pub type Verdict = Arc<OnceLock<bool>>;
 
 /// The captures of one window.
 #[derive(Default)]
 pub struct Workspace {
     current: Option<OpenCapture>,
+    /// The capture shown while `current` is taken behind it, as repeated captures are, until
+    /// `current` ends and replaces it (or is dropped).
+    held: Option<OpenCapture>,
     last_id: u64,
     events: Option<EventSink>,
     /// Runs the decoders without a native implementation, and those stacked on native ones.
@@ -152,6 +169,7 @@ impl std::fmt::Debug for Workspace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Workspace")
             .field("current", &self.current)
+            .field("held", &self.held)
             .field("last_id", &self.last_id)
             .finish_non_exhaustive()
     }
@@ -164,6 +182,8 @@ pub struct LiveCapture {
     pub samples: Arc<RwLock<LogicCapture>>,
     /// Decodes the capture once it is complete.
     pub decode: Box<dyn FnOnce() + Send>,
+    /// For a capture taken behind the shown one: to be told whether it replaces it.
+    pub verdict: Option<Verdict>,
 }
 
 impl std::fmt::Debug for LiveCapture {
@@ -220,7 +240,10 @@ impl Workspace {
         let channel_names = document.header.probes.iter().cloned().collect();
         self.last_id += 1;
         let capture = Arc::new(RwLock::new(document.capture));
-        if let Some(open) = &self.current {
+        for open in [self.current.take(), self.held.take()]
+            .into_iter()
+            .flatten()
+        {
             open.decoding.cancel();
         }
         let decoding = DecodeSet::new(document.decoders.as_ref(), self.decoders.clone());
@@ -234,23 +257,85 @@ impl Workspace {
             decoding,
             driver: document.header.driver,
             session: document.session,
+            verdict: None,
         });
         self.summary().ok_or(SessionError::NoCapture)
     }
 
+    /// The capture the user sees: a held capture until the one behind it replaces it.
+    fn shown(&self) -> Option<&OpenCapture> {
+        match (&self.current, &self.held) {
+            (Some(current), Some(held)) if !current.replaces_held() => Some(held),
+            (Some(current), _) => Some(current),
+            (None, held) => held.as_ref(),
+        }
+    }
+
+    /// Takes the shown capture out of the workspace and drops the other one.
+    fn take_shown(&mut self) -> Option<OpenCapture> {
+        let (shown, dropped) = match (self.current.take(), self.held.take()) {
+            (Some(current), Some(held)) if !current.replaces_held() => (Some(held), Some(current)),
+            (Some(current), held) => (Some(current), held),
+            (None, held) => (held, None),
+        };
+        if let Some(dropped) = dropped {
+            dropped.decoding.cancel();
+        }
+        shown
+    }
+
+    /// Capture `id`, shown or not.
+    fn find(&self, id: u64) -> Result<&OpenCapture, SessionError> {
+        let any = self.current.is_some() || self.held.is_some();
+        [&self.current, &self.held]
+            .into_iter()
+            .flatten()
+            .find(|open| open.id == id)
+            .ok_or(if any {
+                SessionError::StaleCapture
+            } else {
+                SessionError::NoCapture
+            })
+    }
+
+    fn find_mut(&mut self, id: u64) -> Result<&mut OpenCapture, SessionError> {
+        let any = self.current.is_some() || self.held.is_some();
+        [&mut self.current, &mut self.held]
+            .into_iter()
+            .flatten()
+            .find(|open| open.id == id)
+            .ok_or(if any {
+                SessionError::StaleCapture
+            } else {
+                SessionError::NoCapture
+            })
+    }
+
     /// Makes `capture`, which a device is about to fill, the open capture. It keeps the channel
     /// names and decoders of the capture it replaces, as DSView keeps them across captures.
-    pub fn begin_live(&mut self, source: CaptureSource, capture: LogicCapture) -> LiveCapture {
+    ///
+    /// With `hold`, the shown capture stays shown while `capture` fills behind it, as DSView's
+    /// repeated captures fill a back buffer; [`LiveCapture::verdict`] then decides, once the
+    /// capture has ended, whether it replaces the held one.
+    pub fn begin_live(
+        &mut self,
+        source: CaptureSource,
+        capture: LogicCapture,
+        hold: bool,
+    ) -> LiveCapture {
         self.last_id += 1;
         let samples = Arc::new(RwLock::new(capture));
-        let (channel_names, decoders) = self
-            .current
-            .take()
-            .map(|open| {
-                open.decoding.cancel();
-                (open.channel_names, open.decoders)
-            })
+        let shown = self.take_shown();
+        let (channel_names, decoders) = shown
+            .as_ref()
+            .map(|open| (open.channel_names.clone(), open.decoders.clone()))
             .unwrap_or_default();
+        let verdict = (hold && shown.is_some()).then(Verdict::default);
+        match shown {
+            Some(open) if verdict.is_some() => self.held = Some(open),
+            Some(open) => open.decoding.cancel(),
+            None => {}
+        }
         let decoding = DecodeSet::new(decoders.as_ref(), self.decoders.clone());
         let driver = match &source {
             CaptureSource::Device { driver, .. } => driver.clone(),
@@ -265,6 +350,7 @@ impl Workspace {
             decoding: Arc::clone(&decoding),
             driver,
             session: None,
+            verdict: verdict.clone(),
         };
         let summary = summarize(&open);
         self.current = Some(open);
@@ -274,6 +360,7 @@ impl Workspace {
             summary,
             samples,
             decode: Box::new(move || decoding.run(&finished, done)),
+            verdict,
         }
     }
 
@@ -287,11 +374,7 @@ impl Workspace {
     ) -> Result<CaptureSummary, SessionError> {
         let events = self.events.clone();
         let host = self.decoders.clone();
-        let open = match &mut self.current {
-            Some(open) if open.id == id => open,
-            Some(_) => return Err(SessionError::StaleCapture),
-            None => return Err(SessionError::NoCapture),
-        };
+        let open = self.find_mut(id)?;
         if capturing {
             return Err(SessionError::Busy);
         }
@@ -316,11 +399,7 @@ impl Workspace {
         channel: ChannelIndex,
         name: &str,
     ) -> Result<CaptureSummary, SessionError> {
-        let open = match &mut self.current {
-            Some(open) if open.id == id => open,
-            Some(_) => return Err(SessionError::StaleCapture),
-            None => return Err(SessionError::NoCapture),
-        };
+        let open = self.find_mut(id)?;
         if open.capture.read().channel(channel).is_none() {
             return Err(SessionError::UnknownChannel(channel));
         }
@@ -336,11 +415,7 @@ impl Workspace {
     /// What saving or exporting capture `id` needs, taken so the writing can go on without
     /// holding the workspace.
     pub fn export_source(&self, id: u64) -> Result<ExportSource, SessionError> {
-        let open = match &self.current {
-            Some(open) if open.id == id => open,
-            Some(_) => return Err(SessionError::StaleCapture),
-            None => return Err(SessionError::NoCapture),
-        };
+        let open = self.find(id)?;
         Ok(ExportSource {
             capture: Arc::clone(&open.capture),
             channel_names: open.channel_names.clone(),
@@ -357,11 +432,7 @@ impl Workspace {
         path: &Path,
         session: serde_json::Value,
     ) -> Result<CaptureSummary, SessionError> {
-        let open = match &mut self.current {
-            Some(open) if open.id == id => open,
-            Some(_) => return Err(SessionError::StaleCapture),
-            None => return Err(SessionError::NoCapture),
-        };
+        let open = self.find_mut(id)?;
         open.session = Some(session);
         open.source = CaptureSource::File {
             path: path.to_string_lossy().into_owned(),
@@ -378,25 +449,17 @@ impl Workspace {
 
     /// The decoders of capture `id`.
     pub fn decoding(&self, id: u64) -> Result<Arc<DecodeSet>, SessionError> {
-        match &self.current {
-            Some(open) if open.id == id => Ok(Arc::clone(&open.decoding)),
-            Some(_) => Err(SessionError::StaleCapture),
-            None => Err(SessionError::NoCapture),
-        }
+        self.find(id).map(|open| Arc::clone(&open.decoding))
     }
 
-    /// Summary of the open capture.
+    /// Summary of the capture shown.
     pub fn summary(&self) -> Option<CaptureSummary> {
-        self.current.as_ref().map(summarize)
+        self.shown().map(summarize)
     }
 
     /// The samples of capture `id`, shared so long queries do not hold the workspace.
     pub fn capture(&self, id: u64) -> Result<Arc<RwLock<LogicCapture>>, SessionError> {
-        match &self.current {
-            Some(open) if open.id == id => Ok(Arc::clone(&open.capture)),
-            Some(_) => Err(SessionError::StaleCapture),
-            None => Err(SessionError::NoCapture),
-        }
+        self.find(id).map(|open| Arc::clone(&open.capture))
     }
 }
 
