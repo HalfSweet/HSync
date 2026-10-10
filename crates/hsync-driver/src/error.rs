@@ -43,6 +43,22 @@ pub enum DriverError {
     Unsupported,
 }
 
+impl DriverError {
+    /// Why opening a USB device failed, in terms the user can act on.
+    pub fn opening(error: UsbError) -> Self {
+        if let UsbError::Device(device) = &error {
+            match device.kind() {
+                nusb::ErrorKind::Busy => return Self::Busy,
+                nusb::ErrorKind::NotFound | nusb::ErrorKind::Unsupported if cfg!(windows) => {
+                    return Self::NoDriver;
+                }
+                _ => {}
+            }
+        }
+        Self::Usb(error)
+    }
+}
+
 impl From<&DriverError> for UiError {
     fn from(error: &DriverError) -> Self {
         match error {

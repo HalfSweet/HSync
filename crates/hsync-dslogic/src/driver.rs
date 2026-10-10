@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use hsync_driver::usb::{NusbTransport, UsbError};
+use hsync_driver::usb::NusbTransport;
 use hsync_driver::{Candidate, CandidateStatus, Device, Driver, DriverError};
 
 use crate::boot::{self, FirmwareDir};
@@ -55,20 +55,6 @@ fn location(usb: &nusb::DeviceInfo) -> String {
     )
 }
 
-/// Why opening the USB device failed, in terms the user can act on.
-fn open_error(error: UsbError) -> DriverError {
-    if let UsbError::Device(device) = &error {
-        match device.kind() {
-            nusb::ErrorKind::Busy => return DriverError::Busy,
-            nusb::ErrorKind::NotFound | nusb::ErrorKind::Unsupported if cfg!(windows) => {
-                return DriverError::NoDriver;
-            }
-            _ => {}
-        }
-    }
-    DriverError::Usb(error)
-}
-
 impl Driver for DslogicDriver {
     fn name(&self) -> &'static str {
         crate::DRIVER_NAME
@@ -113,7 +99,7 @@ impl Driver for DslogicDriver {
             CandidateStatus::Ready => {
                 log::debug!("opening {} at {}", profile.model, candidate.id);
                 let transport = NusbTransport::open(usb, USB_CONFIGURATION, USB_INTERFACE)
-                    .map_err(open_error)?;
+                    .map_err(DriverError::opening)?;
                 log::debug!("claimed interface {USB_INTERFACE} of {}", profile.model);
                 let ctl = Control::new(Arc::new(transport));
                 let device =
@@ -124,7 +110,7 @@ impl Driver for DslogicDriver {
                 let image = self.firmware.load(profile.firmware)?;
                 let transport =
                     NusbTransport::open_configured(usb, USB_CONFIGURATION, USB_INTERFACE)
-                        .map_err(open_error)?;
+                        .map_err(DriverError::opening)?;
                 boot::upload_firmware(&transport, &image)?;
                 log::info!(
                     "uploaded {} to {}, waiting for it to restart",
