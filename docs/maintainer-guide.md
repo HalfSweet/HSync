@@ -168,7 +168,7 @@ PYO3_CONFIG_FILE=$R/pyo3.cfg CARGO_TARGET_DIR=target/bundled \
 - **Where the app looks.** tauri-plugin-updater reads `https://github.com/HalfSweet/HSync/releases/latest/download/latest.json`. tauri-action assembles that file from all three platforms while building a release.
 - **Which releases count.** Only the latest published release that isn't a pre-release.
 - **How updates are verified.** Against the public key in `plugins.updater.pubkey`. On Windows the installer runs in passive mode.
-- **The interface.** "Check for updates at startup" in the settings panel and the About dialog; see [DESIGN.md](../DESIGN.md).
+- **The interface.** "Check for updates at startup" and the About section of the settings page; see [DESIGN.md](../DESIGN.md).
 - **The repository must be public**, or the releases hosted elsewhere, for users to download them. While it is private, update checks fail. The check at startup only logs the failure.
 
 **The signing key.**
