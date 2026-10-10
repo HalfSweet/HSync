@@ -15,11 +15,14 @@ import {
   type OptionSpec,
 } from '@/decode/catalog'
 import { entryFormat, FORMAT_KEY, NUMBER_FORMATS, type NumberFormat } from '@/decode/numberFormat'
+import { entryRange, withRange } from '@/decode/range'
 import { laneShown, withLaneShown } from '@/decode/rows'
 import { toUiError } from '@/ipc/errors'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
+import { useViewStore } from '@/stores/view'
 import { baseDecoderId } from '@/timeline/groups'
+import { formatTime } from '@/utils/units'
 
 /**
  * Adds a decoder or changes or removes one (DESIGN.md §9.11): the protocol, found by searching
@@ -31,6 +34,7 @@ const { t } = i18n
 const text = useBackendText()
 const capture = useCaptureStore()
 const decode = useDecodeStore()
+const view = useViewStore()
 const dialog = useTemplateRef<HTMLElement>('dialog')
 
 onKeyStroke('Escape', () => decode.closeEditor())
@@ -166,6 +170,25 @@ function validate(): string | null {
   return null
 }
 
+// What to decode: the whole capture, or a segment, as DSView's start and end cursors.
+const storedRange = entryRange(existing.value)
+/** The range "segment" decodes: the segment marked now, else the one stored. */
+const segmentRange = computed<[number, number] | null>(() => {
+  const marked = view.segment
+  if (!marked || marked.from === marked.to) return storedRange
+  return [Math.min(marked.from, marked.to), Math.max(marked.from, marked.to)]
+})
+const rangeMode = shallowRef<'all' | 'segment'>(storedRange ? 'segment' : 'all')
+const rangeNote = computed(() => {
+  const range = segmentRange.value
+  if (!range) return t('decoderDialog.rangeNone')
+  if (rangeMode.value === 'all') return ''
+  return t('decoderDialog.rangeSpan', {
+    from: formatTime(capture.timeOf(range[0]), 3),
+    to: formatTime(capture.timeOf(range[1]), 3),
+  })
+})
+
 // Display (editing only): the number format and which annotation rows show.
 const lanes = computed(() =>
   editing.value === null ? [] : (decode.statusOf(editing.value)?.lanes ?? []),
@@ -199,11 +222,15 @@ async function save(): Promise<void> {
     { ...options[0] },
     stacked.map((spec, position) => ({ spec, options: { ...options[position + 1] } })),
   )
+  const range = rangeMode.value === 'segment' ? segmentRange.value : null
   const next = [...decode.entries]
   if (editing.value === null) {
-    next.push(entry)
+    next.push(withRange({ ...entry }, range))
   } else {
-    let edited: unknown = { ...(existing.value ?? {}), ...entry, [FORMAT_KEY]: numberFormat.value }
+    let edited: unknown = withRange(
+      { ...(existing.value ?? {}), ...entry, [FORMAT_KEY]: numberFormat.value },
+      range,
+    )
     for (const lane of lanes.value) {
       edited = withLaneShown(edited, lane, shownLanes[lane.lane] ?? true)
     }
@@ -370,6 +397,33 @@ const locked = computed(() => capture.running)
             </label>
           </fieldset>
         </template>
+
+        <fieldset v-if="bottom" class="flex flex-col gap-2">
+          <legend class="mb-1 text-caption text-ink-3">{{ t('decoderDialog.range') }}</legend>
+          <div class="flex items-center gap-3">
+            <div role="group" class="flex flex-none gap-0.5 rounded-6 bg-hover p-0.5">
+              <button
+                class="seg"
+                :aria-pressed="rangeMode === 'all'"
+                :disabled="locked"
+                @click="rangeMode = 'all'"
+              >
+                {{ t('decoderDialog.rangeAll') }}
+              </button>
+              <button
+                class="seg"
+                :aria-pressed="rangeMode === 'segment'"
+                :disabled="locked || !segmentRange"
+                @click="rangeMode = 'segment'"
+              >
+                {{ t('decoderDialog.rangeSegment') }}
+              </button>
+            </div>
+            <span class="min-w-0 truncate text-caption text-ink-3 tabular-nums">{{
+              rangeNote
+            }}</span>
+          </div>
+        </fieldset>
 
         <fieldset v-if="lanes.length > 0" class="flex flex-col gap-2">
           <legend class="mb-1 text-caption text-ink-3">{{ t('decoderDialog.display') }}</legend>

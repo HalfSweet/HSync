@@ -385,7 +385,12 @@
       "oct": "八进制",
       "bin": "二进制",
       "ascii": "ASCII"
-    }
+    },
+    "range": "解码范围",
+    "rangeAll": "全程",
+    "rangeSegment": "选段",
+    "rangeSpan": "{from} 至 {to}",
+    "rangeNone": "在标尺上拖出选段后可只解码其中一段"
   },
   "stream": {
     "title": "数据流",

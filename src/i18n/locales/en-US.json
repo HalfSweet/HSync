@@ -385,7 +385,12 @@
       "oct": "Oct",
       "bin": "Bin",
       "ascii": "ASCII"
-    }
+    },
+    "range": "Decode range",
+    "rangeAll": "Whole capture",
+    "rangeSegment": "Segment",
+    "rangeSpan": "{from} to {to}",
+    "rangeNone": "Drag a segment on the ruler to decode only part"
   },
   "stream": {
     "title": "Data stream",
