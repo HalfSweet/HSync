@@ -23,7 +23,7 @@ export interface TraceDraw {
   top: number
   height: number
   wire: number
-  /** Narrow rows use a thinner line and smaller margins. */
+  /** Narrow rows leave smaller margins above and below the levels. */
   narrow: boolean
   cells: Uint8Array
   /** Column runs drawn as blocks, ascending and apart. */

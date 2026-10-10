@@ -1,21 +1,22 @@
 /**
- * The waveform layer as axis-aligned rectangles, for the WebGPU renderer (DESIGN.md §6): every
- * piece of a trace is horizontal or vertical, so each line segment, wash and grid line is one
- * rectangle drawn as an instance.
+ * The waveform layer as axis-aligned rectangles in whole device pixels (DESIGN.md §6): every
+ * piece of a trace is horizontal or vertical, so each line segment, wash, block and grid line is
+ * one rectangle. Both renderers draw these rectangles, so they agree to the pixel, and lines meet
+ * washes and blocks edge to edge rather than at a line's centre.
  */
 import { binStart } from '@/ipc/bins'
 import { sampleToX } from '@/timeline/viewport'
 
-import { gridWidth, traceShape } from './shape'
+import { lineWidth, traceShape } from './shape'
 import type { FrameDescriptor, RenderTokens } from './types'
 
 /** Floats per rectangle: x, y, width, height in device pixels, then premultiplied RGBA. */
 export const RECT_FLOATS = 8
 
-/** Where the levels sit and how thick the line is, as the Canvas2D renderer draws them. */
+/** Where the high and low levels sit within a row, as fractions of its height (DESIGN.md §6.3). */
 const LEVELS = {
-  wide: { high: 6.5 / 30, low: 23.5 / 30, line: 1.25 },
-  narrow: { high: 4.5 / 18, low: 13.5 / 18, line: 1 },
+  wide: { high: 6.5 / 30, low: 23.5 / 30 },
+  narrow: { high: 4.5 / 18, low: 13.5 / 18 },
 }
 
 export type Rgba = [number, number, number, number]
@@ -49,6 +50,62 @@ export function parseColor(css: string): Rgba {
   return [0, 0, 0, 0]
 }
 
+/** Receives a rectangle in device pixels with its CSS colour; rectangles come in drawing order. */
+export type RectSink = (x: number, y: number, width: number, height: number, color: string) => void
+
+/**
+ * Every rectangle of a frame in whole device pixels: grid lines first, then each trace's washes,
+ * blocks and line. A line `w` pixels wide covers the `w` rows (or columns) from its position less
+ * `⌊w/2⌋`. Washes and blocks run from the top of the high line to the bottom of the low line, so
+ * under a high pulse, where no low line is drawn, the wash ends flush with the low line beside it.
+ */
+export function layoutFrame(frame: FrameDescriptor, tokens: RenderTokens, sink: RectSink): void {
+  const rect: RectSink = (x, y, width, height, color) => {
+    if (width > 0 && height > 0) sink(x, y, width, height, color)
+  }
+  const dpr = frame.dpr
+  const device = (css: number) => Math.round(css * dpr)
+  const width = lineWidth(dpr)
+  const half = Math.floor(width / 2)
+
+  const top = device(frame.clipTop)
+  const bottom = device(frame.height)
+  for (const x of frame.grid) {
+    rect(device(frame.trackLeft + x) - half, top, width, bottom - top, tokens.grid)
+  }
+  const bins = frame.bins
+  if (!bins) return
+  for (const trace of frame.traces) {
+    const levels = trace.narrow ? LEVELS.narrow : LEVELS.wide
+    const high = device(trace.top + trace.height * levels.high) - half
+    const low = device(trace.top + trace.height * levels.low) - half
+    const shape = traceShape(
+      trace.cells,
+      (column) => device(frame.trackLeft + sampleToX(frame.view, binStart(bins, column))),
+      trace.blocks,
+      trace.wash,
+    )
+    const wash = tokens.washes[trace.wire] ?? tokens.grid
+    for (const [from, to] of shape.washes) rect(from, high, to - from, low + width - high, wash)
+    const block = tokens.blocks[trace.wire] ?? tokens.grid
+    for (const [from, to] of shape.blocks) rect(from, high, to - from, low + width - high, block)
+
+    const color = tokens.wires[trace.wire] ?? tokens.grid
+    let x = 0
+    let y = 0
+    for (const [command, at, isHigh] of shape.path) {
+      const row = isHigh ? high : low
+      if (command === 'L') {
+        // A level runs on over the edges at its ends, so the corners are square.
+        if (row === y) rect(Math.min(x, at) - half, row, Math.abs(at - x) + width, width, color)
+        else rect(at - half, Math.min(y, row), width, Math.abs(row - y) + width, color)
+      }
+      x = at
+      y = row
+    }
+  }
+}
+
 /** Grows a float buffer as rectangles are added. */
 class RectList {
   data = new Float32Array(1024 * RECT_FLOATS)
@@ -68,65 +125,20 @@ class RectList {
   }
 }
 
-/** Every rectangle of a frame in device pixels, grid first, then each trace's wash and line. */
+/** {@link layoutFrame} as instance data for the WebGPU renderer. */
 export function frameRects(
   frame: FrameDescriptor,
   tokens: RenderTokens,
 ): { data: Float32Array; count: number } {
   const list = new RectList()
-  const dpr = frame.dpr
-  const grid = parseColor(tokens.grid)
-  const gridPixels = gridWidth(dpr)
-  for (const x of frame.grid) {
-    const px = Math.round((frame.trackLeft + x) * dpr) - Math.floor(gridPixels / 2)
-    list.push(px, frame.clipTop * dpr, gridPixels, (frame.height - frame.clipTop) * dpr, grid)
-  }
-  const bins = frame.bins
-  if (!bins) return list
-  for (const trace of frame.traces) {
-    const geometry = trace.narrow ? LEVELS.narrow : LEVELS.wide
-    const yHigh = trace.top + trace.height * geometry.high
-    const yLow = trace.top + trace.height * geometry.low
-    const shape = traceShape(
-      trace.cells,
-      (column) => frame.trackLeft + sampleToX(frame.view, binStart(bins, column)),
-      trace.blocks,
-      trace.wash,
-    )
-    const wash = parseColor(tokens.washes[trace.wire] ?? tokens.grid)
-    for (const [from, to] of shape.washes) {
-      list.push(from * dpr, yHigh * dpr, Math.max(to - from, 0.5) * dpr, (yLow - yHigh) * dpr, wash)
+  const colors = new Map<string, Rgba>()
+  layoutFrame(frame, tokens, (x, y, width, height, css) => {
+    let color = colors.get(css)
+    if (!color) {
+      color = parseColor(css)
+      colors.set(css, color)
     }
-    const block = parseColor(tokens.blocks[trace.wire] ?? tokens.grid)
-    for (const [from, to] of shape.blocks) {
-      list.push(
-        from * dpr,
-        yHigh * dpr,
-        Math.max(to - from, 0.5) * dpr,
-        (yLow - yHigh) * dpr,
-        block,
-      )
-    }
-    const color = parseColor(tokens.wires[trace.wire] ?? tokens.grid)
-    const half = (geometry.line * dpr) / 2
-    let x = 0
-    let y = 0
-    for (const [command, at, high] of shape.path) {
-      const nextX = at * dpr
-      const nextY = (high ? yHigh : yLow) * dpr
-      if (command === 'L') {
-        if (nextY === y) {
-          // Horizontal: overlap half a line at each end so corners meet like mitres.
-          const left = Math.min(x, nextX)
-          list.push(left - half, y - half, Math.abs(nextX - x) + 2 * half, 2 * half, color)
-        } else {
-          const top = Math.min(y, nextY)
-          list.push(nextX - half, top - half, 2 * half, Math.abs(nextY - y) + 2 * half, color)
-        }
-      }
-      x = nextX
-      y = nextY
-    }
-  }
+    list.push(x, y, width, height, color)
+  })
   return list
 }

@@ -1,18 +1,9 @@
 /**
- * Canvas2D waveform renderer: grid lines, then for each trace its high-level wash and its line
- * (see {@link traceShape}).
+ * Canvas2D waveform renderer: the frame's rectangles ({@link layoutFrame}) filled in whole device
+ * pixels, the same ones the WebGPU renderer draws.
  */
-import { binStart } from '@/ipc/bins'
-import { sampleToX } from '@/timeline/viewport'
-
-import { gridWidth, traceShape } from './shape'
-import type { FrameDescriptor, RenderTokens, TraceDraw, WaveformRenderer } from './types'
-
-/** Where the high and low levels sit within a row, as fractions of its height (DESIGN.md §6.3). */
-const LEVELS = {
-  wide: { high: 6.5 / 30, low: 23.5 / 30, line: 1.25 },
-  narrow: { high: 4.5 / 18, low: 13.5 / 18, line: 1 },
-}
+import { layoutFrame } from './rects'
+import type { FrameDescriptor, RenderTokens, WaveformRenderer } from './types'
 
 export class Canvas2DRenderer implements WaveformRenderer {
   private readonly context: CanvasRenderingContext2D
@@ -25,79 +16,40 @@ export class Canvas2DRenderer implements WaveformRenderer {
 
   draw(frame: FrameDescriptor, tokens: RenderTokens): void {
     const { canvas, context } = this
-    const pixelWidth = Math.round(frame.width * frame.dpr)
-    const pixelHeight = Math.round(frame.height * frame.dpr)
+    const pixelWidth = Math.max(1, Math.round(frame.width * frame.dpr))
+    const pixelHeight = Math.max(1, Math.round(frame.height * frame.dpr))
     if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
       canvas.width = pixelWidth
       canvas.height = pixelHeight
     }
     context.setTransform(1, 0, 0, 1, 0, 0)
     context.clearRect(0, 0, pixelWidth, pixelHeight)
-    context.setTransform(frame.dpr, 0, 0, frame.dpr, 0, 0)
 
+    // Rows end at the sticky ruler.
+    const clipTop = Math.min(pixelHeight, Math.max(0, Math.round(frame.clipTop * frame.dpr)))
     context.save()
     context.beginPath()
-    context.rect(0, frame.clipTop, frame.width, frame.height - frame.clipTop)
+    context.rect(0, clipTop, pixelWidth, pixelHeight - clipTop)
     context.clip()
 
-    this.drawGrid(frame, tokens)
-    if (frame.bins) {
-      for (const trace of frame.traces) this.drawTrace(frame, trace, tokens)
+    // Consecutive rectangles of one colour fill as one path.
+    let color: string | null = null
+    let path = new Path2D()
+    const fill = () => {
+      if (color === null) return
+      context.fillStyle = color
+      context.fill(path)
     }
+    layoutFrame(frame, tokens, (x, y, width, height, css) => {
+      if (css !== color) {
+        fill()
+        color = css
+        path = new Path2D()
+      }
+      path.rect(x, y, width, height)
+    })
+    fill()
     context.restore()
-  }
-
-  private drawGrid(frame: FrameDescriptor, tokens: RenderTokens): void {
-    const { context } = this
-    // One CSS pixel, on whole device pixels.
-    const width = gridWidth(frame.dpr)
-    context.beginPath()
-    for (const x of frame.grid) {
-      const px = (Math.round((frame.trackLeft + x) * frame.dpr) + (width % 2) / 2) / frame.dpr
-      context.moveTo(px, frame.clipTop)
-      context.lineTo(px, frame.height)
-    }
-    context.strokeStyle = tokens.grid
-    context.lineWidth = width / frame.dpr
-    context.stroke()
-  }
-
-  private drawTrace(frame: FrameDescriptor, trace: TraceDraw, tokens: RenderTokens): void {
-    const bins = frame.bins
-    if (!bins) return
-    const { context } = this
-    const geometry = trace.narrow ? LEVELS.narrow : LEVELS.wide
-    const yHigh = trace.top + trace.height * geometry.high
-    const yLow = trace.top + trace.height * geometry.low
-    const shape = traceShape(
-      trace.cells,
-      (column) => frame.trackLeft + sampleToX(frame.view, binStart(bins, column)),
-      trace.blocks,
-      trace.wash,
-    )
-
-    const wash = new Path2D()
-    for (const [from, to] of shape.washes)
-      wash.rect(from, yHigh, Math.max(to - from, 0.5), yLow - yHigh)
-    context.fillStyle = tokens.washes[trace.wire] ?? tokens.grid
-    context.fill(wash)
-
-    const block = new Path2D()
-    for (const [from, to] of shape.blocks)
-      block.rect(from, yHigh, Math.max(to - from, 0.5), yLow - yHigh)
-    context.fillStyle = tokens.blocks[trace.wire] ?? tokens.grid
-    context.fill(block)
-
-    const line = new Path2D()
-    for (const [command, at, high] of shape.path) {
-      if (command === 'M') line.moveTo(at, high ? yHigh : yLow)
-      else line.lineTo(at, high ? yHigh : yLow)
-    }
-    context.strokeStyle = tokens.wires[trace.wire] ?? tokens.grid
-    context.lineWidth = geometry.line
-    context.lineJoin = 'miter'
-    context.lineCap = 'butt'
-    context.stroke(line)
   }
 
   dispose(): void {

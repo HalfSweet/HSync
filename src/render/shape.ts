@@ -173,7 +173,7 @@ export function traceShape(
   return { path, washes, blocks: spans }
 }
 
-/** Grid lines are a CSS pixel wide, in whole device pixels. */
-export function gridWidth(dpr: number): number {
+/** Lines, of the grid and of traces, are a CSS pixel wide in whole device pixels. */
+export function lineWidth(dpr: number): number {
   return Math.max(1, Math.round(dpr))
 }
