@@ -23,6 +23,7 @@ const percent = (part: number, whole: number) =>
 
 /** Where the capture is (DESIGN.md §9.10): waiting, how much arrived, or how it ended. */
 const status = computed(() => {
+  if (capture.repeatPending) return t('status.repeatWait', { seconds: capture.interval })
   const live = capture.shownLive
   if (live) {
     switch (live.phase) {

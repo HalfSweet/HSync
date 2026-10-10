@@ -1,4 +1,5 @@
 import { defineStore } from 'pinia'
+import { useStorage } from '@vueuse/core'
 import { computed, shallowRef, watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
@@ -26,8 +27,15 @@ export interface FileJob {
   progress: number
 }
 
-/** Pause between repeated captures, DSView's default interval. */
-const REPEAT_INTERVAL_MS = 1000
+/** Pause between repeated captures in seconds: DSView's range and default. */
+export const REPEAT_INTERVAL = { min: 0.1, max: 10, default: 1 } as const
+
+/** `seconds` within DSView's range, to a tenth of a second. */
+export function repeatInterval(seconds: number): number {
+  if (!Number.isFinite(seconds)) return REPEAT_INTERVAL.default
+  const clamped = Math.min(REPEAT_INTERVAL.max, Math.max(REPEAT_INTERVAL.min, seconds))
+  return Math.round(clamped * 10) / 10
+}
 
 /** The open capture: what it is, and how to place its samples in time. */
 export const useCaptureStore = defineStore('capture', () => {
@@ -45,6 +53,12 @@ export const useCaptureStore = defineStore('capture', () => {
   const mode = shallowRef<CaptureMode>('single')
   /** A repeated capture is due. */
   const repeatPending = shallowRef(false)
+  const storedInterval = useStorage('hsync.repeatInterval', REPEAT_INTERVAL.default)
+  /** Seconds between repeated captures. */
+  const interval = computed<number>({
+    get: () => repeatInterval(storedInterval.value),
+    set: (value) => (storedInterval.value = repeatInterval(value)),
+  })
   /** Where the open capture was last saved or exported, until another capture replaces it. */
   const savedPath = shallowRef<string | null>(null)
   const savedKind = shallowRef<FileJob['kind']>('save')
@@ -176,7 +190,7 @@ export const useCaptureStore = defineStore('capture', () => {
       repeatTimer = null
       repeatPending.value = false
       void start(request, true)
-    }, REPEAT_INTERVAL_MS)
+    }, interval.value * 1000)
   }
 
   function cancelRepeat(): void {
@@ -323,6 +337,7 @@ export const useCaptureStore = defineStore('capture', () => {
     live,
     mode,
     repeatPending,
+    interval,
     savedPath,
     savedKind,
     job,

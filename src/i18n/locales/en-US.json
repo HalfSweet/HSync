@@ -51,7 +51,9 @@
       "instantTip": "Ignore the trigger and start at once",
       "repeatTip": "Capture again after each capture completes",
       "loopTip": "Capture continuously, keeping the latest data",
-      "loopUnavailable": "Stream mode only"
+      "loopUnavailable": "Stream mode only",
+      "interval": "Repeat every",
+      "seconds": "s"
     },
     "search": {
       "aria": "Search decoded data",
@@ -475,6 +477,7 @@
     "capturing": "Capturing",
     "captured": "Captured {percent}%",
     "looping": "Looping · {time} so far",
+    "repeatWait": "Capturing again in {seconds} s",
     "complete": "Capture complete",
     "triggerTime": "Triggered {time}",
     "samples": "{count} samples",

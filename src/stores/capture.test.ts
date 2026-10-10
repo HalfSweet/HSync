@@ -7,7 +7,7 @@ import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import type { DeviceState } from '@/ipc/bindings/DeviceState'
 import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
 
-import { useCaptureStore } from './capture'
+import { repeatInterval, useCaptureStore } from './capture'
 import { useDeviceStore } from './device'
 import { usePreferencesStore } from './preferences'
 import type { TriggerRequest } from './trigger'
@@ -190,5 +190,16 @@ describe('capture store', () => {
     expect(capture.pending).toBeNull()
     // The status bar still tells it was stopped.
     expect(capture.shownLive?.end).toBe('stopped')
+  })
+
+  it("keeps the repeat interval within DSView's range", () => {
+    expect(repeatInterval(0)).toBe(0.1)
+    expect(repeatInterval(2.345)).toBe(2.3)
+    expect(repeatInterval(60)).toBe(10)
+    expect(repeatInterval(Number.NaN)).toBe(1)
+    const capture = useCaptureStore()
+    expect(capture.interval).toBe(1)
+    capture.interval = 0.05
+    expect(capture.interval).toBe(0.1)
   })
 })

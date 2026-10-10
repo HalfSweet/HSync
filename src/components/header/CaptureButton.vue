@@ -4,7 +4,7 @@ import { computed, ref, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
-import { useCaptureStore, type CaptureMode } from '@/stores/capture'
+import { REPEAT_INTERVAL, useCaptureStore, type CaptureMode } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
 import { useTriggerStore } from '@/stores/trigger'
 
@@ -87,6 +87,22 @@ function instant(): void {
         </span>
         <AppIcon v-if="capture.mode === mode" name="check" />
       </button>
+      <label
+        v-if="capture.mode === 'repeat'"
+        class="flex min-h-[30px] items-center gap-2 rounded-4 px-2 py-1 text-caption text-ink-3"
+      >
+        <span class="flex-1">{{ t('header.capture.interval') }}</span>
+        <input
+          v-model.lazy.number="capture.interval"
+          type="number"
+          class="h-6 w-16 rounded-4 border border-line-2 bg-raise px-1.5 text-right text-small text-ink tabular-nums"
+          :min="REPEAT_INTERVAL.min"
+          :max="REPEAT_INTERVAL.max"
+          step="0.1"
+          :aria-label="t('header.capture.interval')"
+        />
+        <span>{{ t('header.capture.seconds') }}</span>
+      </label>
       <div class="my-1 border-t border-line" />
       <button
         role="menuitem"

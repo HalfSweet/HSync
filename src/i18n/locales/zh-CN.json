@@ -51,7 +51,9 @@
       "instantTip": "忽略触发条件，立即开始",
       "repeatTip": "每次采集完成后自动再采一次",
       "loopTip": "持续采集，只保留最新的数据",
-      "loopUnavailable": "仅 Stream 模式可用"
+      "loopUnavailable": "仅 Stream 模式可用",
+      "interval": "重复间隔",
+      "seconds": "秒"
     },
     "search": {
       "aria": "搜索解码结果",
@@ -475,6 +477,7 @@
     "capturing": "正在采集",
     "captured": "已采集 {percent}%",
     "looping": "循环采集中 · 已采 {time}",
+    "repeatWait": "{seconds} 秒后再次采集",
     "complete": "采集完成",
     "triggerTime": "触发时间 {time}",
     "samples": "{count} 个采样点",
