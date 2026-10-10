@@ -78,7 +78,7 @@ async function rename(): Promise<void> {
       <input
         ref="input"
         v-model="name"
-        class="h-7 rounded-6 border border-line-2 bg-raise px-2 text-ink"
+        class="h-7 rounded-6 bg-control px-2 text-ink"
         :placeholder="`D${channel.index}`"
         spellcheck="false"
         @keydown.enter.prevent="emit('close')"

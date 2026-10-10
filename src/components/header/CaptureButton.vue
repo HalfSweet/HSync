@@ -98,7 +98,7 @@ function instant(): void {
           <input
             v-model.lazy.number="capture.interval"
             type="number"
-            class="h-6 w-16 rounded-4 border border-line-2 bg-raise px-1.5 text-right text-small text-ink tabular-nums"
+            class="h-6 w-16 rounded-4 bg-control px-1.5 text-right text-small text-ink tabular-nums"
             :min="REPEAT_INTERVAL.min"
             :max="REPEAT_INTERVAL.max"
             step="0.1"

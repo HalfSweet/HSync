@@ -183,11 +183,11 @@ function toggleChannel(channel: number): void {
               <button
                 v-for="channel in device.state.channelCount"
                 :key="channel"
-                class="h-6 rounded-4 border text-caption tabular-nums disabled:opacity-55"
+                class="h-6 rounded-4 text-caption tabular-nums disabled:opacity-55"
                 :class="
                   device.enabledChannels.includes(channel - 1)
-                    ? 'border-ink-3 bg-sel font-medium text-ink'
-                    : 'border-line text-ink-3 hover:border-ink-3'
+                    ? 'bg-control-on font-medium text-ink'
+                    : 'bg-control text-ink-3 hover:bg-control-hover'
                 "
                 :aria-pressed="device.enabledChannels.includes(channel - 1)"
                 :disabled="locked"

@@ -3,20 +3,19 @@
  * them with other utilities. The comments name the class in the design file (`la-*`).
  */
 
-/* la-btn: 32 px top-bar control */
+/* la-btn: 32 px top-bar control, set apart by its fill rather than an outline */
 @utility btn {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   height: var(--h-bar);
   padding: 0 12px;
-  border: 1px solid var(--line-2);
   border-radius: 6px;
-  background: var(--raise);
+  background: var(--control);
   white-space: nowrap;
 
   &:hover {
-    border-color: var(--ink-3);
+    background: var(--control-hover);
   }
 }
 
@@ -27,15 +26,14 @@
   gap: 4px;
   height: 24px;
   padding: 0 8px;
-  border: 1px solid var(--line-2);
   border-radius: 5px;
-  background: var(--canvas);
+  background: var(--control);
   color: var(--ink-2);
   font-size: 12px;
   white-space: nowrap;
 
   &:hover {
-    border-color: var(--ink-3);
+    background: var(--control-hover);
     color: var(--ink);
   }
 }
@@ -66,8 +64,7 @@
   white-space: nowrap;
 
   &[aria-pressed='true'] {
-    background: var(--raise);
-    box-shadow: 0 0 0 1px var(--line-2);
+    background: var(--control-on);
     color: var(--ink);
   }
 

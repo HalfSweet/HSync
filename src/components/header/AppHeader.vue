@@ -99,7 +99,7 @@ onKeyStroke('/', (event) => {
     <div class="min-w-0 flex-1" />
 
     <label
-      class="flex h-8 max-w-[340px] min-w-0 flex-[1_1_220px] items-center gap-2 rounded-6 border border-line-2 bg-raise pr-2 pl-3 text-ink-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ink"
+      class="flex h-8 max-w-[340px] min-w-0 flex-[1_1_220px] items-center gap-2 rounded-6 bg-control pr-2 pl-3 text-ink-2 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-ink"
     >
       <AppIcon name="search" />
       <input
@@ -121,7 +121,7 @@ onKeyStroke('/', (event) => {
       >
       <kbd
         v-else
-        class="min-w-5 flex-none rounded-4 border border-line-2 px-1 text-center font-sans text-caption leading-[18px] text-ink-3"
+        class="min-w-5 flex-none rounded-4 bg-control px-1 text-center font-sans text-caption leading-[18px] text-ink-3"
       >
         /
       </kbd>

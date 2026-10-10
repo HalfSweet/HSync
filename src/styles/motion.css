@@ -115,14 +115,12 @@
 
 [data-indicator='face'][data-marked]::before {
   border-radius: 4px;
-  background: var(--raise);
-  box-shadow: 0 0 0 1px var(--line-2);
+  background: var(--control-on);
 }
 
 /* The selected segment's own face gives way to the mark. */
 [data-indicator='face'][data-marked] > .seg[aria-pressed='true'] {
   background: none;
-  box-shadow: none;
 }
 
 [data-indicator='line'][data-marked]::before {
