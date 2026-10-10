@@ -539,7 +539,7 @@ function onWheel(event: WheelEvent): void {
       @scroll.passive="onScroll"
       @wheel="onWheel"
     >
-      <div ref="rows" class="relative flex min-h-full min-w-[860px] flex-col">
+      <div ref="rows" class="relative flex min-h-full min-w-[860px] flex-col overflow-x-clip">
         <TimelineRuler class="sticky top-0 z-[5]" />
 
         <div
