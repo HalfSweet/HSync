@@ -72,6 +72,11 @@ function openFile(): void {
   open.value = false
   void files.open()
 }
+
+function loadSession(): void {
+  open.value = false
+  void files.loadSession()
+}
 </script>
 
 <template>
@@ -127,6 +132,14 @@ function openFile(): void {
       >
         <span class="flex-1 text-left">{{ t('file.open') }}</span>
         <kbd class="font-sans text-caption text-ink-3">{{ commandLabel('o') }}</kbd>
+      </button>
+      <button
+        role="menuitem"
+        class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55"
+        :disabled="capture.busy"
+        @click="loadSession"
+      >
+        <span class="flex-1 text-left">{{ t('file.loadSession') }}</span>
       </button>
       <button
         role="menuitem"

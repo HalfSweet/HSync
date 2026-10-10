@@ -73,7 +73,11 @@
     "saving": "正在保存 {percent}%",
     "exporting": "正在导出 {percent}%",
     "cancel": "取消",
-    "exported": "已导出到 {name}"
+    "exported": "已导出到 {name}",
+    "saveSession": "保存会话…",
+    "loadSession": "加载会话…",
+    "sessionFilter": "HSync 会话",
+    "dscFilter": "DSView 会话"
   },
   "exportDialog": {
     "title": "导出",
@@ -535,7 +539,8 @@
       "corrupt": "文件已损坏：{detail}",
       "unsupportedVersion": "不支持第 {version} 版的文件格式",
       "unsupportedMode": "只能打开逻辑分析采集",
-      "cancelled": "已取消"
+      "cancelled": "已取消",
+      "notSession": "这不是会话文件"
     },
     "decode": {
       "python": "解码器运行环境出错：{detail}",

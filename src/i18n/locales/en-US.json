@@ -73,7 +73,11 @@
     "saving": "Saving {percent}%",
     "exporting": "Exporting {percent}%",
     "cancel": "Cancel",
-    "exported": "Exported to {name}"
+    "exported": "Exported to {name}",
+    "saveSession": "Save session…",
+    "loadSession": "Load session…",
+    "sessionFilter": "HSync session",
+    "dscFilter": "DSView session"
   },
   "exportDialog": {
     "title": "Export",
@@ -535,7 +539,8 @@
       "corrupt": "The file is damaged: {detail}",
       "unsupportedVersion": "File format version {version} is not supported",
       "unsupportedMode": "Only logic analyzer captures can be opened",
-      "cancelled": "Cancelled"
+      "cancelled": "Cancelled",
+      "notSession": "This is not a session file"
     },
     "decode": {
       "python": "The decoder runtime failed: {detail}",

@@ -29,6 +29,11 @@ function exportAs(): void {
   open.value = false
   showDialog.value = true
 }
+
+function saveSession(): void {
+  open.value = false
+  void files.saveSession()
+}
 </script>
 
 <template>
@@ -65,6 +70,15 @@ function exportAs(): void {
         @click="exportAs"
       >
         <span class="flex-1 text-left">{{ t('file.exportItem') }}</span>
+      </button>
+      <div class="my-1 border-t border-line" />
+      <button
+        role="menuitem"
+        class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
+        :disabled="capture.busy || capture.job !== null"
+        @click="saveSession"
+      >
+        <span class="flex-1 text-left">{{ t('file.saveSession') }}</span>
       </button>
     </div>
     <ExportDialog v-if="showDialog" @close="showDialog = false" />

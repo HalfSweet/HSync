@@ -3,7 +3,9 @@ import { useI18n } from 'vue-i18n'
 import type { ExportKind } from '@/ipc/bindings/ExportKind'
 import type { ExportRequest } from '@/ipc/bindings/ExportRequest'
 import { pickFile, pickSavePath } from '@/ipc/dialogs'
+import { SESSION_EXTENSION } from '@/session/session'
 import { useCaptureStore } from '@/stores/capture'
+import { useSessionStore } from '@/stores/session'
 
 /** File name extension of each export format. */
 export const EXTENSIONS: Record<ExportKind, string> = {
@@ -60,5 +62,27 @@ export function useFileActions() {
     return capture.exportFile(withExtension(path, extension), request)
   }
 
-  return { open, save, exportTo }
+  /** Saves the session: device settings, channels, triggers and decoders. */
+  async function saveSession(): Promise<void> {
+    if (!idle()) return
+    const extension = SESSION_EXTENSION
+    const path = await pickSavePath(defaultCaptureName(new Date(), extension), [
+      { name: t('file.sessionFilter'), extensions: ['json'] },
+    ])
+    if (path) await useSessionStore().save(withExtension(path, extension))
+  }
+
+  /** Loads a session, HSync's own or DSView's `.dsc`. */
+  async function loadSession(): Promise<void> {
+    if (!idle()) return
+    const path = await pickFile([
+      { name: t('file.sessionFilter'), extensions: ['json'] },
+      { name: t('file.dscFilter'), extensions: ['dsc'] },
+    ])
+    if (!path) return
+    const failure = await useSessionStore().load(path)
+    if (failure) capture.error = failure
+  }
+
+  return { open, save, exportTo, saveSession, loadSession }
 }
