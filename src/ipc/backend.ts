@@ -1,10 +1,20 @@
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import { listen } from '@tauri-apps/api/event'
 
 import type { BinsRequest } from './bindings/BinsRequest'
+import type { CaptureRequest } from './bindings/CaptureRequest'
 import type { CaptureSummary } from './bindings/CaptureSummary'
+import type { DeviceState } from './bindings/DeviceState'
+import type { DeviceSummary } from './bindings/DeviceSummary'
 import type { Direction } from './bindings/Direction'
+import type { LiveStatus } from './bindings/LiveStatus'
+import type { OptionKey } from './bindings/OptionKey'
+import type { OptionValue } from './bindings/OptionValue'
 import type { PulseInfo } from './bindings/PulseInfo'
 import { decodeBins, type BinsResult } from './bins'
+
+/** Stops a subscription. */
+export type Unsubscribe = () => void
 
 /** Everything the UI asks of the Rust side. Components reach it only through stores. */
 export interface Backend {
@@ -21,6 +31,24 @@ export interface Backend {
   ): Promise<number | null>
   /** Median samples between rising edges: the period of the clock a channel carries. */
   clockPeriod(captureId: number, channel: number): Promise<number | null>
+
+  /** Scans for devices. */
+  deviceList(): Promise<DeviceSummary[]>
+  /** Opens a device; one that needs firmware gets it first, which takes a few seconds. */
+  deviceOpen(id: string): Promise<DeviceState>
+  deviceState(): Promise<DeviceState | null>
+  deviceSetOption(key: OptionKey, value: OptionValue): Promise<DeviceState>
+  deviceSetChannel(channel: number, enabled: boolean): Promise<DeviceState>
+  /** Starts a capture on the open device; the returned capture fills as it runs. */
+  captureStart(request: CaptureRequest): Promise<CaptureSummary>
+  captureStop(): Promise<void>
+
+  /** Progress and end of captures taken with a device. */
+  onLive(handler: (status: LiveStatus) => void): Promise<Unsubscribe>
+  /** The device list after devices came or went. */
+  onDevices(handler: (devices: DeviceSummary[]) => void): Promise<Unsubscribe>
+  /** The open device, when it changed by itself (it was unplugged). */
+  onDeviceState(handler: (state: DeviceState | null) => void): Promise<Unsubscribe>
 }
 
 class TauriBackend implements Backend {
@@ -50,6 +78,46 @@ class TauriBackend implements Backend {
 
   clockPeriod(captureId: number, channel: number) {
     return invoke<number | null>('capture_clock_period', { captureId, channel })
+  }
+
+  deviceList() {
+    return invoke<DeviceSummary[]>('device_list')
+  }
+
+  deviceOpen(id: string) {
+    return invoke<DeviceState>('device_open', { id })
+  }
+
+  deviceState() {
+    return invoke<DeviceState | null>('device_state')
+  }
+
+  deviceSetOption(key: OptionKey, value: OptionValue) {
+    return invoke<DeviceState>('device_set_option', { key, value })
+  }
+
+  deviceSetChannel(channel: number, enabled: boolean) {
+    return invoke<DeviceState>('device_set_channel', { channel, enabled })
+  }
+
+  captureStart(request: CaptureRequest) {
+    return invoke<CaptureSummary>('capture_start', { request })
+  }
+
+  captureStop() {
+    return invoke<void>('capture_stop')
+  }
+
+  onLive(handler: (status: LiveStatus) => void) {
+    return listen<LiveStatus>('capture://live', (event) => handler(event.payload))
+  }
+
+  onDevices(handler: (devices: DeviceSummary[]) => void) {
+    return listen<DeviceSummary[]>('device://list', (event) => handler(event.payload))
+  }
+
+  onDeviceState(handler: (state: DeviceState | null) => void) {
+    return listen<DeviceState | null>('device://state', (event) => handler(event.payload))
   }
 }
 

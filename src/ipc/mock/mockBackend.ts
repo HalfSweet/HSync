@@ -3,10 +3,16 @@
  * demo capture from edge lists that `cargo run -p hsync-fileio --example dsl_edges` exported, and
  * answers queries with the same algorithms as `hsync-capture` (see its tests for the semantics).
  */
-import type { Backend } from '../backend'
+import type { Backend, Unsubscribe } from '../backend'
 import type { BinsRequest } from '../bindings/BinsRequest'
+import type { CaptureRequest } from '../bindings/CaptureRequest'
 import type { CaptureSummary } from '../bindings/CaptureSummary'
+import type { DeviceState } from '../bindings/DeviceState'
+import type { DeviceSummary } from '../bindings/DeviceSummary'
 import type { Direction } from '../bindings/Direction'
+import type { LiveStatus } from '../bindings/LiveStatus'
+import type { OptionKey } from '../bindings/OptionKey'
+import type { OptionValue } from '../bindings/OptionValue'
 import type { PulseInfo } from '../bindings/PulseInfo'
 import {
   CELL_EMPTY,
@@ -16,6 +22,13 @@ import {
   type BinsResult,
 } from '../bins'
 import fixture from './fixtures/protocol-demo.json'
+import { DEMO_ID, MOCK_DEVICES, MockDemoDevice, uiError } from './mockDevice'
+
+/** How long a simulated capture takes to fill, and in how many steps. */
+const LIVE_STEPS = 12
+const LIVE_STEP_MS = 90
+/** How long a triggered capture waits for its trigger. */
+const TRIGGER_WAIT_MS = 700
 
 /** Index of the first edge after `index`, i.e. the number of edges at or before it. */
 function upperBound(edges: readonly number[], index: number): number {
@@ -33,7 +46,8 @@ export class MockChannel {
   constructor(
     readonly first: boolean,
     readonly edges: readonly number[],
-    readonly length: number,
+    /** Samples captured so far; grows while a simulated capture runs. */
+    public length: number,
   ) {}
 
   sample(index: number): boolean {
@@ -91,11 +105,6 @@ interface Fixture {
   decoders: unknown
 }
 
-/** Rejection reason shaped like a backend UiError, but an Error as lint rules require. */
-function uiError(code: string, params: Record<string, string | number | boolean> = {}) {
-  return Object.assign(new Error(code), { code, params })
-}
-
 export function createMockBackend(data: Fixture = fixture): Backend {
   const channels = new Map(
     data.channels.map((channel) => [
@@ -105,6 +114,9 @@ export function createMockBackend(data: Fixture = fixture): Backend {
   )
   let summary: CaptureSummary | null = null
   let lastId = 0
+  let device: MockDemoDevice | null = null
+  const liveHandlers = new Set<(status: LiveStatus) => void>()
+  let live: { status: LiveStatus; timers: ReturnType<typeof setTimeout>[] } | null = null
 
   const channel = (captureId: number, index: number): MockChannel => {
     if (!summary || summary.id !== captureId) throw uiError('error.session.staleCapture')
@@ -113,13 +125,39 @@ export function createMockBackend(data: Fixture = fixture): Backend {
     return found
   }
 
+  const setLength = (length: number) => {
+    for (const data of channels.values()) data.length = length
+    if (summary) summary = { ...summary, info: { ...summary.info, sampleCount: length } }
+  }
+
+  const emit = (patch: Partial<LiveStatus>) => {
+    if (!live) return
+    live.status = { ...live.status, ...patch }
+    for (const handler of liveHandlers) handler(live.status)
+  }
+
+  const finish = (end: 'completed' | 'stopped') => {
+    if (!live) return
+    for (const timer of live.timers) clearTimeout(timer)
+    emit({ phase: 'ended', end })
+    live = null
+    if (device) device.capturing = false
+  }
+
+  const subscribe = <T>(handlers: Set<(value: T) => void>, handler: (value: T) => void) => {
+    handlers.add(handler)
+    return Promise.resolve<Unsubscribe>(() => handlers.delete(handler))
+  }
+
   return {
     async captureSummary() {
       return Promise.resolve(summary)
     },
 
     async openDemo() {
+      if (live) return Promise.reject(uiError('error.session.busy'))
       lastId += 1
+      setLength(data.sampleCount)
       summary = {
         id: lastId,
         source: { kind: 'demo' },
@@ -181,6 +219,128 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       if (direction === 'next') return Promise.resolve(data.nextChange(sample))
       const prev = data.prevChange(sample)
       return Promise.resolve(prev === null ? null : prev + 1)
+    },
+
+    async deviceList(): Promise<DeviceSummary[]> {
+      return Promise.resolve(MOCK_DEVICES)
+    },
+
+    async deviceOpen(id: string): Promise<DeviceState> {
+      if (live) return Promise.reject(uiError('error.session.busy'))
+      if (id !== DEMO_ID) return Promise.reject(uiError('error.device.unsupported'))
+      device = new MockDemoDevice(data.samplerate, data.sampleCount)
+      return Promise.resolve(device.state())
+    },
+
+    async deviceState() {
+      return Promise.resolve(device?.state() ?? null)
+    },
+
+    async deviceSetOption(key: OptionKey, value: OptionValue) {
+      if (!device) return Promise.reject(uiError('error.session.noDevice'))
+      device.setOption(key, value)
+      return Promise.resolve(device.state())
+    },
+
+    async deviceSetChannel(index: number, enabled: boolean) {
+      if (!device) return Promise.reject(uiError('error.session.noDevice'))
+      device.setChannel(index, enabled)
+      return Promise.resolve(device.state())
+    },
+
+    async captureStart(request: CaptureRequest): Promise<CaptureSummary> {
+      if (!device) return Promise.reject(uiError('error.session.noDevice'))
+      if (live) return Promise.reject(uiError('error.session.busy'))
+      const enabled = device.state().enabledChannels
+      if (enabled.length === 0) return Promise.reject(uiError('error.device.invalidRequest'))
+      const limit = Math.ceil(device.limit / 1024) * 1024
+      const total = Math.min(limit, data.sampleCount)
+      const waits =
+        !request.instant && request.triggers.some(([, condition]) => condition !== 'none')
+      lastId += 1
+      device.capturing = true
+      const names = new Map(data.channels.map(({ index, name }) => [index, name]))
+      summary = {
+        id: lastId,
+        source: { kind: 'device', driver: 'virtual-demo', model: 'Demo' },
+        info: {
+          samplerate: device.samplerate,
+          sampleCount: 0,
+          triggerSample: null,
+          triggerTimeMs: null,
+          channels: enabled,
+        },
+        channels: enabled.map((index) => ({ index, name: names.get(index) ?? String(index) })),
+        decoders: data.decoders,
+      }
+      setLength(0)
+      live = {
+        status: {
+          captureId: lastId,
+          phase: waits ? 'waiting' : 'capturing',
+          samples: 0,
+          limit,
+          triggerSample: null,
+          hardwareTriggered: false,
+          hardwareSamples: null,
+          overflow: false,
+          end: null,
+          error: null,
+        },
+        timers: [],
+      }
+      const timers = live.timers
+      const begin = waits ? TRIGGER_WAIT_MS : 0
+      if (waits) {
+        const pre = Math.round((total * request.triggerPosition) / 100)
+        timers.push(
+          setTimeout(() => emit({ hardwareSamples: Math.round(pre / 2) }), TRIGGER_WAIT_MS / 2),
+        )
+        timers.push(
+          setTimeout(() => {
+            const trigger = data.triggerSample ?? pre
+            if (summary) {
+              summary = {
+                ...summary,
+                info: { ...summary.info, triggerSample: trigger, triggerTimeMs: Date.now() },
+              }
+            }
+            emit({ phase: 'capturing', triggerSample: trigger })
+          }, TRIGGER_WAIT_MS),
+        )
+      }
+      for (let step = 1; step <= LIVE_STEPS; step++) {
+        timers.push(
+          setTimeout(
+            () => {
+              const samples = Math.round((total * step) / LIVE_STEPS)
+              setLength(samples)
+              emit({ phase: 'capturing', samples })
+              if (step === LIVE_STEPS) finish('completed')
+            },
+            begin + step * LIVE_STEP_MS,
+          ),
+        )
+      }
+      queueMicrotask(() => emit({}))
+      return Promise.resolve(summary)
+    },
+
+    async captureStop() {
+      finish('stopped')
+      return Promise.resolve()
+    },
+
+    onLive(handler) {
+      return subscribe(liveHandlers, handler)
+    },
+
+    onDevices() {
+      return Promise.resolve<Unsubscribe>(() => undefined)
+    },
+
+    onDeviceState() {
+      return Promise.resolve<Unsubscribe>(() => undefined)
     },
   }
 }
