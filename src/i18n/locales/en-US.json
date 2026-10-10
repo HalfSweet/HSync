@@ -520,6 +520,11 @@
       "unsupportedVersion": "File format version {version} is not supported",
       "unsupportedMode": "Only logic analyzer captures can be opened",
       "cancelled": "Cancelled"
+    },
+    "decode": {
+      "python": "The decoder runtime failed: {detail}",
+      "unknown": "No decoder {id}",
+      "invalid": "Decoder {id} cannot be used: {detail}"
     }
   }
 }

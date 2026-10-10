@@ -21,6 +21,7 @@ hsync-demo.workspace = true
 hsync-driver.workspace = true
 hsync-dslogic.workspace = true
 hsync-session.workspace = true
+hsync-srd.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 serde.workspace = true

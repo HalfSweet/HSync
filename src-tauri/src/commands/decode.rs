@@ -2,7 +2,7 @@
 
 use hsync_decode::StreamMode;
 use hsync_session::{DecoderLanes, DecoderStatus, SearchResult, StreamPage};
-use tauri::State;
+use tauri::{Manager, State};
 
 use super::CommandResult;
 use crate::state::AppState;
@@ -81,6 +81,21 @@ pub async fn decode_search(
     mode: StreamMode,
 ) -> CommandResult<Option<SearchResult>> {
     Ok(decoding(&state, capture_id)?.search(&query, mode))
+}
+
+/// Every protocol decoder the host offers, for the decoder dialog.
+#[tauri::command]
+pub async fn decode_catalog(app: tauri::AppHandle) -> CommandResult<Vec<hsync_srd::DecoderInfo>> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        state
+            .decoders
+            .catalog()
+            .map(<[hsync_srd::DecoderInfo]>::to_vec)
+            .map_err(|error| UiError::from(&error))
+    })
+    .await
+    .map_err(|error| UiError::new("error.app.taskFailed").with("detail", error.to_string()))?
 }
 
 /// Replaces the decoders of the open capture (DSView's `decoders` list) and decodes again.

@@ -1271,6 +1271,7 @@ dependencies = [
  "hsync-driver",
  "hsync-dslogic",
  "hsync-session",
+ "hsync-srd",
  "log",
  "parking_lot",
  "serde",

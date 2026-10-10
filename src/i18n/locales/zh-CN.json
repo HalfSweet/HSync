@@ -520,6 +520,11 @@
       "unsupportedVersion": "不支持第 {version} 版的文件格式",
       "unsupportedMode": "只能打开逻辑分析采集",
       "cancelled": "已取消"
+    },
+    "decode": {
+      "python": "解码器运行环境出错：{detail}",
+      "unknown": "没有解码器 {id}",
+      "invalid": "解码器 {id} 无法使用：{detail}"
     }
   }
 }

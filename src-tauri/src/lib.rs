@@ -34,6 +34,16 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .resolve("demo/protocol.dsl", BaseDirectory::Resource)
         .ok();
     let firmware = resolver.resolve("firmware", BaseDirectory::Resource)?;
+    let decoders = Arc::new(hsync_srd::DecoderHost::new(
+        resolver.resolve("decoders", BaseDirectory::Resource)?,
+    ));
+    // Reading the decoders starts Python and imports them all; do it before anyone asks.
+    let preload = Arc::clone(&decoders);
+    std::thread::Builder::new()
+        .name("decoder-catalog".into())
+        .spawn(move || {
+            let _ = preload.catalog();
+        })?;
     let manager = DeviceManager::new(vec![
         Arc::new(DemoDriver::new(demo)),
         Arc::new(DslogicDriver::new(FirmwareDir(firmware))),
@@ -50,6 +60,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     app.manage(AppState::new(
         Workspace::with_events(events),
         Instrument::new(manager.clone()),
+        decoders,
     ));
     let handle = app.handle().clone();
     let watch = manager.watch(HOTPLUG_SETTLE, move || {
@@ -102,6 +113,7 @@ pub fn run() {
             commands::decode::decode_list,
             commands::decode::decode_view,
             commands::decode::decode_stream,
+            commands::decode::decode_catalog,
             commands::decode::decode_row_at,
             commands::decode::decode_search,
             commands::files::capture_export,
