@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import './fonts.css';
 @import './tokens.css';
+@import './components.css';
 
 /*
  * Only design tokens exist as theme values: the default palette, type scale, radii and

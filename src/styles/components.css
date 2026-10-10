@@ -1,0 +1,98 @@
+/*
+ * Recurring control styles of the design, as Tailwind utilities so components can combine
+ * them with other utilities. The comments name the class in the design file (`la-*`).
+ */
+
+/* la-btn: 32 px top-bar control */
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--h-bar);
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--raise);
+  white-space: nowrap;
+
+  &:hover {
+    border-color: var(--ink-3);
+  }
+}
+
+/* la-gh: 24 px secondary button */
+@utility btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--line-2);
+  border-radius: 5px;
+  background: var(--canvas);
+  color: var(--ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: var(--ink-3);
+    color: var(--ink);
+  }
+}
+
+/* la-icb: 24 px icon button */
+@utility btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  color: var(--ink-2);
+
+  &:hover {
+    background: var(--hover);
+    color: var(--ink);
+  }
+}
+
+/* la-seg: segmented control option */
+@utility seg {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  color: var(--ink-2);
+  font-size: 12px;
+  white-space: nowrap;
+
+  &[aria-pressed='true'] {
+    background: var(--raise);
+    box-shadow: 0 0 0 1px var(--line-2);
+    color: var(--ink);
+  }
+
+  &[aria-disabled='true'] {
+    opacity: 0.45;
+    cursor: default;
+  }
+}
+
+/* la-i: 16 px stroked icon */
+@utility icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* la-vr: thin vertical rule between values */
+@utility vr {
+  width: 1px;
+  height: 14px;
+  flex: none;
+  background: var(--line-2);
+}
