@@ -2,12 +2,12 @@
 
 HSync 是一个现代化的逻辑分析仪上位机，用 Tauri 2、Vue 3 与 Rust 重写 [DSView](https://github.com/DreamSourceLab/DSView)。初版的目标是与 DSView 的逻辑分析仪功能保持对齐：支持 DreamSourceLab 的全部 DSLogic 型号与 Demo 设备、Buffer/Stream 采集、触发、协议解码、测量、搜索，以及 DSView `.dsl` 文件的读写。
 
-> 项目处于开发阶段：v1 的逻辑分析仪功能已与 DSView 基本对齐，并在 DSLogic U2Pro16 上实测过采集、触发与循环采集；安装包由 GitHub Actions 构建（macOS Apple 芯片、Windows x64、Linux x64，内置 Python 解码器宿主），随版本发布在 GitHub Releases，应用内可以检查并安装更新，流程见 [DESIGN.md §11.5](./DESIGN.md#115-持续集成与发布)。进度见 [DESIGN.md §13 里程碑](./DESIGN.md#13-里程碑)。
+> 项目处于开发阶段：v1 的逻辑分析仪功能已与 DSView 基本对齐，并在 DSLogic U2Pro16 上实测过采集、触发与循环采集；安装包由 GitHub Actions 构建（macOS Apple 芯片、Windows x64、Linux x64，内置 Python 解码器宿主），随版本发布在 GitHub Releases，应用内可以检查并安装更新。
 
 ## 文档
 
 - [用户指南](./docs/user-guide.md)：界面与操作。
-- [DESIGN.md](./DESIGN.md)：总体设计——范围、架构、DSLogic USB 协议、数据模型、渲染、解码、文件格式、UI/UX 规范、国际化与工程规范。
+- [DESIGN.md](./DESIGN.md)：界面设计规范——布局、设计令牌、各区域的外观与交互、可访问性与动效。
 - [AGENTS.md](./AGENTS.md)：项目的硬性要求、构建命令、编码与提交规范。
 
 ## 开发

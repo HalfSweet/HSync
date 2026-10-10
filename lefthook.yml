@@ -1,4 +1,4 @@
-# Git hooks, see AGENTS.md "提交规范" and DESIGN.md §11.3.
+# Git hooks, see AGENTS.md "提交规范".
 # Installed by `pnpm install` (lefthook's postinstall runs `lefthook install`).
 
 pre-commit:
