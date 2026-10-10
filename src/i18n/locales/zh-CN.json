@@ -503,6 +503,25 @@
         "webgpu": "正在用 WebGPU 绘制波形",
         "canvas2d": "正在用 Canvas2D 绘制波形"
       }
+    },
+    "behaviour": {
+      "label": "行为",
+      "centerTrigger": "触发位置自动居中显示",
+      "followLatest": "采集时自动滚动到最新数据",
+      "quickScroll": "快速拖动后波形继续滚动",
+      "keepStopped": "重复模式下停止后显示最新数据"
+    },
+    "diagnostics": {
+      "label": "诊断",
+      "level": "日志级别",
+      "levels": {
+        "error": "错误",
+        "warn": "警告",
+        "info": "信息",
+        "debug": "调试"
+      },
+      "file": "写入日志文件",
+      "reveal": "在文件夹中显示"
     }
   },
   "units": {
@@ -516,7 +535,9 @@
       "taskFailed": "后台任务失败：{detail}",
       "resourceMissing": "缺少应用资源：{detail}",
       "unexpected": "意外错误：{detail}",
-      "unavailableInBrowser": "浏览器预览中不能读写文件"
+      "unavailableInBrowser": "浏览器预览中不能读写文件",
+      "logFolder": "找不到日志文件夹：{detail}",
+      "reveal": "无法在文件管理器中显示：{detail}"
     },
     "session": {
       "noCapture": "没有打开的采集",

@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
-import { ref, useTemplateRef } from 'vue'
+import { ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import { useBackendText } from '@/composables/useBackendText'
+import { getBackend } from '@/ipc/backend'
+import { toUiError, type UiError } from '@/ipc/errors'
+import { LOG_LEVELS } from '@/ipc/logLevels'
 import {
   DENSITIES,
   GRAPHICS,
@@ -13,6 +17,7 @@ import {
 } from '@/stores/preferences'
 
 const { t } = useI18n()
+const text = useBackendText()
 const preferences = usePreferencesStore()
 const open = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
@@ -22,6 +27,31 @@ onKeyStroke('Escape', () => (open.value = false))
 
 /** Languages are named in their own language. */
 const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US': 'English' }
+
+/** DSView's display options. */
+const BEHAVIOURS = ['centerTrigger', 'followLatest', 'quickScroll', 'keepStopped'] as const
+
+/** Where the log file is; unknown in the browser preview, which has none. */
+const logFile = shallowRef<string | null>(null)
+const revealError = shallowRef<UiError | null>(null)
+watch(open, async (isOpen) => {
+  revealError.value = null
+  if (!isOpen || logFile.value) return
+  try {
+    logFile.value = await (await getBackend()).logFile()
+  } catch (error) {
+    console.error('log file location failed', error)
+  }
+})
+
+async function revealLog(): Promise<void> {
+  revealError.value = null
+  try {
+    await (await getBackend()).revealLog()
+  } catch (error) {
+    revealError.value = toUiError(error)
+  }
+}
 </script>
 
 <template>
@@ -40,7 +70,7 @@ const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US
       v-if="open"
       role="dialog"
       :aria-label="t('settings.title')"
-      class="absolute top-full right-0 z-20 mt-1 flex w-64 flex-col gap-3 rounded-6 border border-ink bg-raise p-3 text-small"
+      class="absolute top-full right-0 z-20 mt-1 flex max-h-[calc(100vh-64px)] w-72 flex-col gap-3 overflow-y-auto rounded-6 border border-ink bg-raise p-3 text-small"
     >
       <div class="flex flex-col gap-1.5">
         <span class="text-caption text-ink-3">{{ t('settings.theme.label') }}</span>
@@ -100,6 +130,43 @@ const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US
             {{ locale === 'system' ? t('settings.language.system') : LANGUAGE_NAMES[locale] }}
           </button>
         </div>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="text-caption text-ink-3">{{ t('settings.behaviour.label') }}</span>
+        <label v-for="behaviour in BEHAVIOURS" :key="behaviour" class="flex items-center gap-2">
+          <input v-model="preferences[behaviour]" type="checkbox" class="size-4 accent-ink" />
+          <span>{{ t(`settings.behaviour.${behaviour}`) }}</span>
+        </label>
+      </div>
+      <div class="flex flex-col gap-1.5">
+        <span class="text-caption text-ink-3">{{ t('settings.diagnostics.label') }}</span>
+        <div
+          role="group"
+          :aria-label="t('settings.diagnostics.level')"
+          class="flex gap-0.5 self-start rounded-6 bg-hover p-0.5"
+        >
+          <button
+            v-for="level in LOG_LEVELS"
+            :key="level"
+            class="seg"
+            :aria-pressed="preferences.logLevel === level"
+            @click="preferences.logLevel = level"
+          >
+            {{ t(`settings.diagnostics.levels.${level}`) }}
+          </button>
+        </div>
+        <div class="flex items-center gap-2">
+          <label class="flex flex-1 items-center gap-2">
+            <input v-model="preferences.logToFile" type="checkbox" class="size-4 accent-ink" />
+            <span>{{ t('settings.diagnostics.file') }}</span>
+          </label>
+          <button v-if="logFile" class="btn-ghost h-[22px]" :title="logFile" @click="revealLog">
+            {{ t('settings.diagnostics.reveal') }}
+          </button>
+        </div>
+        <span v-if="revealError" role="alert" class="text-caption text-alert">{{
+          text.error(revealError)
+        }}</span>
       </div>
     </div>
   </div>

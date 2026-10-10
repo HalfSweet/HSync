@@ -503,6 +503,25 @@
         "webgpu": "Waveforms drawn with WebGPU",
         "canvas2d": "Waveforms drawn with Canvas2D"
       }
+    },
+    "behaviour": {
+      "label": "Behaviour",
+      "centerTrigger": "Centre the view on the trigger",
+      "followLatest": "Follow the latest data while capturing",
+      "quickScroll": "Keep scrolling after a quick drag",
+      "keepStopped": "Show the latest data when a repeat stops"
+    },
+    "diagnostics": {
+      "label": "Diagnostics",
+      "level": "Log level",
+      "levels": {
+        "error": "Errors",
+        "warn": "Warnings",
+        "info": "Info",
+        "debug": "Debug"
+      },
+      "file": "Write a log file",
+      "reveal": "Show in folder"
     }
   },
   "units": {
@@ -516,7 +535,9 @@
       "taskFailed": "A background task failed: {detail}",
       "resourceMissing": "An application resource is missing: {detail}",
       "unexpected": "Unexpected error: {detail}",
-      "unavailableInBrowser": "Files cannot be read or written in the browser preview"
+      "unavailableInBrowser": "Files cannot be read or written in the browser preview",
+      "logFolder": "Cannot find the log folder: {detail}",
+      "reveal": "Cannot show it in the file manager: {detail}"
     },
     "session": {
       "noCapture": "No capture is open",
