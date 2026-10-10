@@ -16,6 +16,7 @@ import type { DeviceState } from './bindings/DeviceState'
 import type { DeviceSummary } from './bindings/DeviceSummary'
 import type { Direction } from './bindings/Direction'
 import type { ExportRequest } from './bindings/ExportRequest'
+import type { ImportRequest } from './bindings/ImportRequest'
 import type { LiveStatus } from './bindings/LiveStatus'
 import type { OptionKey } from './bindings/OptionKey'
 import type { OptionValue } from './bindings/OptionValue'
@@ -24,6 +25,7 @@ import type { PulseInfo } from './bindings/PulseInfo'
 import type { SearchResult } from './bindings/SearchResult'
 import type { StreamMode } from './bindings/StreamMode'
 import type { StreamPage } from './bindings/StreamPage'
+import type { WaveformSummary } from './bindings/WaveformSummary'
 import { decodeBins, type BinsResult } from './bins'
 import type { UiError } from './errors'
 import type { LogLevel } from './logLevels'
@@ -78,8 +80,21 @@ export interface Backend {
     request: ExportRequest,
     onProgress: (done: number) => void,
   ): Promise<void>
-  /** Stops the save or export under way; it fails as cancelled. */
+  /** Stops the save, export or import under way; it fails as cancelled. */
   cancelFile(): Promise<void>
+  /**
+   * Reads a waveform file (VCD, FST or GHW) and lists what it holds; the backend keeps the
+   * file for {@link waveformImport} until then or {@link waveformDiscard}. Reading cannot be
+   * cancelled.
+   */
+  waveformInspect(path: string, onProgress: (done: number) => void): Promise<WaveformSummary>
+  /** Lays the chosen signals of the waveform read last onto a capture, which becomes the open one. */
+  waveformImport(
+    request: ImportRequest,
+    onProgress: (done: number) => void,
+  ): Promise<CaptureSummary>
+  /** Forgets the waveform read last. */
+  waveformDiscard(): Promise<void>
   /** Writes text the UI composed, such as the data stream as listed. */
   saveText(path: string, text: string): Promise<void>
   /** Reads a small text file, such as a session. */
@@ -225,6 +240,24 @@ class TauriBackend implements Backend {
 
   cancelFile() {
     return invoke<void>('file_cancel')
+  }
+
+  waveformInspect(path: string, onProgress: (done: number) => void) {
+    return invoke<WaveformSummary>('waveform_inspect', {
+      path,
+      onProgress: progress(onProgress),
+    })
+  }
+
+  waveformImport(request: ImportRequest, onProgress: (done: number) => void) {
+    return invoke<CaptureSummary>('waveform_import', {
+      request,
+      onProgress: progress(onProgress),
+    })
+  }
+
+  waveformDiscard() {
+    return invoke<void>('waveform_discard')
   }
 
   saveText(path: string, text: string) {

@@ -6,7 +6,9 @@ import { getBackend } from '@/ipc/backend'
 import type { CapturePreset } from '@/ipc/bindings/CapturePreset'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import type { ExportRequest } from '@/ipc/bindings/ExportRequest'
+import type { ImportRequest } from '@/ipc/bindings/ImportRequest'
 import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
+import type { WaveformSummary } from '@/ipc/bindings/WaveformSummary'
 import { toUiError, type UiError } from '@/ipc/errors'
 import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
@@ -22,10 +24,19 @@ export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
  */
 export type CaptureMode = 'single' | 'repeat' | 'loop'
 
-/** A save or export under way and the share of it done. */
+/**
+ * A file job under way and the share of it done: a save, an export, the reading of a waveform
+ * file for the import dialog, or the import itself. Reading cannot be cancelled.
+ */
 export interface FileJob {
-  kind: 'save' | 'export'
+  kind: 'save' | 'export' | 'read' | 'import'
   progress: number
+}
+
+/** A waveform file read for the import dialog, until it is imported or dismissed. */
+export interface PendingImport {
+  path: string
+  summary: WaveformSummary
 }
 
 /** Pause between repeated captures in seconds: DSView's range and default. */
@@ -63,8 +74,10 @@ export const useCaptureStore = defineStore('capture', () => {
   /** Where the open capture was last saved or exported, until another capture replaces it. */
   const savedPath = shallowRef<string | null>(null)
   const savedKind = shallowRef<FileJob['kind']>('save')
-  /** The save or export under way. */
+  /** The file job under way. */
   const job = shallowRef<FileJob | null>(null)
+  /** The waveform file the import dialog shows. */
+  const pendingImport = shallowRef<PendingImport | null>(null)
   /**
    * Channel names and decoders for a capture that follows no other: those remembered for the
    * open device, or of a session loaded before any capture. Without, the device's own apply.
@@ -320,6 +333,69 @@ export const useCaptureStore = defineStore('capture', () => {
     })
   }
 
+  /** Reads a waveform file for the import dialog, following the reading. */
+  async function inspectWaveform(path: string): Promise<void> {
+    if (job.value) return
+    error.value = null
+    job.value = { kind: 'read', progress: 0 }
+    try {
+      const summary = await (
+        await getBackend()
+      ).waveformInspect(path, (done) => {
+        if (job.value) job.value = { kind: 'read', progress: done }
+      })
+      pendingImport.value = { path, summary }
+    } catch (reason) {
+      error.value = toUiError(reason)
+    } finally {
+      job.value = null
+    }
+  }
+
+  /**
+   * Imports the chosen signals of the waveform file read last; the capture that makes becomes
+   * the open one. A cancelled import leaves the dialog and the open capture as they were.
+   */
+  async function importWaveform(request: ImportRequest): Promise<boolean> {
+    if (!pendingImport.value || job.value) return false
+    const before = status.value
+    status.value = 'loading'
+    error.value = null
+    savedPath.value = null
+    job.value = { kind: 'import', progress: 0 }
+    try {
+      summary.value = await (
+        await getBackend()
+      ).waveformImport(request, (done) => {
+        if (job.value) job.value = { kind: 'import', progress: done }
+      })
+      status.value = 'ready'
+      pendingImport.value = null
+      return true
+    } catch (reason) {
+      const failure = toUiError(reason)
+      if (failure.code === 'error.file.cancelled') {
+        status.value = before
+      } else {
+        error.value = failure
+        status.value = 'error'
+      }
+      return false
+    } finally {
+      job.value = null
+    }
+  }
+
+  /** Closes the import dialog without importing; the backend forgets the file. */
+  async function discardImport(): Promise<void> {
+    pendingImport.value = null
+    try {
+      await (await getBackend()).waveformDiscard()
+    } catch (reason) {
+      console.error('discarding the waveform failed', reason)
+    }
+  }
+
   /** Renames a channel of the open capture; an empty name gives back its number. */
   async function renameChannel(index: number, name: string): Promise<void> {
     const current = summary.value
@@ -331,9 +407,9 @@ export const useCaptureStore = defineStore('capture', () => {
     }
   }
 
-  /** Stops the save or export under way. */
+  /** Stops the save, export or import under way. */
   async function cancelFile(): Promise<void> {
-    if (job.value) await (await getBackend()).cancelFile()
+    if (job.value && job.value.kind !== 'read') await (await getBackend()).cancelFile()
   }
 
   return {
@@ -349,6 +425,7 @@ export const useCaptureStore = defineStore('capture', () => {
     savedPath,
     savedKind,
     job,
+    pendingImport,
     preset,
     pending,
     running,
@@ -371,6 +448,9 @@ export const useCaptureStore = defineStore('capture', () => {
     saveFile,
     exportFile,
     saveText,
+    inspectWaveform,
+    importWaveform,
+    discardImport,
     cancelFile,
     renameChannel,
     start,

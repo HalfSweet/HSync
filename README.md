@@ -71,7 +71,8 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 ### Files
 
 - **Opens DSView `.dsl` captures** of every version, and saves `.dsl` files that DSView opens, with channel names and decoders.
-- **Exports CSV, VCD, sigrok `.sr` and raw binary**: the whole capture or a segment, all channels or a few.
+- **Imports VCD, FST and GHW waveforms** from simulators and FPGA logic analyzers (Vivado ILA, Signal Tap, …): pick the signals, and each bit becomes a channel on the clock the file was sampled with.
+- **Exports CSV, VCD, FST, sigrok `.sr` and raw binary**: the whole capture or a segment, all channels or a few.
 - **Sessions** keep your device settings, channels, triggers and decoders; DSView `.dsc` sessions load too.
 
 ### Interface
@@ -122,7 +123,7 @@ HSync looks for a new version each time it starts (turn this off under **Setting
 4. **Capture.** Press **Capture**. The arrow beside it switches between **Single**, **Repeat** and **Loop**, or starts an **Instant** capture that ignores the trigger.
 5. **Decode.** Click **Add decoder**, search for a protocol and choose its channels. Open the **Data stream** from the status bar to list everything it decoded.
 6. **Look closer.** Ctrl/⌘ + wheel zooms, dragging pans and `Home` shows the whole capture. Hover a pulse to read it, click two edges to measure between them and press `/` to search.
-7. **Save.** ⌘S / Ctrl+S saves a `.dsl` file that DSView opens too; **Export…** in the export menu writes CSV, VCD, sigrok and binary files.
+7. **Save.** ⌘S / Ctrl+S saves a `.dsl` file that DSView opens too; **Export…** in the export menu writes CSV, VCD, FST, sigrok and binary files.
 
 The [user guide](docs/user-guide.md) covers every feature and keyboard shortcut.
 
@@ -150,7 +151,7 @@ HSync talks to DSLogic devices the way DSView does, and to ATK-Logic devices the
 No. HSync brings its own firmware, decoders and Python runtime. You can keep DSView installed alongside it, and HSync opens DSView's captures and sessions.
 
 **Can I take a capture to other tools?**
-Yes: export it as a sigrok session for PulseView, as VCD for GTKWave and other waveform viewers, or as CSV for spreadsheets and scripts.
+Yes: export it as a sigrok session for PulseView, as VCD or FST for GTKWave, Surfer and other waveform viewers, or as CSV for spreadsheets and scripts. The other way round, **Open file…** imports the VCD, FST and GHW waveforms those tools and FPGA logic analyzers write.
 
 **Where are the logs?**
 Open **Settings**, and under **Diagnostics** click **Show in folder**. Attach the latest log when you [report a problem](https://github.com/HalfSweet/HSync/issues/new).

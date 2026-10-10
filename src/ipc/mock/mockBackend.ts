@@ -15,6 +15,7 @@ import type { OptionKey } from '../bindings/OptionKey'
 import type { OptionValue } from '../bindings/OptionValue'
 import type { PatternCondition } from '../bindings/PatternCondition'
 import type { PulseInfo } from '../bindings/PulseInfo'
+import type { WaveformItem } from '../bindings/WaveformItem'
 import {
   CELL_EMPTY,
   CELL_FIRST_HIGH,
@@ -249,6 +250,41 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
     },
 
     async cancelFile() {
+      return Promise.resolve()
+    },
+
+    // The browser preview has no files: the import dialog shows the demo's channels as the
+    // signals of a waveform, and importing them opens the demo.
+    async waveformInspect(_path: string, onProgress: (done: number) => void) {
+      onProgress(1)
+      const signal = ({ index, name }: { index: number; name: string }, depth: number) =>
+        ({ depth, name, kind: 'logic', signal: index, width: 1, range: null }) as WaveformItem
+      const items: WaveformItem[] = [
+        { depth: 0, name: 'top', kind: 'scope', signal: null, width: 0, range: null },
+        ...data.channels.slice(0, 8).map((channel) => signal(channel, 1)),
+        { depth: 1, name: 'spi', kind: 'scope', signal: null, width: 0, range: null },
+        { depth: 2, name: 'data', kind: 'logic', signal: 100, width: 8, range: [7, 0] },
+        { depth: 2, name: 'temperature', kind: 'other', signal: null, width: 0, range: null },
+        ...data.channels.slice(8).map((channel) => signal(channel, 2)),
+      ]
+      const unit = 1e-9
+      return Promise.resolve({
+        format: 'vcd' as const,
+        samplerate: data.samplerate,
+        sampleCount: data.sampleCount,
+        coarsened: false,
+        unit,
+        span: (data.sampleCount - 1) * Math.round(1 / (data.samplerate * unit)),
+        finest: Math.round(1 / (data.samplerate * unit)),
+        items,
+      })
+    },
+
+    async waveformImport() {
+      return this.openDemo()
+    },
+
+    async waveformDiscard() {
       return Promise.resolve()
     },
 

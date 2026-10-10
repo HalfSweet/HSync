@@ -74,12 +74,16 @@
   },
   "file": {
     "filter": "DSView capture",
+    "filterAll": "Captures and waveforms",
+    "waveformFilter": "HDL waveform (VCD, FST, GHW)",
     "open": "Open file…",
     "save": "Save capture…",
     "saved": "Saved to {name}",
     "exportItem": "Export…",
     "saving": "Saving {percent}%",
     "exporting": "Exporting {percent}%",
+    "reading": "Reading {percent}%",
+    "importing": "Importing {percent}%",
     "cancel": "Cancel",
     "exported": "Exported to {name}",
     "saveSession": "Save session…",
@@ -94,6 +98,7 @@
       "dsl": "DSView capture",
       "csv": "CSV table",
       "vcd": "VCD waveform",
+      "fst": "FST waveform",
       "sigrok": "sigrok session",
       "binary": "Raw binary"
     },
@@ -101,6 +106,7 @@
       "dsl": "Opens in HSync and DSView, decoders included",
       "csv": "A time and every channel level per row, for spreadsheets",
       "vcd": "The common digital waveform format, for GTKWave and others",
+      "fst": "GTKWave’s compact waveform format, far smaller than VCD",
       "sigrok": "Opens in PulseView",
       "binary": "⌈channels / 8⌉ bytes per sample, channel k in bit k"
     },
@@ -114,6 +120,32 @@
     "everySample": "A row for every sample (otherwise only where a level changes)",
     "noChannel": "Choose at least one channel",
     "export": "Export…",
+    "cancel": "Cancel"
+  },
+  "importDialog": {
+    "title": "Import waveform",
+    "formats": {
+      "vcd": "VCD waveform",
+      "fst": "FST waveform",
+      "ghw": "GHW waveform (GHDL)"
+    },
+    "all": "All",
+    "none": "None",
+    "search": "Search signals",
+    "signals": "Signals",
+    "noMatch": "No signal matches",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "bits": "{count} bits",
+    "noLevel": "no logic level",
+    "samplerate": "Sample rate",
+    "autoRate": "From the timestamps",
+    "badSamplerate": "Enter a sample rate such as 25 MHz",
+    "grid": "{rate} · {samples} samples · {channels} channels · about {size}",
+    "coarsened": "The file’s time steps are finer than the samples; changes closer together than one sample fall together",
+    "tooLarge": "This import needs about {size} of memory, over half of this machine’s, and may not finish; choose fewer signals",
+    "noSignal": "Choose at least one signal",
+    "import": "Import",
     "cancel": "Cancel"
   },
   "device": {
@@ -552,7 +584,8 @@
       "noDevice": "No device is open",
       "unknownDevice": "Device {id} was not found",
       "busy": "A capture is running; stop it first",
-      "nothingToExport": "No channel to export"
+      "nothingToExport": "No channel to export",
+      "noWaveform": "No waveform file is waiting to be imported"
     },
     "device": {
       "usb": "USB communication failed: {detail}",
@@ -580,7 +613,13 @@
       "unsupportedVersion": "File format version {version} is not supported",
       "unsupportedMode": "Only logic analyzer captures can be opened",
       "cancelled": "Cancelled",
-      "notSession": "This is not a session file"
+      "notSession": "This is not a session file",
+      "notWaveform": "This is not a VCD, FST or GHW waveform file",
+      "waveform": "The waveform file could not be read: {detail}",
+      "emptyWaveform": "The waveform file holds no samples",
+      "unknownSignal": "The file has no signal {signal}",
+      "noSignal": "Choose at least one signal",
+      "tooManyChannels": "{count} channels is more than the {limit} a capture holds"
     },
     "decode": {
       "python": "The decoder runtime failed: {detail}",

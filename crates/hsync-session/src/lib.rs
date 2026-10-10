@@ -19,6 +19,7 @@ use std::sync::{Arc, OnceLock};
 use hsync_capture::{CaptureInfo, LogicCapture};
 use hsync_core::{ChannelIndex, SampleIndex};
 use hsync_driver::CapturePreset;
+use hsync_fileio::ImportedCapture;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -31,6 +32,10 @@ pub use decoding::{
 pub use error::SessionError;
 pub use files::{ExportKind, ExportRequest, ExportSource, read_text, write_text};
 pub use hsync_capture::{PatternCondition, PatternLevel};
+pub use hsync_fileio::{
+    ImportRequest, Waveform, WaveformFormat, WaveformItem, WaveformItemKind, WaveformSummary,
+    read_waveform_file,
+};
 pub use instrument::{
     CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,
     SessionEvent,
@@ -153,6 +158,16 @@ impl OpenCapture {
 /// Whether a capture taken behind a held one replaces it; set when the capture ends.
 pub type Verdict = Arc<OnceLock<bool>>;
 
+/// A capture read from a file, about to become the open capture.
+struct Loaded {
+    source: CaptureSource,
+    capture: LogicCapture,
+    channel_names: BTreeMap<ChannelIndex, String>,
+    decoders: Option<serde_json::Value>,
+    driver: String,
+    session: Option<serde_json::Value>,
+}
+
 /// The captures of one window.
 #[derive(Default)]
 pub struct Workspace {
@@ -239,25 +254,57 @@ impl Workspace {
     fn load(&mut self, path: &Path, source: CaptureSource) -> Result<CaptureSummary, SessionError> {
         let document = hsync_fileio::read_dsl_file(path)?;
         let channel_names = document.header.probes.iter().cloned().collect();
+        self.install(Loaded {
+            source,
+            capture: document.capture,
+            channel_names,
+            decoders: document.decoders,
+            driver: document.header.driver,
+            session: document.session,
+        })
+    }
+
+    /// Makes a capture imported from the waveform file at `path` the open capture. It comes
+    /// without decoders, a device or DSView's session document.
+    pub fn open_imported(
+        &mut self,
+        path: &Path,
+        imported: ImportedCapture,
+    ) -> Result<CaptureSummary, SessionError> {
+        self.install(Loaded {
+            source: CaptureSource::File {
+                path: path.to_string_lossy().into_owned(),
+            },
+            capture: imported.capture,
+            channel_names: imported.channel_names,
+            decoders: None,
+            driver: String::new(),
+            session: None,
+        })
+    }
+
+    /// Makes `loaded` the open capture, dropping the captures open so far, and starts its
+    /// decoders.
+    fn install(&mut self, loaded: Loaded) -> Result<CaptureSummary, SessionError> {
         self.last_id += 1;
-        let capture = Arc::new(RwLock::new(document.capture));
+        let capture = Arc::new(RwLock::new(loaded.capture));
         for open in [self.current.take(), self.held.take()]
             .into_iter()
             .flatten()
         {
             open.decoding.cancel();
         }
-        let decoding = DecodeSet::new(document.decoders.as_ref(), self.decoders.clone());
+        let decoding = DecodeSet::new(loaded.decoders.as_ref(), self.decoders.clone());
         decoding.run(&capture, decoded_events(self.events.clone(), self.last_id));
         self.current = Some(OpenCapture {
             id: self.last_id,
-            source,
+            source: loaded.source,
             capture,
-            channel_names,
-            decoders: document.decoders,
+            channel_names: loaded.channel_names,
+            decoders: loaded.decoders,
             decoding,
-            driver: document.header.driver,
-            session: document.session,
+            driver: loaded.driver,
+            session: loaded.session,
             verdict: None,
         });
         self.summary().ok_or(SessionError::NoCapture)

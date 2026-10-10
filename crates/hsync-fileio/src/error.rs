@@ -32,6 +32,27 @@ pub enum FileError {
     /// The user cancelled the write.
     #[error("cancelled")]
     Cancelled,
+    /// The file is not a VCD, FST or GHW waveform.
+    #[error("not a waveform file")]
+    NotWaveform,
+    /// The waveform file could not be read.
+    #[error("invalid waveform: {0}")]
+    Waveform(String),
+    /// The waveform file holds no timestamps.
+    #[error("the waveform holds no samples")]
+    EmptyWaveform,
+    /// The import names a signal the file does not have.
+    #[error("unknown signal {0}")]
+    UnknownSignal(u32),
+    /// The import names no signal.
+    #[error("no signal chosen")]
+    NoSignal,
+    /// The import would hold more channels than a capture can.
+    #[error("{0} channels is more than a capture holds")]
+    TooManyChannels(usize),
+    /// Writing an FST file failed.
+    #[error("fst: {0}")]
+    Fst(#[from] fst_writer::FstWriteError),
     /// An embedded JSON document is malformed.
     #[error("invalid json in {entry}: {source}")]
     Json {
@@ -64,6 +85,21 @@ impl From<&FileError> for UiError {
                 UiError::new("error.file.corrupt").with("detail", entry.as_str())
             }
             FileError::Cancelled => UiError::new("error.file.cancelled"),
+            FileError::NotWaveform => UiError::new("error.file.notWaveform"),
+            FileError::Waveform(detail) => {
+                UiError::new("error.file.waveform").with("detail", detail.as_str())
+            }
+            FileError::EmptyWaveform => UiError::new("error.file.emptyWaveform"),
+            FileError::UnknownSignal(signal) => {
+                UiError::new("error.file.unknownSignal").with("signal", *signal)
+            }
+            FileError::NoSignal => UiError::new("error.file.noSignal"),
+            FileError::TooManyChannels(count) => UiError::new("error.file.tooManyChannels")
+                .with("count", *count)
+                .with("limit", u16::MAX),
+            FileError::Fst(error) => {
+                UiError::new("error.file.io").with("detail", error.to_string())
+            }
         }
     }
 }

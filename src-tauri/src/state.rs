@@ -6,17 +6,21 @@ use hsync_session::{Instrument, Workspace};
 use hsync_srd::DecoderHost;
 use parking_lot::Mutex;
 
-/// State shared by all commands of the main window. Commands that need both lock the
-/// instrument before the workspace.
+use crate::commands::waveform::PendingWaveform;
+
+/// State shared by all commands of the main window. Commands that need more than one lock take
+/// them in the order of the fields: the instrument before the waveform before the workspace.
 #[derive(Debug)]
 pub struct AppState {
-    /// The open capture and its queries.
-    pub workspace: Mutex<Workspace>,
     /// Devices and the running capture.
     pub instrument: Mutex<Instrument>,
+    /// A waveform file read for the import dialog, until it is imported or dismissed.
+    pub waveform: Mutex<Option<PendingWaveform>>,
+    /// The open capture and its queries.
+    pub workspace: Mutex<Workspace>,
     /// Keeps the USB hotplug watch alive.
     pub hotplug: Mutex<Option<WatchHandle>>,
-    /// Asks the save or export under way to stop.
+    /// Asks the save, export or import under way to stop.
     pub file_cancel: AtomicBool,
     /// The bundled Python protocol decoders.
     pub decoders: Arc<DecoderHost>,
@@ -25,8 +29,9 @@ pub struct AppState {
 impl AppState {
     pub fn new(workspace: Workspace, instrument: Instrument, decoders: Arc<DecoderHost>) -> Self {
         Self {
-            workspace: Mutex::new(workspace),
             instrument: Mutex::new(instrument),
+            waveform: Mutex::new(None),
+            workspace: Mutex::new(workspace),
             hotplug: Mutex::new(None),
             file_cancel: AtomicBool::new(false),
             decoders,

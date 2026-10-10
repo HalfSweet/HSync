@@ -71,7 +71,8 @@ HSync 是 DreamSourceLab DSLogic 与正点原子（ALIENTEK）ATK-Logic 系列�
 ### 文件
 
 - **打开各版本的 DSView `.dsl` 采集文件**；保存的 `.dsl` 文件 DSView 也能打开，通道名与解码器一并保存。
-- **导出 CSV、VCD、sigrok `.sr` 与原始二进制**：可以导出全程或选段、全部通道或部分通道。
+- **导入 VCD、FST、GHW 波形**：仿真器与 FPGA 片上逻辑分析仪（Vivado ILA、Signal Tap 等）导出的波形，勾选信号后每一位成为一个通道，采样率就是文件当初的采样时钟。
+- **导出 CSV、VCD、FST、sigrok `.sr` 与原始二进制**：可以导出全程或选段、全部通道或部分通道。
 - **会话**保存设备设置、通道、触发与解码器；也能加载 DSView 的 `.dsc` 会话。
 
 ### 界面
@@ -122,7 +123,7 @@ HSync 每次启动时检查新版本（可在「设置 → 行为」里关闭）
 4. **采集。** 点「采集」。旁边的下拉箭头可以在「单次」「重复」「循环」之间切换，或发起忽略触发条件的「即时」采集。
 5. **解码。** 点「添加协议解码」，搜索协议并为它选择通道。点状态栏的「数据流」查看全部解码结果。
 6. **细看。** Ctrl/⌘ + 滚轮缩放，拖动平移，`Home` 缩放到全程。指针悬停在脉冲上即可读数，单击两个边沿测量间隔，按 `/` 搜索。
-7. **保存。** ⌘S / Ctrl+S 保存为 DSView 也能打开的 `.dsl` 文件；导出菜单里的「导出…」可以导出 CSV、VCD、sigrok 与二进制文件。
+7. **保存。** ⌘S / Ctrl+S 保存为 DSView 也能打开的 `.dsl` 文件；导出菜单里的「导出…」可以导出 CSV、VCD、FST、sigrok 与二进制文件。
 
 全部功能与快捷键见[用户指南](docs/user-guide.md)（英文）。
 
@@ -150,7 +151,7 @@ HSync 与 DSLogic 的通信方式与 DSView 逐字节一致，与 ATK-Logic 的�
 不需要。HSync 自带固件、解码器与 Python 运行环境。DSView 可以同时安装，HSync 也能打开 DSView 的采集文件与会话。
 
 **能把采集数据带到其他软件里吗？**
-可以：导出为 sigrok 会话后用 PulseView 打开，导出为 VCD 后用 GTKWave 等波形查看器打开，或导出为 CSV 用表格与脚本处理。
+可以：导出为 sigrok 会话后用 PulseView 打开，导出为 VCD 或 FST 后用 GTKWave、Surfer 等波形查看器打开，或导出为 CSV 用表格与脚本处理。反过来，「打开文件…」也能导入这些工具和 FPGA 片上逻辑分析仪写出的 VCD、FST、GHW 波形。
 
 **日志在哪里？**
 打开「设置」，在「诊断」下点击「在文件夹中显示」。[反馈问题](https://github.com/HalfSweet/HSync/issues/new)时附上最新的日志会很有帮助。

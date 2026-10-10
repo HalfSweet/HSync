@@ -74,12 +74,16 @@
   },
   "file": {
     "filter": "DSView 采集文件",
+    "filterAll": "采集与波形文件",
+    "waveformFilter": "HDL 波形（VCD、FST、GHW）",
     "open": "打开文件…",
     "save": "保存采集…",
     "saved": "已保存到 {name}",
     "exportItem": "导出…",
     "saving": "正在保存 {percent}%",
     "exporting": "正在导出 {percent}%",
+    "reading": "正在读取 {percent}%",
+    "importing": "正在导入 {percent}%",
     "cancel": "取消",
     "exported": "已导出到 {name}",
     "saveSession": "保存会话…",
@@ -94,6 +98,7 @@
       "dsl": "DSView 采集文件",
       "csv": "CSV 表格",
       "vcd": "VCD 波形",
+      "fst": "FST 波形",
       "sigrok": "sigrok 会话",
       "binary": "原始二进制"
     },
@@ -101,6 +106,7 @@
       "dsl": "HSync 与 DSView 都能打开，保留解码设置",
       "csv": "每行一个时刻与各通道的电平，可用表格软件打开",
       "vcd": "通用的数字波形格式，GTKWave 等工具可打开",
+      "fst": "GTKWave 的紧凑波形格式，比 VCD 小得多",
       "sigrok": "PulseView 可打开",
       "binary": "每个采样点 ⌈通道数 / 8⌉ 个字节，第 k 个通道在第 k 位"
     },
@@ -114,6 +120,32 @@
     "everySample": "每个采样点写一行（默认只在电平变化时写一行）",
     "noChannel": "至少选一个通道",
     "export": "导出…",
+    "cancel": "取消"
+  },
+  "importDialog": {
+    "title": "导入波形",
+    "formats": {
+      "vcd": "VCD 波形",
+      "fst": "FST 波形",
+      "ghw": "GHW 波形（GHDL）"
+    },
+    "all": "全选",
+    "none": "全不选",
+    "search": "搜索信号",
+    "signals": "信号",
+    "noMatch": "没有匹配的信号",
+    "expand": "展开",
+    "collapse": "折叠",
+    "bits": "{count} 位",
+    "noLevel": "无逻辑电平",
+    "samplerate": "采样率",
+    "autoRate": "按时间戳推算",
+    "badSamplerate": "请输入采样率，例如 25 MHz",
+    "grid": "{rate} · {samples} 个采样点 · {channels} 个通道 · 约 {size}",
+    "coarsened": "文件的时间步比采样点更细，相距不到一个采样点的变化会合并",
+    "tooLarge": "这次导入约需 {size} 内存，超过本机内存的一半，可能无法完成；请减少信号",
+    "noSignal": "至少选一个信号",
+    "import": "导入",
     "cancel": "取消"
   },
   "device": {
@@ -552,7 +584,8 @@
       "noDevice": "没有打开设备",
       "unknownDevice": "找不到设备 {id}",
       "busy": "正在采集，请先停止",
-      "nothingToExport": "没有可导出的通道"
+      "nothingToExport": "没有可导出的通道",
+      "noWaveform": "没有等待导入的波形文件"
     },
     "device": {
       "usb": "USB 通信失败：{detail}",
@@ -580,7 +613,13 @@
       "unsupportedVersion": "不支持第 {version} 版的文件格式",
       "unsupportedMode": "只能打开逻辑分析采集",
       "cancelled": "已取消",
-      "notSession": "这不是会话文件"
+      "notSession": "这不是会话文件",
+      "notWaveform": "这不是 VCD、FST 或 GHW 波形文件",
+      "waveform": "无法读取波形文件：{detail}",
+      "emptyWaveform": "波形文件里没有采样数据",
+      "unknownSignal": "文件里没有信号 {signal}",
+      "noSignal": "至少选一个信号",
+      "tooManyChannels": "{count} 个通道超过了一次采集最多容纳的 {limit} 个"
     },
     "decode": {
       "python": "解码器运行环境出错：{detail}",

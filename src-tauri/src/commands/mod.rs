@@ -5,6 +5,7 @@ pub mod capture;
 pub mod decode;
 pub mod device;
 pub mod files;
+pub mod waveform;
 
 use hsync_core::UiError;
 use hsync_session::SessionError;

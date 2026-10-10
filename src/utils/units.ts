@@ -87,6 +87,20 @@ export function formatSamplerate(hz: number): string {
   return `${Number((hz / scale).toPrecision(6))} ${unit}`
 }
 
+const FREQUENCY_PREFIXES: Record<string, number> = { '': 1, k: 1e3, m: 1e6, g: 1e9 }
+
+/**
+ * Reads a frequency typed by the user, such as `25 MHz`, `25M`, `100 kHz` or `25000000`, as a
+ * whole number of hertz; `null` for anything else or for nothing at all.
+ */
+export function parseFrequency(text: string): number | null {
+  const match = /^\s*(\d+(?:[.,]\d+)?(?:e\d+)?)\s*([kmg]?)(?:hz)?\s*$/i.exec(text)
+  if (!match) return null
+  const value = Number(match[1]!.replace(',', '.')) * FREQUENCY_PREFIXES[match[2]!.toLowerCase()]!
+  const hz = Math.round(value)
+  return Number.isFinite(hz) && hz > 0 ? hz : null
+}
+
 /**
  * Formats a count with digit grouping. Chinese uses a narrow no-break space between groups
  * (`131 072`) as the design does; other languages follow Intl.

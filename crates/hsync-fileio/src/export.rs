@@ -1,12 +1,18 @@
-//! Exporting samples to other tools: DSView's CSV, Value Change Dump, sigrok's
+//! Exporting samples to other tools: DSView's CSV, Value Change Dump, GTKWave's FST, sigrok's
 //! session format and plain interleaved bytes. Callers export part of a capture by slicing it
 //! first ([`LogicCapture::slice`]).
 //!
 //! The CSV layout follows DSView's `libsigrok4DSL/output/csv.c`; the sigrok archive what
 //! libsigrok's `srzip` input reads.
 
+use std::fs::File;
 use std::io::{Seek, Write};
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
+use fst_writer::{
+    FstFileType, FstInfo, FstScopeType, FstSignalId, FstSignalType, FstVarDirection, FstVarType,
+};
 use hsync_capture::{ChannelData, LogicCapture};
 use hsync_core::ChannelIndex;
 use zip::write::SimpleFileOptions;
@@ -25,6 +31,8 @@ pub enum ExportFormat {
     Csv { every_sample: bool },
     /// Value Change Dump.
     Vcd,
+    /// GTKWave's FST, a compact binary waveform.
+    Fst,
     /// sigrok's session archive (`.sr`), which PulseView opens.
     Sigrok,
     /// Each sample as ⌈channels / 8⌉ bytes, the `k`-th channel in bit `k`, little endian.
@@ -73,6 +81,7 @@ pub fn export<W: Write + Seek>(
             )?;
         }
         ExportFormat::Vcd => write_vcd(&mut writer, capture, &channels, request, progress)?,
+        ExportFormat::Fst => write_fst(&mut writer, capture, &channels, request, progress)?,
         ExportFormat::Binary => {
             let mut sink = |bytes: &[u8]| writer.write_all(bytes);
             interleave(capture.len(), &channels, progress, &mut sink)?;
@@ -350,6 +359,107 @@ fn write_vcd<W: Write>(
     Ok(())
 }
 
+/// The FST time unit: the largest power of ten of a second, down to 1 fs, that divides the
+/// sample period, as a power of ten of a second and in femtoseconds. Rates that do not divide
+/// 10^15 fs use 1 ps.
+fn fst_timescale(rate: u64) -> (i8, u64) {
+    const SECOND: u64 = 1_000_000_000_000_000;
+    if rate == 0 || !SECOND.is_multiple_of(rate) {
+        return (-12, 1_000);
+    }
+    let period = SECOND / rate;
+    (-15..=0)
+        .rev()
+        .map(|exponent: i8| (exponent, 10u64.pow((exponent + 15) as u32)))
+        .find(|(_, unit)| period.is_multiple_of(*unit))
+        .unwrap_or((-15, 1))
+}
+
+/// Temporary FST files written so far by this process, to name them apart.
+static FST_TEMP_FILES: AtomicU64 = AtomicU64::new(0);
+
+/// Writes the capture as an FST file the way [`write_vcd`] writes a VCD. fst-writer writes to
+/// a path of its own, so the file goes to a temporary one and is copied into `out` once
+/// complete.
+fn write_fst<W: Write>(
+    out: &mut W,
+    capture: &LogicCapture,
+    channels: &[&ChannelData],
+    request: &ExportRequest<'_>,
+    progress: Progress<'_>,
+) -> Result<(), FileError> {
+    let temp: PathBuf = std::env::temp_dir().join(format!(
+        "hsync-{}-{}.fst",
+        std::process::id(),
+        FST_TEMP_FILES.fetch_add(1, Ordering::Relaxed)
+    ));
+    let written = write_fst_to(&temp, capture, channels, request, progress).and_then(|()| {
+        std::io::copy(&mut File::open(&temp)?, out)?;
+        Ok(())
+    });
+    let _ = std::fs::remove_file(&temp);
+    written
+}
+
+fn write_fst_to(
+    path: &Path,
+    capture: &LogicCapture,
+    channels: &[&ChannelData],
+    request: &ExportRequest<'_>,
+    progress: Progress<'_>,
+) -> Result<(), FileError> {
+    let len = capture.len();
+    let rate = capture.samplerate();
+    let (exponent, unit_fs) = fst_timescale(rate);
+    let period_fs = 1_000_000_000_000_000f64 / rate.max(1) as f64;
+    let time = |sample: u64| (sample as f64 * period_fs / unit_fs as f64).round() as u64;
+    let info = FstInfo {
+        start_time: 0,
+        timescale_exponent: exponent,
+        version: request.generator.to_owned(),
+        date: request.date.to_owned(),
+        file_type: FstFileType::Verilog,
+    };
+    let mut header = fst_writer::open_fst(path, &info)?;
+    header.scope("HSync", "", FstScopeType::Module)?;
+    let ids: Vec<FstSignalId> = request
+        .channels
+        .iter()
+        .map(|(_, name)| {
+            header.var(
+                name,
+                FstSignalType::bit_vec(1),
+                FstVarType::Wire,
+                FstVarDirection::Implicit,
+                None,
+            )
+        })
+        .collect::<Result<_, _>>()?;
+    header.up_scope()?;
+    let mut body = header.finish()?;
+    let mut changes = Changes::new(channels, len);
+    let mut previous: Vec<Option<bool>> = vec![None; channels.len()];
+    let mut rows = 0u64;
+    while let Some((sample, levels)) = changes.advance() {
+        rows += 1;
+        if rows.is_multiple_of(65_536) && cancelled(progress, sample, len) {
+            return Err(FileError::Cancelled);
+        }
+        body.time_change(time(sample))?;
+        for (position, &level) in levels.iter().enumerate() {
+            if previous[position] != Some(level) {
+                body.signal_change(ids[position], if level { b"1" } else { b"0" })?;
+                previous[position] = Some(level);
+            }
+        }
+    }
+    // The final timestamp marks the length, as the VCD does.
+    body.time_change(time(len))?;
+    body.finish()?;
+    progress(1.0);
+    Ok(())
+}
+
 /// A VCD identifier: `!`, `"`, … for the first 94 channels, then two characters.
 fn vcd_id(position: usize) -> String {
     const FIRST: u8 = b'!';
@@ -509,6 +619,15 @@ mod tests {
         assert_eq!(vcd_timescale(400_000_000), (100_000, "100 ps"));
         assert_eq!(vcd_timescale(1_000_000), (1_000_000_000, "1 us"));
         assert_eq!(vcd_timescale(3_000_000), (1_000, "1 ps"));
+    }
+
+    #[test]
+    fn picks_a_power_of_ten_fst_unit() {
+        assert_eq!(fst_timescale(25_000_000), (-8, 10_000_000));
+        assert_eq!(fst_timescale(100_000_000), (-8, 10_000_000));
+        assert_eq!(fst_timescale(400_000_000), (-10, 100_000));
+        assert_eq!(fst_timescale(1_000_000), (-6, 1_000_000_000));
+        assert_eq!(fst_timescale(3_000_000), (-12, 1_000));
     }
 
     #[test]
