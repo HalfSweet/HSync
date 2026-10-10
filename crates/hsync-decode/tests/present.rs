@@ -195,3 +195,45 @@ fn counts_bytes_inside_a_segment() {
     let (start, end) = first.expect("a transfer");
     assert_eq!(i2c.count_inside(start, end + 1), 4);
 }
+
+#[test]
+fn views_fetched_wide_answer_for_the_samples_in_view() {
+    let all = presentations();
+    let width = VIEW.1 - VIEW.0;
+    let window = VIEW.0 - width..VIEW.1 + width;
+
+    // The SPI transfer still names the bytes in view, not those of the whole window.
+    let spi = find(&all, "1:spi").view_around(window.clone(), VIEW.0..VIEW.1, SPP);
+    let transfer = spi.lanes[0]
+        .items
+        .iter()
+        .find_map(|item| match item {
+            LaneItem::SpiTransfer { first, last, .. } => Some((*first, *last)),
+            _ => None,
+        })
+        .expect("a transfer");
+    assert!(
+        (79..=81).contains(&transfer.0) && (159..=161).contains(&transfer.1),
+        "{transfer:?}"
+    );
+
+    // The I²C address is the one of the transfers in view.
+    let i2c = find(&all, "1:i2c");
+    assert_eq!(
+        i2c.view_around(window.clone(), VIEW.0..VIEW.1, SPP).address,
+        i2c.view(VIEW.0, VIEW.1, SPP).address
+    );
+
+    // An empty view inside a window with frames still points at the frames beside it.
+    let can = find(&all, "can-fd");
+    let full = can.view(0, u64::MAX, SPP);
+    let frames: Vec<(u64, u64)> = full.lanes[0]
+        .items
+        .iter()
+        .map(|item| (item.start(), item.end()))
+        .collect();
+    let gap = frames[0].1 + 10..frames[1].0 - 10;
+    let around = can.view_around(frames[0].0..frames[1].1, gap.clone(), SPP);
+    assert_eq!(around.previous, Some(frames[0].0));
+    assert_eq!(around.next, Some(frames[1].0));
+}

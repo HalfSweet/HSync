@@ -384,6 +384,17 @@ impl DecodeSet {
 
     /// Lanes of every finished decoder over `start..end`.
     pub fn view(&self, start: u64, end: u64, samples_per_pixel: f64) -> Vec<DecoderLanes> {
+        self.view_around(start..end, start..end, samples_per_pixel)
+    }
+
+    /// Lanes of every finished decoder over `window`, what depends on the view worked out for
+    /// `focus` (see [`Presentation::view_around`]).
+    pub fn view_around(
+        &self,
+        window: Range<u64>,
+        focus: Range<u64>,
+        samples_per_pixel: f64,
+    ) -> Vec<DecoderLanes> {
         let finished: Vec<(u32, Arc<Presentation>)> = self
             .entries
             .read()
@@ -400,7 +411,7 @@ impl DecodeSet {
             .into_iter()
             .map(|(index, presentation)| DecoderLanes {
                 index,
-                view: presentation.view(start, end, samples_per_pixel),
+                view: presentation.view_around(window.clone(), focus.clone(), samples_per_pixel),
             })
             .collect()
     }

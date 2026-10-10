@@ -4,6 +4,7 @@
 //! text with its translations.
 
 use serde::Serialize;
+use std::ops::Range;
 use ts_rs::TS;
 
 use crate::search::{Found, Needle, Searchable, Sequence};
@@ -675,6 +676,20 @@ impl Presentation {
 
     /// The lanes over `start..end` drawn `samples_per_pixel` samples to a pixel.
     pub fn view(&self, start: u64, end: u64, samples_per_pixel: f64) -> DecoderView {
+        self.view_around(start..end, start..end, samples_per_pixel)
+    }
+
+    /// The lanes over `window` — the samples in view and some either side, fetched ahead so
+    /// panning has them at hand — with what depends on the view worked out for `focus`, the
+    /// samples in view: the SPI word offsets, the I²C address and, when no item is in view, the
+    /// frames either side.
+    pub fn view_around(
+        &self,
+        window: Range<u64>,
+        focus: Range<u64>,
+        samples_per_pixel: f64,
+    ) -> DecoderView {
+        let (start, end) = (window.start, window.end);
         // Narrower than 3 px is unreadable.
         let min_width = (samples_per_pixel * 3.0).ceil() as u64;
         let mut lanes: Vec<LaneView> = self
@@ -685,7 +700,8 @@ impl Presentation {
                 items: lane.view(start, end, min_width),
             })
             .collect();
-        // SPI transfers name the offsets of their words in view.
+        // SPI transfers name the offsets of their words in view, or in the window when they are
+        // not in view yet.
         for item in lanes.iter_mut().flat_map(|lane| lane.items.iter_mut()) {
             if let LaneItem::SpiTransfer {
                 start: transfer_start,
@@ -698,20 +714,27 @@ impl Presentation {
                     .iter()
                     .find(|(at, _)| at == transfer_start)
             {
-                let from = words.partition_point(|&(_, word_end)| word_end <= start);
-                let to = words.partition_point(|&(word_start, _)| word_start < end);
-                if to > from {
-                    *first = from as u32;
-                    *last = (to - 1) as u32;
+                let within = |range: &Range<u64>| {
+                    let from = words.partition_point(|&(_, word_end)| word_end <= range.start);
+                    let to = words.partition_point(|&(word_start, _)| word_start < range.end);
+                    (to > from).then(|| (from as u32, (to - 1) as u32))
+                };
+                if let Some((from, to)) = within(&focus).or_else(|| within(&window)) {
+                    *first = from;
+                    *last = to;
                 }
             }
         }
-        let empty = lanes.iter().all(|lane| lane.items.is_empty());
+        let empty = lanes.iter().all(|lane| {
+            lane.items
+                .iter()
+                .all(|item| item.end() <= focus.start || item.start() >= focus.end)
+        });
         let header = self.lanes.first().map(|(_, lane)| lane);
         let address = {
             let mut counts: std::collections::BTreeMap<u8, usize> = Default::default();
             for &(from, to, address) in &self.addresses {
-                if from < end && to > start {
+                if from < focus.end && to > focus.start {
                     *counts.entry(address).or_default() += 1;
                 }
             }
@@ -724,12 +747,12 @@ impl Presentation {
             lanes,
             address,
             previous: if empty {
-                header.and_then(|lane| lane.previous(start))
+                header.and_then(|lane| lane.previous(focus.start))
             } else {
                 None
             },
             next: if empty {
-                header.and_then(|lane| lane.next(end))
+                header.and_then(|lane| lane.next(focus.end))
             } else {
                 None
             },

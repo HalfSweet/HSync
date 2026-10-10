@@ -31,7 +31,8 @@ pub fn decode_list(
     Ok(decoding(&state, capture_id)?.statuses())
 }
 
-/// Lanes of every finished decoder over `start..end`.
+/// Lanes of every finished decoder over `start..end`, what depends on the view (SPI offsets, the
+/// I²C address, the frames beside an empty view) worked out for `focus`, the samples in view.
 #[tauri::command]
 pub fn decode_view(
     state: State<'_, AppState>,
@@ -39,8 +40,14 @@ pub fn decode_view(
     start: u64,
     end: u64,
     samples_per_pixel: f64,
+    focus: Option<(u64, u64)>,
 ) -> CommandResult<Vec<DecoderLanes>> {
-    Ok(decoding(&state, capture_id)?.view(start, end, samples_per_pixel.max(1e-6)))
+    let (focus_start, focus_end) = focus.unwrap_or((start, end));
+    Ok(decoding(&state, capture_id)?.view_around(
+        start..end,
+        focus_start..focus_end,
+        samples_per_pixel.max(1e-6),
+    ))
 }
 
 /// Rows of a decoder's data stream.
