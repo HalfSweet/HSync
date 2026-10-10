@@ -3,6 +3,7 @@ import { onKeyStroke } from '@vueuse/core'
 import { computed, onMounted, ref, shallowRef, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AnimatedHeight from '@/components/common/AnimatedHeight.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { EXTENSIONS, useFileActions } from '@/composables/useFileActions'
 import type { ExportKind } from '@/ipc/bindings/ExportKind'
@@ -84,38 +85,40 @@ async function run(): Promise<void> {
         </button>
       </header>
       <div class="flex min-h-0 flex-col gap-4 overflow-y-auto p-4">
-        <fieldset class="flex flex-col gap-1">
-          <legend class="mb-1 text-caption text-ink-3">{{ t('exportDialog.format') }}</legend>
-          <template v-for="one in KINDS" :key="one">
-            <label
-              class="flex cursor-pointer items-start gap-2 rounded-4 px-2 py-1.5 hover:bg-hover"
-            >
-              <input
-                v-model="kind"
-                type="radio"
-                name="format"
-                :value="one"
-                class="mt-0.5 accent-ink"
-              />
-              <span class="flex flex-col">
-                <span class="font-medium"
-                  >{{ t(`exportDialog.formats.${one}`) }}
-                  <span class="font-mono text-caption text-ink-3"
-                    >.{{ EXTENSIONS[one] }}</span
-                  ></span
-                >
-                <span class="text-ink-3">{{ t(`exportDialog.formatTips.${one}`) }}</span>
-              </span>
-            </label>
-            <label
-              v-if="one === 'csv' && kind === 'csv'"
-              class="-mt-1 mb-1 flex items-center gap-2 pl-8 text-ink-2"
-            >
-              <input v-model="everySample" type="checkbox" class="accent-ink" />
-              {{ t('exportDialog.everySample') }}
-            </label>
-          </template>
-        </fieldset>
+        <AnimatedHeight>
+          <fieldset class="flex flex-col gap-1">
+            <legend class="mb-1 text-caption text-ink-3">{{ t('exportDialog.format') }}</legend>
+            <template v-for="one in KINDS" :key="one">
+              <label
+                class="flex cursor-pointer items-start gap-2 rounded-4 px-2 py-1.5 hover:bg-hover"
+              >
+                <input
+                  v-model="kind"
+                  type="radio"
+                  name="format"
+                  :value="one"
+                  class="mt-0.5 accent-ink"
+                />
+                <span class="flex flex-col">
+                  <span class="font-medium"
+                    >{{ t(`exportDialog.formats.${one}`) }}
+                    <span class="font-mono text-caption text-ink-3"
+                      >.{{ EXTENSIONS[one] }}</span
+                    ></span
+                  >
+                  <span class="text-ink-3">{{ t(`exportDialog.formatTips.${one}`) }}</span>
+                </span>
+              </label>
+              <label
+                v-if="one === 'csv' && kind === 'csv'"
+                class="-mt-1 mb-1 flex items-center gap-2 pl-8 text-ink-2"
+              >
+                <input v-model="everySample" type="checkbox" class="accent-ink" />
+                {{ t('exportDialog.everySample') }}
+              </label>
+            </template>
+          </fieldset>
+        </AnimatedHeight>
 
         <div class="flex items-center gap-3">
           <span class="w-12 flex-none text-caption text-ink-3">{{ t('exportDialog.range') }}</span>
