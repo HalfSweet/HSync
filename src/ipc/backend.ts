@@ -5,6 +5,7 @@ import type { BinsRequest } from './bindings/BinsRequest'
 import type { CaptureRequest } from './bindings/CaptureRequest'
 import type { CaptureSummary } from './bindings/CaptureSummary'
 import type { ChannelEdges } from './bindings/ChannelEdges'
+import type { DecoderInfo } from './bindings/DecoderInfo'
 import type { DecoderLanes } from './bindings/DecoderLanes'
 import type { DecoderStatus } from './bindings/DecoderStatus'
 import type { DeviceState } from './bindings/DeviceState'
@@ -103,6 +104,8 @@ export interface Backend {
   captureStart(request: CaptureRequest): Promise<CaptureSummary>
   captureStop(): Promise<void>
 
+  /** Every protocol decoder there is, for the decoder dialog. */
+  decodeCatalog(): Promise<DecoderInfo[]>
   /** The decoders of a capture and how far they are. */
   decodeList(captureId: number): Promise<DecoderStatus[]>
   /** Decode lanes of finished decoders over `start..end`. */
@@ -239,6 +242,10 @@ class TauriBackend implements Backend {
 
   captureStop() {
     return invoke<void>('capture_stop')
+  }
+
+  decodeCatalog() {
+    return invoke<DecoderInfo[]>('decode_catalog')
   }
 
   decodeList(captureId: number) {

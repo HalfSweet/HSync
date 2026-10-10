@@ -285,6 +285,11 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve(prev === null ? null : prev + 1)
     },
 
+    async decodeCatalog() {
+      // No Python in the browser: the dialog keeps its built-in list.
+      return Promise.reject(uiError('error.app.unavailableInBrowser'))
+    },
+
     async decodeList(captureId: number) {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))
