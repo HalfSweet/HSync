@@ -90,14 +90,19 @@ function geometry(start: number, end: number): Geometry {
 
 const blockId = (item: LaneItem) => `${props.decoder}:${props.lane}:${item.start}:${item.end}`
 
-/** Rendered pieces: blocks, marks and SPI characters. */
-const pieces = computed(() =>
-  items.value.map((item) => {
-    const g = geometry(item.start, item.end)
-    const id = blockId(item)
-    return { item, g, id, on: props.selected === id }
-  }),
-)
+/** Rendered pieces in view: blocks, marks and SPI characters. Lanes reach beyond the view, so
+ * panning shows them at once; what lies wholly outside is left out. */
+const pieces = computed(() => {
+  const { start: origin, samplesPerPixel, width } = props.viewport
+  const end = origin + width * samplesPerPixel
+  return items.value
+    .filter((item) => item.end >= origin && item.start <= end)
+    .map((item) => {
+      const g = geometry(item.start, item.end)
+      const id = blockId(item)
+      return { item, g, id, on: props.selected === id }
+    })
+})
 
 /** SPI characters in view, with their x and whether their line is selected. */
 const characters = computed(() =>

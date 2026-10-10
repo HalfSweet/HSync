@@ -132,6 +132,9 @@ export interface Backend {
     start: number,
     end: number,
     samplesPerPixel: number,
+    /** The samples in view, when `start..end` reaches beyond them: SPI offsets, the I²C
+     * address and the frames beside an empty view are worked out for these. */
+    focus?: readonly [number, number],
   ): Promise<DecoderLanes[]>
   decodeStream(request: StreamRequest): Promise<StreamPage | null>
   /** Replaces the capture's decoders (DSView's `decoders` list) and decodes again. */
@@ -298,8 +301,20 @@ class TauriBackend implements Backend {
     return invoke<DecoderStatus[]>('decode_list', { captureId })
   }
 
-  decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
-    return invoke<DecoderLanes[]>('decode_view', { captureId, start, end, samplesPerPixel })
+  decodeView(
+    captureId: number,
+    start: number,
+    end: number,
+    samplesPerPixel: number,
+    focus?: readonly [number, number],
+  ) {
+    return invoke<DecoderLanes[]>('decode_view', {
+      captureId,
+      start,
+      end,
+      samplesPerPixel,
+      focus: focus ?? null,
+    })
   }
 
   decodeStream(request: StreamRequest) {

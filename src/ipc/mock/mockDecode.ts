@@ -94,27 +94,38 @@ class Presentation {
     this.lanes = snapshot.lanes.map(([name, items]) => lane(name, items))
   }
 
-  view(start: number, end: number, samplesPerPixel: number): DecoderView {
+  /** The lanes over `start..end`, what depends on the view worked out for `focus`, as the
+   * backend's `Presentation::view_around`. */
+  view(
+    start: number,
+    end: number,
+    samplesPerPixel: number,
+    focus: readonly [number, number] = [start, end],
+  ): DecoderView {
     const minWidth = Math.ceil(samplesPerPixel * 3)
     const lanes = this.lanes.map((one) => ({
       lane: one.name,
       items: laneView(one, start, end, minWidth),
     }))
+    const [focusStart, focusEnd] = focus
     for (const item of lanes.flatMap((one) => one.items)) {
       if (item.type !== 'spiTransfer') continue
       const words = this.snapshot.transferWords.find(([at]) => at === item.start)?.[1] ?? []
-      const from = partition(words.length, (i) => (words[i]?.[1] ?? 0) <= start)
-      const to = partition(words.length, (i) => (words[i]?.[0] ?? 0) < end)
-      if (to > from) {
-        item.first = from
-        item.last = to - 1
+      const within = (from: number, to: number): [number, number] | null => {
+        const first = partition(words.length, (i) => (words[i]?.[1] ?? 0) <= from)
+        const after = partition(words.length, (i) => (words[i]?.[0] ?? 0) < to)
+        return after > first ? [first, after - 1] : null
       }
+      const offsets = within(focusStart, focusEnd) ?? within(start, end)
+      if (offsets) [item.first, item.last] = offsets
     }
-    const empty = lanes.every((one) => one.items.length === 0)
+    const empty = lanes.every((one) =>
+      one.items.every((item) => item.end <= focusStart || item.start >= focusEnd),
+    )
     const header = this.lanes[0]
     const counts = new Map<number, number>()
     for (const [from, to, address] of this.snapshot.addresses) {
-      if (from < end && to > start) counts.set(address, (counts.get(address) ?? 0) + 1)
+      if (from < focusEnd && to > focusStart) counts.set(address, (counts.get(address) ?? 0) + 1)
     }
     let address: number | null = null
     let best = 0
@@ -124,8 +135,8 @@ class Presentation {
     let previous: number | null = null
     let next: number | null = null
     if (empty && header) {
-      previous = header.items.filter((item) => item.end <= start).at(-1)?.start ?? null
-      next = header.items.find((item) => item.start >= end)?.start ?? null
+      previous = header.items.filter((item) => item.end <= focusStart).at(-1)?.start ?? null
+      next = header.items.find((item) => item.start >= focusEnd)?.start ?? null
     }
     return { lanes, address, previous, next }
   }
@@ -187,9 +198,10 @@ export function mockView(
   start: number,
   end: number,
   samplesPerPixel: number,
+  focus: readonly [number, number] = [start, end],
 ): DecoderLanes[] {
   return match(decoders).flatMap(({ index, presentation }) =>
-    presentation ? [{ index, view: presentation.view(start, end, samplesPerPixel) }] : [],
+    presentation ? [{ index, view: presentation.view(start, end, samplesPerPixel, focus) }] : [],
   )
 }
 

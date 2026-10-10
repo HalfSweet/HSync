@@ -6,6 +6,10 @@ import { getBackend } from '@/ipc/backend'
 import type { DecoderStatus } from '@/ipc/bindings/DecoderStatus'
 import type { DecoderView } from '@/ipc/bindings/DecoderView'
 import { viewportEnd } from '@/timeline/viewport'
+import { covers, overscan, type SampleWindow } from '@/timeline/window'
+
+/** How long the view rests before what depends on it is worked out again. */
+const REFOCUS_MS = 150
 
 import { useCaptureStore } from './capture'
 import { useViewStore } from './view'
@@ -66,39 +70,81 @@ export const useDecodeStore = defineStore('decode', () => {
     })
   }
 
-  const request = computed(() => {
+  /** The visible samples, for the decode lanes. */
+  const wanted = computed(() => {
     const summary = capture.summary
     const viewport = view.viewport
     if (!summary || viewport.width <= 0) return null
     return {
+      key: `${summary.id}:${revision.value}:${capture.extent}`,
       captureId: summary.id,
-      start: Math.max(0, Math.floor(viewport.start)),
-      end: Math.ceil(viewportEnd(viewport)),
-      samplesPerPixel: viewport.samplesPerPixel,
-      revision: revision.value,
+      extent: capture.extent,
+      window: {
+        start: viewport.start,
+        end: viewportEnd(viewport),
+        samplesPerPixel: viewport.samplesPerPixel,
+      },
     }
   })
 
-  let sequence = 0
-  watch(
-    request,
-    async (next) => {
-      const current = ++sequence
-      if (!next) {
-        lanes.value = new Map()
-        return
+  // Lanes are fetched a view's width beyond each side, so panning shows what is at hand; one
+  // request at a time, the latest wanted once it returns. What depends on the view (SPI offsets,
+  // the I²C address, the frames beside an empty view) is worked out for the samples in view, and
+  // again once the view has rested after moving within the fetched window.
+  let fetched: { key: string; window: SampleWindow; focus: [number, number] } | null = null
+  let loading = false
+  let again = false
+  let refocus: ReturnType<typeof setTimeout> | null = null
+
+  const focusOf = (window: SampleWindow): [number, number] => [
+    Math.max(0, Math.floor(window.start)),
+    Math.ceil(window.end),
+  ]
+
+  async function loadLanes(force = false): Promise<void> {
+    const want = wanted.value
+    if (!want) {
+      lanes.value = new Map()
+      fetched = null
+      return
+    }
+    if (!force && fetched?.key === want.key && covers(fetched.window, want.window, want.extent)) {
+      const [from, to] = focusOf(want.window)
+      if (fetched.focus[0] !== from || fetched.focus[1] !== to) {
+        if (refocus !== null) clearTimeout(refocus)
+        refocus = setTimeout(() => {
+          refocus = null
+          void loadLanes(true)
+        }, REFOCUS_MS)
       }
-      try {
-        const found = await (
-          await getBackend()
-        ).decodeView(next.captureId, next.start, next.end, next.samplesPerPixel)
-        if (current === sequence) lanes.value = new Map(found.map((one) => [one.index, one.view]))
-      } catch (error) {
-        console.error('decode lanes failed', error)
+      return
+    }
+    if (loading) {
+      again = true
+      return
+    }
+    loading = true
+    try {
+      const window =
+        force && fetched?.key === want.key ? fetched.window : overscan(want.window, want.extent)
+      const focus = focusOf(want.window)
+      const found = await (
+        await getBackend()
+      ).decodeView(want.captureId, window.start, window.end, window.samplesPerPixel, focus)
+      if (wanted.value?.captureId !== want.captureId) return
+      lanes.value = new Map(found.map((one) => [one.index, one.view]))
+      fetched = { key: want.key, window, focus }
+    } catch (error) {
+      console.error('decode lanes failed', error)
+    } finally {
+      loading = false
+      if (again) {
+        again = false
+        void loadLanes()
       }
-    },
-    { immediate: true },
-  )
+    }
+  }
+  watch(wanted, () => void loadLanes(), { immediate: true })
 
   function statusOf(decoder: number | null): DecoderStatus | undefined {
     return decoder === null ? undefined : statuses.value.find((one) => one.index === decoder)

@@ -338,11 +338,17 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.resolve(mockStatuses(summary.decoders, live?.status.captureId === captureId))
     },
 
-    async decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
+    async decodeView(
+      captureId: number,
+      start: number,
+      end: number,
+      samplesPerPixel: number,
+      focus?: readonly [number, number],
+    ) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       if (live?.status.captureId === captureId) return Promise.resolve([])
-      return Promise.resolve(mockView(summary.decoders, start, end, samplesPerPixel))
+      return Promise.resolve(mockView(summary.decoders, start, end, samplesPerPixel, focus))
     },
 
     async decodeStream(request: StreamRequest) {
