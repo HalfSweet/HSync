@@ -116,6 +116,54 @@ impl LogicCapture {
         }
     }
 
+    /// Samples `from..to` of `channels` as a capture of their own, for saving or exporting part of
+    /// a capture. Channels the capture lacks are left out; the trigger stays when it falls inside.
+    pub fn slice(&self, from: SampleIndex, to: SampleIndex, channels: &[ChannelIndex]) -> Self {
+        /// Words copied at once, to bound the staging buffer.
+        const BATCH: usize = 1 << 16;
+        let to = to.min(self.len());
+        let from = from.min(to);
+        let len = to - from;
+        let kept: Vec<ChannelIndex> = channels
+            .iter()
+            .copied()
+            .filter(|&index| self.channel(index).is_some())
+            .collect();
+        let mut out = Self::new(self.samplerate, kept);
+        out.trigger_time_ms = self.trigger_time_ms;
+        out.trigger_sample = self
+            .trigger_sample
+            .filter(|&sample| sample >= from && sample < to)
+            .map(|sample| sample - from);
+        let first = (from / 64) as usize;
+        let shift = from % 64;
+        let words = len.div_ceil(64) as usize;
+        for (index, data) in &mut out.channels {
+            let Some(source) = self.channel(*index) else {
+                continue;
+            };
+            let available = source.word_count();
+            let word = |at: usize| if at < available { source.word(at) } else { 0 };
+            let mut batch = Vec::with_capacity(words.min(BATCH));
+            for at in 0..words {
+                let low = word(first + at) >> shift;
+                let high = if shift == 0 {
+                    0
+                } else {
+                    word(first + at + 1) << (64 - shift)
+                };
+                batch.push(low | high);
+                if batch.len() == BATCH {
+                    data.append_words(&batch);
+                    batch.clear();
+                }
+            }
+            data.append_words(&batch);
+            data.truncate(len);
+        }
+        out
+    }
+
     /// Shortens every channel to `len` samples.
     pub fn truncate(&mut self, len: SampleIndex) {
         for (_, data) in &mut self.channels {

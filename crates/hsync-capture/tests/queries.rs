@@ -248,3 +248,41 @@ fn cross_data_reaches_the_right_channels() {
     assert!(!d3.sample(64));
     assert!(capture.channel(1).is_none());
 }
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    #[test]
+    fn slices_keep_every_sample_of_their_range(
+        runs in runs(),
+        from_share in 0.0f64..1.0,
+        len_share in 0.0f64..1.0,
+    ) {
+        let model = Model::from_runs(&runs);
+        let mut capture = LogicCapture::new(1_000_000, [0, 3]);
+        for index in [0, 3] {
+            let data = capture.channel_mut(index).expect("channel");
+            *data = model.channel(1);
+        }
+        capture.set_trigger(Some(model.len / 2), Some(1_700_000_000_000));
+        let from = (model.len as f64 * from_share) as u64;
+        let to = from + ((model.len - from) as f64 * len_share) as u64;
+        let slice = capture.slice(from, to, &[3, 7]);
+        prop_assert_eq!(slice.len(), to - from);
+        prop_assert_eq!(slice.info().channels, vec![3]);
+        let data = slice.channel(3).expect("kept channel");
+        for sample in (0..to - from).step_by(((to - from) / 257).max(1) as usize) {
+            prop_assert_eq!(data.sample(sample), model.sample(from + sample), "sample {}", sample);
+        }
+        if to > from {
+            prop_assert_eq!(data.sample(to - from - 1), model.sample(to - 1));
+        }
+        let trigger = model.len / 2;
+        let expected = (trigger >= from && trigger < to).then(|| trigger - from);
+        prop_assert_eq!(slice.trigger_sample(), expected);
+        // Edges inside the range survive, counted the same.
+        let inside = model.edges.iter().filter(|&&edge| edge > from && edge < to).count() as u64;
+        let counted = data.count_edges(0, to - from);
+        prop_assert_eq!(counted.rising + counted.falling, inside);
+    }
+}
