@@ -230,6 +230,14 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       return Promise.reject(uiError('error.app.unavailableInBrowser'))
     },
 
+    async exportFile() {
+      return Promise.reject(uiError('error.app.unavailableInBrowser'))
+    },
+
+    async cancelFile() {
+      return Promise.resolve()
+    },
+
     async bins(request: BinsRequest): Promise<BinsResult> {
       const bins = Math.min(request.bins, request.end - request.start)
       const cells = request.channels.map(

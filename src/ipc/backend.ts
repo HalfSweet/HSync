@@ -1,4 +1,4 @@
-import { invoke, isTauri } from '@tauri-apps/api/core'
+import { Channel, invoke, isTauri } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
 import type { BinsRequest } from './bindings/BinsRequest'
@@ -10,6 +10,7 @@ import type { DecoderStatus } from './bindings/DecoderStatus'
 import type { DeviceState } from './bindings/DeviceState'
 import type { DeviceSummary } from './bindings/DeviceSummary'
 import type { Direction } from './bindings/Direction'
+import type { ExportRequest } from './bindings/ExportRequest'
 import type { LiveStatus } from './bindings/LiveStatus'
 import type { OptionKey } from './bindings/OptionKey'
 import type { OptionValue } from './bindings/OptionValue'
@@ -48,7 +49,20 @@ export interface Backend {
   openDemo(): Promise<CaptureSummary>
   openFile(path: string): Promise<CaptureSummary>
   /** Saves a capture as a `.dsl` file; it then counts as that file. */
-  saveFile(captureId: number, path: string): Promise<CaptureSummary>
+  saveFile(
+    captureId: number,
+    path: string,
+    onProgress: (done: number) => void,
+  ): Promise<CaptureSummary>
+  /** Writes a capture, or part of it, in another format. */
+  exportFile(
+    captureId: number,
+    path: string,
+    request: ExportRequest,
+    onProgress: (done: number) => void,
+  ): Promise<void>
+  /** Stops the save or export under way; it fails as cancelled. */
+  cancelFile(): Promise<void>
   bins(request: BinsRequest): Promise<BinsResult>
   pulse(captureId: number, channel: number, sample: number): Promise<PulseInfo | null>
   edge(
@@ -117,6 +131,13 @@ export interface Backend {
   onDecoded(handler: (event: DecodedEvent) => void): Promise<Unsubscribe>
 }
 
+/** A channel the backend reports the share done through. */
+function progress(handler: (done: number) => void): Channel<number> {
+  const channel = new Channel<number>()
+  channel.onmessage = handler
+  return channel
+}
+
 class TauriBackend implements Backend {
   captureSummary() {
     return invoke<CaptureSummary | null>('capture_summary')
@@ -130,8 +151,30 @@ class TauriBackend implements Backend {
     return invoke<CaptureSummary>('capture_open_file', { path })
   }
 
-  saveFile(captureId: number, path: string) {
-    return invoke<CaptureSummary>('capture_save', { captureId, path })
+  saveFile(captureId: number, path: string, onProgress: (done: number) => void) {
+    return invoke<CaptureSummary>('capture_save', {
+      captureId,
+      path,
+      onProgress: progress(onProgress),
+    })
+  }
+
+  exportFile(
+    captureId: number,
+    path: string,
+    request: ExportRequest,
+    onProgress: (done: number) => void,
+  ) {
+    return invoke<void>('capture_export', {
+      captureId,
+      path,
+      request,
+      onProgress: progress(onProgress),
+    })
+  }
+
+  cancelFile() {
+    return invoke<void>('file_cancel')
   }
 
   async bins(request: BinsRequest) {
