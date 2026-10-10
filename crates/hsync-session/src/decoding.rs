@@ -130,10 +130,16 @@ impl DecodeSet {
             let spawned = std::thread::Builder::new()
                 .name(format!("decode-{}", spec.id))
                 .spawn(move || {
+                    let began = std::time::Instant::now();
                     let decoded = {
                         let capture = capture.read();
                         spec.run(&capture, capture.len())
                     };
+                    log::debug!(
+                        "decoded {} in {:.1} ms",
+                        spec.id,
+                        began.elapsed().as_secs_f64() * 1e3
+                    );
                     let state = match decoded {
                         Some(decoded) => State::Done(Arc::new(Presentation::new(&decoded))),
                         None => State::MissingChannels,
