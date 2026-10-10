@@ -609,7 +609,7 @@ pub struct Annotation {
   3. `put()` 的文本列表可含一个整数（数值）或以 `@` 开头的十六进制串（如 `'@%02X' % v`），文本里的 `{$}` 由前端按用户选择的进制替换；
   4. 解码器 id 可带版本前缀（`0:i2c`、`1:i2c`），`.dsl` 中按此 id 保存。
 - **叠加**：下层 `OUTPUT_PYTHON` 的 `put` 直接调用上层实例的 `decode(ss, es, data)`，与 libsigrokdecode 一致。
-- **分发**：随应用打包 python-build-standalone 的精简 CPython（只含解码器用到的标准库：`collections`、`re`、`struct`、`math`、`functools`、`enum`、`json`、`zlib`、`decimal`、`calendar`、`string`、`operator`），解码器源码作为资源。Python 解码器以 GPL-2.0-or-later/GPL-3.0-or-later 发布，与本项目许可证兼容。
+- **分发**：随安装包内置 python-build-standalone 的精简 CPython（§15 第 10 条），解码器源码作为资源。Python 解码器以 GPL-2.0-or-later/GPL-3.0-or-later 发布，与本项目许可证兼容。
 - 宿主不可用（初始化失败）时，原生解码器照常工作，Python 解码器在列表中标「不可用」。
 
 **实现（`crates/hsync-srd`，对照 libsigrokdecode4DSL 逐条核对）：**
@@ -621,7 +621,9 @@ pub struct Annotation {
 - **`put()`**：`OUTPUT_ANN` 的数据为 `[类, [文本…]]`；格式不对的注解丢弃并记日志，不抛异常。文本列表中的整数作为数值（取最后一个），`'@'` 加十六进制的文本也作为数值（优先于整数）且不单独成行；显示时文本里的 `{$}` 换成数值（目前固定十六进制），没有文本则只显示数值。`OUTPUT_PYTHON` 依次调用上层的 `decode(ss, es, data)`；上层出错只记日志并在状态里报告，下层继续。`OUTPUT_BINARY`、`OUTPUT_META` 与 DSView 一样不处理。同一输出重复 `register()` 返回同一 id；`printlog()` 写日志。
 - **生命周期**：自上而下实例化（`__init__` 之后设置 `options`，值按默认值的类型转换），自下而上 `metadata(SRD_CONF_SAMPLERATE, 采样率)` 与 `start()`，`start()` 之后 `samplenum = 0`、`matched = 0`；完整解码后调用 `end()`：底层先得到 `last_samplenum`，再依次调用上层的 `end()`（DSView 扩展）。
 - **会话中的位置**：没有叠加的原生总线照旧用原生解码器；原生总线上叠加了解码器时，原生解码器画总线，整个栈在 Python 里跑一遍得到上层注解，作为附加通道放在原生通道之下；其余解码器整栈用 Python。添加解码对话框按 DSView 的规则补全下层（选 `eeprom24xx` 得到 `1:i2c → eeprom24xx`，跳过 `0:` 轻量版本），存为 DSView 的 `"stacked decoders"`。
-- **构建要求**：编译 `hsync-srd` 需要带共享库的 Python 3（开发机用系统或 Homebrew 的 Python 即可）；发行包内置精简 CPython 留待 M5。
+- **内置 CPython**：`scripts/python-runtime.mjs` 固定 python-build-standalone 的版本（CPython 3.14）与各平台压缩包的 SHA-256，下载校验后在 `target/python/<目标>/` 下放三样东西：原样的发行版（构建链接它的 libpython）；去掉 pip、Tk、IDLE、测试、`ensurepip`、`venv`、SQLite 与 OpenSSL 的标准库（`home/`，作为应用的 `python` 资源，约 12–14 MB，Linux 连 libpython 44 MB）；以及 `PYO3_CONFIG_FILE`（发行版的 sysconfig 仍指向它的构建机，pyo3 不能直接问解释器）与追加的 Tauri 配置（`tauri build --config`）。解码器用到的模块（`collections`、`re`、`struct`、`math`、`functools`、`enum`、`json`、`zlib`、`decimal`、`calendar`、`string`、`operator`、`binascii`、`subprocess`、`platform`、`ctypes`、`os`）都保留，只删整块用不到的部分。libpython 在 macOS 放 `Contents/Frameworks`（安装名本就是 `@rpath/…`，tauri-build 加 rpath），Windows 与 VC 运行库一起放在可执行文件旁，Linux 放在资源的 `python/lib`，由 `src-tauri/build.rs` 给可执行文件加 `$ORIGIN/../lib/HSync/python/lib` 的 RUNPATH。
+- **启动**：应用资源里有 `python` 目录时，`DecoderHost::with_python_home` 在读取解码器目录之前用 `PyConfig` 以隔离模式（不读 `PYTHONHOME`、`PYTHONPATH` 与用户 site-packages）启动 Python，home 设为该目录、关闭字节码写入（安装目录只读，macOS 上还有签名）；pyo3 之后看到 Python 已在运行便不再启动。启动失败只让 Python 解码器不可用，不会走到 pyo3 的默认启动而中止进程。开发构建没有这个目录，仍由 pyo3 启动链接时的 Python。
+- **构建要求**：开发机编译 `hsync-srd` 需要带共享库的 Python 3（系统或 Homebrew 的即可）；发行构建（`pnpm bundle` 与 CI，§11.5）用内置的 CPython 链接与测试。
 
 ### 7.4 执行模型
 
@@ -1077,14 +1079,14 @@ demo 信号大部分时间空闲，解码器借摘要跳过空闲段，所以样
 
 ## 14. 风险与对策
 
-| 风险                                    | 对策                                                                              |
-| --------------------------------------- | --------------------------------------------------------------------------------- |
-| 无法在所有型号的真机上回归              | golden 字节测试保证与 DSView 一致；征集持有各型号的测试者；驱动日志可导出         |
-| Windows 驱动：nusb 需要 WinUSB          | 安装包附带 WinUSB 的 INF（DSView 也需要驱动安装）；打开失败时给出明确指引         |
-| macOS 上 nusb 与设备重枚举的时序        | 等待重连窗口可配置，重试打开 3 次                                                 |
-| 嵌入 CPython 的体积与签名               | Python 宿主做成可选组件（首次使用时下载或随完整版安装包），原生解码器覆盖常用协议 |
-| WebView 差异（WebGPU 可用性、字体渲染） | Canvas2D 为基线；字体本地打包；视觉回归在三平台各跑一次                           |
-| 超大采集占满内存                        | 内存预算检查 + 换出到内存映射文件；Stream 模式实时显示已用内存                    |
+| 风险                                    | 对策                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------- |
+| 无法在所有型号的真机上回归              | golden 字节测试保证与 DSView 一致；征集持有各型号的测试者；驱动日志可导出 |
+| Windows 驱动：nusb 需要 WinUSB          | 安装包附带 WinUSB 的 INF（DSView 也需要驱动安装）；打开失败时给出明确指引 |
+| macOS 上 nusb 与设备重枚举的时序        | 等待重连窗口可配置，重试打开 3 次                                         |
+| 嵌入 CPython 的体积与签名               | 随安装包内置精简 CPython（§7.3）；原生解码器覆盖常用协议                  |
+| WebView 差异（WebGPU 可用性、字体渲染） | Canvas2D 为基线；字体本地打包；视觉回归在三平台各跑一次                   |
+| 超大采集占满内存                        | 内存预算检查 + 换出到内存映射文件；Stream 模式实时显示已用内存            |
 
 ---
 
@@ -1106,7 +1108,7 @@ demo 信号大部分时间空闲，解码器借摘要跳过空闲段，所以样
 7. 设备选项、添加解码、导出、设置等对话框尚无设计稿（§9.11）。
 8. 140 余个非 I²C/UART/SPI/CAN 解码器的配色：默认使用中性的通用总线色，是否需要为常见协议（1-Wire、I²S、JTAG、SWD、USB PD…）分配专属总线色？
 9. `MAX25_VTH` 型号的 VTH 可调上限：DSView 驱动按 2.5 V 量程换算寄存器值，但界面允许的范围需以硬件规格确认。
-10. Python 解码器宿主的分发方式：随完整安装包内置，还是首次使用时下载？
+10. ~~Python 解码器宿主的分发方式：随完整安装包内置，还是首次使用时下载？~~（已定：随安装包内置，见 §7.3。）
 11. 是否需要在 v1 支持 DSView 之外的逻辑分析仪（如 fx2lafw 类设备）？架构已预留，但不在 v1 范围内。
 
 ---
