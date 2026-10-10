@@ -1,4 +1,4 @@
-//! Saving and exporting captures (DESIGN.md §8): what to write is taken from the workspace
+//! Saving and exporting captures: what to write is taken from the workspace
 //! under its lock, and the writing goes on without it, reporting progress and stopping when
 //! asked.
 

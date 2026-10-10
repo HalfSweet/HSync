@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** The pulse under the pointer: a band over it and a read-out above (DESIGN.md §9.6). */
+/** The pulse under the pointer: a band over it and a read-out above (DESIGN.md §6.4). */
 defineProps<{
   /** Left of the visible part of the pulse, in track pixels. */
   left: number

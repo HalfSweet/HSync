@@ -1,5 +1,5 @@
 /**
- * Edge measurement (DESIGN.md §9.6), after DSView's edge jump: click an edge, point at another
+ * Edge measurement (DESIGN.md §6.5), after DSView's edge jump: click an edge, point at another
  * on the same channel or any other, and read the time between them. The end under the pointer
  * snaps to the nearest edge, and clicking there keeps the measurement on screen.
  */

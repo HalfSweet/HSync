@@ -380,7 +380,7 @@ const segment = computed(() =>
   view.segment ? segmentGeometry(view.segment.from, view.segment.to, view.viewport) : null,
 )
 
-// Trigger menu: one channel at a time, beside the label column (DESIGN.md §9.7).
+// Trigger menu: one channel at a time, beside the label column (DESIGN.md §7.1).
 interface OpenMenu {
   channel: ChannelRef
   top: number
@@ -656,7 +656,7 @@ const readout = computed(() => {
 })
 
 // Ctrl/⌘ + wheel zooms around the pointer; shift + wheel and horizontal swipes pan.
-// Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §9.10).
+// Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §10).
 useEventListener(document, 'keydown', (event: KeyboardEvent) => {
   if (event.defaultPrevented || keyTakenElsewhere(event.target)) return
   const action = timelineAction(event)

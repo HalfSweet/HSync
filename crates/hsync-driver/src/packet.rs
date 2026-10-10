@@ -1,4 +1,4 @@
-//! What an acquisition sends to the session (DESIGN.md §4.1).
+//! What an acquisition sends to the session.
 
 use hsync_core::{ChannelIndex, UiError};
 
@@ -6,7 +6,7 @@ use hsync_core::{ChannelIndex, UiError};
 #[derive(Debug, Clone, PartialEq)]
 pub enum Packet {
     /// Samples follow for these channels: cross-format groups of 64 samples, one little-endian
-    /// `u64` per channel in this order (DESIGN.md §4.8).
+    /// `u64` per channel in this order.
     Start {
         channels: Vec<ChannelIndex>,
         samplerate: u64,

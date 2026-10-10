@@ -3,7 +3,7 @@ import type { AdvancedTrigger } from "./AdvancedTrigger";
 import type { TriggerCondition } from "./TriggerCondition";
 
 /**
- * A capture request from the UI (DESIGN.md §9.7).
+ * A capture request from the UI (DESIGN.md §7).
  */
 export type CaptureRequest = { 
 /**

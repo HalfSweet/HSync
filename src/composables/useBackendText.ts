@@ -18,7 +18,7 @@ function present(params: Record<string, unknown>): Params {
 }
 
 /**
- * Translates text the backend sends as an i18n key with parameters (DESIGN.md §10.4): option
+ * Translates text the backend sends as an i18n key with parameters: option
  * labels and errors. Unknown keys show as themselves so nothing is silently dropped.
  */
 export function useBackendText() {

@@ -1,5 +1,5 @@
 /**
- * Numbers in the annotations of DSView's decoders (DESIGN.md §7.3): a decoder gives a value in
+ * Numbers in the annotations of DSView's decoders: a decoder gives a value in
  * hex digits and texts where `{$}` stands for it; the user picks how values show, as DSView's
  * protocol dock does (`annotationrestable.cpp`).
  */

@@ -26,7 +26,7 @@ import { baseDecoderId } from '@/timeline/groups'
 import { formatTime } from '@/utils/units'
 
 /**
- * Adds a decoder or changes or removes one (DESIGN.md §9.11): the protocol, found by searching
+ * Adds a decoder or changes or removes one (DESIGN.md §11): the protocol, found by searching
  * the catalog, the decoders it stacks on, a channel for each role of the bottom one and every
  * layer's options, stored as DSView stores decoders so `.dsl` files keep them.
  */

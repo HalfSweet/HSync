@@ -1,4 +1,4 @@
-//! Recognising DSLogic devices and opening them (DESIGN.md §4.3).
+//! Recognising DSLogic devices and opening them.
 
 use std::sync::Arc;
 

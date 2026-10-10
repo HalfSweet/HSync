@@ -9,7 +9,7 @@ import { getBackend } from '@/ipc/backend'
 import { useUpdateStore } from '@/stores/update'
 
 /**
- * About HSync (DESIGN.md §9.11): the version and updates to it, the license and where the parts
+ * About HSync (DESIGN.md §11): the version and updates to it, the license and where the parts
  * come from.
  */
 const emit = defineEmits<{ close: [] }>()

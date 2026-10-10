@@ -1,5 +1,5 @@
 //! Capture sessions: the capture the user is looking at and the queries the UI runs on it
-//! (DESIGN.md §3.1, §5.3, §5.4).
+//!.
 //!
 //! Every query names the capture it was computed for; a capture replaced in the meantime makes
 //! the query fail with [`SessionError::StaleCapture`] instead of answering for the wrong data.

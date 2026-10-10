@@ -1,4 +1,4 @@
-//! A host for the sigrok-compatible Python protocol decoders DSView ships (DESIGN.md §7.3): CPython
+//! A host for the sigrok-compatible Python protocol decoders DSView ships: CPython
 //! embedded through pyo3, with the `sigrokdecode` module they import implemented in Rust on top of
 //! `hsync-decode`'s wait engine.
 

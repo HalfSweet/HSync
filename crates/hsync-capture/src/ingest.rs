@@ -1,7 +1,7 @@
 //! De-interleaving of DSLogic "cross" data.
 //!
 //! The FPGA sends groups of 64 samples: for every enabled channel in ascending order one
-//! little-endian `u64` whose bit `j` is the channel's sample `j` of the group (DESIGN.md §4.8).
+//! little-endian `u64` whose bit `j` is the channel's sample `j` of the group.
 //! USB transfers end at arbitrary byte offsets, so the de-interleaver carries the current
 //! channel and an incomplete word across calls.
 

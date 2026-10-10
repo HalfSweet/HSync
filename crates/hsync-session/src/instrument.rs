@@ -1,5 +1,5 @@
 //! The devices of a workspace: finding and opening them, their settings, and captures that
-//! stream from them into the workspace (DESIGN.md §3.1, §4).
+//! stream from them into the workspace.
 
 use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -47,7 +47,7 @@ pub struct DeviceState {
     pub hardware_depth: Option<u64>,
 }
 
-/// A capture request from the UI (DESIGN.md §9.7).
+/// A capture request from the UI (DESIGN.md §7).
 #[derive(Debug, Clone, Default, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]

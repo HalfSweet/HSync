@@ -1,4 +1,4 @@
-//! Finding values and text in decoded data, for the search box (DESIGN.md §9.8).
+//! Finding values and text in decoded data, for the search box (DESIGN.md §8).
 
 use serde::Serialize;
 

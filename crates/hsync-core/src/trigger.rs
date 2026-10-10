@@ -3,7 +3,7 @@ use ts_rs::TS;
 
 /// The condition a channel must meet for a simple (per-channel) trigger to fire.
 ///
-/// These are the six choices of the trigger menu (DESIGN.md §9.7). With conditions on several
+/// These are the six choices of the trigger menu (DESIGN.md §7.1). With conditions on several
 /// channels, all of them must hold at the same sample.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]

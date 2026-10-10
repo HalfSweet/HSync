@@ -39,7 +39,7 @@ function recall(driver: string): Session | null {
 }
 
 /**
- * Sessions (DESIGN.md §8.3): the device settings, channels, triggers and decoders as a whole,
+ * Sessions: the device settings, channels, triggers and decoders as a whole,
  * saved to and loaded from files, and the device settings remembered per driver between runs,
  * as DSView restores a device's last settings.
  */

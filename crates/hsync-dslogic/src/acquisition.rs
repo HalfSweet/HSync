@@ -1,5 +1,5 @@
 //! Running a capture: arming the FPGA, the bulk transfer loop with the trigger header, progress
-//! and overflow polling, and the stop sequence (DESIGN.md §4.7, §4.8).
+//! and overflow polling, and the stop sequence.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

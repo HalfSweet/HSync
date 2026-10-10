@@ -1,4 +1,4 @@
-//! The binary format of viewport queries (DESIGN.md §5.4).
+//! The binary format of viewport queries.
 //!
 //! ```text
 //! header (little endian, 32 bytes)

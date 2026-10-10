@@ -1,4 +1,4 @@
-//! Starting the embedded interpreter from the Python home release builds bundle (DESIGN.md §7.3).
+//! Starting the embedded interpreter from the Python home release builds bundle.
 
 use std::ffi::{CStr, c_char};
 use std::mem::MaybeUninit;

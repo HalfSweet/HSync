@@ -1,5 +1,5 @@
 /**
- * Decoding of the binary viewport format (DESIGN.md §5.4, `hsync_session::encode_bins`).
+ * Decoding of the binary viewport format (`hsync_session::encode_bins`).
  */
 
 /** Level of the first sample in the bin. */

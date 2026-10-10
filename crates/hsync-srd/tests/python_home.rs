@@ -1,4 +1,4 @@
-//! Starting Python from the home release builds bundle (DESIGN.md §7.3). Python starts once per
+//! Starting Python from the home release builds bundle. Python starts once per
 //! process, so this has a test binary of its own. It runs where `HSYNC_TEST_PYTHON_HOME` names a
 //! runtime laid out by `scripts/python-runtime.mjs`, as CI does, and passes trivially elsewhere.
 

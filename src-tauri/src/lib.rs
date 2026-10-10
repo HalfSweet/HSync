@@ -47,7 +47,7 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     let firmware = resolver.resolve("firmware", BaseDirectory::Resource)?;
     let decoders =
         hsync_srd::DecoderHost::new(resolver.resolve("decoders", BaseDirectory::Resource)?);
-    // Release builds carry their own Python (DESIGN.md §7.3); development builds use the one they
+    // Release builds carry their own Python; development builds use the one they
     // linked against.
     let python = resolver.resolve("python", BaseDirectory::Resource)?;
     let decoders = Arc::new(if python.is_dir() {

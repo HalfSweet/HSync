@@ -6,7 +6,7 @@ use ts_rs::TS;
 
 /// An error as presented to the user: a stable i18n key and its message parameters.
 ///
-/// The backend never produces natural language (DESIGN.md §10.4); the frontend translates
+/// The backend never produces natural language; the frontend translates
 /// `code` with `params`.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]

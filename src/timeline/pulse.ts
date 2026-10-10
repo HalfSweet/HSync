@@ -1,5 +1,5 @@
 /**
- * The hover read-out of a pulse (DESIGN.md §9.6): its level and width within the viewport,
+ * The hover read-out of a pulse (DESIGN.md §6.4): its level and width within the viewport,
  * plus the period, frequency and duty cycle of clocks and other periodic signals, or the bit
  * count of UART lines.
  */

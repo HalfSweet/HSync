@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Lays out the CPython that release builds embed (DESIGN.md §7.3): python-build-standalone for the
+ * Lays out the CPython that release builds embed: python-build-standalone for the
  * target, checked against its published digest and trimmed of what no decoder uses.
  *
  *   node scripts/python-runtime.mjs [--target <rust triple>] [--github-env]

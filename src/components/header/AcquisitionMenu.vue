@@ -11,7 +11,7 @@ import { useDeviceStore } from '@/stores/device'
 import { formatBytes, formatCount, formatSamplerate, formatTimeShort } from '@/utils/units'
 
 /**
- * `rate │ duration │ N channels` and its menu (DESIGN.md §9.4): sample rates, the durations
+ * `rate │ duration │ N channels` and its menu (DESIGN.md §4): sample rates, the durations
  * DSView offers for the rate, and which channels to capture.
  */
 const { t, locale } = useI18n()
@@ -59,7 +59,7 @@ const needsRle = (duration: number) => {
   return depth != null && samplesFor(duration, rate.value) > depth
 }
 
-// A capture is kept bit-packed in memory; past half of the machine's, warn (DESIGN.md §5.2).
+// A capture is kept bit-packed in memory; past half of the machine's, warn.
 const memory = shallowRef<number | null>(null)
 watch(open, async (shown) => {
   if (!shown || memory.value !== null) return

@@ -1,5 +1,5 @@
 /**
- * Rows of the timeline and where they sit (DESIGN.md §6.1, §9.6). The DOM label column and the
+ * Rows of the timeline and where they sit (DESIGN.md §6.1). The DOM label column and the
  * waveform canvas both use this layout, so neither has to measure the other.
  */
 import type { ChannelGroup, ChannelRef } from './groups'

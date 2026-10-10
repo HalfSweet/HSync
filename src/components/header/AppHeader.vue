@@ -69,7 +69,7 @@ function onSearchKey(event: KeyboardEvent): void {
   }
 }
 
-// `/` focuses the search box from anywhere but text fields (DESIGN.md §9.8).
+// `/` focuses the search box from anywhere but text fields (DESIGN.md §8).
 onKeyStroke('/', (event) => {
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, [contenteditable="true"]')) return

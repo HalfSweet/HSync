@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * The picture of a trigger condition (DESIGN.md §9.7): drawn like a trace, 1.5 px round line,
+ * The picture of a trigger condition (DESIGN.md §7.1): drawn like a trace, 1.5 px round line,
  * with a 26 % wash on the high side.
  */
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'

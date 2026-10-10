@@ -1,4 +1,4 @@
-//! The app's surroundings: diagnostics (DESIGN.md §2.5), the log level and log file the settings
+//! The app's surroundings: diagnostics, the log level and log file the settings
 //! panel controls, and the machine's memory, which large captures must fit in (§5.2).
 
 use std::path::{Path, PathBuf};
@@ -63,7 +63,7 @@ pub fn log_reveal(app: AppHandle) -> CommandResult<()> {
         .map_err(|error| UiError::new("error.app.reveal").with("detail", error.to_string()))
 }
 
-/// Physical memory in bytes; captures beyond half of it get a warning, as DESIGN.md §5.2 asks.
+/// Physical memory in bytes; captures beyond half of it get a warning (DESIGN.md §4).
 #[tauri::command]
 pub fn system_memory() -> u64 {
     let mut system = sysinfo::System::new();

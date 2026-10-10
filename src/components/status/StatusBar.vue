@@ -21,7 +21,7 @@ const view = useViewStore()
 const percent = (part: number, whole: number) =>
   whole > 0 ? Math.min(100, Math.floor((part / whole) * 100)) : 0
 
-/** Where the capture is (DESIGN.md §9.10): waiting, how much arrived, or how it ended. */
+/** Where the capture is (DESIGN.md §10): waiting, how much arrived, or how it ended. */
 const status = computed(() => {
   if (capture.repeatPending) return t('status.repeatWait', { seconds: capture.interval })
   const live = capture.shownLive

@@ -1,5 +1,5 @@
 /**
- * Channel groups of the timeline (DESIGN.md §9.6): one group per decoder with the channels it
+ * Channel groups of the timeline (DESIGN.md §6.1): one group per decoder with the channels it
  * reads, then the channels no decoder uses under "unnamed channels".
  */
 import type { ChannelSummary } from '@/ipc/bindings/ChannelSummary'

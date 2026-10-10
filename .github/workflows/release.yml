@@ -1,4 +1,4 @@
-# Releases with release-please (DESIGN.md §11.5). Each push to main updates a release pull request
+# Releases with release-please. Each push to main updates a release pull request
 # with the next version and its changelog, worked out from the commit messages. Merging it tags the
 # version and drafts the release; the installers are built into the draft, which is published once
 # all of them are in.

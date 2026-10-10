@@ -17,7 +17,7 @@ const DEBOUNCE_MS = 150
 export type SearchKind = 'decode' | 'pattern'
 
 /**
- * The search box (DESIGN.md §9.8): values or text in the decoded data, or a level pattern
+ * The search box (DESIGN.md §8): values or text in the decoded data, or a level pattern
  * stepped through from the current place.
  */
 export const useSearchStore = defineStore('search', () => {

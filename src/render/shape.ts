@@ -1,7 +1,7 @@
 /**
  * The shape of one trace from its column cells: a polyline between the high and low levels, the
  * spans of high level that get the wash, and blocks where the trace changes too often to draw
- * edge by edge (DESIGN.md §6.3), outlined at both levels. Neighbouring columns with the same
+ * edge by edge (DESIGN.md §6.2), outlined at both levels. Neighbouring columns with the same
  * level merge, so the shape has as many segments as there are transitions in view.
  */
 import { CELL_EMPTY, CELL_FIRST_HIGH, CELL_LAST_HIGH, CELL_TRANSITION } from '@/ipc/bins'

@@ -1,4 +1,4 @@
-//! Drivers recognise devices; devices are configured and run acquisitions (DESIGN.md §4.1).
+//! Drivers recognise devices; devices are configured and run acquisitions.
 
 use crossbeam_channel::Sender;
 use hsync_core::{ChannelIndex, TriggerCondition};

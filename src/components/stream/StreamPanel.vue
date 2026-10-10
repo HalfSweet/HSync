@@ -19,7 +19,7 @@ import { useViewStore } from '@/stores/view'
 import { csvLines } from '@/stream/csv'
 import type { BusKind } from '@/timeline/groups'
 
-/** The data stream under the timeline (DESIGN.md §9.9). */
+/** The data stream under the timeline (DESIGN.md §9). */
 const { t } = useI18n()
 const capture = useCaptureStore()
 const decode = useDecodeStore()
@@ -400,7 +400,7 @@ async function copyRows(): Promise<void> {
   await copy(rows.map(textLine).join('\n'))
 }
 
-// Exporting the listing (DESIGN.md §8.2): CSV with time, decoder, label, offset and content
+// Exporting the listing: CSV with time, decoder, label, offset and content
 // columns, or text as the panel shows it.
 const exportMenu = ref(false)
 const exportRoot = useTemplateRef<HTMLElement>('exportRoot')

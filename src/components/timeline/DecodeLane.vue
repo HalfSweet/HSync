@@ -12,7 +12,7 @@ import type { Viewport } from '@/timeline/viewport'
 import { formatSpan, formatTime } from '@/utils/units'
 
 /**
- * One decode lane of the timeline (DESIGN.md §9.6): blocks for transfers, bytes and frames,
+ * One decode lane of the timeline (DESIGN.md §6.3): blocks for transfers, bytes and frames,
  * marks for I²C conditions and acknowledges, SPI text drawn character by character.
  */
 const props = defineProps<{

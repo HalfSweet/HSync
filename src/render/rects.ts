@@ -1,5 +1,5 @@
 /**
- * The waveform layer as axis-aligned rectangles in whole device pixels (DESIGN.md §6): every
+ * The waveform layer as axis-aligned rectangles in whole device pixels: every
  * piece of a trace is horizontal or vertical, so each line segment, wash, block and grid line is
  * one rectangle. Both renderers draw these rectangles, so they agree to the pixel, and lines meet
  * washes and blocks edge to edge rather than at a line's centre.
@@ -13,7 +13,7 @@ import type { FrameDescriptor, RenderTokens } from './types'
 /** Floats per rectangle: x, y, width, height in device pixels, then premultiplied RGBA. */
 export const RECT_FLOATS = 8
 
-/** Where the high and low levels sit within a row, as fractions of its height (DESIGN.md §6.3). */
+/** Where the high and low levels sit within a row, as fractions of its height (DESIGN.md §6.2). */
 const LEVELS = {
   wide: { high: 6.5 / 30, low: 23.5 / 30 },
   narrow: { high: 4.5 / 18, low: 13.5 / 18 },

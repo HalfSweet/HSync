@@ -8,7 +8,7 @@ import { REPEAT_INTERVAL, useCaptureStore, type CaptureMode } from '@/stores/cap
 import { useDeviceStore } from '@/stores/device'
 import { useTriggerStore } from '@/stores/trigger'
 
-/** Capture / stop, and how to capture (DESIGN.md §9.4). */
+/** Capture / stop, and how to capture (DESIGN.md §4). */
 const { t } = useI18n()
 const capture = useCaptureStore()
 const trigger = useTriggerStore()

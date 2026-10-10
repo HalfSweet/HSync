@@ -1,5 +1,5 @@
 /**
- * Keyboard navigation of the timeline (DESIGN.md §9.10): `+` and `-` zoom, `←` and `→` pan
+ * Keyboard navigation of the timeline (DESIGN.md §10): `+` and `-` zoom, `←` and `→` pan
  * (further with Shift), `Home` shows the whole capture and `Esc` drops the edge measurement, or
  * else the segment.
  */

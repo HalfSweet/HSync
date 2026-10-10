@@ -30,7 +30,7 @@ function boxesOf(list: Element): Map<Element, Box> {
 }
 
 /**
- * For `<TransitionGroup name="item" @before-leave="holdInPlace">` (DESIGN.md §9.13): takes an
+ * For `<TransitionGroup name="item" @before-leave="holdInPlace">` (DESIGN.md §13): takes an
  * entry that is leaving out of the flow where it stands, so the others can move into its place
  * while it fades. The list must be the entry's offset parent (positioned), and a selection mark
  * on the list skips the entry meanwhile.

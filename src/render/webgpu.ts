@@ -1,5 +1,5 @@
 /**
- * WebGPU waveform renderer (DESIGN.md §6): the frame's rectangles ({@link frameRects}) drawn as
+ * WebGPU waveform renderer: the frame's rectangles ({@link frameRects}) drawn as
  * instances of one quad, premultiplied over a transparent canvas. {@link WebGpuRenderer.create}
  * answers `null` where WebGPU is missing, and the timeline keeps the Canvas2D renderer.
  */

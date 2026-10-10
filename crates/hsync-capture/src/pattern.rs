@@ -1,4 +1,4 @@
-//! Level patterns, as DSView's search dock finds them (DESIGN.md §9.8): where every listed
+//! Level patterns, as DSView's search dock finds them (DESIGN.md §8): where every listed
 //! channel shows a level or an edge.
 
 use hsync_core::{ChannelIndex, SampleIndex};

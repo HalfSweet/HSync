@@ -2,7 +2,7 @@
 import type { MeasureGeometry } from '@/timeline/measure'
 
 /**
- * The edge measurement over the rows (DESIGN.md §9.6): a dot on each edge (a cursor line for an
+ * The edge measurement over the rows (DESIGN.md §6.5): a dot on each edge (a cursor line for an
  * end that follows the pointer between edges), a line between the ends across the second end's
  * row, a dashed drop from the first end when it is on another row, and the read-out above. A
  * ring marks the edge a click would start from.

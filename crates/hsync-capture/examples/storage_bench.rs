@@ -1,6 +1,6 @@
 //! Throughput of the sample storage on this machine: appending cross-format data as a device
 //! streams it, summarising columns for the waveform, finding edges and counting them, and
-//! dropping old samples as loop captures do (DESIGN.md §5).
+//! dropping old samples as loop captures do.
 //!
 //! ```sh
 //! cargo run --release -p hsync-capture --example storage_bench [-- SAMPLES_PER_CHANNEL]

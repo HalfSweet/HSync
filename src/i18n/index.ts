@@ -14,7 +14,7 @@ declare module 'vue-i18n' {
   export interface DefineLocaleMessage extends MessageSchema {}
 }
 
-/** Chinese for any `zh*` system language, English otherwise (DESIGN.md §10.1). */
+/** Chinese for any `zh*` system language, English otherwise. */
 export function detectLocale(languages: readonly string[]): AppLocale {
   for (const language of languages) {
     const tag = language.toLowerCase()

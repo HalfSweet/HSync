@@ -4,7 +4,7 @@ import { onBeforeUnmount, onMounted, useTemplateRef } from 'vue'
 import { motionTiming } from '@/motion/timing'
 
 /**
- * A box that eases to its content's height (DESIGN.md §9.13): when what it holds grows or
+ * A box that eases to its content's height (DESIGN.md §13): when what it holds grows or
  * shrinks, as a panel switches views, the box goes from the height shown to the new one
  * instead of jumping, and clips the content meanwhile. The content itself changes at once.
  */

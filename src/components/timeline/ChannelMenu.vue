@@ -8,7 +8,7 @@ import { useChannelsStore } from '@/stores/channels'
 import { wireOf, type ChannelRef } from '@/timeline/groups'
 
 /**
- * A channel's context menu on the label column (DESIGN.md §2.1): its name, which saved files
+ * A channel's context menu on the label column: its name, which saved files
  * keep, and its colour.
  */
 const props = defineProps<{ channel: ChannelRef; x: number; y: number }>()

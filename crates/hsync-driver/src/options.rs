@@ -1,4 +1,4 @@
-//! Device options described for the UI (DESIGN.md §4.1, §4.9). Drivers never produce text:
+//! Device options described for the UI. Drivers never produce text:
 //! choices carry an i18n key and parameters.
 
 use std::collections::BTreeMap;

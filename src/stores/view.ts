@@ -16,7 +16,7 @@ import {
 import { useCaptureStore } from './capture'
 import { usePreferencesStore } from './preferences'
 
-/** A stretch of time chosen on the ruler or by clicking a decoded block (DESIGN.md §9.6). */
+/** A stretch of time chosen on the ruler or by clicking a decoded block (DESIGN.md §6.6). */
 export interface Segment {
   /** First sample (A). */
   from: number

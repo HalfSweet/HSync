@@ -1,4 +1,4 @@
-//! What the timeline and the data stream show of a decoded bus (DESIGN.md §7.1, §9.6, §9.9).
+//! What the timeline and the data stream show of a decoded bus (DESIGN.md §6.3, §9).
 //!
 //! Everything here is structure without language: the UI turns meanings, notes and tokens into
 //! text with its translations.

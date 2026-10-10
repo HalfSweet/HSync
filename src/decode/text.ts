@@ -1,5 +1,5 @@
 /**
- * Text of decoded data, shared by the decode lanes and the data stream (DESIGN.md §9.6, §9.9).
+ * Text of decoded data, shared by the decode lanes and the data stream (DESIGN.md §6.3, §9).
  * Callers pass their translate function so this stays usable outside components.
  */
 import type { I2cMeaning } from '@/ipc/bindings/I2cMeaning'

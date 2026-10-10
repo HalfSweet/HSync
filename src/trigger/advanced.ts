@@ -1,5 +1,5 @@
 /**
- * Multi-stage and serial triggers as the trigger panel edits them (DESIGN.md §2.2), and the
+ * Multi-stage and serial triggers as the trigger panel edits them, and the
  * requests they turn into. The fields and their defaults follow DSView's trigger dock.
  */
 import type { AdvancedTrigger } from '@/ipc/bindings/AdvancedTrigger'

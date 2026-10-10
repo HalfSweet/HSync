@@ -1,5 +1,5 @@
 /**
- * Session files (DESIGN.md §8.3): HSync's own JSON with the device settings, channels, triggers
+ * Session files: HSync's own JSON with the device settings, channels, triggers
  * and decoders, and DSView's `.dsc` sessions: their device options (by libsigrok's option
  * names, list values as codes in version 3 and as English or Chinese text before), capture
  * mode, channels, triggers and decoders.

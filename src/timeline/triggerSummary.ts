@@ -1,5 +1,5 @@
 /**
- * What the top bar's trigger button lists (DESIGN.md §9.4): up to three channels with their
+ * What the top bar's trigger button lists (DESIGN.md §4): up to three channels with their
  * conditions; with more, the first two and a count of all.
  */
 export interface ArmedChannel<C> {

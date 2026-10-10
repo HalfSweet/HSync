@@ -26,11 +26,8 @@ import PatternCells from './PatternCells.vue'
 
 /**
  * The top bar's trigger button and panel. The per-channel conditions stay on the timeline
- * (DESIGN.md §9.7); the panel holds what DSView's trigger dock has beyond them: the trigger
- * position, and multi-stage and serial triggers.
- *
- * TODO(product): DESIGN.md §15 item 5 — the panel has no design yet; this is the default plain
- * form with DSView's fields.
+ * (DESIGN.md §7.1); the panel holds what DSView's trigger dock has beyond them: the trigger
+ * position, and multi-stage and serial triggers (§7.2).
  */
 const { t } = useI18n()
 const capture = useCaptureStore()

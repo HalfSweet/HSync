@@ -1,4 +1,4 @@
-//! An opened DSLogic: its options (DESIGN.md §4.9), the open sequence (§4.5) and starting
+//! An opened DSLogic: its options, the open sequence (§4.5) and starting
 //! acquisitions.
 
 use std::sync::Arc;

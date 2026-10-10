@@ -1,5 +1,5 @@
 /**
- * Which stretches of a trace are drawn as blocks (DESIGN.md §6.3): where it changes too often to
+ * Which stretches of a trace are drawn as blocks (DESIGN.md §6.2): where it changes too often to
  * draw edge by edge, as an SPI clock does within a byte; an SPI data line takes the bytes of its
  * clock in which it changes, so both show the same byte blocks.
  */

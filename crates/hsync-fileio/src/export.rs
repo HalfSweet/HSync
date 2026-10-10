@@ -1,4 +1,4 @@
-//! Exporting samples to other tools (DESIGN.md §8.2): DSView's CSV, Value Change Dump, sigrok's
+//! Exporting samples to other tools: DSView's CSV, Value Change Dump, sigrok's
 //! session format and plain interleaved bytes. Callers export part of a capture by slicing it
 //! first ([`LogicCapture::slice`]).
 //!

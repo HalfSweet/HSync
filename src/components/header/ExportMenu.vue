@@ -9,7 +9,7 @@ import { useFileActions } from '@/composables/useFileActions'
 import { useCaptureStore } from '@/stores/capture'
 import { commandLabel } from '@/utils/keys'
 
-/** The export button of the top bar (DESIGN.md §9.4): saving the capture, and exporting it. */
+/** The export button of the top bar (DESIGN.md §4): saving the capture, and exporting it. */
 const { t } = useI18n()
 const capture = useCaptureStore()
 const files = useFileActions()

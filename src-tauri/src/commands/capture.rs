@@ -104,7 +104,8 @@ pub fn capture_stop(state: State<'_, AppState>) {
     state.instrument.lock().stop();
 }
 
-/// Summarises channels over a sample range in the binary layout of DESIGN.md §5.4.
+/// Summarises channels over a sample range in the binary layout of viewport queries
+/// (`hsync_session::encode_bins`).
 #[tauri::command]
 pub async fn capture_bins(
     state: State<'_, AppState>,

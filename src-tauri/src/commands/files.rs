@@ -1,4 +1,4 @@
-//! Saving and exporting the open capture (DESIGN.md §8), with progress and cancellation.
+//! Saving and exporting the open capture, with progress and cancellation.
 
 use std::path::PathBuf;
 use std::sync::atomic::Ordering;

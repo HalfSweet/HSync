@@ -1,4 +1,4 @@
-//! Capture files: DSView `.dsl` reading and writing (DESIGN.md §8).
+//! Capture files: DSView `.dsl` reading and writing.
 
 #![forbid(unsafe_code)]
 

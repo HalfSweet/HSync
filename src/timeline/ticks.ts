@@ -1,5 +1,5 @@
 /**
- * Ruler and overview ticks. Times are relative to the trigger (DESIGN.md §5.1, §9.6); majors
+ * Ruler and overview ticks. Times are relative to the trigger (DESIGN.md §5, §6.1); majors
  * follow the 1-2-5 sequence and carry labels in one unit for the whole ruler.
  */
 import { digitsFor, inUnit, niceStep, timeUnitFor, type TimeUnit } from '@/utils/units'

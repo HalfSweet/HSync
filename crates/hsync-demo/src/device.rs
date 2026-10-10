@@ -1,4 +1,4 @@
-//! The demo driver and device (DESIGN.md §4.10).
+//! The demo driver and device.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};

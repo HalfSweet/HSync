@@ -1,5 +1,5 @@
 /**
- * Placement of a segment on the ruler and over the rows (DESIGN.md §9.6): the A and B flags sit
+ * Placement of a segment on the ruler and over the rows (DESIGN.md §6.6): the A and B flags sit
  * outside the segment except near the edges of the view, where they turn inward; a wide segment
  * carries its length between the flags, a narrow one beside B (or beside A near the right edge).
  */

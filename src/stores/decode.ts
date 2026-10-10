@@ -14,7 +14,7 @@ const REFOCUS_MS = 150
 import { useCaptureStore } from './capture'
 import { useViewStore } from './view'
 
-/** The decoders of the open capture and what they show in the viewport (DESIGN.md §7, §9.6). */
+/** The decoders of the open capture and what they show in the viewport (DESIGN.md §6.3). */
 export const useDecodeStore = defineStore('decode', () => {
   const capture = useCaptureStore()
   const view = useViewStore()

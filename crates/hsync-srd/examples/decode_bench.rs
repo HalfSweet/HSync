@@ -1,6 +1,6 @@
 //! Decoding speed on this machine: DSView's protocol demo repeated many times, through the
 //! native decoders and through DSView's own Python decoders in the embedded interpreter
-//! (DESIGN.md §7).
+//!.
 //!
 //! ```sh
 //! cargo run --release -p hsync-srd --example decode_bench [-- REPEATS]

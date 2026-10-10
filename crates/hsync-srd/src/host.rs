@@ -24,8 +24,8 @@ impl DecoderHost {
         }
     }
 
-    /// Starts Python with the standard library under `home`, the runtime release builds bundle
-    /// (DESIGN.md §7.3), instead of where the interpreter the build linked against keeps it.
+    /// Starts Python with the standard library under `home`, the runtime release builds bundle,
+    /// instead of where the interpreter the build linked against keeps it.
     pub fn with_python_home(mut self, home: PathBuf) -> Self {
         self.python_home = Some(home);
         self

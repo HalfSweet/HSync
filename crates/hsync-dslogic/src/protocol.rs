@@ -1,4 +1,4 @@
-//! Vendor control protocol of the DSLogic FX2/FX3 firmware (`command.h`, DESIGN.md §4.4).
+//! Vendor control protocol of the DSLogic FX2/FX3 firmware (`command.h`).
 
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -216,7 +216,7 @@ impl Control {
     }
 }
 
-/// The capture status read while waiting for the trigger (DESIGN.md §4.8).
+/// The capture status read while waiting for the trigger.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CaptureStatus {
     pub triggered: bool,

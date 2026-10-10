@@ -1,5 +1,5 @@
 /**
- * Number formatting for times, frequencies and counts (DESIGN.md §10.3). Units are the same in
+ * Number formatting for times, frequencies and counts. Units are the same in
  * every language; a value and its unit are separated by one space.
  */
 

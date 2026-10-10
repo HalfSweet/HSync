@@ -1,6 +1,5 @@
 //! Waiting for pin conditions over bit-packed samples, with the semantics of sigrok's
-//! `Decoder.wait()` as DSView's libsigrokdecode4DSL implements it (`instance.c`, DESIGN.md
-//! §7.3):
+//! `Decoder.wait()` as DSView's libsigrokdecode4DSL implements it (`instance.c`):
 //!
 //! - a wait takes conditions that are OR-ed; each condition AND-s its terms;
 //! - the first wait starts at the first sample decoded (0, or the start of a decode range),

@@ -13,7 +13,7 @@ import { usePreferencesStore } from '@/stores/preferences'
 export type UpdateState =
   'idle' | 'checking' | 'latest' | 'available' | 'downloading' | 'restarting' | 'failed'
 
-/** Updates of the app itself (DESIGN.md §9.11), from the GitHub releases. */
+/** Updates of the app itself (DESIGN.md §4, §11), from the GitHub releases. */
 export const useUpdateStore = defineStore('update', () => {
   const preferences = usePreferencesStore()
   const state = shallowRef<UpdateState>('idle')

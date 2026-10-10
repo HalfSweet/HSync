@@ -1,4 +1,4 @@
-//! Devices and drivers of HSync (DESIGN.md §4): the traits drivers implement, the option model
+//! Devices and drivers of HSync: the traits drivers implement, the option model
 //! the UI renders, the packets acquisitions send, and USB access through nusb.
 
 #![forbid(unsafe_code)]

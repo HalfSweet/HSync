@@ -1,5 +1,5 @@
 /**
- * Waveform renderers draw the canvas layer of the timeline (DESIGN.md §6): grid lines and
+ * Waveform renderers draw the canvas layer of the timeline: grid lines and
  * traces. Canvas2D is the baseline; a WebGPU renderer can implement the same interface.
  */
 import type { BinsResult } from '@/ipc/bins'

@@ -1,4 +1,4 @@
-//! The demo device of HSync (DESIGN.md §4.10): replays the bundled protocol capture or
+//! The demo device of HSync: replays the bundled protocol capture or
 //! synthesises random and counter signals, in real time, through the same driver traits and
 //! packets as hardware.
 

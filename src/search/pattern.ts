@@ -1,5 +1,5 @@
 /**
- * Level patterns in the search box (DESIGN.md §9.8), DSView's search dock as text: `D3=R D5=1`
+ * Level patterns in the search box (DESIGN.md §8), DSView's search dock as text: `D3=R D5=1`
  * finds where channel 3 rises while channel 5 is high.
  */
 import type { PatternCondition } from '@/ipc/bindings/PatternCondition'

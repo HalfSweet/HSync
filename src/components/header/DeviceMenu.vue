@@ -13,7 +13,7 @@ import { commandLabel } from '@/utils/keys'
 
 import DeviceOptionsDialog from './DeviceOptionsDialog.vue'
 
-/** The device picker of the top bar (DESIGN.md §9.4). */
+/** The device picker of the top bar (DESIGN.md §4). */
 const { t } = useI18n()
 const device = useDeviceStore()
 const capture = useCaptureStore()

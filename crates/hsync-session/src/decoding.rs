@@ -1,5 +1,5 @@
 //! Decoding the open capture: the session's decoders run in the background and their
-//! presentations answer the UI's lane and data stream queries (DESIGN.md §7.4).
+//! presentations answer the UI's lane and data stream queries.
 
 use std::ops::Range;
 use std::sync::Arc;

@@ -1,5 +1,5 @@
 //! Triggers beyond the simple per-channel one: DSView's multi-stage and serial triggers
-//! (DESIGN.md §2.2; `DSView/pv/dock/triggerdock.cpp`).
+//! (`DSView/pv/dock/triggerdock.cpp`).
 
 use hsync_core::{ChannelIndex, TriggerCondition};
 use serde::{Deserialize, Serialize};

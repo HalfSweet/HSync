@@ -1,5 +1,5 @@
 # Builds the installers for macOS (Apple silicon), Windows (x64) and Linux (x64) with the bundled
-# Python (DESIGN.md §7.3, §11.5). The release workflow calls it to fill a draft release; run by
+# Python. The release workflow calls it to fill a draft release; run by
 # hand, it keeps the installers with the run as artifacts.
 name: Bundle
 

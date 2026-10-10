@@ -17,7 +17,7 @@ import type { TriggerRequest } from './trigger'
 export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
 /**
  * Single captures, another one a moment after each completes, or one that runs until stopped
- * and keeps its newest samples (DESIGN.md §9.4).
+ * and keeps its newest samples (DESIGN.md §4).
  */
 export type CaptureMode = 'single' | 'repeat' | 'loop'
 

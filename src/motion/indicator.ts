@@ -1,7 +1,7 @@
 import type { Directive } from 'vue'
 
 /**
- * `v-indicator` on a segmented control, or `v-indicator:line` on a tab bar (DESIGN.md §9.13):
+ * `v-indicator` on a segmented control, or `v-indicator:line` on a tab bar (DESIGN.md §13):
  * the selected option's mark, its raised face or the line under it, slides to the next
  * selection instead of jumping there.
  *

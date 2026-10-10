@@ -1,6 +1,6 @@
 /**
  * The capture lengths offered in the acquisition menu, as DSView's sampling bar builds them
- * (`samplingbar.cpp:472-618`, DESIGN.md §9.4): from the longest possible duration down a 1-2-5
+ * (`samplingbar.cpp:472-618`, DESIGN.md §4): from the longest possible duration down a 1-2-5
  * sequence until fewer than 1024 samples remain. Minutes, hours and days step through 50 s,
  * 50 min and 20 h on the way down.
  */

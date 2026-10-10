@@ -17,7 +17,7 @@ const EXPORT_PAGE = 5000
 
 export type StreamScope = 'all' | 'segment'
 
-/** The data stream panel under the timeline (DESIGN.md §9.9). */
+/** The data stream panel under the timeline (DESIGN.md §9). */
 export const useStreamStore = defineStore('stream', () => {
   const capture = useCaptureStore()
   const decode = useDecodeStore()

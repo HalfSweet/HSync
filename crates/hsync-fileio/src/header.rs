@@ -1,7 +1,7 @@
 //! The `header` entry of a `.dsl` file: a GKeyFile (INI) document.
 //!
 //! Written by DSView's `StoreSession::meta_gen` and read by `sr_load_virtual_device_session`
-//! (DESIGN.md §8.1).
+//!.
 
 use std::fmt::Write as _;
 

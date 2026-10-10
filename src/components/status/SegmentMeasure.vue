@@ -10,7 +10,7 @@ import { useViewStore } from '@/stores/view'
 import { formatCount, formatSpan } from '@/utils/units'
 
 /**
- * The marked segment in the status bar (DESIGN.md §9.6): its duration, and on click the rising
+ * The marked segment in the status bar (DESIGN.md §6.6): its duration, and on click the rising
  * and falling edges of every channel inside it, as DSView's cursor measurement counts them.
  */
 const { t, locale } = useI18n()

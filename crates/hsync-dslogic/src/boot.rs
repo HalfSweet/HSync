@@ -1,5 +1,5 @@
 //! Bringing a DSLogic up: FX2 firmware upload, FPGA configuration, the security handshake and
-//! the clock synthesiser (DESIGN.md §4.3, §4.5, §4.6).
+//! the clock synthesiser.
 
 use std::path::PathBuf;
 use std::time::Duration;

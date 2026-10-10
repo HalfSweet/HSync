@@ -1,5 +1,5 @@
 //! The capture configuration the FPGA receives before each acquisition: `DSL_setting` and, on
-//! 32-channel models, `DSL_setting_ext32` (DESIGN.md §4.7).
+//! 32-channel models, `DSL_setting_ext32`.
 //!
 //! Ported from `dsl_fpga_arm()` in `libsigrok4DSL/hardware/DSL/dsl.c` and the trigger encoders in
 //! `libsigrok4DSL/trigger.c`. `tests/setting.rs` compares the bytes with ones DSView itself

@@ -1,5 +1,5 @@
 //! Captures from the first DSLogic found and summarises what arrived: a smoke test for real
-//! hardware (DESIGN.md §4.11).
+//! hardware.
 //!
 //! ```sh
 //! cargo run -p hsync-dslogic --example dslogic_capture -- \

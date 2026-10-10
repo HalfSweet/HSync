@@ -23,7 +23,7 @@ export type TriggerRequest = Omit<CaptureRequest, 'looping' | 'hold' | 'keepStop
 const DEFAULT_CAPS: TriggerCaps = { maxPosition: 90, advanced: false }
 
 /**
- * The trigger panel's settings (DESIGN.md §2.2, §15 item 5): the trigger position, and a
+ * The trigger panel's settings (DESIGN.md §7.2): the trigger position, and a
  * multi-stage or serial trigger in place of the per-channel conditions of the timeline.
  */
 export const useTriggerStore = defineStore('trigger', () => {

@@ -13,7 +13,7 @@ import { formatSamplerate } from '@/utils/units'
 
 /**
  * Every option of the open device but rate and depth, which the acquisition menu holds
- * (DESIGN.md §4.9, §9.11). The form follows the option kinds the driver reports.
+ * (DESIGN.md §11). The form follows the option kinds the driver reports.
  */
 const emit = defineEmits<{ close: [] }>()
 const { t } = useI18n()

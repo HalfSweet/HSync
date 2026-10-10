@@ -6,7 +6,7 @@ import AppIcon from '@/components/common/AppIcon.vue'
 import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 
-/** The trigger menu of one channel, beside the label column (DESIGN.md §9.7). */
+/** The trigger menu of one channel, beside the label column (DESIGN.md §7.1). */
 const props = defineProps<{
   channel: string
   wire: number

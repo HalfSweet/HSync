@@ -1,6 +1,6 @@
 //! Storage of logic captures: bit-packed samples per channel, multi-level summaries for
 //! searches over billions of samples, and the queries behind waveform drawing, hover read-outs
-//! and measurements (DESIGN.md §5).
+//! and measurements.
 
 #![forbid(unsafe_code)]
 

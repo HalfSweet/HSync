@@ -1,6 +1,6 @@
 /**
  * The decoders the decoder dialog offers, with DSView's ids, channel roles and options, so the
- * entries they produce are the ones DSView stores in `.dsl` files (DESIGN.md §7.2). The list
+ * entries they produce are the ones DSView stores in `.dsl` files. The list
  * comes from the Python decoders' catalog; the natively decoded buses below stand in when the
  * catalog cannot be read.
  */

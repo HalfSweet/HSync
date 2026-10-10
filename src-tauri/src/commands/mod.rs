@@ -1,4 +1,4 @@
-//! IPC commands, see DESIGN.md §3.4. Errors cross as [`UiError`]: an i18n key and parameters.
+//! IPC commands. Errors cross as [`UiError`]: an i18n key and parameters.
 
 pub mod app;
 pub mod capture;

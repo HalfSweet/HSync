@@ -14,7 +14,7 @@ export const DEMO_DRIVER = 'virtual-demo'
 
 /**
  * How long a device that went away may take to come back as itself before HSync falls back to
- * the demo device (DESIGN.md §4.2; DSView waits 500 ms, macOS re-enumerates more slowly).
+ * the demo device (DSView waits 500 ms, macOS re-enumerates more slowly).
  */
 export const RECONNECT_MS = 2000
 const RECONNECT_POLL_MS = 200
@@ -24,7 +24,7 @@ function integer(option: OptionState | undefined): number | null {
   return option?.value.type === 'integer' ? option.value.value : null
 }
 
-/** Devices found, the open one and its settings (DESIGN.md §4.9, §9.4). */
+/** Devices found, the open one and its settings (DESIGN.md §4). */
 export const useDeviceStore = defineStore('device', () => {
   const devices = shallowRef<DeviceSummary[]>([])
   const state = shallowRef<DeviceState | null>(null)

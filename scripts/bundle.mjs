@@ -1,7 +1,7 @@
 // @ts-check
 /**
- * Builds the installers for this machine as releases are built, with the bundled Python
- * (DESIGN.md §7.3, §11.5). Arguments go on to `tauri build`:
+ * Builds the installers for this machine as releases are built, with the bundled Python.
+ * Arguments go on to `tauri build`:
  *
  *   pnpm bundle [--bundles app]
  */

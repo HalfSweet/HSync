@@ -12,7 +12,7 @@ import { useCaptureStore } from '@/stores/capture'
 import { useViewStore } from '@/stores/view'
 
 /**
- * The export dialog (DESIGN.md §8.2): a format, the whole capture or the segment, and the
+ * The export dialog: a format, the whole capture or the segment, and the
  * channels. Choosing where to write comes after, in the system's save dialog.
  */
 const emit = defineEmits<{ close: [] }>()
