@@ -101,10 +101,12 @@ const binsRequest = computed(() => {
   const viewport = view.viewport
   if (!summary || viewport.width <= 0 || traceChannels.value.length === 0) return null
   const start = Math.max(0, Math.floor(viewport.start))
-  const end = Math.min(capture.sampleCount, Math.ceil(viewportEnd(viewport)))
+  const end = Math.min(capture.extent, Math.ceil(viewportEnd(viewport)))
   if (end <= start) return null
   const bins = Math.max(1, Math.min(Math.round(viewport.width * pixelRatio.value), end - start))
-  return { captureId: summary.id, channels: traceChannels.value, start, end, bins }
+  // Asks again as a running capture grows; columns past its samples come back empty.
+  const received = capture.sampleCount
+  return { captureId: summary.id, channels: traceChannels.value, start, end, bins, received }
 })
 
 const bins = shallowRef<BinsResult | null>(null)
@@ -118,7 +120,8 @@ watch(
       return
     }
     try {
-      const result = await (await getBackend()).bins(request)
+      const { received: _, ...query } = request
+      const result = await (await getBackend()).bins(query)
       if (sequence === binsSequence) bins.value = result
     } catch (error) {
       console.error('bins request failed', error)

@@ -22,6 +22,9 @@
   --veil: rgb(23 27 31 / 0.05);
   --hover: rgb(23 27 31 / 0.06);
   --sel: rgb(23 27 31 / 0.12);
+  /* Problems the user must notice: failed captures, lost data, unplugged devices */
+  --alert: #b3261e;
+  --alert-wash: #fcebe9;
 
   /* Bus colours: main / block wash / stronger wash */
   --i2c: #1f55c5;
@@ -92,6 +95,8 @@
   --veil: rgb(233 237 240 / 0.06);
   --hover: rgb(233 237 240 / 0.08);
   --sel: rgb(233 237 240 / 0.18);
+  --alert: #ff8a80;
+  --alert-wash: #3a1d1b;
 
   --i2c: #8fb5ff;
   --i2c-wash: #182844;

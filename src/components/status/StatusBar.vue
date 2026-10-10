@@ -3,15 +3,40 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import { useBackendText } from '@/composables/useBackendText'
 import { useCaptureStore } from '@/stores/capture'
+import { useDeviceStore } from '@/stores/device'
 import { useViewStore } from '@/stores/view'
 import { formatCount, formatTimeShort } from '@/utils/units'
 
 const { t, locale } = useI18n()
+const text = useBackendText()
 const capture = useCaptureStore()
+const device = useDeviceStore()
 const view = useViewStore()
 
+const percent = (part: number, whole: number) =>
+  whole > 0 ? Math.min(100, Math.floor((part / whole) * 100)) : 0
+
+/** Where the capture is (DESIGN.md §9.10): waiting, how much arrived, or how it ended. */
 const status = computed(() => {
+  const live = capture.live
+  if (live && live.captureId === capture.summary?.id) {
+    switch (live.phase) {
+      case 'waiting':
+        return live.hardwareSamples === null
+          ? t('status.waitingTrigger')
+          : `${t('status.waitingTrigger')} · ${t('status.hardwareFill', {
+              percent: percent(live.hardwareSamples, live.limit),
+            })}`
+      case 'capturing':
+        return t('status.captured', { percent: percent(live.samples, live.limit) })
+      default:
+        if (live.end === 'stopped') return t('status.stopped')
+        if (live.end === 'completed') return t('status.complete')
+        return t('status.failed')
+    }
+  }
   switch (capture.status) {
     case 'loading':
       return t('status.capturing')
@@ -20,6 +45,15 @@ const status = computed(() => {
     default:
       return t('status.ready')
   }
+})
+
+/** The latest problem worth telling: a failed capture, lost data or a refused setting. */
+const problem = computed(() => {
+  if (capture.error) return text.error(capture.error)
+  if (capture.live?.overflow && capture.live.captureId === capture.summary?.id)
+    return t('status.overflow')
+  if (device.error) return text.error(device.error)
+  return null
 })
 
 const triggerTime = computed(() => {
@@ -47,7 +81,8 @@ const perDivision = computed(() =>
       <AppIcon name="stream" />
       <span>{{ t('stream.title') }}</span>
     </button>
-    <span>{{ status }}</span>
+    <span :aria-live="capture.capturing ? 'off' : 'polite'">{{ status }}</span>
+    <span v-if="problem" role="alert" class="text-alert">{{ problem }}</span>
     <span v-if="triggerTime" class="text-ink-3 tabular-nums">{{ triggerTime }}</span>
     <span v-if="capture.summary" class="text-ink-3 tabular-nums">
       {{ t('status.samples', { count: formatCount(capture.sampleCount, locale) }) }}

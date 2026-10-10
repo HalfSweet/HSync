@@ -15,7 +15,11 @@ const view = useViewStore()
 const track = useTemplateRef<HTMLElement>('track')
 
 const ticks = computed(() => view.ruler.ticks)
-const majors = computed(() => ticks.value.filter((tick) => tick.major))
+/** Labels too close to the left edge would run into the unit label there; their marks stay. */
+const UNIT_LABEL_CLEARANCE = 32
+const majors = computed(() =>
+  ticks.value.filter((tick) => tick.major && tick.x >= UNIT_LABEL_CLEARANCE),
+)
 
 /** Tick marks as one SVG path: 4 px minor and 8 px major marks along the bottom edge. */
 const marks = computed(() =>
@@ -43,7 +47,7 @@ function sampleAtPointer(event: PointerEvent): number {
   const box = track.value?.getBoundingClientRect()
   if (!box) return 0
   const x = Math.min(Math.max(event.clientX - box.left, 0), box.width)
-  return Math.round(Math.min(Math.max(xToSample(view.viewport, x), 0), capture.sampleCount))
+  return Math.round(Math.min(Math.max(xToSample(view.viewport, x), 0), capture.extent))
 }
 
 function onPointerDown(event: PointerEvent): void {

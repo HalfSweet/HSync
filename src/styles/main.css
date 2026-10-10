@@ -49,6 +49,8 @@
   --color-veil: var(--veil);
   --color-hover: var(--hover);
   --color-sel: var(--sel);
+  --color-alert: var(--alert);
+  --color-alert-wash: var(--alert-wash);
 
   --color-i2c: var(--i2c);
   --color-i2c-wash: var(--i2c-wash);

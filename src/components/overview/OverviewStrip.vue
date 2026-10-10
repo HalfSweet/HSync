@@ -14,13 +14,17 @@ const view = useViewStore()
 const strip = useTemplateRef<HTMLElement>('strip')
 const { width } = useElementSize(strip)
 
-const percent = (sample: number) =>
-  capture.sampleCount > 0 ? (sample / capture.sampleCount) * 100 : 0
+const percent = (sample: number) => (capture.extent > 0 ? (sample / capture.extent) * 100 : 0)
 
 const box = computed(() => ({
   left: percent(view.viewport.start),
   width: Math.max(percent(view.end) - percent(view.viewport.start), 0.2),
 }))
+
+/** The whole capture, or all it will hold while it fills. */
+const wholeDuration = computed(() =>
+  capture.samplerate > 0 ? capture.extent / capture.samplerate : 0,
+)
 
 const viewportTip = computed(() =>
   t('overview.viewport', {
@@ -30,7 +34,7 @@ const viewportTip = computed(() =>
 )
 
 const ticks = computed(() => {
-  const ruler = overviewTicks(width.value, capture.sampleCount, {
+  const ruler = overviewTicks(width.value, capture.extent, {
     samplerate: capture.samplerate,
     triggerSample: capture.triggerSample,
   })
@@ -54,7 +58,7 @@ function sampleAt(event: PointerEvent | WheelEvent): number {
   if (!element) return 0
   const rect = element.getBoundingClientRect()
   const fraction = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1)
-  return fraction * capture.sampleCount
+  return fraction * capture.extent
 }
 
 function onPointerDown(event: PointerEvent): void {
@@ -79,7 +83,7 @@ function onWheel(event: WheelEvent): void {
   <div class="flex flex-none border-b border-line">
     <div class="flex w-(--lab) flex-none flex-col justify-center gap-0.5 border-r border-line px-3">
       <span class="text-caption text-ink-3">{{ t('overview.whole') }}</span>
-      <span class="font-medium tabular-nums">{{ formatTimeShort(capture.duration) }}</span>
+      <span class="font-medium tabular-nums">{{ formatTimeShort(wholeDuration) }}</span>
     </div>
     <div
       ref="strip"

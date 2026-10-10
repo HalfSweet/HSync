@@ -8,32 +8,16 @@ import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { summarizeTriggers } from '@/timeline/triggerSummary'
-import { formatSamplerate, formatTimeShort } from '@/utils/units'
 
+import AcquisitionMenu from './AcquisitionMenu.vue'
+import CaptureButton from './CaptureButton.vue'
+import DeviceMenu from './DeviceMenu.vue'
 import SettingsMenu from './SettingsMenu.vue'
 
 const { t } = useI18n()
 const capture = useCaptureStore()
 const channels = useChannelsStore()
 const search = useTemplateRef<HTMLInputElement>('search')
-
-const deviceName = computed(() => {
-  const source = capture.summary?.source
-  if (!source) return t('header.device.select')
-  if (source.kind === 'demo') return 'Demo Device'
-  return source.path.split(/[\\/]/).pop() ?? source.path
-})
-
-const rate = computed(() => formatSamplerate(capture.samplerate))
-const duration = computed(() => formatTimeShort(capture.duration))
-const channelCount = computed(() => capture.summary?.channels.length ?? 0)
-const acquisitionLabel = computed(() =>
-  t('header.acquisition.aria', {
-    rate: rate.value,
-    duration: duration.value,
-    channels: channelCount.value,
-  }),
-)
 
 const trigger = computed(() => summarizeTriggers(channels.armed))
 const triggerTip = computed(() => {
@@ -68,19 +52,9 @@ onKeyStroke('/', (event) => {
       <path d="M3 13.5h3.5v-7h4v7h3.5v-7H17" />
     </svg>
 
-    <button class="btn font-medium">
-      <span>{{ deviceName }}</span>
-      <AppIcon name="chevron-down" />
-    </button>
+    <DeviceMenu />
 
-    <button class="btn gap-3" :aria-label="acquisitionLabel">
-      <span class="tabular-nums">{{ rate }}</span>
-      <i class="vr" />
-      <span class="tabular-nums">{{ duration }}</span>
-      <i class="vr" />
-      <span>{{ t('header.acquisition.channels', { count: channelCount }) }}</span>
-      <AppIcon name="chevron-down" />
-    </button>
+    <AcquisitionMenu />
 
     <button class="btn" :aria-label="triggerTip" :title="triggerTip">
       <AppIcon name="trigger" />
@@ -101,21 +75,7 @@ onKeyStroke('/', (event) => {
       <AppIcon name="chevron-down" />
     </button>
 
-    <div class="flex">
-      <button
-        class="inline-flex h-8 items-center gap-2 rounded-l-6 bg-ink pr-4 pl-3 font-medium whitespace-nowrap text-canvas hover:opacity-86"
-        @click="capture.openDemo()"
-      >
-        <AppIcon name="play" />
-        <span>{{ t('header.capture.start') }}</span>
-      </button>
-      <button
-        class="ml-px inline-flex h-8 w-7 items-center justify-center rounded-r-6 bg-ink text-canvas hover:opacity-86"
-        :aria-label="t('header.capture.more')"
-      >
-        <AppIcon name="chevron-down" />
-      </button>
-    </div>
+    <CaptureButton />
 
     <div class="min-w-0 flex-1" />
 
