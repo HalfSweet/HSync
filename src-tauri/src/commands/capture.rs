@@ -104,3 +104,19 @@ pub fn capture_edge(
     let edge = hsync_session::edge(&capture.read(), channel, sample, direction);
     edge.map_err(|error| UiError::from(&error))
 }
+
+/// The median period of a clock channel in samples, for the group meta of I2C and SPI.
+#[tauri::command]
+pub fn capture_clock_period(
+    state: State<'_, AppState>,
+    capture_id: u64,
+    channel: ChannelIndex,
+) -> CommandResult<Option<f64>> {
+    let capture = state
+        .workspace
+        .lock()
+        .capture(capture_id)
+        .map_err(|error| UiError::from(&error))?;
+    let period = hsync_session::clock_period(&capture.read(), channel);
+    period.map_err(|error| UiError::from(&error))
+}

@@ -206,6 +206,42 @@ pub fn pulse(
     }))
 }
 
+/// Rising edges considered by [`clock_period`]; enough for a stable median, bounded in time.
+const CLOCK_EDGES: usize = 1 << 16;
+
+/// The median number of samples between consecutive rising edges of `channel`, over up to
+/// 65536 edges from the start: the period of the clock the channel carries. Shown next to the
+/// I²C and SPI group titles; the median ignores the pauses between bursts.
+pub fn clock_period(
+    capture: &LogicCapture,
+    channel: ChannelIndex,
+) -> Result<Option<f64>, SessionError> {
+    let data = capture
+        .channel(channel)
+        .ok_or(SessionError::UnknownChannel(channel))?;
+    if data.is_empty() {
+        return Ok(None);
+    }
+    let mut rising = Vec::new();
+    let mut at = 0;
+    while rising.len() < CLOCK_EDGES {
+        let Some(edge) = data.next_change(at) else {
+            break;
+        };
+        if data.sample(edge) {
+            rising.push(edge);
+        }
+        at = edge;
+    }
+    let mut periods: Vec<u64> = rising.windows(2).map(|pair| pair[1] - pair[0]).collect();
+    if periods.is_empty() {
+        return Ok(None);
+    }
+    let middle = periods.len() / 2;
+    let (_, median, _) = periods.select_nth_unstable(middle);
+    Ok(Some(*median as f64))
+}
+
 /// The nearest edge of `channel` after or before `sample`: the first sample of the new level.
 pub fn edge(
     capture: &LogicCapture,

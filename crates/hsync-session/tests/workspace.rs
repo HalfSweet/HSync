@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use hsync_session::{CaptureSource, Direction, SessionError, Workspace, edge, pulse};
+use hsync_session::{CaptureSource, Direction, SessionError, Workspace, clock_period, edge, pulse};
 
 fn demo_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/resources/demo/protocol.dsl")
@@ -63,4 +63,16 @@ fn reads_pulses_and_edges_of_the_i2c_clock() {
         edge(&capture, 1, first_fall + 10, Direction::Previous).expect("SCL exists"),
         Some(first_fall)
     );
+}
+
+#[test]
+fn measures_the_clocks_of_the_demo_buses() {
+    let mut workspace = Workspace::new();
+    let summary = workspace.open_demo(&demo_path()).expect("demo opens");
+    let capture = workspace.capture(summary.id).expect("open");
+    let capture = capture.read();
+    // The recorded I2C clock runs at 99.6 kHz (251 samples), the SPI clock at 1.32 MHz (19).
+    assert_eq!(clock_period(&capture, 1).expect("SCL exists"), Some(251.0));
+    assert_eq!(clock_period(&capture, 12).expect("CLK exists"), Some(19.0));
+    assert!(clock_period(&capture, 13).expect("CS# exists").is_some());
 }
