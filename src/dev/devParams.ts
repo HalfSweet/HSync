@@ -10,6 +10,7 @@
  *   &stream=0            open the data stream on decoder 0  &streamMode=hex
  *   &update=0.3.0        the mock backend announces this release, found at startup
  *   &import=1            open the import dialog on the waveform the mock backend reads
+ *   &import=all          import every signal of it at once, to see the capture it makes
  */
 import { nextTick, watch } from 'vue'
 
@@ -49,7 +50,15 @@ export function applyDevParams(search = window.location.search): void {
   if (locale) preferences.locale = locale
   // Development builds skip the check at startup; this one finds what the mock announces.
   if (params.has('update')) void useUpdateStore().check(true)
-  if (params.get('import') === '1') void capture.inspectWaveform('sim/counter.vcd')
+  const imported = params.get('import')
+  if (imported === '1' || imported === 'all') {
+    void capture.inspectWaveform('sim/counter.vcd').then(() => {
+      const signals = capture.pendingImport?.summary.items.flatMap((item) =>
+        item.signal === null ? [] : [item.signal],
+      )
+      if (imported === 'all' && signals) void capture.importWaveform({ signals, samplerate: null })
+    })
+  }
 
   for (const pair of (params.get('trig') ?? '').split(',').filter(Boolean)) {
     const [index, condition] = pair.split(':')
