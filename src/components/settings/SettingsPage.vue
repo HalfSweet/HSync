@@ -1,6 +1,33 @@
 <script setup lang="ts">
+import {
+  ArrowRightToLine,
+  Crosshair,
+  FolderOpen,
+  Gpu,
+  Info,
+  Languages,
+  Monitor,
+  Moon,
+  MoveHorizontal,
+  Palette,
+  RefreshCw,
+  Repeat,
+  Rows3,
+  ScrollText,
+  SlidersHorizontal,
+  Stethoscope,
+  Sun,
+  SunMoon,
+} from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
-import { nextTick, onBeforeUnmount, onMounted, shallowRef, useTemplateRef } from 'vue'
+import {
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  shallowRef,
+  useTemplateRef,
+  type Component,
+} from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -15,6 +42,7 @@ import {
   LOCALE_PREFERENCES,
   THEMES,
   usePreferencesStore,
+  type ThemePreference,
 } from '@/stores/preferences'
 import { SETTINGS_SECTIONS, useSettingsStore, type SettingsSection } from '@/stores/settings'
 import { useUpdateStore } from '@/stores/update'
@@ -44,6 +72,23 @@ const BEHAVIOURS = [
   'keepStopped',
   'checkUpdates',
 ] as const
+
+const SECTION_ICONS: Record<SettingsSection, Component> = {
+  appearance: Palette,
+  behaviour: SlidersHorizontal,
+  diagnostics: Stethoscope,
+  about: Info,
+}
+
+const THEME_ICONS: Record<ThemePreference, Component> = { system: Monitor, light: Sun, dark: Moon }
+
+const BEHAVIOUR_ICONS: Record<(typeof BEHAVIOURS)[number], Component> = {
+  centerTrigger: Crosshair,
+  followLatest: ArrowRightToLine,
+  quickScroll: MoveHorizontal,
+  keepStopped: Repeat,
+  checkUpdates: RefreshCw,
+}
 
 // Focus goes into the page without ringing a section, and back to what opened it when it closes.
 const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -150,10 +195,11 @@ async function revealLog(): Promise<void> {
               :aria-controls="`settings-panel-${one}`"
               :tabindex="settings.section === one ? 0 : -1"
               :title="updateNote(one)"
-              class="flex h-[30px] items-center rounded-4 px-2.5 text-left text-ink-2 hover:text-ink focus-visible:outline-offset-[-2px] aria-selected:font-medium aria-selected:text-ink"
+              class="flex h-[30px] items-center gap-2 rounded-4 px-2.5 text-left text-ink-2 hover:text-ink focus-visible:outline-offset-[-2px] aria-selected:font-medium aria-selected:text-ink"
               :class="one === 'about' && 'mt-auto'"
               @click="settings.section = one"
             >
+              <component :is="SECTION_ICONS[one]" />
               {{ t(`settings.sections.${one}`) }}
               <template v-if="updateNote(one)">
                 <i class="ml-auto size-1.5 flex-none rounded-full bg-ink" aria-hidden="true" />
@@ -175,7 +221,9 @@ async function revealLog(): Promise<void> {
             v-if="settings.section === 'appearance'"
             class="grid grid-cols-[minmax(7rem,max-content)_minmax(0,1fr)] items-start gap-x-4 gap-y-5"
           >
-            <span class="leading-[26px] text-ink-2">{{ t('settings.theme.label') }}</span>
+            <span class="flex h-[26px] items-center gap-2 text-ink-2">
+              <SunMoon class="text-ink-3" />{{ t('settings.theme.label') }}
+            </span>
             <div
               v-indicator
               role="group"
@@ -185,15 +233,18 @@ async function revealLog(): Promise<void> {
               <button
                 v-for="theme in THEMES"
                 :key="theme"
-                class="seg"
+                class="inline-flex seg items-center gap-1.5"
                 :aria-pressed="preferences.theme === theme"
                 @click="preferences.theme = theme"
               >
+                <component :is="THEME_ICONS[theme]" :size="14" />
                 {{ t(`settings.theme.${theme}`) }}
               </button>
             </div>
 
-            <span class="leading-[26px] text-ink-2">{{ t('settings.density.label') }}</span>
+            <span class="flex h-[26px] items-center gap-2 text-ink-2">
+              <Rows3 class="text-ink-3" />{{ t('settings.density.label') }}
+            </span>
             <div
               v-indicator
               role="group"
@@ -211,7 +262,9 @@ async function revealLog(): Promise<void> {
               </button>
             </div>
 
-            <span class="leading-[26px] text-ink-2">{{ t('settings.graphics.label') }}</span>
+            <span class="flex h-[26px] items-center gap-2 text-ink-2">
+              <Gpu class="text-ink-3" />{{ t('settings.graphics.label') }}
+            </span>
             <div class="flex flex-col items-start gap-1.5">
               <div
                 v-indicator
@@ -234,7 +287,9 @@ async function revealLog(): Promise<void> {
               }}</span>
             </div>
 
-            <span class="leading-[26px] text-ink-2">{{ t('settings.language.label') }}</span>
+            <span class="flex h-[26px] items-center gap-2 text-ink-2">
+              <Languages class="text-ink-3" />{{ t('settings.language.label') }}
+            </span>
             <div
               v-indicator
               role="group"
@@ -260,6 +315,7 @@ async function revealLog(): Promise<void> {
               class="flex items-center gap-2.5"
             >
               <input v-model="preferences[behaviour]" type="checkbox" class="size-4 accent-ink" />
+              <component :is="BEHAVIOUR_ICONS[behaviour]" class="text-ink-3" />
               <span>{{ t(`settings.behaviour.${behaviour}`) }}</span>
             </label>
           </div>
@@ -268,7 +324,9 @@ async function revealLog(): Promise<void> {
             v-else-if="settings.section === 'diagnostics'"
             class="grid grid-cols-[minmax(7rem,max-content)_minmax(0,1fr)] items-start gap-x-4 gap-y-5"
           >
-            <span class="leading-[26px] text-ink-2">{{ t('settings.diagnostics.level') }}</span>
+            <span class="flex h-[26px] items-center gap-2 text-ink-2">
+              <ScrollText class="text-ink-3" />{{ t('settings.diagnostics.level') }}
+            </span>
             <div
               v-indicator
               role="group"
@@ -302,6 +360,7 @@ async function revealLog(): Promise<void> {
                   :title="logFile"
                   @click="revealLog"
                 >
+                  <FolderOpen :size="14" />
                   {{ t('settings.diagnostics.reveal') }}
                 </button>
               </div>

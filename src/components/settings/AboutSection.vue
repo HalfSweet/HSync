@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Download, RefreshCw } from '@lucide/vue'
 import { computed, onMounted, shallowRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -53,6 +54,7 @@ onMounted(async () => {
           t('about.update.restarting')
         }}</span>
         <button v-else class="btn-ghost h-[26px]" @click="update.install()">
+          <Download :size="14" />
           {{ t('about.update.install') }}
         </button>
       </div>
@@ -62,6 +64,7 @@ onMounted(async () => {
           :disabled="update.state === 'checking'"
           @click="update.check()"
         >
+          <RefreshCw :size="14" />
           {{ t('about.update.check') }}
         </button>
         <span v-if="update.state === 'checking'" role="status" class="rise-in text-ink-3">{{
