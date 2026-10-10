@@ -94,7 +94,7 @@ async function rename(): Promise<void> {
           :aria-checked="choice === wire"
           :aria-label="t(`channelMenu.wires.${choice}`)"
           :title="t(`channelMenu.wires.${choice}`)"
-          class="flex size-5 items-center justify-center rounded-full aria-checked:outline-[1.5px] aria-checked:outline-offset-1 aria-checked:outline-ink aria-checked:outline-solid"
+          class="flex size-5 items-center justify-center rounded-full hover:bg-hover aria-checked:bg-sel"
           :class="`wire-${choice}`"
           @click="channels.setColour(channel.index, choice)"
         >
