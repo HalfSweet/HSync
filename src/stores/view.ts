@@ -13,6 +13,7 @@ import {
 } from '@/timeline/viewport'
 
 import { useCaptureStore } from './capture'
+import { usePreferencesStore } from './preferences'
 
 /** A stretch of time chosen on the ruler or by clicking a decoded block (DESIGN.md §9.6). */
 export interface Segment {
@@ -27,6 +28,7 @@ export interface Segment {
 /** Which samples the timeline shows, and the segment the user marked. */
 export const useViewStore = defineStore('view', () => {
   const capture = useCaptureStore()
+  const preferences = usePreferencesStore()
   const viewport = shallowRef<Viewport>({ start: 0, samplesPerPixel: 1, width: 0 })
   const segment = shallowRef<Segment | null>(null)
   /** Refit to the whole capture when the width changes, until the user zooms or pans. */
@@ -78,12 +80,32 @@ export const useViewStore = defineStore('view', () => {
     segment.value = next
   }
 
-  // A new capture starts fully zoomed out without a segment.
+  /** The shown capture's sample rate, and whether a device took it. */
+  let shown: { samplerate: number; device: boolean } | null = null
+
+  // A new capture drops the segment. One taken with the device after another keeps the zoom and
+  // position in time, as DSView does, so repeated captures stay where the user looks; anything
+  // else starts fully zoomed out.
   watch(
     () => capture.summary?.id,
     () => {
       segment.value = null
-      fit()
+      const previous = shown
+      const device = capture.summary?.source.kind === 'device'
+      shown = capture.summary ? { samplerate: capture.samplerate, device } : null
+      if (autoFit || !device || !previous?.device || previous.samplerate <= 0) {
+        fit()
+        return
+      }
+      const scale = capture.samplerate / previous.samplerate
+      viewport.value = clampViewport(
+        {
+          ...viewport.value,
+          start: viewport.value.start * scale,
+          samplesPerPixel: viewport.value.samplesPerPixel * scale,
+        },
+        capture.extent,
+      )
     },
   )
 
@@ -93,6 +115,30 @@ export const useViewStore = defineStore('view', () => {
     () => {
       if (autoFit) fit()
       else viewport.value = clampViewport(viewport.value, capture.extent)
+    },
+  )
+
+  // DSView's "trigger position in the middle": once a capture finds its trigger, centre it,
+  // unless the whole capture is in view anyway.
+  watch(
+    () => [capture.summary?.id, capture.triggered] as const,
+    ([id, triggered], [previousId, wasTriggered]) => {
+      if (!triggered || (id === previousId && wasTriggered)) return
+      if (preferences.centerTrigger && !autoFit) centerOn(capture.triggerSample)
+    },
+  )
+
+  // DSView's "auto scroll to the latest data": while samples stream in, keep the newest at the
+  // right edge, unless the whole capture is in view anyway.
+  watch(
+    () => [capture.sampleCount, capture.dropped] as const,
+    () => {
+      if (!capture.capturing || autoFit || !preferences.followLatest) return
+      const span = viewport.value.width * viewport.value.samplesPerPixel
+      const start = Math.max(0, capture.sampleCount - span)
+      if (start !== viewport.value.start) {
+        viewport.value = clampViewport({ ...viewport.value, start }, capture.extent)
+      }
     },
   )
 
