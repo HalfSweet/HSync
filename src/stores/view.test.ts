@@ -91,6 +91,20 @@ describe('view store', () => {
     expect(view.viewport.start).toBe(0)
   })
 
+  it('drops the segment and the edge measurement with a new capture', async () => {
+    const capture = useCaptureStore()
+    const view = useViewStore()
+    capture.summary = summary(1, 'device', 1_000_000, 100_000)
+    await nextTick()
+    const edge = { sample: 10, rowKey: 'd0', edge: true }
+    view.setSegment({ from: 10, to: 20 })
+    view.setMeasure({ phase: 'done', from: edge, to: { ...edge, sample: 30 } })
+    capture.summary = summary(2, 'device', 1_000_000, 100_000)
+    await nextTick()
+    expect(view.segment).toBeNull()
+    expect(view.measure).toBeNull()
+  })
+
   it('follows the newest samples while they stream in', async () => {
     const capture = useCaptureStore()
     const view = useViewStore()

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 
+import type { Measure } from '@/timeline/measure'
 import { rulerTicks } from '@/timeline/ticks'
 import {
   clampViewport,
@@ -25,12 +26,13 @@ export interface Segment {
   blockId?: string
 }
 
-/** Which samples the timeline shows, and the segment the user marked. */
+/** Which samples the timeline shows, the segment the user marked and the edges they measure. */
 export const useViewStore = defineStore('view', () => {
   const capture = useCaptureStore()
   const preferences = usePreferencesStore()
   const viewport = shallowRef<Viewport>({ start: 0, samplesPerPixel: 1, width: 0 })
   const segment = shallowRef<Segment | null>(null)
+  const measure = shallowRef<Measure | null>(null)
   /** Refit to the whole capture when the width changes, until the user zooms or pans. */
   let autoFit = true
 
@@ -80,16 +82,21 @@ export const useViewStore = defineStore('view', () => {
     segment.value = next
   }
 
+  function setMeasure(next: Measure | null): void {
+    measure.value = next
+  }
+
   /** The shown capture's sample rate, and whether a device took it. */
   let shown: { samplerate: number; device: boolean } | null = null
 
-  // A new capture drops the segment. One taken with the device after another keeps the zoom and
-  // position in time, as DSView does, so repeated captures stay where the user looks; anything
-  // else starts fully zoomed out.
+  // A new capture drops the segment and the measurement. One taken with the device after another
+  // keeps the zoom and position in time, as DSView does, so repeated captures stay where the user
+  // looks; anything else starts fully zoomed out.
   watch(
     () => capture.summary?.id,
     () => {
       segment.value = null
+      measure.value = null
       const previous = shown
       const device = capture.summary?.source.kind === 'device'
       shown = capture.summary ? { samplerate: capture.samplerate, device } : null
@@ -147,6 +154,7 @@ export const useViewStore = defineStore('view', () => {
     end,
     ruler,
     segment,
+    measure,
     setWidth,
     fit,
     zoom,
@@ -154,5 +162,6 @@ export const useViewStore = defineStore('view', () => {
     showRange,
     centerOn,
     setSegment,
+    setMeasure,
   }
 })
