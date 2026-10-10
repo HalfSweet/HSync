@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { setLucideProps } from '@lucide/vue'
 import { onMounted } from 'vue'
 
 import AppShell from '@/components/AppShell.vue'
@@ -10,6 +11,8 @@ import { useDeviceStore } from '@/stores/device'
 import { useSessionStore } from '@/stores/session'
 import { useUpdateStore } from '@/stores/update'
 
+// Lucide icons draw like the design's own: 16 px, with a 1.5 px stroke at any size.
+setLucideProps({ size: 16, strokeWidth: 1.5, nonScalingStroke: true, class: 'flex-none' })
 useRootPreferences()
 useWindowTitle()
 const capture = useCaptureStore()
