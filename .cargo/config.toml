@@ -1,5 +1,5 @@
 [env]
-# ts-rs writes the TypeScript bindings of IPC types here (see DESIGN.md §3.4).
+# ts-rs writes the TypeScript bindings of IPC types here.
 TS_RS_EXPORT_DIR = { value = "src/ipc/bindings", relative = true }
 # Sample indices stay below 2^53, so plain numbers are safe and avoid BigInt in the UI.
 TS_RS_LARGE_INT = "number"

@@ -1,5 +1,5 @@
 /*
- * Design tokens, see DESIGN.md §9.3.
+ * Design tokens, see DESIGN.md §3.
  *
  * The paper theme is the default. `.theme-night` and `.density-compact` on the root
  * element switch the theme and the density; components only ever read these variables
@@ -82,7 +82,7 @@
   --h-status: 28px;
   --w-trigger-menu: 176px;
 
-  /* Motion (DESIGN.md §9.13): what appears starts fast and settles softly, what leaves goes
+  /* Motion (DESIGN.md §13): what appears starts fast and settles softly, what leaves goes
      quicker and gathers speed, and a selection mark slides over with a slight overshoot. */
   --motion-enter: 200ms;
   --motion-exit: 120ms;

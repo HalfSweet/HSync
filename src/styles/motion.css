@@ -1,5 +1,5 @@
 /*
- * Motion (DESIGN.md §9.13). Vue's <Transition> and <TransitionGroup> put these classes on what
+ * Motion (DESIGN.md §13). Vue's <Transition> and <TransitionGroup> put these classes on what
  * appears and leaves; the timing comes from the motion tokens, which reduced motion zeroes.
  * Whatever is on its way out no longer takes the pointer.
  *
