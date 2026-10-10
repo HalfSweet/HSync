@@ -274,6 +274,12 @@
     "bits": "≈ {count} bits",
     "outsideViewport": "Extends beyond view"
   },
+  "edgeMeasure": {
+    "delta": "Δt {time}",
+    "detail": "{samples} samples · 1/Δt {frequency}",
+    "sameSample": "Both edges on one sample",
+    "hint": "Click another edge to finish, Esc to cancel"
+  },
   "selection": {
     "outsideViewport": "Extends beyond view"
   },

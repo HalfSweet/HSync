@@ -274,6 +274,12 @@
     "bits": "约 {count} 位",
     "outsideViewport": "延伸到视口外"
   },
+  "edgeMeasure": {
+    "delta": "Δt {time}",
+    "detail": "{samples} 个采样点 · 1/Δt {frequency}",
+    "sameSample": "两个边沿在同一采样点",
+    "hint": "单击另一个边沿完成测量，Esc 取消"
+  },
   "selection": {
     "outsideViewport": "延伸到视口外"
   },

@@ -1,6 +1,7 @@
 /**
  * Keyboard navigation of the timeline (DESIGN.md §9.10): `+` and `-` zoom, `←` and `→` pan
- * (further with Shift), `Home` shows the whole capture and `Esc` drops the segment.
+ * (further with Shift), `Home` shows the whole capture and `Esc` drops the edge measurement, or
+ * else the segment.
  */
 
 export type TimelineAction =
@@ -8,7 +9,8 @@ export type TimelineAction =
   /** Pan by a share of the visible width; positive is towards later samples. */
   | { kind: 'pan'; share: number }
   | { kind: 'fit' }
-  | { kind: 'clearSegment' }
+  /** Let go of the edge measurement, or else of the segment. */
+  | { kind: 'clear' }
 
 type Keys = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>
 
@@ -29,7 +31,7 @@ export function timelineAction(event: Keys): TimelineAction | null {
     case 'Home':
       return { kind: 'fit' }
     case 'Escape':
-      return { kind: 'clearSegment' }
+      return { kind: 'clear' }
     default:
       return null
   }

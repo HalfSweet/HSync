@@ -35,16 +35,24 @@ import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/
 import { denseGap } from '@/render/shape'
 import { BUSY_WIDTH, blockWidth, traceBlocks } from '@/timeline/blocks'
 import { keyTakenElsewhere, timelineAction } from '@/timeline/keys'
+import {
+  clickMeasure,
+  leftStart,
+  measureGeometry,
+  nearestEdge,
+  type MeasureEnd,
+} from '@/timeline/measure'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
 import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
 import { sampleToX, viewportEnd, xToSample } from '@/timeline/viewport'
-import { formatFrequency, formatTime } from '@/utils/units'
+import { formatCount, formatFrequency, formatSampled, formatTime } from '@/utils/units'
 
 import ChannelLabel from './ChannelLabel.vue'
 import DecodeLane from './DecodeLane.vue'
 import GroupLabel from './GroupLabel.vue'
+import MeasureOverlay from './MeasureOverlay.vue'
 import PulseReadout from './PulseReadout.vue'
 import TimelineRuler from './TimelineRuler.vue'
 import ChannelMenu from './ChannelMenu.vue'
@@ -55,7 +63,7 @@ const MIN_ROWS_WIDTH = 860
 /** Height of the trigger menu, for keeping it inside the timeline. */
 const MENU_HEIGHT = 236
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const capture = useCaptureStore()
 const channels = useChannelsStore()
 const decode = useDecodeStore()
@@ -413,7 +421,7 @@ useEventListener(document, 'pointerdown', (event) => {
   if (menu.value && !target?.closest('[role="menu"], [aria-haspopup="menu"]')) closeMenu(false)
 })
 
-// Hover read-out and drag to pan on the tracks.
+// Hover read-out, drag to pan and click to measure on the tracks.
 interface Hover {
   row: Row
   pulse: PulseInfo
@@ -421,7 +429,12 @@ interface Hover {
 const hover = shallowRef<Hover | null>(null)
 let hoverTarget: { row: Row; sample: number } | null = null
 let hoverRequest = 0
+/** Where the pointer is over the tracks, in track pixels. */
+const pointer = shallowRef<{ row: Row; x: number } | null>(null)
 let drag: { x: number; moves: PointerSample[] } | null = null
+/** Where the button went down: released within a few pixels, it is a click. */
+let press: { x: number; y: number; row: Row } | null = null
+const CLICK_SLOP = 3
 let fling = 0
 
 function stopFling(): void {
@@ -449,9 +462,12 @@ function startFling(speed: number): void {
 }
 onBeforeUnmount(stopFling)
 
+function trackX(event: PointerEvent): number {
+  return event.clientX - (event.currentTarget as HTMLElement).getBoundingClientRect().left
+}
+
 function trackSample(event: PointerEvent): number {
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect()
-  return Math.floor(xToSample(view.viewport, event.clientX - box.left))
+  return Math.floor(xToSample(view.viewport, trackX(event)))
 }
 
 async function resolveHover(): Promise<void> {
@@ -473,6 +489,7 @@ function onTrackPointerMove(row: Row, event: PointerEvent): void {
     if (drag.moves.length > 32) drag.moves.splice(0, drag.moves.length - 32)
     return
   }
+  pointer.value = { row, x: trackX(event) }
   if (!isTrace(row) || !row.channel) return
   const sample = trackSample(event)
   if (sample < 0 || sample >= capture.sampleCount) {
@@ -490,28 +507,125 @@ function onTrackPointerMove(row: Row, event: PointerEvent): void {
 function onTrackPointerLeave(): void {
   hoverTarget = null
   hover.value = null
+  pointer.value = null
 }
 
-function onTrackPointerDown(event: PointerEvent): void {
+function onTrackPointerDown(row: Row, event: PointerEvent): void {
   stopFling()
   if (event.button !== 0 || (event.target as Element).closest('button')) return
   drag = { x: event.clientX, moves: [{ x: event.clientX, t: event.timeStamp }] }
+  press = { x: event.clientX, y: event.clientY, row }
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   onTrackPointerLeave()
 }
 
 function onTrackPointerUp(event: PointerEvent): void {
-  if (drag && preferences.quickScroll) {
+  const clicked =
+    event.type === 'pointerup' &&
+    press !== null &&
+    Math.abs(event.clientX - press.x) <= CLICK_SLOP &&
+    Math.abs(event.clientY - press.y) <= CLICK_SLOP
+  if (drag && preferences.quickScroll && !clicked) {
     const speed = releaseSpeed(drag.moves, event.timeStamp)
     if (Math.abs(speed) >= FLING_MIN_SPEED) startFling(speed)
   }
   drag = null
+  if (clicked && press) void onTrackClick(press.row, trackX(event))
+  press = null
 }
+
+/** The first edge of a measurement under way on `row`, which the other end skips. */
+function startOn(row: Row): number | null {
+  const measure = view.measure
+  return measure?.phase === 'measuring' && measure.from.rowKey === row.key
+    ? measure.from.sample
+    : null
+}
+
+/** The edge of the row's channel within reach of track x `x`, as a click picks it. */
+async function edgeAt(row: Row, x: number): Promise<MeasureEnd | null> {
+  const summary = capture.summary
+  const viewport = view.viewport
+  const sample = Math.floor(xToSample(viewport, x))
+  if (!isTrace(row) || !row.channel || !summary || sample < 0 || sample >= capture.sampleCount) {
+    return null
+  }
+  const pulse = await (await getBackend()).pulse(summary.id, row.channel.index, sample)
+  const found = pulse && nearestEdge(pulse, x, viewport, startOn(row))
+  return found == null ? null : { sample: found, rowKey: row.key, edge: true }
+}
+
+/** A click on the tracks starts, completes or lets go of the edge measurement (§9.6). */
+async function onTrackClick(row: Row, x: number): Promise<void> {
+  const before = view.measure
+  const edge = await edgeAt(row, x)
+  if (view.measure === before) view.setMeasure(clickMeasure(before, edge))
+}
+
+/** The edge under the pointer within reach, other than a measurement's first. */
+const pointed = computed<MeasureEnd | null>(() => {
+  const at = pointer.value
+  const current = hover.value
+  if (!at || !current || current.row.key !== at.row.key) return null
+  const found = nearestEdge(current.pulse, at.x, view.viewport, startOn(at.row))
+  return found === null ? null : { sample: found, rowKey: at.row.key, edge: true }
+})
+
+/** Rows by key, in the rows' coordinates (below the ruler). */
+const rowBoxes = computed(
+  () =>
+    new Map(
+      layout.value.rows.map((row) => [
+        row.key,
+        { top: metrics.value.ruler + row.top, height: row.height },
+      ]),
+    ),
+)
+const rowBox = (key: string) => rowBoxes.value.get(key) ?? null
+
+/** The measurement as drawn: a finished one, or one whose second end follows the pointer. */
+const measured = computed(() => {
+  const measure = view.measure
+  if (!measure) return null
+  let to: MeasureEnd | null = measure.phase === 'done' ? measure.to : null
+  if (measure.phase === 'measuring' && pointer.value) {
+    const live = pointed.value ?? {
+      sample: Math.round(xToSample(view.viewport, pointer.value.x)),
+      rowKey: pointer.value.row.key,
+      edge: false,
+    }
+    if (leftStart(measure.from, live, view.viewport)) to = live
+  }
+  const geometry = measureGeometry(measure.from, to ?? measure.from, view.viewport, rowBox)
+  const hint = t('edgeMeasure.hint')
+  if (!to) return { geometry, primary: null, secondary: hint, done: false }
+  const samples = Math.abs(to.sample - measure.from.sample)
+  const seconds = capture.samplerate > 0 ? samples / capture.samplerate : 0
+  const primary = t('edgeMeasure.delta', { time: formatSampled(seconds, capture.samplerate) })
+  if (!to.edge) return { geometry, primary, secondary: hint, done: false }
+  const secondary =
+    seconds > 0
+      ? t('edgeMeasure.detail', {
+          samples: formatCount(samples, locale.value),
+          frequency: formatFrequency(1 / seconds, 1),
+        })
+      : t('edgeMeasure.sameSample')
+  return { geometry, primary, secondary, done: measure.phase === 'done' }
+})
+
+/** The edge a click would start a measurement from: a ring on it. */
+const target = computed(() => {
+  const edge = pointed.value
+  const box = edge && rowBox(edge.rowKey)
+  if (!edge || !box || view.measure?.phase === 'measuring') return null
+  return { x: sampleToX(view.viewport, edge.sample), y: box.top + box.height / 2 }
+})
 
 const readout = computed(() => {
   const current = hover.value
   const channel = current?.row.channel
-  if (!current || !channel) return null
+  // While measuring, the measurement's read-out takes its place.
+  if (!current || !channel || view.measure?.phase === 'measuring') return null
   const baud = current.row.group.options.baudrate
   const reading = readPulse(
     current.pulse,
@@ -558,9 +672,10 @@ useEventListener(document, 'keydown', (event: KeyboardEvent) => {
     case 'fit':
       view.fit()
       break
-    case 'clearSegment':
-      if (!view.segment) return
-      view.setSegment(null)
+    case 'clear':
+      if (view.measure) view.setMeasure(null)
+      else if (view.segment) view.setSegment(null)
+      else return
       break
   }
   event.preventDefault()
@@ -649,7 +764,8 @@ function onWheel(event: WheelEvent): void {
           </div>
           <div
             class="relative min-w-0 flex-1"
-            @pointerdown="onTrackPointerDown"
+            :class="view.measure?.phase === 'measuring' && 'cursor-crosshair'"
+            @pointerdown="onTrackPointerDown(row, $event)"
             @pointermove="onTrackPointerMove(row, $event)"
             @pointerup="onTrackPointerUp"
             @pointercancel="onTrackPointerUp"
@@ -730,6 +846,15 @@ function onWheel(event: WheelEvent): void {
             :style="{ left: `${segment.b.x}px` }"
           />
         </div>
+
+        <MeasureOverlay
+          v-if="measured || target"
+          :geometry="measured?.geometry ?? null"
+          :primary="measured?.primary ?? null"
+          :secondary="measured?.secondary ?? null"
+          :done="measured?.done ?? false"
+          :target="target"
+        />
 
         <ChannelMenu
           v-if="channelMenu"

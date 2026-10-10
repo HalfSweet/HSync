@@ -12,7 +12,7 @@ const key = (key: string, more: Partial<KeyboardEvent> = {}) => ({
 })
 
 describe('timeline keys', () => {
-  it('zoom, pan, fit and drop the segment', () => {
+  it('zoom, pan, fit and clear', () => {
     expect(timelineAction(key('+'))).toEqual({ kind: 'zoom', factor: 2 })
     expect(timelineAction(key('='))).toEqual({ kind: 'zoom', factor: 2 })
     expect(timelineAction(key('-'))).toEqual({ kind: 'zoom', factor: 0.5 })
@@ -22,7 +22,7 @@ describe('timeline keys', () => {
       share: 0.5,
     })
     expect(timelineAction(key('Home'))).toEqual({ kind: 'fit' })
-    expect(timelineAction(key('Escape'))).toEqual({ kind: 'clearSegment' })
+    expect(timelineAction(key('Escape'))).toEqual({ kind: 'clear' })
   })
 
   it('leave other keys and shortcuts alone', () => {
