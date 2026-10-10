@@ -53,6 +53,8 @@ cargo test --workspace
 
 完成一项改动前，至少运行与改动相关的：`pnpm lint`、`pnpm typecheck`、`pnpm test`、`cargo clippy`、`cargo test`。
 
+编译 `crates/hsync-srd`（Python 解码器宿主，经 pyo3 嵌入 CPython）需要 PATH 中有带共享库的 Python 3；`src-tauri/resources/decoders/` 是从 DSView 复制的解码器，不要改动其内容。
+
 ## 编码规范
 
 ### 前端
