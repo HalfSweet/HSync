@@ -4,7 +4,9 @@
 use std::sync::Arc;
 
 use hsync_capture::LogicCapture;
-use hsync_decode::{Bus, DecoderView, Presentation, Spec, StreamCounts, StreamMode, StreamRow};
+use hsync_decode::{
+    Bus, DecoderView, Needle, Presentation, Spec, StreamCounts, StreamMode, StreamRow,
+};
 use parking_lot::RwLock;
 use serde::Serialize;
 use serde_json::Value;
@@ -58,6 +60,30 @@ pub struct StreamPage {
     /// With a segment: bytes (or frames) entirely inside it.
     pub inside: Option<u32>,
 }
+
+/// Something the search box found in a decoder's results.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct SearchHit {
+    /// Position of the decoder in the capture's decoder list.
+    pub decoder: u32,
+    pub start: u64,
+    pub end: u64,
+    /// The row of the decoder's data stream that lists it.
+    pub row: Option<u32>,
+}
+
+/// What a search found, in time order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct SearchResult {
+    pub hits: Vec<SearchHit>,
+    /// More were found than `hits` holds.
+    pub truncated: bool,
+}
+
+/// Hits a search returns at most.
+pub const SEARCH_LIMIT: usize = 10_000;
 
 #[derive(Debug)]
 enum State {
@@ -240,6 +266,40 @@ impl DecodeSet {
             counts: presentation.counts(),
             inside: segment.map(|(from, to)| presentation.count_inside(from, to)),
         })
+    }
+
+    /// Values or text matching `query` in every finished decoder, with their rows in `mode`
+    /// listings; `None` for a blank query.
+    pub fn search(&self, query: &str, mode: StreamMode) -> Option<SearchResult> {
+        let needle = Needle::parse(query)?;
+        let finished: Vec<(u32, Arc<Presentation>)> = self
+            .entries
+            .read()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, entry)| match &entry.state {
+                State::Done(presentation) => Some((index as u32, Arc::clone(presentation))),
+                _ => None,
+            })
+            .collect();
+        let mut hits: Vec<SearchHit> = finished
+            .iter()
+            .flat_map(|(index, presentation)| {
+                presentation
+                    .search(&needle, mode)
+                    .into_iter()
+                    .map(|found| SearchHit {
+                        decoder: *index,
+                        start: found.start,
+                        end: found.end,
+                        row: found.row,
+                    })
+            })
+            .collect();
+        hits.sort_by_key(|hit| (hit.start, hit.decoder));
+        let truncated = hits.len() > SEARCH_LIMIT;
+        hits.truncate(SEARCH_LIMIT);
+        Some(SearchResult { hits, truncated })
     }
 
     /// Position of the first row (of all rows in `mode`) ending after `sample`, to scroll the

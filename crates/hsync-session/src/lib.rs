@@ -22,8 +22,12 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use bins::{BINS_FORMAT_VERSION, BinsRequest, encode_bins};
-pub use decoding::{DecodeSet, DecodeState, DecoderLanes, DecoderStatus, StreamPage};
+pub use decoding::{
+    DecodeSet, DecodeState, DecoderLanes, DecoderStatus, SEARCH_LIMIT, SearchHit, SearchResult,
+    StreamPage,
+};
 pub use error::SessionError;
+pub use hsync_capture::{PatternCondition, PatternLevel};
 pub use instrument::{
     CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,
     SessionEvent,

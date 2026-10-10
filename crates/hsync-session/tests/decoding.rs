@@ -180,3 +180,29 @@ fn saves_and_reopens_a_capture_with_its_decoders() {
     assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(4));
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn searches_every_decoder_in_time_order() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let decoding = workspace.decoding(opened.id).expect("decoders");
+    let result = decoding
+        .search("s", hsync_decode::StreamMode::Text)
+        .expect("a query");
+    assert!(!result.truncated);
+    assert!(
+        result
+            .hits
+            .windows(2)
+            .all(|pair| pair[0].start <= pair[1].start)
+    );
+    let decoders: std::collections::BTreeSet<u32> =
+        result.hits.iter().map(|hit| hit.decoder).collect();
+    assert!(decoders.len() >= 2, "{decoders:?}");
+    assert!(
+        decoding
+            .search("  ", hsync_decode::StreamMode::Text)
+            .is_none()
+    );
+}
