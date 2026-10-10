@@ -6,6 +6,7 @@
 mod acquisition;
 mod assemble;
 mod device;
+mod driver;
 pub mod models;
 pub mod protocol;
 
@@ -13,6 +14,7 @@ pub use device::{
     APP_VERSION, AtkLogicDevice, MAX_SOFTWARE_DEPTH, MIN_FPGA_VERSION, MIN_SAMPLES, Settings,
     UPDATE_TOOL,
 };
+pub use driver::AtkLogicDriver;
 
 /// Driver name, also recorded in capture files; devices are listed under it until opened.
 pub const DRIVER_NAME: &str = "ATK-Logic";
