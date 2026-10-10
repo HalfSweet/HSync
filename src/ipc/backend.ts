@@ -12,7 +12,9 @@ import type { Direction } from './bindings/Direction'
 import type { LiveStatus } from './bindings/LiveStatus'
 import type { OptionKey } from './bindings/OptionKey'
 import type { OptionValue } from './bindings/OptionValue'
+import type { PatternCondition } from './bindings/PatternCondition'
 import type { PulseInfo } from './bindings/PulseInfo'
+import type { SearchResult } from './bindings/SearchResult'
 import type { StreamMode } from './bindings/StreamMode'
 import type { StreamPage } from './bindings/StreamPage'
 import { decodeBins, type BinsResult } from './bins'
@@ -56,6 +58,13 @@ export interface Backend {
   ): Promise<number | null>
   /** Median samples between rising edges: the period of the clock a channel carries. */
   clockPeriod(captureId: number, channel: number): Promise<number | null>
+  /** The nearest place from `sample` on (or back from it) where a level pattern holds. */
+  find(
+    captureId: number,
+    conditions: PatternCondition[],
+    sample: number,
+    direction: Direction,
+  ): Promise<number | null>
 
   /** Scans for devices. */
   deviceList(): Promise<DeviceSummary[]>
@@ -87,6 +96,8 @@ export interface Backend {
     mode: StreamMode,
     sample: number,
   ): Promise<number | null>
+  /** Values or text in every decoder's results; `null` for a blank query. */
+  decodeSearch(captureId: number, query: string, mode: StreamMode): Promise<SearchResult | null>
 
   /** Progress and end of captures taken with a device. */
   onLive(handler: (status: LiveStatus) => void): Promise<Unsubscribe>
@@ -129,6 +140,10 @@ class TauriBackend implements Backend {
 
   clockPeriod(captureId: number, channel: number) {
     return invoke<number | null>('capture_clock_period', { captureId, channel })
+  }
+
+  find(captureId: number, conditions: PatternCondition[], sample: number, direction: Direction) {
+    return invoke<number | null>('capture_find', { captureId, conditions, sample, direction })
   }
 
   deviceList() {
@@ -177,6 +192,10 @@ class TauriBackend implements Backend {
 
   decodeRowAt(captureId: number, index: number, mode: StreamMode, sample: number) {
     return invoke<number | null>('decode_row_at', { captureId, index, mode, sample })
+  }
+
+  decodeSearch(captureId: number, query: string, mode: StreamMode) {
+    return invoke<SearchResult | null>('decode_search', { captureId, query, mode })
   }
 
   onLive(handler: (status: LiveStatus) => void) {

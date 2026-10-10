@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import fixture from './fixtures/protocol-demo.json'
-import { mockStatuses, mockStream, mockView } from './mockDecode'
+import { mockSearch, mockStatuses, mockStream, mockView } from './mockDecode'
 
 const DECODERS = fixture.decoders
 
@@ -37,5 +37,20 @@ describe('mock decoders', () => {
     expect(page?.total).toBe(6)
     expect(page?.rows).toHaveLength(4)
     expect(mockStatuses(DECODERS, false).every((status) => status.state === 'done')).toBe(true)
+  })
+
+  it('searches like hsync-decode', () => {
+    // 0x4F is also the O of the SPI text.
+    const register = mockSearch(DECODERS, '4F', 'text')?.hits.filter((hit) => hit.decoder === 0)
+    expect(register).toHaveLength(1)
+    expect(register?.[0]?.row).toEqual(expect.any(Number))
+    expect(mockSearch(DECODERS, '32 BB', 'text')?.hits).toHaveLength(3)
+    const host = mockSearch(DECODERS, 'host', 'hex')?.hits ?? []
+    expect(host.length).toBeGreaterThan(0)
+    expect(host.every((hit) => hit.decoder === 2 && hit.row !== null)).toBe(true)
+    expect(
+      mockSearch(DECODERS, '0x100', 'text')?.hits.filter((hit) => hit.decoder === 3),
+    ).toHaveLength(3)
+    expect(mockSearch(DECODERS, '  ', 'text')).toBeNull()
   })
 })

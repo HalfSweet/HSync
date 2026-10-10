@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { CELL_FIRST_HIGH, CELL_LAST_HIGH, CELL_TRANSITION } from '../bins'
-import { createMockBackend, MockChannel } from './mockBackend'
+import decoded from './fixtures/protocol-decoded.json'
+import { createMockBackend, findPattern, MockChannel } from './mockBackend'
 
 describe('MockChannel', () => {
   // Low for 0..10, high for 10..15, low for 15..20.
@@ -57,5 +58,44 @@ describe('createMockBackend', () => {
     await expect(backend.pulse(first.id, 1, 0)).rejects.toMatchObject({
       code: 'error.session.staleCapture',
     })
+  })
+})
+
+describe('findPattern', () => {
+  // Low for 0..10, high for 10..15, low for 15..20; and high for 0..12, low after.
+  const a = new MockChannel(false, [10, 15], 20)
+  const b = new MockChannel(true, [12], 20)
+
+  it('hits levels at the start of each stretch and every edge', () => {
+    const both = [
+      { channel: a, level: 'high' as const },
+      { channel: b, level: 'high' as const },
+    ]
+    expect(findPattern(both, 20, 0, true)).toBe(10)
+    expect(findPattern(both, 20, 11, true)).toBeNull()
+    expect(findPattern(both, 20, 19, false)).toBe(10)
+    expect(findPattern([{ channel: a, level: 'edge' }], 20, 11, true)).toBe(15)
+    expect(findPattern([{ channel: a, level: 'falling' }], 20, 14, false)).toBeNull()
+  })
+
+  it('finds the I2C start conditions the decoder found', async () => {
+    const backend = createMockBackend()
+    const summary = await backend.openDemo()
+    // SDA (D0) falls while SCL (D1) is high.
+    const conditions = [
+      { channel: 0, level: 'falling' as const },
+      { channel: 1, level: 'high' as const },
+    ]
+    const found = await backend.find(summary.id, conditions, 0, 'next')
+    const lanes = (
+      decoded as {
+        presentation: { lanes: [string, { type: string; condition?: string; start: number }[]][] }
+      }[]
+    )[0]?.presentation.lanes
+    const starts = lanes
+      ?.flatMap(([, items]) => items)
+      .filter((item) => item.type === 'i2cCondition' && item.condition === 'start')
+      .map((item) => item.start)
+    expect(found).toBe(starts?.[0])
   })
 })

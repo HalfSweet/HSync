@@ -3,10 +3,13 @@
  * decode_fixture` exported, queried the way `hsync_decode::Presentation` answers them.
  */
 import type { Bus } from '../bindings/Bus'
+import type { DataLine } from '../bindings/DataLine'
 import type { DecoderLanes } from '../bindings/DecoderLanes'
 import type { DecoderStatus } from '../bindings/DecoderStatus'
 import type { DecoderView } from '../bindings/DecoderView'
 import type { LaneItem } from '../bindings/LaneItem'
+import type { SearchHit } from '../bindings/SearchHit'
+import type { SearchResult } from '../bindings/SearchResult'
 import type { StreamCounts } from '../bindings/StreamCounts'
 import type { StreamMode } from '../bindings/StreamMode'
 import type { StreamPage } from '../bindings/StreamPage'
@@ -22,6 +25,8 @@ interface Snapshot {
   counts: StreamCounts
   addresses: [number, number, number][]
   transferWords: [number, [number, number][]][]
+  sequences: { line: DataLine | null; words: [number, number, number][] }[]
+  ids: [number, number, number][]
 }
 
 interface Entry {
@@ -223,4 +228,102 @@ export function mockRowAt(
   const rows = presentation.rows(mode)
   const at = rows.findIndex((row) => row.end >= sample)
   return at < 0 ? rows.length : at
+}
+
+/** `Needle::parse` of hsync-decode: word sequences to find (text ignoring ASCII case). */
+function parseNeedle(
+  query: string,
+): { sequences: [number[], boolean][]; number: number | null } | null {
+  const trimmed = query.trim()
+  if (!trimmed) return null
+  const sequences: [number[], boolean][] = []
+  let number: number | null = null
+  const tokens = trimmed.split(/\s+/).map((token) => token.replace(/^0x/i, ''))
+  if (tokens.every((digits) => /^[0-9a-f]{1,8}$/i.test(digits))) {
+    const values = tokens.map((digits) => parseInt(digits, 16))
+    const single = tokens.length === 1 ? tokens[0] : undefined
+    if (single !== undefined) {
+      number = values[0] ?? null
+      if (single.length > 2 && single.length % 2 === 0) {
+        sequences.push([single.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? [], false])
+      }
+    }
+    sequences.push([values, false])
+  }
+  const text = [...new TextEncoder().encode(trimmed)].map((byte) =>
+    byte >= 65 && byte <= 90 ? byte + 32 : byte,
+  )
+  if (!sequences.some(([words]) => words.join() === text.join())) sequences.push([text, true])
+  return { sequences, number }
+}
+
+/** The line a row lists words of; `undefined` for rows without words. */
+function rowLine(row: StreamRow): DataLine | null | undefined {
+  switch (row.type) {
+    case 'i2c':
+    case 'uartText':
+    case 'can':
+      return null
+    case 'hex':
+    case 'run':
+      return row.line
+    case 'spiText':
+      return row.line
+    default:
+      return undefined
+  }
+}
+
+/** Values or text in the decoded demo, as `DecodeSet::search` finds them. */
+export function mockSearch(
+  decoders: unknown,
+  query: string,
+  mode: StreamMode,
+): SearchResult | null {
+  const needle = parseNeedle(query)
+  if (!needle) return null
+  const hits: SearchHit[] = []
+  for (const { index, presentation } of match(decoders)) {
+    if (!presentation) continue
+    const rows = presentation.rows(mode)
+    const found: [number, number, DataLine | null][] = []
+    for (const sequence of presentation.snapshot.sequences) {
+      for (const [pattern, fold] of needle.sequences) {
+        const words = sequence.words
+        let at = 0
+        while (pattern.length > 0 && at + pattern.length <= words.length) {
+          const same = pattern.every((wanted, i) => {
+            const word = words[at + i]?.[0] ?? -1
+            return (fold && word >= 65 && word <= 90 ? word + 32 : word) === wanted
+          })
+          if (same) {
+            found.push([
+              words[at]?.[1] ?? 0,
+              words[at + pattern.length - 1]?.[2] ?? 0,
+              sequence.line,
+            ])
+            at += pattern.length
+          } else {
+            at += 1
+          }
+        }
+      }
+    }
+    if (needle.number !== null) {
+      for (const [id, start, end] of presentation.snapshot.ids) {
+        if (id === needle.number) found.push([start, end, null])
+      }
+    }
+    found.sort((a, b) => a[0] - b[0] || String(a[2]).localeCompare(String(b[2])) || b[1] - a[1])
+    found.forEach(([start, end, line], i) => {
+      const previous = found[i - 1]
+      if (previous && previous[0] === start && previous[2] === line) return
+      const row = rows.findIndex(
+        (one) => rowLine(one) === line && one.start <= start && start < one.end,
+      )
+      hits.push({ decoder: index, start, end, row: row < 0 ? null : row })
+    })
+  }
+  hits.sort((a, b) => a.start - b.start || a.decoder - b.decoder)
+  return { hits: hits.slice(0, 10_000), truncated: hits.length > 10_000 }
 }

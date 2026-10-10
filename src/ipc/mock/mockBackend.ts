@@ -13,6 +13,7 @@ import type { Direction } from '../bindings/Direction'
 import type { LiveStatus } from '../bindings/LiveStatus'
 import type { OptionKey } from '../bindings/OptionKey'
 import type { OptionValue } from '../bindings/OptionValue'
+import type { PatternCondition } from '../bindings/PatternCondition'
 import type { PulseInfo } from '../bindings/PulseInfo'
 import {
   CELL_EMPTY,
@@ -22,7 +23,7 @@ import {
   type BinsResult,
 } from '../bins'
 import fixture from './fixtures/protocol-demo.json'
-import { mockRowAt, mockStatuses, mockStream, mockView } from './mockDecode'
+import { mockRowAt, mockSearch, mockStatuses, mockStream, mockView } from './mockDecode'
 import { DEMO_ID, MOCK_DEVICES, MockDemoDevice, uiError } from './mockDevice'
 
 /** How long a simulated capture takes to fill, and in how many steps. */
@@ -95,6 +96,44 @@ export class MockChannel {
     }
     return out
   }
+}
+
+/**
+ * `LogicCapture::find_pattern` of hsync-capture over edge lists: every hit is at sample 0 or at
+ * an edge of one of the channels, so only those samples need checking.
+ */
+export function findPattern(
+  channels: { channel: MockChannel; level: PatternCondition['level'] }[],
+  length: number,
+  from: number,
+  forward: boolean,
+): number | null {
+  if (channels.length === 0 || length === 0) return null
+  const edges = channels.some(({ level }) => level !== 'low' && level !== 'high')
+  const matches = (sample: number) =>
+    channels.every(({ channel, level }) => {
+      const now = channel.sample(sample)
+      const before = sample > 0 ? channel.sample(sample - 1) : null
+      switch (level) {
+        case 'low':
+          return !now
+        case 'high':
+          return now
+        case 'rising':
+          return before === false && now
+        case 'falling':
+          return before === true && !now
+        default:
+          return before !== null && before !== now
+      }
+    })
+  const hit = (sample: number) => matches(sample) && (edges || sample === 0 || !matches(sample - 1))
+  const candidates = [...new Set([0, ...channels.flatMap(({ channel }) => channel.edges)])]
+    .filter((sample) => sample < length)
+    .sort((a, b) => a - b)
+  const start = Math.min(from, length - 1)
+  if (forward) return candidates.find((sample) => sample >= start && hit(sample)) ?? null
+  return candidates.filter((sample) => sample <= start && hit(sample)).at(-1) ?? null
 }
 
 interface Fixture {
@@ -268,6 +307,27 @@ export function createMockBackend(data: Fixture = fixture): Backend {
       if (!summary || summary.id !== captureId)
         return Promise.reject(uiError('error.session.staleCapture'))
       return Promise.resolve(mockRowAt(summary.decoders, index, mode, sample))
+    },
+
+    async decodeSearch(captureId, query, mode) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      const result = mockSearch(summary.decoders, query, mode)
+      // Decoders of a capture still being taken have found nothing yet.
+      const running = live?.status.captureId === captureId
+      return Promise.resolve(result && running ? { hits: [], truncated: false } : result)
+    },
+
+    async find(captureId, conditions: PatternCondition[], sample, direction) {
+      if (!summary || summary.id !== captureId)
+        return Promise.reject(uiError('error.session.staleCapture'))
+      const resolved = conditions.flatMap(({ channel: index, level }) => {
+        const found = channels.get(index)
+        return found ? [{ channel: found, level }] : []
+      })
+      if (resolved.length < conditions.length) return Promise.resolve(null)
+      const forward = direction === 'next'
+      return Promise.resolve(findPattern(resolved, summary.info.sampleCount, sample, forward))
     },
 
     async decodeSet(captureId: number, decoders: unknown[]) {
