@@ -137,16 +137,22 @@ function time(row: StreamRow): string {
   return (capture.timeOf(row.start) * 1000).toFixed(4)
 }
 
-/** Whether a row lies entirely inside the marked segment. */
+/** Whether a row lies entirely inside the marked segment; I²C shades its bytes instead. */
 function inSegment(row: StreamRow): boolean {
-  const segment = stream.segment
-  return !!segment && row.type !== 'gap' && row.start >= segment[0] && row.end <= segment[1]
+  return row.type !== 'gap' && row.type !== 'i2c' && spanInside(row.start, row.end)
 }
 
 interface Cell {
   text: string
   kind: 'plain' | 'muted' | 'nack' | 'escape' | 'note' | 'run'
   prefix?: string
+  /** The cell lies inside the segment (I²C shades byte by byte). */
+  inside?: boolean
+}
+
+function spanInside(start: number, end: number): boolean {
+  const segment = stream.segment
+  return !!segment && start >= segment[0] && end <= segment[1]
 }
 
 function noteText(row: Extract<StreamRow, { type: 'note' }>): string {
@@ -163,23 +169,25 @@ function cellsOf(row: StreamRow): Cell[] {
       return [{ text: noteText(row), kind: 'note' }]
     case 'i2c': {
       const cells: Cell[] = row.tokens.map((token) => {
+        const inside = spanInside(token.start, token.end)
         switch (token.type) {
           case 'start':
-            return { text: 'S', kind: 'muted' }
+            return { text: 'S', kind: 'muted', inside }
           case 'repeatedStart':
-            return { text: 'Sr', kind: 'muted' }
+            return { text: 'Sr', kind: 'muted', inside }
           case 'stop':
-            return { text: 'P', kind: 'muted' }
+            return { text: 'P', kind: 'muted', inside }
           case 'nack':
-            return { text: 'N', kind: 'nack' }
+            return { text: 'N', kind: 'nack', inside }
           case 'address':
             return {
               text: hex(token.address),
               kind: 'plain',
               prefix: t(token.read ? 'decode.i2c.read' : 'decode.i2c.write'),
+              inside,
             }
           default:
-            return { text: hex(token.value), kind: 'plain' }
+            return { text: hex(token.value), kind: 'plain', inside }
         }
       })
       if (row.cut)
@@ -465,7 +473,7 @@ function onGripUp(): void {
                   v-for="(cell, at) in cellsOf(row)"
                   :key="at"
                   class="cell"
-                  :class="`cell-${cell.kind}`"
+                  :class="[`cell-${cell.kind}`, cell.inside && 'bg-sel']"
                   ><i v-if="cell.prefix" class="cell-prefix">{{ cell.prefix }}</i
                   >{{ cell.text }}</span
                 ></span

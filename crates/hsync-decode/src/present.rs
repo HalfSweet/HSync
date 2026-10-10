@@ -208,23 +208,40 @@ pub enum StreamNote {
     CanCut,
 }
 
-/// One element of the I²C bus order column.
+/// One element of the I²C bus order column, with the samples it spans so the stream can shade
+/// the ones inside the segment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 #[ts(export)]
 pub enum I2cToken {
-    Start,
-    RepeatedStart,
-    Stop,
+    Start {
+        start: u64,
+        end: u64,
+    },
+    RepeatedStart {
+        start: u64,
+        end: u64,
+    },
+    Stop {
+        start: u64,
+        end: u64,
+    },
     Address {
+        start: u64,
+        end: u64,
         address: u8,
         read: bool,
     },
     Data {
+        start: u64,
+        end: u64,
         value: u8,
     },
     /// Not acknowledged; acknowledged bytes are not marked.
-    Nack,
+    Nack {
+        start: u64,
+        end: u64,
+    },
 }
 
 /// What the data stream lists for a decoder, one row per item.
@@ -640,7 +657,10 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
         for item in transfer {
             match item.kind {
                 i2c::Kind::Start => {
-                    tokens.push(I2cToken::Start);
+                    tokens.push(I2cToken::Start {
+                        start: item.start,
+                        end: item.end,
+                    });
                     bytes.push(LaneItem::I2cCondition {
                         start: item.start,
                         end: item.end,
@@ -648,7 +668,10 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                     });
                 }
                 i2c::Kind::RepeatedStart => {
-                    tokens.push(I2cToken::RepeatedStart);
+                    tokens.push(I2cToken::RepeatedStart {
+                        start: item.start,
+                        end: item.end,
+                    });
                     bytes.push(LaneItem::I2cCondition {
                         start: item.start,
                         end: item.end,
@@ -656,7 +679,10 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                     });
                 }
                 i2c::Kind::Stop => {
-                    tokens.push(I2cToken::Stop);
+                    tokens.push(I2cToken::Stop {
+                        start: item.start,
+                        end: item.end,
+                    });
                     bytes.push(LaneItem::I2cCondition {
                         start: item.start,
                         end: item.end,
@@ -667,6 +693,8 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                     let read = item.kind == i2c::Kind::AddressRead;
                     target.get_or_insert(shown(item));
                     tokens.push(I2cToken::Address {
+                        start: item.start,
+                        end: item.end,
                         address: shown(item),
                         read,
                     });
@@ -681,7 +709,11 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                     counts.bytes += 1;
                 }
                 i2c::Kind::DataWrite | i2c::Kind::DataRead => {
-                    tokens.push(I2cToken::Data { value: item.byte });
+                    tokens.push(I2cToken::Data {
+                        start: item.start,
+                        end: item.end,
+                        value: item.byte,
+                    });
                     bytes.push(LaneItem::I2cData {
                         start: item.start,
                         end: item.end,
@@ -696,7 +728,10 @@ fn present_i2c(trace: &i2c::Trace, shifted: bool) -> Presentation {
                 i2c::Kind::Ack | i2c::Kind::Nack => {
                     let ack = item.kind == i2c::Kind::Ack;
                     if !ack {
-                        tokens.push(I2cToken::Nack);
+                        tokens.push(I2cToken::Nack {
+                            start: item.start,
+                            end: item.end,
+                        });
                     }
                     bytes.push(LaneItem::I2cAck {
                         start: item.start,
