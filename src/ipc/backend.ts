@@ -19,6 +19,8 @@ export interface Backend {
     sample: number,
     direction: Direction,
   ): Promise<number | null>
+  /** Median samples between rising edges: the period of the clock a channel carries. */
+  clockPeriod(captureId: number, channel: number): Promise<number | null>
 }
 
 class TauriBackend implements Backend {
@@ -44,6 +46,10 @@ class TauriBackend implements Backend {
 
   edge(captureId: number, channel: number, sample: number, direction: Direction) {
     return invoke<number | null>('capture_edge', { captureId, channel, sample, direction })
+  }
+
+  clockPeriod(captureId: number, channel: number) {
+    return invoke<number | null>('capture_clock_period', { captureId, channel })
   }
 }
 

@@ -51,6 +51,15 @@ export class MockChannel {
     return at > 0 ? (this.edges[at - 1] ?? 0) - 1 : null
   }
 
+  /** Median samples between rising edges over the first 65536 of them (see `clock_period`). */
+  clockPeriod(): number | null {
+    const rising = this.edges.filter((edge) => this.sample(edge)).slice(0, 1 << 16)
+    const periods = rising.slice(1).map((edge, i) => edge - (rising[i] ?? 0))
+    if (periods.length === 0) return null
+    periods.sort((a, b) => a - b)
+    return periods[Math.floor(periods.length / 2)] ?? null
+  }
+
   bins(start: number, end: number, bins: number): Uint8Array {
     const out = new Uint8Array(bins).fill(CELL_EMPTY)
     const bound = (i: number) => start + Math.floor(((end - start) * i) / bins)
@@ -161,6 +170,10 @@ export function createMockBackend(data: Fixture = fixture): Backend {
         endIsEdge: next !== null,
         nextEnd: next === null ? null : data.nextChange(next),
       })
+    },
+
+    async clockPeriod(captureId, index) {
+      return Promise.resolve(channel(captureId, index).clockPeriod())
     },
 
     async edge(captureId, index, sample, direction: Direction) {

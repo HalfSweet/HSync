@@ -43,6 +43,13 @@ describe('createMockBackend', () => {
     )
   })
 
+  it('measures clocks like the Rust session', async () => {
+    const backend = createMockBackend()
+    const summary = await backend.openDemo()
+    expect(await backend.clockPeriod(summary.id, 1)).toBe(251)
+    expect(await backend.clockPeriod(summary.id, 12)).toBe(19)
+  })
+
   it('rejects queries for replaced captures', async () => {
     const backend = createMockBackend()
     const first = await backend.openDemo()
