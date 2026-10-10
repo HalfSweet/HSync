@@ -3,6 +3,7 @@ import { useStorage } from '@vueuse/core'
 import { computed, shallowRef, watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
+import type { CapturePreset } from '@/ipc/bindings/CapturePreset'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import type { ExportRequest } from '@/ipc/bindings/ExportRequest'
 import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
@@ -64,6 +65,11 @@ export const useCaptureStore = defineStore('capture', () => {
   const savedKind = shallowRef<FileJob['kind']>('save')
   /** The save or export under way. */
   const job = shallowRef<FileJob | null>(null)
+  /**
+   * Channel names and decoders for a capture that follows no other: those of a session loaded
+   * before any capture. Without, the device's own apply.
+   */
+  const preset = shallowRef<CapturePreset | null>(null)
   let lastRequest: TriggerRequest | null = null
   let repeatTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -231,7 +237,7 @@ export const useCaptureStore = defineStore('capture', () => {
         looping,
         hold,
         keepStopped: preferences.keepStopped,
-        preset: null,
+        preset: preset.value,
       })
       if (hold) {
         pending.value = started
@@ -343,6 +349,7 @@ export const useCaptureStore = defineStore('capture', () => {
     savedPath,
     savedKind,
     job,
+    preset,
     pending,
     running,
     capturing,

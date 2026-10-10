@@ -2,6 +2,8 @@ import { defineStore } from 'pinia'
 import { watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
+import type { CapturePreset } from '@/ipc/bindings/CapturePreset'
+import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import { toUiError, type UiError } from '@/ipc/errors'
 import {
   optionRank,
@@ -38,10 +40,28 @@ function recall(driver: string): Session | null {
   }
 }
 
+/** Channels of a capture with names of their own. */
+function namesOf(summary: CaptureSummary): Record<string, string> {
+  return Object.fromEntries(
+    summary.channels
+      .filter((channel) => channel.name !== String(channel.index))
+      .map((channel) => [channel.index, channel.name]),
+  )
+}
+
+/** The channel names and decoders a session gives a first capture; `null` for none. */
+function presetOf(session: Session): CapturePreset | null {
+  const { channelNames, decoders } = session
+  return decoders === null && Object.keys(channelNames).length === 0
+    ? null
+    : { channelNames: { ...channelNames }, decoders }
+}
+
 /**
  * Sessions: the device settings, channels, triggers and decoders as a whole,
  * saved to and loaded from files, and the device settings remembered per driver between runs,
- * as DSView restores a device's last settings.
+ * as DSView restores a device's last settings. Channel names and decoders belong to captures:
+ * those of a session loaded before any capture wait for the first one.
  */
 export const useSessionStore = defineStore('session', () => {
   const device = useDeviceStore()
@@ -53,6 +73,8 @@ export const useSessionStore = defineStore('session', () => {
   /** Everything a session holds, as things are now. */
   function snapshot(): Session {
     const state = device.state
+    const summary = capture.summary
+    const decoders = summary ? decode.entries : (capture.preset?.decoders ?? [])
     return {
       format: SESSION_FORMAT,
       version: SESSION_VERSION,
@@ -62,11 +84,7 @@ export const useSessionStore = defineStore('session', () => {
         .sort((a, b) => optionRank(a.key) - optionRank(b.key))
         .map((option) => [option.key, option.value]),
       enabledChannels: state ? [...state.enabledChannels] : null,
-      channelNames: Object.fromEntries(
-        (capture.summary?.channels ?? [])
-          .filter((channel) => channel.name !== String(channel.index))
-          .map((channel) => [channel.index, channel.name]),
-      ),
+      channelNames: summary ? namesOf(summary) : { ...capture.preset?.channelNames },
       colours: { ...channels.colours } as Record<string, number>,
       triggers: { ...channels.triggers },
       trigger: {
@@ -76,7 +94,7 @@ export const useSessionStore = defineStore('session', () => {
         stages: trigger.stages,
         serial: trigger.serial,
       },
-      decoders: decode.entries.length > 0 ? [...decode.entries] : null,
+      decoders: decoders.length > 0 ? [...decoders] : null,
       captureMode: capture.mode,
     }
   }
@@ -117,11 +135,21 @@ export const useSessionStore = defineStore('session', () => {
     if (mode && (mode !== 'loop' || capture.canLoop)) capture.mode = mode
   }
 
-  /** Applies all of `session`, its channel names and decoders to the open capture too. */
+  /**
+   * Applies all of `session`, its channel names and decoders to the open capture too, or
+   * without one to the first capture.
+   */
   async function apply(session: Session): Promise<void> {
     await applySettings(session)
     const summary = capture.summary
-    if (!summary) return
+    if (!summary) {
+      // As with a capture, a session without decoders leaves those there are.
+      capture.preset = presetOf({
+        ...session,
+        decoders: session.decoders ?? capture.preset?.decoders ?? null,
+      })
+      return
+    }
     for (const channel of summary.channels) {
       const name = session.channelNames[channel.index] ?? ''
       const current = channel.name === String(channel.index) ? '' : channel.name

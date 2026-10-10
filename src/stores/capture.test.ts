@@ -120,6 +120,18 @@ describe('capture store', () => {
     expect(capture.summary?.id).toBe(summary.id)
   })
 
+  it('asks the backend to start a first capture with the preset', async () => {
+    const capture = useCaptureStore()
+    useDeviceStore().state = deviceState(true)
+    await capture.start(trigger)
+    expect(requests.at(-1)?.preset).toBeNull()
+
+    const preset = { channelNames: { 0: 'SDA' }, decoders: [] }
+    capture.preset = preset
+    await capture.start(trigger)
+    expect(requests.at(-1)?.preset).toEqual(preset)
+  })
+
   it('shows the capture the backend holds after a reload', async () => {
     const capture = useCaptureStore()
     await capture.init()
