@@ -16,6 +16,8 @@ log.workspace = true
 nusb.workspace = true
 
 [dev-dependencies]
+hsync-capture.workspace = true
+log = { workspace = true, features = ["std"] }
 hsync-driver = { workspace = true, features = ["mock"] }
 
 [lints]

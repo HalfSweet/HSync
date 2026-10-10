@@ -1330,6 +1330,7 @@ name = "hsync-dslogic"
 version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
+ "hsync-capture",
  "hsync-core",
  "hsync-driver",
  "log",
