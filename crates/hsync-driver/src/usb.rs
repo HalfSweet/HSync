@@ -93,13 +93,26 @@ pub struct NusbTransport {
 
 impl NusbTransport {
     /// Opens `info` and claims `interface`, detaching kernel drivers where the platform needs it.
-    pub fn open(info: &nusb::DeviceInfo, interface: u8) -> Result<Self, UsbError> {
+    /// A device left unconfigured (macOS does that for vendor-class devices without a driver)
+    /// first gets `configuration`, as libusb does when claiming.
+    pub fn open(
+        info: &nusb::DeviceInfo,
+        configuration: u8,
+        interface: u8,
+    ) -> Result<Self, UsbError> {
         let device = info.open().wait()?;
-        let interface = device.detach_and_claim_interface(interface).wait()?;
-        Ok(Self {
-            interface,
-            bulk_out: Mutex::new(None),
-        })
+        match Self::claim(&device, interface) {
+            // The device's own answer to GET_CONFIGURATION cannot be trusted here: DSLogic
+            // firmware reports configuration 1 while macOS still holds it unconfigured.
+            Err(UsbError::Device(error)) if error.kind() == nusb::ErrorKind::NotFound => {
+                log::debug!(
+                    "interface {interface} not found, selecting configuration {configuration}"
+                );
+                device.set_configuration(configuration).wait()?;
+                Self::claim(&device, interface)
+            }
+            other => other,
+        }
     }
 
     /// Opens `info` and selects `configuration` before claiming `interface`, as firmware
@@ -114,6 +127,10 @@ impl NusbTransport {
             // Some platforms refuse to set the configuration that is already active.
             log::debug!("set_configuration({configuration}) failed: {error}");
         }
+        Self::claim(&device, interface)
+    }
+
+    fn claim(device: &nusb::Device, interface: u8) -> Result<Self, UsbError> {
         let interface = device.detach_and_claim_interface(interface).wait()?;
         Ok(Self {
             interface,

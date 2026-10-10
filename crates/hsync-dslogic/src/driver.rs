@@ -111,7 +111,10 @@ impl Driver for DslogicDriver {
             .ok_or(DriverError::Unsupported)?;
         match candidate.status {
             CandidateStatus::Ready => {
-                let transport = NusbTransport::open(usb, USB_INTERFACE).map_err(open_error)?;
+                log::debug!("opening {} at {}", profile.model, candidate.id);
+                let transport = NusbTransport::open(usb, USB_CONFIGURATION, USB_INTERFACE)
+                    .map_err(open_error)?;
+                log::debug!("claimed interface {USB_INTERFACE} of {}", profile.model);
                 let ctl = Control::new(Arc::new(transport));
                 let device =
                     DslogicDevice::open(ctl, profile, self.firmware.clone(), candidate.id.clone())?;
