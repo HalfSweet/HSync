@@ -62,6 +62,21 @@ async fn open(
     .await
 }
 
+/// Renames a channel of the open capture; an empty name goes back to its number.
+#[tauri::command]
+pub fn capture_rename_channel(
+    state: State<'_, AppState>,
+    capture_id: u64,
+    channel: ChannelIndex,
+    name: String,
+) -> CommandResult<CaptureSummary> {
+    let renamed = state
+        .workspace
+        .lock()
+        .rename_channel(capture_id, channel, &name);
+    renamed.map_err(|error| UiError::from(&error))
+}
+
 /// Starts a capture on the open device. The new capture replaces the open one at once and
 /// fills while [`LIVE_EVENT`]s report its progress.
 #[tauri::command]

@@ -97,6 +97,7 @@ pub fn run() {
             commands::capture::capture_edge,
             commands::capture::capture_edges,
             commands::capture::capture_find,
+            commands::capture::capture_rename_channel,
             commands::capture::capture_clock_period,
             commands::decode::decode_list,
             commands::decode::decode_view,
