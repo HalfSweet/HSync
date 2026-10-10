@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/common/AppIcon.vue'
 import SegmentMeasure from '@/components/status/SegmentMeasure.vue'
 import { useBackendText } from '@/composables/useBackendText'
-import { useCaptureStore } from '@/stores/capture'
+import { useCaptureStore, type FileJob } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
 import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
@@ -20,6 +20,14 @@ const view = useViewStore()
 
 const percent = (part: number, whole: number) =>
   whole > 0 ? Math.min(100, Math.floor((part / whole) * 100)) : 0
+
+/** What the status bar says about each kind of file job. */
+const JOB_TEXT: Record<FileJob['kind'], string> = {
+  save: 'file.saving',
+  export: 'file.exporting',
+  read: 'file.reading',
+  import: 'file.importing',
+}
 
 /** Where the capture is (DESIGN.md §10): waiting, how much arrived, or how it ended. */
 const status = computed(() => {
@@ -99,14 +107,16 @@ const perDivision = computed(() =>
       class="rise-in inline-flex items-center gap-2 tabular-nums"
     >
       <span>{{
-        t(capture.job.kind === 'save' ? 'file.saving' : 'file.exporting', {
-          percent: Math.floor(capture.job.progress * 100),
-        })
+        t(JOB_TEXT[capture.job.kind], { percent: Math.floor(capture.job.progress * 100) })
       }}</span>
       <span class="h-1 w-24 overflow-hidden rounded-full bg-hover" aria-hidden="true">
         <span class="block h-full bg-ink" :style="{ width: `${capture.job.progress * 100}%` }" />
       </span>
-      <button class="btn-ghost h-[22px]" @click="capture.cancelFile()">
+      <button
+        v-if="capture.job.kind !== 'read'"
+        class="btn-ghost h-[22px]"
+        @click="capture.cancelFile()"
+      >
         {{ t('file.cancel') }}
       </button>
     </span>

@@ -17,6 +17,21 @@ export const EXTENSIONS: Record<ExportKind, string> = {
   binary: 'bin',
 }
 
+/** Extensions of the waveform files the import dialog reads. */
+export const WAVEFORM_EXTENSIONS = ['vcd', 'fst', 'ghw'] as const
+
+const WAVEFORM_SUFFIX = /\.(vcd|fst|ghw)$/i
+
+/** Whether `path` names a waveform file to import rather than a capture to open. */
+export function isWaveformPath(path: string): boolean {
+  return WAVEFORM_SUFFIX.test(path)
+}
+
+/** The `.dsl` name to suggest for the capture that came from `path`. */
+export function suggestedDslPath(path: string): string {
+  return withExtension(path.replace(WAVEFORM_SUFFIX, ''), 'dsl')
+}
+
 /** A file name for a new capture: `HSync-20261010-142530.dsl`. */
 export function defaultCaptureName(now = new Date(), extension = 'dsl'): string {
   const pad = (value: number) => String(value).padStart(2, '0')
@@ -37,16 +52,23 @@ export function useFileActions() {
   const filters = () => [{ name: t('file.filter'), extensions: ['dsl'] }]
   const idle = () => !capture.busy && capture.job === null
 
+  /** Opens a `.dsl` capture, or reads a waveform file for the import dialog. */
   async function open(): Promise<void> {
     if (!idle()) return
-    const path = await pickFile(filters())
-    if (path) await capture.openFile(path)
+    const path = await pickFile([
+      { name: t('file.filterAll'), extensions: ['dsl', ...WAVEFORM_EXTENSIONS] },
+      ...filters(),
+      { name: t('file.waveformFilter'), extensions: [...WAVEFORM_EXTENSIONS] },
+    ])
+    if (!path) return
+    if (isWaveformPath(path)) await capture.inspectWaveform(path)
+    else await capture.openFile(path)
   }
 
   async function save(): Promise<void> {
     if (!capture.summary || !idle()) return
     const source = capture.summary.source
-    const suggested = source.kind === 'file' ? source.path : defaultCaptureName()
+    const suggested = source.kind === 'file' ? suggestedDslPath(source.path) : defaultCaptureName()
     const path = await pickSavePath(suggested, filters())
     if (path) await capture.saveFile(withExtension(path, 'dsl'))
   }

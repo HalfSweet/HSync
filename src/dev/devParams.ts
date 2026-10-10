@@ -9,6 +9,7 @@
  *   &autocapture=1       start a capture once a device is open (the app starts without one)
  *   &stream=0            open the data stream on decoder 0  &streamMode=hex
  *   &update=0.3.0        the mock backend announces this release, found at startup
+ *   &import=1            open the import dialog on the waveform the mock backend reads
  */
 import { nextTick, watch } from 'vue'
 
@@ -48,6 +49,7 @@ export function applyDevParams(search = window.location.search): void {
   if (locale) preferences.locale = locale
   // Development builds skip the check at startup; this one finds what the mock announces.
   if (params.has('update')) void useUpdateStore().check(true)
+  if (params.get('import') === '1') void capture.inspectWaveform('sim/counter.vcd')
 
   for (const pair of (params.get('trig') ?? '').split(',').filter(Boolean)) {
     const [index, condition] = pair.split(':')
