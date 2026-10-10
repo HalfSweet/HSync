@@ -1,9 +1,18 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
+
+import AppShell from '@/components/AppShell.vue'
 import { useRootPreferences } from '@/composables/useRootPreferences'
+import { useCaptureStore } from '@/stores/capture'
 
 useRootPreferences()
+const capture = useCaptureStore()
+
+onMounted(() => {
+  void capture.init()
+})
 </script>
 
 <template>
-  <main class="h-full bg-canvas p-4 text-body text-ink-2">{{ $t('app.name') }}</main>
+  <AppShell />
 </template>
