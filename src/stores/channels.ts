@@ -7,6 +7,8 @@ import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 export const useChannelsStore = defineStore('channels', () => {
   /** Trigger condition by channel index; channels without one are absent. */
   const triggers = ref<Record<number, TriggerCondition>>({})
+  /** Wire colour (0..7) the user chose by channel index; others take their number's. */
+  const colours = ref<Partial<Record<number, number>>>({})
   /** Collapsed state by group key; groups not listed use their default. */
   const collapsed = ref<Record<string, boolean>>({})
 
@@ -33,6 +35,14 @@ export const useChannelsStore = defineStore('channels', () => {
     triggers.value = {}
   }
 
+  /** Sets a channel's colour, or with `null` gives it back its number's. */
+  function setColour(index: number, wire: number | null): void {
+    const next = { ...colours.value }
+    if (wire === null) delete next[index]
+    else next[index] = wire
+    colours.value = next
+  }
+
   function isCollapsed(key: string, fallback = false): boolean {
     return collapsed.value[key] ?? fallback
   }
@@ -47,6 +57,8 @@ export const useChannelsStore = defineStore('channels', () => {
     triggerOf,
     setTrigger,
     clearTriggers,
+    colours,
+    setColour,
     collapsed,
     isCollapsed,
     toggleGroup,

@@ -9,6 +9,8 @@ import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
 import { toUiError, type UiError } from '@/ipc/errors'
 import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
+import { useChannelsStore } from './channels'
+
 export type CaptureStatus = 'idle' | 'loading' | 'ready' | 'error'
 /** Single captures, or another one a moment after each completes (DESIGN.md §9.4). */
 export type CaptureMode = 'single' | 'repeat'
@@ -66,7 +68,9 @@ export const useCaptureStore = defineStore('capture', () => {
   )
   /** Channels grouped by decoder, in timeline order. */
   const groups = computed<ChannelGroup[]>(() =>
-    summary.value ? groupChannels(summary.value.channels, summary.value.decoders) : [],
+    summary.value
+      ? groupChannels(summary.value.channels, summary.value.decoders, useChannelsStore().colours)
+      : [],
   )
 
   /** How the timeline labels a channel: its decoder role (SDA, RX…) or its own name. */
@@ -241,6 +245,17 @@ export const useCaptureStore = defineStore('capture', () => {
     })
   }
 
+  /** Renames a channel of the open capture; an empty name gives back its number. */
+  async function renameChannel(index: number, name: string): Promise<void> {
+    const current = summary.value
+    if (!current) return
+    try {
+      replaceSummary(await (await getBackend()).renameChannel(current.id, index, name))
+    } catch (reason) {
+      error.value = toUiError(reason)
+    }
+  }
+
   /** Stops the save or export under way. */
   async function cancelFile(): Promise<void> {
     if (job.value) await (await getBackend()).cancelFile()
@@ -276,6 +291,7 @@ export const useCaptureStore = defineStore('capture', () => {
     exportFile,
     saveText,
     cancelFile,
+    renameChannel,
     start,
     stop,
     replaceSummary,

@@ -90,7 +90,16 @@ function decoderRoles(entry: Record<string, unknown>): [string, number][] {
   )
 }
 
-export function groupChannels(channels: ChannelSummary[], decoders: unknown): ChannelGroup[] {
+/**
+ * Groups `channels` by the decoders that read them. `wires` gives a channel's colour when the
+ * user chose one; otherwise its number picks one.
+ */
+export function groupChannels(
+  channels: ChannelSummary[],
+  decoders: unknown,
+  wires: Partial<Record<number, number>> = {},
+): ChannelGroup[] {
+  const wire = (index: number) => wires[index] ?? wireOf(index)
   const present = new Map(channels.map((channel) => [channel.index, channel]))
   const used = new Set<number>()
   const groups: ChannelGroup[] = []
@@ -118,7 +127,7 @@ export function groupChannels(channels: ChannelSummary[], decoders: unknown): Ch
           index,
           label: ROLE_LABELS[role] ?? role.toUpperCase(),
           numeric: false,
-          wire: wireOf(index),
+          wire: wire(index),
           role,
         }
       }),
@@ -140,7 +149,7 @@ export function groupChannels(channels: ChannelSummary[], decoders: unknown): Ch
           index: channel.index,
           label: numeric ? `D${channel.index}` : channel.name,
           numeric,
-          wire: wireOf(channel.index),
+          wire: wire(channel.index),
         }
       }),
       options: {},
