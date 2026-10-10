@@ -33,8 +33,20 @@ pre-push:
     - name: vitest
       run: pnpm test
 
+    # The Rust checks take minutes; they run only when the pushed commits touch Rust code or
+    # what the crates build from.
     - name: clippy
+      glob: &rust
+        - '*.rs'
+        - '*Cargo.toml'
+        - 'Cargo.lock'
+        - 'rust-toolchain.toml'
+        - 'rustfmt.toml'
+        - '.cargo/**'
+        - 'crates/**'
+        - 'src-tauri/**'
       run: cargo clippy --workspace --all-targets -- -D warnings
 
     - name: cargo-test
+      glob: *rust
       run: cargo test --workspace
