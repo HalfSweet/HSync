@@ -34,6 +34,9 @@ pub enum SessionError {
     /// An export would hold no channel.
     #[error("nothing to export")]
     NothingToExport,
+    /// No waveform file was read for the import.
+    #[error("no waveform to import")]
+    NoWaveform,
 }
 
 impl From<&SessionError> for UiError {
@@ -53,6 +56,7 @@ impl From<&SessionError> for UiError {
             SessionError::Busy => UiError::new("error.session.busy"),
             SessionError::Device(error) => error.clone(),
             SessionError::NothingToExport => UiError::new("error.session.nothingToExport"),
+            SessionError::NoWaveform => UiError::new("error.session.noWaveform"),
         }
     }
 }
