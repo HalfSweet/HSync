@@ -8,8 +8,9 @@ use crossbeam_channel::Receiver;
 use hsync_capture::LogicCapture;
 use hsync_core::{ChannelIndex, TriggerCondition, UiError};
 use hsync_driver::{
-    Acquisition, Candidate, CandidateStatus, CapturePlan, Device, DeviceInfo, DeviceManager,
-    DeviceSummary, DriverError, EndReason, OptionKey, OptionState, OptionValue, Packet,
+    Acquisition, AdvancedTrigger, Candidate, CandidateStatus, CapturePlan, Device, DeviceInfo,
+    DeviceManager, DeviceSummary, DriverError, EndReason, OptionKey, OptionState, OptionValue,
+    Packet, TriggerCaps,
 };
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
@@ -38,6 +39,8 @@ pub struct DeviceState {
     pub enabled_channels: Vec<ChannelIndex>,
     /// Whether a capture is running; settings are locked meanwhile.
     pub capturing: bool,
+    /// What the trigger can do with the current options.
+    pub trigger: TriggerCaps,
 }
 
 /// A capture request from the UI (DESIGN.md §9.7).
@@ -51,6 +54,8 @@ pub struct CaptureRequest {
     pub trigger_position: u8,
     /// Start at once and ignore the trigger.
     pub instant: bool,
+    /// A multi-stage or serial trigger in place of `triggers`.
+    pub advanced: Option<AdvancedTrigger>,
 }
 
 /// Where a running capture is.
@@ -260,6 +265,7 @@ impl Instrument {
             channel_count: open.device.channel_count(),
             enabled_channels: open.device.enabled_channels(),
             capturing: self.is_capturing(),
+            trigger: open.device.trigger_caps(),
         })
     }
 
@@ -321,15 +327,16 @@ impl Instrument {
             .and_then(|option| option.value.as_integer())
             .map_or(0, |limit| (limit + 1023) & !1023);
         let waits = !request.instant
-            && request
-                .triggers
-                .iter()
-                .any(|(_, condition)| *condition != TriggerCondition::None);
+            && (request.advanced.is_some()
+                || request
+                    .triggers
+                    .iter()
+                    .any(|(_, condition)| *condition != TriggerCondition::None));
         let plan = CapturePlan {
             triggers: request.triggers,
             trigger_position: request.trigger_position,
             instant: request.instant,
-            advanced: None,
+            advanced: request.advanced,
         };
         let (sink, packets) = crossbeam_channel::unbounded();
         let acquisition = open

@@ -95,6 +95,7 @@ fn waits_for_the_trigger() {
         triggers: vec![(10, TriggerCondition::Rise)],
         trigger_position: 25,
         instant: false,
+        advanced: None,
     };
     let summary = instrument
         .start(&mut workspace, request, sink)
