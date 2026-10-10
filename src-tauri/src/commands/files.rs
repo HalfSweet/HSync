@@ -81,6 +81,15 @@ pub async fn text_save(app: AppHandle, path: PathBuf, text: String) -> CommandRe
     .await
 }
 
+/// Text files the UI reads (sessions) are small; anything bigger is not one.
+const TEXT_LIMIT: u64 = 16 << 20;
+
+/// Reads a text file the UI asked for, such as a session.
+#[tauri::command]
+pub async fn text_read(app: AppHandle, path: PathBuf) -> CommandResult<String> {
+    blocking(app, move |_| hsync_session::read_text(&path, TEXT_LIMIT)).await
+}
+
 /// Stops the save or export under way; it fails as cancelled and leaves no file.
 #[tauri::command]
 pub fn file_cancel(state: State<'_, AppState>) {
