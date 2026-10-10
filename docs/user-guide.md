@@ -77,9 +77,10 @@ Press `/` to focus the search box in the top bar:
 
 ## Files
 
-- **Open**: **Open file…** in the device menu, or ⌘O / Ctrl+O, reads DSView `.dsl` files (all versions).
+- **Open**: **Open file…** in the device menu, or ⌘O / Ctrl+O, reads DSView `.dsl` files (all versions). Choosing a VCD, FST or GHW waveform instead, as simulators and FPGA logic analyzers (Vivado's ILA, Quartus' Signal Tap, …) export them, opens the **Import waveform** dialog.
+- **Import**: the dialog lists the file's scopes and signals as a tree; tick the signals to import (search them by name), and click **Import**. Every bit becomes a channel, so a vector `data[7:0]` gives `data[0]` to `data[7]`; signals without a logic level (reals, strings) cannot be imported, and unknown (`x`) or high-impedance (`z`) values read as low. The **Sample rate** starts as the file's timestamps give it: the coarsest grid every timestamp falls on, which gives a logic analyzer export its sampling clock back when enough signals change; type the clock the file was sampled at if you know it, such as `25 MHz`. A line under the tree shows the sample rate, the number of samples and channels, and the memory the import needs. An imported capture has no decoders; add them as usual. **Save capture…** writes it as a `.dsl` file.
 - **Save**: **Save capture…** in the export menu (the download icon in the top bar), or ⌘S / Ctrl+S, saves a `.dsl` file that DSView can open, including channel names and decoders.
-- **Export**: **Export…** in the export menu writes `.dsl`, CSV, VCD, sigrok `.sr` or raw binary. You can export just the segment, or only some of the channels. You can cancel a save or an export while it runs.
+- **Export**: **Export…** in the export menu writes `.dsl`, CSV, VCD, FST, sigrok `.sr` or raw binary. You can export just the segment, or only some of the channels. You can cancel a save or an export while it runs.
 - **Sessions**: **Save session…** in the export menu stores the device settings, channels, triggers, decoders and capture mode as `.hsync-session.json`; **Load session…** in the device menu also reads DSView `.dsc` sessions. A session loaded before anything was captured keeps its channel names and decoders for the first capture.
 
 ## Settings
