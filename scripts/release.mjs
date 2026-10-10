@@ -1,7 +1,8 @@
 // @ts-check
 /**
- * Asks for a release (AGENTS.md「发布」): the Release workflow sets the version on a branch from
- * main and opens its pull request; merging that pull request releases it. Needs the GitHub CLI.
+ * Asks for a release (AGENTS.md "Releasing"): the Release workflow sets the version on a branch
+ * from main and opens its pull request; merging that pull request releases it. Needs the GitHub
+ * CLI.
  *
  *   pnpm release <version>
  */

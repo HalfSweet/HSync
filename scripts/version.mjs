@@ -1,6 +1,6 @@
 // @ts-check
 /**
- * Sets the version everywhere it lives (AGENTS.md「发布」): package.json, which tauri.conf.json
+ * Sets the version everywhere it lives (AGENTS.md "Releasing"): package.json, which tauri.conf.json
  * reads, the Cargo workspace, and the workspace's crates in Cargo.lock. The release workflow runs
  * it for the version asked for and refuses one that does not come after the last release.
  *

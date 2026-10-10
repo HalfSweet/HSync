@@ -1,5 +1,5 @@
 # CLAUDE.md
 
-本仓库的需求与协作约定写在 AGENTS.md，Claude Code 通过下面的导入读取它；设计细节见 DESIGN.md。
+This repository's requirements and working conventions live in AGENTS.md, which Claude Code reads through the import below; DESIGN.md is the interface design spec.
 
 @AGENTS.md

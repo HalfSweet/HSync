@@ -1,4 +1,4 @@
-# Releases when the owner asks (AGENTS.md「发布」). Run with a version (`pnpm release 0.2.0`, or
+# Releases when the owner asks (AGENTS.md "Releasing"). Run with a version (`pnpm release 0.2.0`, or
 # "Run workflow" here), it opens a pull request that sets that version. Merging the pull request is
 # the release: the merge commit is tagged, the installers are built into a draft release, and the
 # release is published once all of them are in.

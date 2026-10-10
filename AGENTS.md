@@ -1,122 +1,125 @@
 # AGENTS.md
 
-本文件写给在本仓库工作的 AI agent 与工程师：项目要做什么、硬性要求、怎么构建与验证、怎么提交。动手前先读完本文件；改界面前再读 [DESIGN.md](./DESIGN.md)（界面设计规范）。
+This file is for the AI agents and engineers working in this repository: what the project sets out to do, its hard requirements, how to build and verify, and how to commit. Read all of it before you start; before changing the interface, also read [DESIGN.md](./DESIGN.md) (the interface design spec).
 
-## 项目是什么
+## What the project is
 
-HSync 用现代技术栈重写 [DSView](https://github.com/DreamSourceLab/DSView)，目标是一个通用的逻辑分析仪上位机。**初版（v1）的功能与 DSView 的逻辑分析仪功能保持对齐**：支持全部 DSLogic 型号与 Demo 设备、Buffer/Stream 采集、简单/高级/串行触发、协议解码、测量、搜索、`.dsl` 文件读写与导出。示波器（DSO）与数据采集（DAQ）模式不在 v1 范围内。
+HSync rewrites [DSView](https://github.com/DreamSourceLab/DSView) on a modern stack, aiming to be a general-purpose logic analyzer application. **The first release (v1) matches DSView's logic analyzer features**: every DSLogic model and the Demo device, Buffer and Stream capture, simple, advanced and serial triggers, protocol decoding, measurement, search, reading and writing `.dsl` files, and export. The oscilloscope (DSO) and data acquisition (DAQ) modes are out of scope for v1.
 
-## 硬性要求
+## Hard requirements
 
-这些要求来自项目负责人，任何改动都不能违背：
+These come from the project owner; no change may break them:
 
-1. **技术栈**：桌面壳用 **Tauri 2**；前端用 **Vue 3 + TypeScript + Tailwind CSS v4**；波形渲染以 Canvas2D 为基线，**在可用时启用 WebGPU 加速**，并始终保留回退路径。
-2. **UI/UX 以 DESIGN.md 为准，`.hsync/` 设计稿只作参考**：`.hsync/handoff.md` 与 `.hsync/逻辑分析仪界面改版.html`（本地文件，不入库）是起点，不是必须遵守的规范；界面可以按实际使用体验改进，改动同步写进 DESIGN.md。
-3. **国际化**：首版支持简体中文（默认）与英文。界面上任何用户可见文字都必须走 vue-i18n，禁止硬编码；Rust 侧不输出自然语言，只输出 i18n key 与参数。
-4. **与真实硬件的一切交互都用 Rust 实现**，USB 访问只用 **nusb**。禁止引入 libusb、rusb 或任何 C/C++ 驱动代码的 FFI；DSView 的 C 代码只作为移植参考。
-5. **代码风格**：前端遵循 **ESLint + Prettier**；Rust 遵循 rustfmt + clippy。由 **lefthook** 在提交时保证代码已格式化，提交信息由 commitlint 校验。
-6. **提交**：使用**细粒度的约定式提交**（Conventional Commits）；**PR 与 issue 用英文书写**。见下文「提交规范」。
+1. **Stack**: the desktop shell is **Tauri 2**; the frontend is **Vue 3 + TypeScript + Tailwind CSS v4**; waveforms render with Canvas2D as the baseline, **accelerated with WebGPU where it is available**, and the fallback always stays.
+2. **DESIGN.md governs the UI and UX; the `.hsync/` mockups are only a reference**: `.hsync/handoff.md` and the HTML mockup beside it (local files, not in the repository) are a starting point, not a spec to follow. The interface may improve on them for real-world use; such changes go into DESIGN.md.
+3. **Internationalization**: the first release supports Simplified Chinese (the default) and English. Every user-visible string in the interface goes through vue-i18n, never hard-coded; the Rust side outputs no natural language, only i18n keys and parameters.
+4. **All interaction with real hardware is written in Rust**, and USB is reached only through **nusb**. Never bring in libusb, rusb or FFI to any C/C++ driver code; DSView's C code is only a porting reference.
+5. **Code style**: the frontend follows **ESLint + Prettier**; Rust follows rustfmt + clippy. **lefthook** makes sure code is formatted when it is committed, and commitlint checks the commit messages.
+6. **Commits**: use **fine-grained Conventional Commits**; **write pull requests and issues in English**. See [Commit conventions](#commit-conventions) below.
+7. **Language**: everything in the repository is written in English (documentation, DESIGN.md, this file, code comments, commit messages), except the Chinese README `README.zh-CN.md` and the Chinese interface strings `src/i18n/locales/zh-CN.json`. Chinese that is data stays as it is (such as the values DSView writes into `.dsc` sessions, which `src/session/session.ts` reads). `README.md` and `README.zh-CN.md` say the same thing; change them together.
 
-## 仓库地图
+## Repository map
 
-| 路径             | 内容                                                                        |
-| ---------------- | --------------------------------------------------------------------------- |
-| `DESIGN.md`      | 界面设计规范：布局、设计令牌、各区域的外观与交互、可访问性、动效            |
-| `docs/`          | 用户文档（`user-guide.md`），界面或操作变化时同步更新                       |
-| `src/`           | Vue 前端（组件、Pinia store、渲染器、IPC 封装、i18n）                       |
-| `src-tauri/`     | Tauri 应用 crate（命令、事件、资源：固件与 Demo 数据）                      |
-| `crates/hsync-*` | Rust 库：core、capture、driver、dslogic、demo、decode、srd、fileio、session |
-| `scripts/`       | 布置内置 CPython，按发行方式构建本机安装包                                  |
-| `.github/`       | CI 检查、安装包构建与发布                                                   |
-| `.hsync/`        | 设计稿（本地参考，已在 `.gitignore` 中，不要提交）                          |
-| `../DSView`      | 参考实现（DSView 源码），只读                                               |
+| Path                           | Contents                                                                                                                                                             |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `README.md`, `README.zh-CN.md` | The project page in English and Chinese: features, downloads, getting started, building                                                                              |
+| `DESIGN.md`                    | Interface design spec: layout, design tokens, each area's look and behaviour, accessibility, motion                                                                  |
+| `docs/`                        | The user guide (`user-guide.md`), updated when the interface or how it works changes, and the maintainer guide on CI, releases and packaging (`maintainer-guide.md`) |
+| `assets/`                      | The brand mark and social preview (`brand/`), the README screenshots (`screenshots/`)                                                                                |
+| `src/`                         | Vue frontend (components, Pinia stores, renderers, IPC wrappers, i18n)                                                                                               |
+| `src-tauri/`                   | Tauri app crate (commands, events, resources: firmware and demo data)                                                                                                |
+| `crates/hsync-*`               | Rust libraries: core, capture, driver, dslogic, demo, decode, srd, fileio, session                                                                                   |
+| `scripts/`                     | Lays out the bundled CPython; builds this machine's installers the way releases are built                                                                            |
+| `.github/`                     | CI checks, installer builds and releases                                                                                                                             |
+| `.hsync/`                      | Design mockups (a local reference, listed in `.gitignore`; never commit them)                                                                                        |
+| `../DSView`                    | The reference implementation (DSView's source), read-only                                                                                                            |
 
-Rust crate 之间的依赖方向：`src-tauri → hsync-session → {driver, capture, decode, srd, fileio} → hsync-core`；`hsync-srd`（Python 解码器宿主）建在 `hsync-decode` 之上，`hsync-dslogic` 与 `hsync-demo` 实现 `hsync-driver` 的 trait。库 crate 不得依赖 Tauri。
+Dependencies between the Rust crates run `src-tauri → hsync-session → {driver, capture, decode, srd, fileio} → hsync-core`; `hsync-srd` (the Python decoder host) builds on `hsync-decode`, and `hsync-dslogic` and `hsync-demo` implement the traits of `hsync-driver`. Library crates must not depend on Tauri.
 
-## 常用命令
+## Common commands
 
 ```sh
-pnpm install              # 安装依赖并安装 lefthook 钩子
-pnpm dev                  # 只启动前端（Vite，http://localhost:1420）
-pnpm tauri dev            # 启动桌面应用（前端 + Rust）
-pnpm build                # 类型检查并构建前端
-pnpm tauri build          # 打包桌面应用
-pnpm bundle               # 按发行方式打包本机安装包（内置 CPython）
-pnpm release 0.2.0        # 请求发布：开一个设置该版本的 PR，合并即发布（见「发布」）
+pnpm install              # install dependencies and the lefthook hooks
+pnpm dev                  # the frontend alone (Vite, http://localhost:1420)
+pnpm tauri dev            # the desktop app (frontend + Rust)
+pnpm build                # type-check and build the frontend
+pnpm tauri build          # package the desktop app
+pnpm bundle               # build this machine's installers as releases are built (bundled CPython)
+pnpm release 0.2.0        # ask for a release: opens a pull request setting this version; merging it releases (see Releasing)
 
 pnpm lint                 # ESLint
-pnpm lint:fix             # ESLint 自动修复
-pnpm format               # Prettier 写入
-pnpm format:check         # Prettier 检查
+pnpm lint:fix             # ESLint, applying fixes
+pnpm format               # Prettier, writing
+pnpm format:check         # Prettier, checking
 pnpm typecheck            # vue-tsc
-pnpm test                 # Vitest（单次运行）
+pnpm test                 # Vitest (single run)
 
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-完成一项改动前，至少运行与改动相关的：`pnpm lint`、`pnpm typecheck`、`pnpm test`、`cargo clippy`、`cargo test`。
+Before you finish a change, run at least the ones that concern it: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `cargo clippy`, `cargo test`.
 
-编译 `crates/hsync-srd`（Python 解码器宿主，经 pyo3 嵌入 CPython）需要 PATH 中有带共享库的 Python 3（发行构建与 CI 改用 `scripts/python-runtime.mjs` 布置的内置 CPython）；`src-tauri/resources/decoders/` 是从 DSView 复制的解码器，不要改动其内容。
+Building `crates/hsync-srd` (the Python decoder host, which embeds CPython through pyo3) needs a Python 3 with a shared library on the PATH; release builds and CI use the bundled CPython that `scripts/python-runtime.mjs` lays out instead. `src-tauri/resources/decoders/` holds the decoders copied from DSView; do not change their contents.
 
-## 编码规范
+## Coding conventions
 
-### 前端
+### Frontend
 
-- 组件用 `<script setup lang="ts">`；文件名 PascalCase；composable 以 `use` 开头；Pinia store 命名 `useXxxStore`。
-- 跨端类型从 `src/ipc/bindings/`（ts-rs 生成，勿手改）导入；调用后端只经过 `src/ipc/` 中的封装，组件里不直接 `invoke`。
-- 样式只使用设计令牌：Tailwind 主题类（`bg-canvas`、`text-ink-2`、`border-line` …）或 `var(--token)`。**禁止**写死色值、渐变、投影、发光；红色与琥珀色只用于错误与警告。
-- 数值一律等宽数字（`tabular-nums`）；时间、频率、样本数的格式化统一走 `src/utils/units.ts`。
-- 大列表（数据流、解码结果）必须虚拟化；波形绘制不得逐样本循环，只消费后端返回的 bins/边沿数据。
-- 可访问性：图标按钮必须有 `aria-label`；菜单、标签页、分段控件遵循 DESIGN.md §12。
+- Components use `<script setup lang="ts">`; file names are PascalCase; composables start with `use`; Pinia stores are named `useXxxStore`.
+- Types shared with Rust come from `src/ipc/bindings/` (generated by ts-rs; never edit them by hand). The backend is reached only through the wrappers in `src/ipc/`; components never call `invoke` themselves.
+- Style with design tokens only: Tailwind theme classes (`bg-canvas`, `text-ink-2`, `border-line` …) or `var(--token)`. **Never** hard-code colours, gradients, shadows or glows; red and amber are for errors and warnings alone.
+- Numbers always use tabular figures (`tabular-nums`); times, frequencies and sample counts are formatted through `src/utils/units.ts`.
+- Long lists (the data stream, decoded results) must be virtualized. Waveform drawing never loops over samples; it uses only the bins and edges the backend returns.
+- Accessibility: icon buttons need an `aria-label`; menus, tabs and segmented controls follow DESIGN.md §12.
 
 ### Rust
 
-- edition 2024，stable 工具链；`clippy -D warnings` 必须通过；公共 API 写 rustdoc。
-- 错误用 `thiserror` 定义的枚举，跨 IPC 的错误转换成 `{ code, params }`，`code` 是 i18n key。
-- 硬件、存储、解码 crate 原则上不写 `unsafe`；确需时附 `// SAFETY:` 说明。
-- 长任务（采集、解码、保存、导出）必须可取消，并通过事件或 `Channel` 上报进度。
+- Edition 2024 on the stable toolchain; `clippy -D warnings` must pass; public APIs get rustdoc.
+- Errors are enums defined with `thiserror`; errors that cross IPC turn into `{ code, params }`, where `code` is an i18n key.
+- The hardware, storage and decoding crates stay free of `unsafe` as a rule; where it is really needed, explain it in a `// SAFETY:` comment.
+- Long tasks (capture, decoding, saving, export) must be cancellable and report progress through events or a `Channel`.
 
-### 硬件层（`hsync-dslogic`、`hsync-driver`）
+### Hardware layer (`hsync-dslogic`, `hsync-driver`)
 
-- 行为与 DSView **逐字节一致**：命令、寄存器、`DSL_setting` 布局、触发编码、传输规模、停止流程都以 `libsigrok4DSL/hardware/DSL/` 为准。偏离时在代码注释中写明原因。
-- 控制传输一律经已认领的 `nusb::Interface` 发出（Windows 不支持 `Device::control_*`）。
-- DSView 中没有上限的轮询，移植时一律加超时。
-- 每个协议细节都要有单元测试：结构体字节布局用 golden 数据断言；命令序列用 `UsbTransport` 模拟器回放。
-- 不要修改 `src-tauri/resources/firmware/` 下的固件与位流（MIT 许可，来自 `DSView/res`，保留其许可文件）。
+- Behave **byte for byte like DSView**: commands, registers, the `DSL_setting` layout, trigger encoding, transfer sizes and the stop sequence all follow `libsigrok4DSL/hardware/DSL/`. Where the port departs from it, say why in a code comment.
+- Control transfers always go through a claimed `nusb::Interface` (Windows does not support `Device::control_*`).
+- Polling that has no limit in DSView gets a timeout in the port.
+- Every protocol detail has unit tests: struct byte layouts are asserted against golden data; command sequences are replayed with the `UsbTransport` mock.
+- Do not modify the firmware and bitstreams in `src-tauri/resources/firmware/` (MIT licensed, from `DSView/res`; keep their license file).
 
-### 设计实现
+### Implementing the design
 
-- 尺寸、颜色、字号、间距、交互规则与文案以 DESIGN.md 为准；设计稿只作参考，好用比像设计稿更重要。设计稿标注为「示意」的部分（写死的数据、只有外观的按钮）要接上真实功能。
-- 设计稿里被否决过的方案默认不做：右侧详情面板、底部栏小波形、高电平渐变阴影、并排塞进一页的数据流、顶栏里的全局触发设置；确有需要时先问负责人。
+- Sizes, colours, type sizes, spacing, interaction rules and copy follow DESIGN.md. The mockups are only a reference: being pleasant to use matters more than looking like them. Whatever the mockups mark as illustrative (hard-coded data, buttons that only look the part) gets wired to real functionality.
+- Ideas the mockups rejected stay out by default: a details panel on the right, small waveforms in the bottom bar, gradient shading under high levels, data streams squeezed side by side onto one page, global trigger settings in the top bar. If one is really needed, ask the owner first.
 
-### 国际化
+### Internationalization
 
-- 文案放在 `src/i18n/locales/zh-CN.json` 与 `en-US.json`，两份文件的 key 必须完全一致（有测试校验）。
-- key 用分层命名 `<区域>.<元素>[.<状态>]`；句子用带参数的消息，不在代码里拼接字符串。
-- 设计稿中的中文文案可作参考，不清楚的可以改；英文需与中文同义且长度相近。
+- Strings live in `src/i18n/locales/zh-CN.json` and `en-US.json`; both files must have exactly the same keys (a test checks this).
+- Keys are hierarchical, `<area>.<element>[.<state>]`; sentences are messages with parameters, never strings concatenated in code.
+- The Chinese copy in the mockups is a reference and may change where it is unclear; the English must mean the same as the Chinese and be about as long.
 
-## 提交规范
+## Commit conventions
 
-格式：
+Format:
 
 ```
 <type>(<scope>): <subject>
 
-<body：为什么改、改了什么、有什么影响>
+<body: why it changed, what changed and what it affects>
 ```
 
-- **type**：`feat`、`fix`、`perf`、`refactor`、`style`、`test`、`docs`、`build`、`ci`、`chore`、`revert`。
-- **scope**（可省略，填写时必须在白名单内，见 `commitlint.config.js`）：`core`、`capture`、`driver`、`dslogic`、`demo`、`decode`、`fileio`、`session`、`app`、`ui`、`timeline`、`stream`、`trigger`、`render`、`i18n`、`theme`、`ipc`、`store`、`deps`、`tooling`、`repo`。
-- **subject**：英文祈使句，小写开头，不加句号，≤ 72 字符。
-- **细粒度**：一个提交只做一件可以独立回滚、独立审查的事。配置、脚手架、功能、测试、文档分开提交；格式化改动与逻辑改动不要混在一起；新增依赖与使用它的代码可以放在同一个提交里。
-- 破坏性变更在 type 后加 `!`，并在正文写 `BREAKING CHANGE:`。
-- 发布说明与 `CHANGELOG.md` 由 git-cliff 从提交信息生成，`feat`、`fix`、`perf` 的 subject 会原样进入其中，要让用户读得懂。不要手改版本号与 `CHANGELOG.md`，见「发布」。
-- 不要用 `--no-verify` 跳过钩子；钩子失败就修好再提交。不要提交 `.hsync/`、构建产物与本地配置。
-- **PR 与 issue** 的标题、正文和评论一律用英文书写；引用界面上的中文文案时可以原样保留。
+- **type**: `feat`, `fix`, `perf`, `refactor`, `style`, `test`, `docs`, `build`, `ci`, `chore`, `revert`.
+- **scope** (optional; when given it must be on the allow-list in `commitlint.config.js`): `core`, `capture`, `driver`, `dslogic`, `demo`, `decode`, `fileio`, `session`, `app`, `ui`, `timeline`, `stream`, `trigger`, `render`, `i18n`, `theme`, `ipc`, `store`, `deps`, `tooling`, `repo`.
+- **subject**: an imperative sentence in English, starting in lower case, without a full stop, at most 72 characters.
+- **Fine-grained**: a commit does one thing that can be reverted and reviewed on its own. Configuration, scaffolding, features, tests and documentation go in separate commits; formatting and logic changes are never mixed; a new dependency may share a commit with the code that uses it.
+- Breaking changes add `!` after the type and a `BREAKING CHANGE:` line in the body.
+- git-cliff writes the release notes and `CHANGELOG.md` from the commit messages: the subjects of `feat`, `fix` and `perf` commits go into them as they are, so write them for users to read. Never edit the version or `CHANGELOG.md` by hand; see [Releasing](#releasing).
+- Never skip the hooks with `--no-verify`; when a hook fails, fix the cause and commit again. Do not commit `.hsync/`, build output or local configuration.
+- **Pull requests and issues**: titles, descriptions and comments are always written in English; Chinese interface copy may be quoted as it is.
 
-示例：
+Examples:
 
 ```
 feat(dslogic): encode simple trigger into fpga setting stages
@@ -125,29 +128,31 @@ build(tooling): run prettier on staged files in lefthook pre-commit
 docs: describe the data stream's tabs in DESIGN.md
 ```
 
-## 发布
+## Releasing
 
-何时发布、用什么版本号由负责人决定，版本号不必按提交类型推算：
+The owner decides when to release and which version it is; the version does not have to follow from the commit types:
 
-1. 运行 `pnpm release <版本>`（需要 GitHub CLI），或在 GitHub Actions 的 Release 工作流点 Run workflow 填版本。工作流从 main 拉出 `release/v<版本>`，用 `scripts/version.mjs` 把 `package.json`、Cargo 工作区与 `Cargo.lock` 的版本改成它，用 git-cliff（`cliff.toml`）重写 `CHANGELOG.md`，并把上一个 tag 以来的 `feat`、`fix`、`perf`、`revert` 提交作为说明预览，开 PR `chore: release <版本>`。
-2. 合并这个 PR 就是发布：合并后的提交打上 `v<版本>`，按 tag 实际包含的提交重新生成说明并建草稿 Release，Bundle 工作流在 macOS、Windows、Linux 构建安装包（内置 CPython 与更新签名）放进草稿，全部成功后发布。
-3. PR 开着时 main 继续前进也没关系，发布的是合并那一刻的 main；想在 PR 里看到新的说明预览，用同一个版本再运行一次。带 `-` 的版本（如 `0.2.0-beta.1`）发布为预发布，应用内更新不会推送它。
+1. Run `pnpm release <version>` (it needs the GitHub CLI), or click **Run workflow** on the Release workflow in GitHub Actions and enter the version. The workflow branches `release/v<version>` off main, sets the version of `package.json`, the Cargo workspace and `Cargo.lock` with `scripts/version.mjs`, rewrites `CHANGELOG.md` with git-cliff (`cliff.toml`), takes the `feat`, `fix`, `perf` and `revert` commits since the last tag as a preview of the notes, and opens the pull request `chore: release <version>`.
+2. Merging that pull request is the release: the merge commit is tagged `v<version>`, the notes are written again from the commits the tag really contains, and a draft release is created; the Bundle workflow builds the installers on macOS, Windows and Linux (with the bundled CPython and update signatures) into the draft, which is published once all of them succeed.
+3. Main may move on while the pull request is open; the release is main as it is at the merge. To see fresh notes in the pull request, run the release again with the same version. A version with a `-` (such as `0.2.0-beta.1`) is published as a pre-release, which the in-app updater does not offer.
 
-`pnpm bundle` 在本机按同样方式构建安装包（不含更新签名）；Bundle 工作流也可以手动运行，安装包留作那次运行的 artifact。发布需要仓库 secrets `TAURI_SIGNING_PRIVATE_KEY` 与 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（更新签名，公钥在 `src-tauri/tauri.conf.json`）。
+`pnpm bundle` builds the installers on this machine the same way (without update signatures); the Bundle workflow can also be run by hand, keeping the installers as artifacts of that run. Releasing needs the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the update signatures; the public key is in `src-tauri/tauri.conf.json`). The [maintainer guide](docs/maintainer-guide.md) goes into the details: CI, failed releases, the installers, the bundled Python, updates and signing.
 
-## 测试要求
+## Testing
 
-- 新功能附带测试；修 bug 先写能复现的测试。
-- Rust：存储与查询用 proptest 对照朴素实现；`.dsl` 读写做往返测试，并用 DSView 自带的 demo 文件做兼容性测试。
-- 前端：纯逻辑（单位格式化、触发汇总、数据流行生成、视口换算）用 Vitest 单测；交互组件用 Vue Test Utils。
-- 涉及界面外观的改动，用 Demo 设备打开 `protocol.demo`，在 1440×900 下检查亮色/暗色 × 舒适/紧凑四种组合，可以参照设计稿画板。
+- New features come with tests; a bug fix starts with a test that reproduces the bug.
+- Rust: storage and queries are checked with proptest against a naive implementation; `.dsl` reading and writing get round-trip tests, and compatibility tests with the demo files that ship with DSView.
+- Frontend: pure logic (unit formatting, trigger summaries, data stream rows, viewport maths) gets Vitest unit tests; interactive components are tested with Vue Test Utils.
+- For changes to how the interface looks, open the Demo device's protocol demo and check the four combinations of Light/Dark × Comfortable/Compact at 1440×900; the mockup artboards help as a comparison.
 
-## 许可
+## License
 
-本项目为 GPL-3.0-or-later（移植自 GPL 的 libsigrok4DSL 与 libsigrokdecode）。从 DSView 移植的文件在文件头注明来源；固件与 FPGA 位流为 MIT 许可，字体为 SIL OFL 1.1。
+The project is GPL-3.0-or-later (ported from the GPL-licensed libsigrok4DSL and libsigrokdecode). Files ported from DSView name their source in the file header; the firmware and FPGA bitstreams are MIT licensed, and the fonts SIL OFL 1.1.
 
-## 工作方式
+## Way of working
 
-- 改界面前先读 DESIGN.md 的相关章节；界面或交互的改动同步更新 DESIGN.md。
-- 产品层面拿不准的问题（交互、文案、范围）向项目负责人提问，不要猜。
-- 不要修改 `../DSView`；它只是参考实现。
+- Before changing the interface, read the relevant sections of DESIGN.md; changes to the interface or its interaction update DESIGN.md as well.
+- Changes users notice update `docs/user-guide.md`. When they change what the READMEs show (features, supported devices, downloads, screenshots), update `README.md` and `README.zh-CN.md` together.
+- The README screenshots in `assets/screenshots/<locale>/` come from `pnpm dev` in Chrome, put into state with the URL parameters of `src/dev/devParams.ts`: 1440×900 for `hero-*`, 1240×770 for the rest, at a device pixel ratio of 2, framed as a macOS window and saved as lossless WebP. When the interface they show changes, retake them in both languages. `assets/brand/social-preview.png` is the repository's social preview on GitHub.
+- Ask the project owner about product questions you are unsure of (interaction, copy, scope) rather than guessing.
+- Do not modify `../DSView`; it is only the reference implementation.

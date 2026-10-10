@@ -1,5 +1,5 @@
 /**
- * Conventional Commits, see AGENTS.md "提交规范".
+ * Conventional Commits, see AGENTS.md "Commit conventions".
  *
  * @type {import('@commitlint/types').UserConfig}
  */
