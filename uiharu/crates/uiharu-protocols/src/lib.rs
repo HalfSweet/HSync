@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod i2s;
+pub mod modbus_rtu;
 pub mod parallel;
 pub mod pwm;
 pub mod spi;
