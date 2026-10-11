@@ -24,6 +24,8 @@ pub struct Harness {
     pub nor: Option<Exposed<NorEvent>>,
     pub spi_items: Vec<Item<SpiEvent>>,
     pub nor_items: Vec<Item<NorEvent>>,
+    /// How many items `push` reads from each output when the source is full.
+    pub drain_on_full: usize,
 }
 
 impl Harness {
@@ -64,15 +66,21 @@ impl Harness {
             nor,
             spi_items: Vec::new(),
             nor_items: Vec::new(),
+            drain_on_full: usize::MAX,
         })
     }
 
     /// Runs the pipeline and collects everything the outputs hold.
     pub fn collect(&mut self) {
+        self.collect_some(usize::MAX);
+    }
+
+    /// Runs the pipeline and collects up to `count` items from each output.
+    pub fn collect_some(&mut self, count: usize) {
         self.pipeline.run();
-        collect_into(&self.spi, &mut self.spi_items);
+        collect_some_into(&self.spi, &mut self.spi_items, count);
         if let Some(nor) = &self.nor {
-            collect_into(nor, &mut self.nor_items);
+            collect_some_into(nor, &mut self.nor_items, count);
         }
     }
 
@@ -84,7 +92,7 @@ impl Harness {
                 Ok(()) => return,
                 Err(PushError::Full(back)) => {
                     item = back;
-                    self.collect();
+                    self.collect_some(self.drain_on_full.max(1));
                 }
                 Err(other) => panic!("push failed: {other}"),
             }
@@ -129,12 +137,18 @@ impl Harness {
         }
     }
 
-    /// Ends the samples where they stand and runs to the end.
+    /// Ends the samples where they stand and runs to the end, reading the outputs as the
+    /// nodes fill them.
     pub fn end(&mut self) {
         let at = self.pipeline.next_tick(self.source).expect("the source");
         self.push(SignalItem::End(at));
-        self.collect();
-        assert!(self.pipeline.is_finished(), "{:?}", self.pipeline.run());
+        for _ in 0..1_000_000 {
+            self.collect();
+            if self.pipeline.is_finished() {
+                return;
+            }
+        }
+        panic!("the pipeline did not finish: {:?}", self.pipeline.run());
     }
 
     /// Feeds the whole block in one piece and ends.
@@ -153,11 +167,20 @@ impl Harness {
 }
 
 pub fn collect_into<T: Clone>(exposed: &Exposed<T>, into: &mut Vec<Item<T>>) {
-    while let Some(item) = exposed.next() {
+    collect_some_into(exposed, into, usize::MAX);
+}
+
+/// Reads up to `count` items; the end of the stream is read once and ends the reading.
+pub fn collect_some_into<T: Clone>(exposed: &Exposed<T>, into: &mut Vec<Item<T>>, count: usize) {
+    for _ in 0..count {
+        if into.last().is_some_and(Item::is_end) {
+            return;
+        }
+        let Some(item) = exposed.next() else { return };
         let end = item.is_end();
         into.push(item);
         if end {
-            break;
+            return;
         }
     }
 }
