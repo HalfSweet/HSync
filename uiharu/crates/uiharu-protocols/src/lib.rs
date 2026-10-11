@@ -10,6 +10,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod am230x;
 pub mod apa102;
 pub mod avr_isp;
 pub mod can;
