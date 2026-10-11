@@ -2,6 +2,9 @@
 
 //! The 93Cxx EEPROM decoder over Microwire, on synthesized waveforms.
 
+use std::collections::BTreeMap;
+
+use proptest::prelude::*;
 use uiharu_core::testing::{Harness, Tap, assert_block_invariant, without_progress};
 use uiharu_core::{GraphConfig, GraphError, InputRef, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::eeprom93xx::synth::{eral, erase, ewds, ewen, read, wral, write};
@@ -734,5 +737,202 @@ fn progress_never_passes_an_operation_not_yet_reported() {
             }
         }
         assert!(seen > Tick::ZERO, "blocks of {sizes:?} announce progress");
+    }
+}
+
+// Random traffic.
+
+/// One transaction of a random scenario.
+#[derive(Clone, Debug)]
+enum Step {
+    Read {
+        address: u16,
+        words: Vec<u16>,
+    },
+    Write {
+        address: u16,
+        value: u16,
+    },
+    Erase {
+        address: u16,
+    },
+    Ewen,
+    Ewds,
+    Eral,
+    Wral {
+        value: u16,
+    },
+    /// A read released after `keep` of its bits.
+    Short {
+        keep: usize,
+    },
+    /// Chip select asserted with DO at `level`, and `clocks` pulses with DI low.
+    Poll {
+        level: bool,
+        clocks: u8,
+    },
+    /// Pulses with DI low before a read's start bit.
+    Leading {
+        clocks: u8,
+    },
+}
+
+fn step() -> impl Strategy<Value = Step> {
+    prop_oneof![
+        4 => (any::<u16>(), prop::collection::vec(any::<u16>(), 0..5))
+            .prop_map(|(address, words)| Step::Read { address, words }),
+        3 => (any::<u16>(), any::<u16>()).prop_map(|(address, value)| Step::Write { address, value }),
+        2 => any::<u16>().prop_map(|address| Step::Erase { address }),
+        1 => Just(Step::Ewen),
+        1 => Just(Step::Ewds),
+        1 => Just(Step::Eral),
+        1 => any::<u16>().prop_map(|value| Step::Wral { value }),
+        2 => (0usize..40).prop_map(|keep| Step::Short { keep }),
+        3 => (any::<bool>(), 0u8..4).prop_map(|(level, clocks)| Step::Poll { level, clocks }),
+        1 => (1u8..5).prop_map(|clocks| Step::Leading { clocks }),
+    ]
+}
+
+fn eeprom_config(wide: u8) -> Eeprom93xxConfig {
+    let (address_bits, organisation) = match wide % 4 {
+        0 => (6, Organisation::X16),
+        1 => (7, Organisation::X8),
+        2 => (8, Organisation::X16),
+        _ => (11, Organisation::X8),
+    };
+    Eeprom93xxConfig {
+        address_bits,
+        organisation,
+    }
+}
+
+fn traffic(steps: &[Step], config: &Eeprom93xxConfig, half: u64) -> LogicBlock {
+    let mask = |value: u16, bits: u8| value & (u16::MAX >> (16 - bits));
+    let address = |value: u16| mask(value, config.address_bits);
+    let word = |value: u16| mask(value, config.organisation.data_bits());
+    let mut waveform =
+        MicrowireWaveform::new(MicrowireConfig::default(), CHANNELS, half, Tick::ZERO);
+    waveform.idle(5);
+    for (n, step) in steps.iter().enumerate() {
+        match step {
+            Step::Read { address: at, words } => {
+                let words: Vec<u16> = words.iter().map(|value| word(*value)).collect();
+                waveform.transaction(read(config, address(*at), &words));
+            }
+            Step::Write { address: at, value } => {
+                waveform.transaction(write(config, address(*at), word(*value)));
+            }
+            Step::Erase { address: at } => waveform.transaction(erase(config, address(*at))),
+            Step::Ewen => waveform.transaction(ewen(config)),
+            Step::Ewds => waveform.transaction(ewds(config)),
+            Step::Eral => waveform.transaction(eral(config)),
+            Step::Wral { value } => waveform.transaction(wral(config, word(*value))),
+            Step::Short { keep } => {
+                let bits = read(config, 0x15, &[0x1234]);
+                waveform.transaction(bits.into_iter().take(*keep));
+            }
+            Step::Poll { level, clocks } => {
+                waveform.select();
+                waveform.set_out(*level);
+                waveform.idle(3);
+                waveform.bits((0..*clocks).map(|_| (false, *level)));
+                waveform.release();
+            }
+            Step::Leading { clocks } => {
+                waveform.select();
+                waveform.bits((0..*clocks).map(|_| (false, true)));
+                waveform.bits(read(config, 0x2a, &[0xabcd]));
+                waveform.release();
+            }
+        }
+        waveform.idle(2 + (n as u64 % 4) * 3);
+    }
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(48),
+        ..ProptestConfig::default()
+    })]
+
+    /// Blocks of any size, a reader that pauses at random and tiny queues and budgets yield the
+    /// events of one uninterrupted run in both layers; every operation that begins ends once,
+    /// and the streams settle in order without progress passing what they still report.
+    #[test]
+    fn random_traffic_decodes_alike_however_it_comes(
+        steps in prop::collection::vec(step(), 1..10),
+        wide in any::<u8>(),
+        half in 2u64..6,
+        sizes in prop::collection::vec(1u64..300, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        cut in prop::option::of(0.05f64..1.0),
+        gap in prop::option::of((0.05f64..0.95, 1u64..200)),
+    ) {
+        let config = eeprom_config(wide);
+        let whole = traffic(&steps, &config, half);
+        let block = match cut {
+            Some(cut) => {
+                let end = Tick(((whole.len() as f64) * cut) as u64).max(Tick(1));
+                whole.slice(TickRange::new(Tick::ZERO, end)).expect("a slice")
+            }
+            None => whole,
+        };
+        let gaps: Vec<TickRange> = gap
+            .and_then(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                let end = (start + len).min(block.len());
+                (start < end).then(|| TickRange::new(Tick(start), Tick(end)))
+            })
+            .into_iter()
+            .collect();
+        let bus = MicrowireConfig::default();
+        let (reference, bus_reference) = {
+            let (mut harness, tap) = build(bus, config, GraphConfig::default()).expect("builds");
+            harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+            harness.end();
+            (harness.without_progress(), tap.without_progress())
+        };
+
+        let (mut harness, tap) =
+            build(bus, config, GraphConfig { queue_capacity, budget }).expect("builds");
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference.clone());
+        prop_assert_eq!(tap.without_progress(), bus_reference);
+        let stats = harness.pipeline().stats();
+        prop_assert!(stats.within_capacity(), "{stats:?}");
+
+        let mut seen = Tick::ZERO;
+        for item in &harness.items {
+            match item {
+                Item::Progress(tick) => seen = seen.max(*tick),
+                Item::Event(event) => prop_assert!(event.span.start >= seen, "{event:?} after {seen}"),
+                Item::Gap(_) | Item::End(_) => {}
+            }
+        }
+        let mut settled = Tick::ZERO;
+        let mut open = BTreeMap::new();
+        for event in reference.iter().filter_map(Item::event) {
+            prop_assert!(event.settled >= settled, "{event:?} settled before {settled}");
+            settled = event.settled;
+            match &event.payload {
+                Eeprom93xxEvent::Instruction { op, .. } => {
+                    prop_assert!(open.insert(*op, ()).is_none(), "{op:?} began twice");
+                }
+                Eeprom93xxEvent::Data { op, values, .. } => {
+                    prop_assert!(open.contains_key(op));
+                    prop_assert!(!values.is_empty() && values.len() <= DATA_BATCH);
+                }
+                Eeprom93xxEvent::End { op, .. } => {
+                    prop_assert!(open.remove(op).is_some(), "{op:?} ended twice");
+                }
+                Eeprom93xxEvent::Status { .. } => {}
+            }
+        }
+        prop_assert!(open.is_empty(), "operations left open: {open:?}");
     }
 }
