@@ -2,10 +2,11 @@
 
 //! The AVR serial programming decoder on synthesized SPI waveforms.
 
+use proptest::prelude::*;
 use serde::Serialize;
 use uiharu_core::testing::{Harness, assert_block_invariant};
 use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
-use uiharu_protocols::avr_isp::{AvrIsp, IspEvent, synth};
+use uiharu_protocols::avr_isp::{AvrIsp, Command, IspEvent, synth};
 use uiharu_protocols::spi::synth::SpiWaveform;
 use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig};
 
@@ -680,5 +681,153 @@ fn progress_never_passes_an_instruction_under_way() {
             }
             assert!(progress > 10, "blocks of {sizes:?}");
         }
+    }
+}
+
+/// The first bytes of the instruction set, and some others.
+const FIRST_BYTES: [u8; 18] = [
+    0xac, 0xf0, 0x4d, 0x48, 0x40, 0xc1, 0x28, 0x20, 0xa0, 0x58, 0x30, 0x50, 0x38, 0x4c, 0xc0, 0xc2,
+    0x00, 0xff,
+];
+
+/// One instruction's words: of the set or not, read or written, Programming Enable in sync or
+/// not.
+fn any_instruction() -> impl Strategy<Value = Vec<(u8, u8)>> {
+    prop_oneof![
+        4 => (
+            prop::sample::select(FIRST_BYTES.to_vec()),
+            prop::sample::select(vec![0x00u8, 0x08, 0x53, 0x80, 0xe0, 0xa0, 0xa8, 0xa4, 0x01]),
+            any::<u8>(),
+            any::<u8>(),
+        )
+            .prop_map(|(first, second, third, fourth)| {
+                synth::instruction([first, second, third, fourth])
+            }),
+        2 => (
+            prop::sample::select(FIRST_BYTES.to_vec()),
+            prop::sample::select(vec![0x00u8, 0x08, 0x01]),
+            any::<u8>(),
+            any::<u8>(),
+        )
+            .prop_map(|(first, second, third, answer)| synth::read([first, second, third], answer)),
+        1 => any::<bool>().prop_map(synth::programming_enable),
+        1 => any::<[u8; 4]>().prop_map(synth::instruction),
+    ]
+}
+
+/// A session of a random scenario: the words of its instructions, and how many words of one
+/// more it sends before RESET goes high, 0 to 3.
+type Session = (Vec<Vec<(u8, u8)>>, usize);
+
+fn any_session() -> impl Strategy<Value = Session> {
+    (
+        prop::collection::vec(any_instruction(), 0..8),
+        prop_oneof![3 => Just(0usize), 1 => 1usize..4],
+    )
+}
+
+fn sessions_waveform(spi: SpiConfig, sessions: &[Session]) -> LogicBlock {
+    let mut waveform = waveform(spi);
+    for (n, (instructions, cut)) in sessions.iter().enumerate() {
+        waveform.select();
+        for instruction in instructions {
+            waveform.words(instruction.iter().copied());
+        }
+        waveform.words(synth::programming_enable(true).into_iter().take(*cut));
+        waveform.release();
+        waveform.idle(4 + n as u64 % 3 * 5);
+    }
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        // The default is enough for every run; PROPTEST_CASES raises it for a stress run.
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(64),
+        ..ProptestConfig::default()
+    })]
+
+    /// Random sessions, with RESET or without, cut into blocks of any size, read with random
+    /// pauses through tiny queues and budgets, with or without a gap, yield the events of one
+    /// uninterrupted run.
+    #[test]
+    fn blocks_pauses_queues_and_budgets_do_not_change_the_events(
+        sessions in prop::collection::vec(any_session(), 1..5),
+        with_reset in any::<bool>(),
+        sizes in prop::collection::vec(1u64..400, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        gap in prop::option::of((0.05f64..0.95, 1u64..300)),
+    ) {
+        let spi = if with_reset { framed() } else { unframed() };
+        let block = sessions_waveform(spi.clone(), &sessions);
+        let gaps: Vec<TickRange> = gap
+            .map(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                TickRange::new(Tick(start), Tick((start + len).min(block.len())))
+            })
+            .into_iter()
+            .filter(|gap| !gap.is_empty())
+            .collect();
+        let reference = {
+            let mut harness = harness(spi.clone());
+            harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+            harness.end();
+            harness.without_progress()
+        };
+        let mut harness = build(spi, GraphConfig { queue_capacity, budget }).expect("builds");
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference);
+    }
+
+    /// With RESET, every session is decoded instruction by instruction from its first word:
+    /// each four bytes as the instruction they name or as unknown, and the words before
+    /// RESET's release as an incomplete instruction.
+    #[test]
+    fn sessions_are_grouped_from_their_first_word(
+        sessions in prop::collection::vec(any_session(), 1..5),
+    ) {
+        let block = sessions_waveform(framed(), &sessions);
+        let mut expected = Vec::new();
+        let mut op = 0;
+        for (tx, (instructions, cut)) in sessions.iter().enumerate() {
+            let tx = tx + 1;
+            for instruction in instructions {
+                let bytes: Vec<u8> = instruction.iter().map(|(mosi, _)| *mosi).collect();
+                match Command::from_bytes(bytes[0], bytes[1]) {
+                    Some(command) => {
+                        op += 1;
+                        expected.push(format!(
+                            "instruction op{op} tx{tx} {} {}",
+                            name(&command),
+                            hex(&bytes)
+                        ));
+                    }
+                    None => expected.push(format!("unknown tx{tx} {}", hex(&bytes))),
+                }
+            }
+            if *cut > 0 {
+                let sent = &[0xac, 0x53, 0x00][..*cut];
+                expected.push(format!("error tx{tx} incomplete {}", hex(sent)));
+            }
+        }
+        let mut harness = harness(framed());
+        harness.run_all(&block);
+        // The instruction's fields aside: its name, its number and its bytes.
+        let lines: Vec<String> = lines(&harness)
+            .into_iter()
+            .map(|line| {
+                let words: Vec<&str> = line.split(' ').collect();
+                if line.starts_with("instruction ") {
+                    format!("{} {} {} {} {}", words[0], words[1], words[2], words[3], words[8])
+                } else {
+                    line
+                }
+            })
+            .collect();
+        prop_assert_eq!(lines, expected);
     }
 }
