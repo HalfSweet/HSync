@@ -18,7 +18,7 @@ use uiharu_core::{
     Exposed, Graph, Pipeline, PushError, SignalItem, SourceId, SourceSpec, Tick, TimeBase,
 };
 use uiharu_protocols::spi::{Spi, SpiEvent};
-use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
+use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
 
 use crate::workload::Source;
 
@@ -207,13 +207,13 @@ fn uiharu(source: &Source, chunk: u64, nor: bool) -> Result<Measured, String> {
         .expose("spi", Spi::events(spi))
         .map_err(|error| error.to_string())?;
     let nor_out = if nor {
-        let node = graph.add(SpiNorRead24::new());
+        let node = graph.add(SpiNor::new(SpiNorConfig::default()));
         graph
-            .connect(Spi::events(spi), SpiNorRead24::input(node))
+            .connect(Spi::events(spi), SpiNor::input(node))
             .map_err(|error| error.to_string())?;
         Some(
             graph
-                .expose("nor", SpiNorRead24::operations(node))
+                .expose("nor", SpiNor::events(node))
                 .map_err(|error| error.to_string())?,
         )
     } else {
