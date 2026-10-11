@@ -60,7 +60,7 @@ Progress never passes the rising edge of a bit whose falling edge is still to co
 
 ### Reading the stream
 
-Decoders built on Microwire read it through `MicrowireBus` and `Transaction`, shaped like the SPI cursor: `next()` waits for the next transaction, gap, progress or end; a transaction offers `bit()` (the next bit with both lines; the transaction's end is an error here), `bit_or_end()` (the only read that returns the normal end, with DO's level there), `drain()` and `consumed()` for the provenance of what was read. A read that cannot return a bit says why: `Incomplete` (chip select released), `Truncated` (an aborted end), `Gap`, `EndOfInput`, or `NoDataOut` for a DO level asked of a bus without DO. Start bits, opcodes, address and word widths are the consuming decoder's own code.
+Decoders built on Microwire read it through `MicrowireBus` and `Transaction`, shaped like the SPI cursor: `next()` waits for the next transaction, gap, progress or end; a transaction offers `bit()` (the next bit with both lines; the transaction's end is an error here), `bit_or_end()` (the only read that returns the normal end, with DO's level there), `drain()` and `consumed()` for the provenance of what was read. On a bus without chip select, `next()` opens transaction `0` at its first bit, and the transaction ends only at a gap or the end of the stream; `finish()` does not drain it, and calling `next()` again hands it back at the next bit. A read that cannot return a bit says why: `Incomplete` (chip select released), `Truncated` (an aborted end), `Gap`, `EndOfInput`, or `NoDataOut` for a DO level asked of a bus without DO. Start bits, opcodes, address and word widths are the consuming decoder's own code.
 
 ## 93Cxx EEPROM: `eeprom93xx.events` v1
 
