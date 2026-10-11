@@ -1,0 +1,19 @@
+[package]
+name = "uiharu-core"
+description = "uiharu, a streaming protocol decode engine: sample blocks, signal cursors, event streams with backpressure, typed decode graphs and the executor that runs decoders as resumable state machines"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+authors.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
