@@ -3,10 +3,14 @@
 //! Reading an SPI event stream transaction by transaction, for decoders built on SPI.
 //!
 //! [`SpiBus::next`] waits for a transaction to begin and hands out a [`Transaction`], a cursor
-//! over its words: reads consume one word each and can wait across blocks, keeping what they
-//! have read so far. A transaction's normal end is only ever returned by
-//! [`Transaction::read_u8_or_end`]; everywhere else, running out of words is an error that
-//! tells the decoder how the transaction ended, so that it can close what it had opened.
+//! over its words: each read consumes one word, with both lines' values, and can wait across
+//! blocks. A transaction's normal end is only ever returned by [`Transaction::word_or_end`];
+//! everywhere else, running out of words is an error that tells the decoder how the
+//! transaction ended, so that it can close what it had opened.
+//!
+//! The cursor offers the contract's primitives and nothing more: the next word, the normal
+//! end, draining. What a protocol makes of the words — which line it reads, byte order, field
+//! widths — is that protocol's own code, so that the contract stays as general as the bus.
 
 use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
 
@@ -42,11 +46,32 @@ pub enum ReadError {
     MissingLine(Line),
 }
 
-/// What [`Transaction::read_u8_or_end`] finds.
+/// One word as both lines carried it; a line that is not connected reads `None`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Word {
+    /// The word on MOSI.
+    pub mosi: Option<u8>,
+    /// The word on MISO.
+    pub miso: Option<u8>,
+}
+
+impl Word {
+    /// The word on MOSI; an error when the line is not connected.
+    pub fn mosi(&self) -> Result<u8, ReadError> {
+        self.mosi.ok_or(ReadError::MissingLine(Line::Mosi))
+    }
+
+    /// The word on MISO; an error when the line is not connected.
+    pub fn miso(&self) -> Result<u8, ReadError> {
+        self.miso.ok_or(ReadError::MissingLine(Line::Miso))
+    }
+}
+
+/// What [`Transaction::word_or_end`] finds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Read {
-    /// The next word's value on the line.
-    Value(u8),
+    /// The next word.
+    Word(Word),
     /// Chip select was released: the transaction ended normally.
     End,
 }
@@ -145,7 +170,7 @@ impl SpiBus {
     }
 
     /// Takes the next word of the current transaction, or reports how it ended instead.
-    async fn next_word(&mut self) -> Result<Option<(Option<u8>, Option<u8>)>, ReadError> {
+    async fn next_word(&mut self) -> Result<Option<Word>, ReadError> {
         let Some(current) = self.current.as_ref() else {
             return Err(ReadError::Incomplete);
         };
@@ -176,7 +201,7 @@ impl SpiBus {
             let result = match peeked {
                 Peeked::Word(event, mosi, miso) => {
                     self.consume(&event);
-                    return Ok(Some((mosi, miso)));
+                    return Ok(Some(Word { mosi, miso }));
                 }
                 Peeked::End(event, EndReason::CsRelease) => {
                     self.consume(&event);
@@ -258,44 +283,19 @@ impl Transaction<'_> {
         self.bus.consumed()
     }
 
-    /// Reads the next word's value on `line`; the transaction's end, normal or not, is an
-    /// error here.
-    pub async fn read_u8(&mut self, line: Line) -> Result<u8, ReadError> {
-        match self.read_u8_or_end(line).await? {
-            Read::Value(value) => Ok(value),
+    /// Reads the next word; the transaction's end, normal or not, is an error here. A
+    /// sequence of reads that pauses between them keeps what it has read; nothing is read
+    /// twice.
+    pub async fn word(&mut self) -> Result<Word, ReadError> {
+        match self.word_or_end().await? {
+            Read::Word(word) => Ok(word),
             Read::End => Err(ReadError::Incomplete),
         }
     }
 
-    /// Reads the next word's value on `line`, or finds the transaction's normal end.
-    pub async fn read_u8_or_end(&mut self, line: Line) -> Result<Read, ReadError> {
-        match self.bus.next_word().await? {
-            None => Ok(Read::End),
-            Some((mosi, miso)) => {
-                let value = match line {
-                    Line::Mosi => mosi,
-                    Line::Miso => miso,
-                };
-                value.map(Read::Value).ok_or(ReadError::MissingLine(line))
-            }
-        }
-    }
-
-    /// Reads the next three words on `line` as a big-endian 24-bit value. Pausing between
-    /// the words keeps what was read; nothing is read twice.
-    pub async fn read_u24_be(&mut self, line: Line) -> Result<u32, ReadError> {
-        let mut value = 0u32;
-        for _ in 0..3 {
-            value = (value << 8) | u32::from(self.read_u8(line).await?);
-        }
-        Ok(value)
-    }
-
-    /// Reads the next two words on `line` as a big-endian 16-bit value.
-    pub async fn read_u16_be(&mut self, line: Line) -> Result<u16, ReadError> {
-        let high = self.read_u8(line).await?;
-        let low = self.read_u8(line).await?;
-        Ok(u16::from_be_bytes([high, low]))
+    /// Reads the next word, or finds the transaction's normal end.
+    pub async fn word_or_end(&mut self) -> Result<Read, ReadError> {
+        Ok(self.bus.next_word().await?.map_or(Read::End, Read::Word))
     }
 
     /// Consumes the rest of the transaction up to its normal end.

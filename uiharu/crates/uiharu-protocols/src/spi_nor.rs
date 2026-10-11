@@ -15,7 +15,7 @@ use uiharu_core::{
     OutputSpec, Props, Provenance, Requires, SchemaId, Tick, TickRange,
 };
 
-use crate::spi::{Line, Next, Read, ReadError, SpiBus, SpiEvent, Transaction, TxId};
+use crate::spi::{Next, Read, ReadError, SpiBus, SpiEvent, Transaction, TxId};
 
 /// The schema of SPI NOR event streams.
 pub const NOR_EVENTS: SchemaId = SchemaId::new("nor.events", 1);
@@ -249,22 +249,27 @@ impl NorOut {
 
 /// The body of the decoder: one `READ` transaction.
 async fn transaction(mut tx: Transaction<'_>, out: &mut NorOut) -> Result<(), ReadError> {
-    let opcode = tx.read_u8(Line::Mosi).await?;
+    let opcode = tx.word().await?.mosi()?;
     if opcode != READ {
         out.unknown_command(tx.id(), opcode, tx.consumed()).await;
         tx.drain().await?;
         return Ok(());
     }
     let op = out.begin(Command::Read, tx.id(), tx.consumed()).await;
-    let address = tx.read_u24_be(Line::Mosi).await?;
+    // Three address bytes, most significant first. Pausing between them keeps the bytes
+    // read so far: they are the state of this future.
+    let mut address = 0u32;
+    for _ in 0..3 {
+        address = (address << 8) | u32::from(tx.word().await?.mosi()?);
+    }
     out.address(op, address, tx.consumed()).await;
     loop {
-        match tx.read_u8_or_end(Line::Miso).await? {
+        match tx.word_or_end().await? {
             Read::End => {
                 out.end(op, NorEnd::Complete, tx.consumed()).await;
                 return Ok(());
             }
-            Read::Value(byte) => out.data(op, byte, tx.consumed()).await,
+            Read::Word(word) => out.data(op, word.miso()?, tx.consumed()).await,
         }
     }
 }
