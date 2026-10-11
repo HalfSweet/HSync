@@ -56,8 +56,13 @@ pub(crate) struct AcquisitionParams {
     pub looping: bool,
 }
 
-/// Transfers in flight (`num_transfers`).
+/// Blocks in flight (`num_transfers`).
 const TRANSFERS: usize = 4;
+/// Longest transfer HSync asks for: PXView's default `BUFSIZE`. PXView reads a whole block (up
+/// to 4 MiB) at once and turns WinUSB's RAW_IO off, so WinUSB splits it; nusb reads with RAW_IO
+/// on, where WinUSB fails any read longer than the pipe's maximum transfer size. The same blocks
+/// stay in flight, in more transfers.
+const MAX_TRANSFER: usize = 1 << 20;
 /// PWM0 at PXView's 1 kHz with half duty, switched off: the registers PXView writes before
 /// every capture (`PWM_CLK / pwm0_freq`).
 const PWM0_PERIOD: u32 = 125_000_000 / 1000;
@@ -73,6 +78,14 @@ const CONTROL_PULSE: u32 = 1 << 4;
 const POLL_INTERVAL: Duration = Duration::from_millis(20);
 /// How long cancelled transfers may take to come back.
 const CANCEL_GRACE: Duration = Duration::from_secs(2);
+
+/// The size and number of the transfers that keep [`TRANSFERS`] blocks of `block` bytes in
+/// flight. Blocks are whole 4 KiB pages, so every transfer is whole packets.
+fn transfer_plan(block: u32) -> (usize, usize) {
+    let block = block as usize;
+    let size = block.min(MAX_TRANSFER);
+    (size, (TRANSFERS * block).div_ceil(size))
+}
 
 /// Writes the registers of a capture, in `start_transfers()`'s order. PXView goes on when a
 /// write fails; HSync gives up, as the capture would run on half its settings.
@@ -139,13 +152,14 @@ pub(crate) fn start(
         params.speed,
     );
     set_up(&ctl, &params, block)?;
+    let (transfer, count) = transfer_plan(block);
     let mut bulk = ctl.usb().bulk_in(EP_DATA)?;
-    for _ in 0..TRANSFERS {
-        bulk.submit(block as usize);
+    for _ in 0..count {
+        bulk.submit(transfer);
     }
     log::info!(
-        "capturing {} samples at {} Hz on {} channels in {} mode ({TRANSFERS} transfers of \
-         {block} bytes)",
+        "capturing {} samples at {} Hz on {} channels in {} mode (blocks of {block} bytes, \
+         {count} transfers of {transfer} bytes)",
         params.limit_samples,
         params.samplerate,
         params.channels.len(),
@@ -162,7 +176,7 @@ pub(crate) fn start(
         ctl,
         params,
         bulk,
-        block,
+        transfer,
         sink,
         stop: Arc::clone(&stop),
     };
@@ -207,7 +221,8 @@ struct Worker {
     ctl: Control,
     params: AcquisitionParams,
     bulk: Box<dyn BulkIn>,
-    block: u32,
+    /// Bytes each transfer asks for.
+    transfer: usize,
     sink: Sender<Packet>,
     stop: Arc<AtomicBool>,
 }
@@ -230,11 +245,12 @@ impl Worker {
     }
 
     fn receive(&mut self) -> EndReason {
-        let channels = self.params.channels.len() as u64;
-        let limit = self.params.limit_samples;
+        // The capture in bytes, 8 a channel for every 64 samples; counted in bytes, as a
+        // transfer need not end on a group of samples.
+        let limit = self.params.limit_samples * self.params.channels.len() as u64 / 8;
         // A loop capture in Stream mode keeps no count and runs until stopped.
         let counting = !(self.params.stream && self.params.looping);
-        let mut samples: u64 = 0;
+        let mut received: u64 = 0;
         let mut triggered = false;
         let mut last_poll = Instant::now();
         loop {
@@ -243,25 +259,17 @@ impl Worker {
             }
             match self.bulk.next(POLL_INTERVAL) {
                 Some(Ok(mut data)) => {
-                    if !data.is_empty() {
-                        if counting {
-                            let arrived = data.len() as u64 * 8 / channels;
-                            if samples + arrived >= limit {
-                                let rest = (limit - samples) * channels / 8;
-                                data.truncate(usize::try_from(rest).unwrap_or(usize::MAX));
-                                samples = limit;
-                            } else {
-                                samples += arrived;
-                            }
-                        }
-                        if !data.is_empty() {
-                            self.send(Packet::Logic(data));
-                        }
+                    if counting {
+                        data.truncate(usize::try_from(limit - received).unwrap_or(usize::MAX));
+                        received += data.len() as u64;
                     }
-                    if counting && samples >= limit {
+                    if !data.is_empty() {
+                        self.send(Packet::Logic(data));
+                    }
+                    if counting && received >= limit {
                         return EndReason::Completed;
                     }
-                    self.bulk.submit(self.block as usize);
+                    self.bulk.submit(self.transfer);
                 }
                 Some(Err(error)) => {
                     return if error.is_disconnected() {
@@ -273,7 +281,7 @@ impl Worker {
                 None => {}
             }
             // `receive_data2()`: until samples are counted, read where the capture is.
-            if samples == 0 && !triggered && last_poll.elapsed() >= POLL_INTERVAL {
+            if received == 0 && !triggered && last_poll.elapsed() >= POLL_INTERVAL {
                 last_poll = Instant::now();
                 triggered = self.poll_trigger();
             }
@@ -304,5 +312,21 @@ impl Worker {
             });
         }
         state.triggered
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reads_blocks_in_transfers_of_at_most_1_mib() {
+        // USB 3.0 at the fastest rates: 4 MiB blocks.
+        assert_eq!(transfer_plan(4 << 20), (1 << 20, 16));
+        // 13 channels: blocks of no whole number of MiB.
+        assert_eq!(transfer_plan(4_153_344), (1 << 20, 16));
+        // USB 2.0, and slow rates: blocks under 1 MiB are read whole.
+        assert_eq!(transfer_plan(602_112), (602_112, 4));
+        assert_eq!(transfer_plan(4096), (4096, 4));
     }
 }

@@ -22,6 +22,10 @@ use hsync_pxlogic::protocol::{
 };
 use nusb::transfer::TransferError;
 
+/// Longest read the simulated device takes: on Windows, nusb reads with RAW_IO on, where WinUSB
+/// fails reads beyond the pipe's maximum transfer size.
+const LARGEST_TRANSFER: usize = 1 << 20;
+
 /// Profiles by where the scan finds them: the current ids over USB 3.0 and 2.0.
 const SCANNED_SUPER: usize = 2;
 const SCANNED_HIGH: usize = 3;
@@ -246,6 +250,9 @@ impl MockDevice for FakePx {
 
     fn bulk_in(&mut self, endpoint: u8, length: usize) -> Option<Result<Vec<u8>, UsbError>> {
         assert_eq!(endpoint, EP_DATA);
+        if length > LARGEST_TRANSFER {
+            return Some(Err(UsbError::Transfer(TransferError::InvalidArgument)));
+        }
         if self
             .unplug_after
             .is_some_and(|transfers| self.completed >= transfers)
@@ -754,6 +761,46 @@ fn captures_in_buffer_mode() {
     assert_eq!(received.external, 3);
     assert_eq!(fake.register(regs::VTH_DUTY), 5938);
     assert_eq!(fake.register(regs::DIVIDER), 99);
+}
+
+#[test]
+fn reads_large_blocks_in_transfers_of_1_mib() {
+    // 13 channels at 500 MHz: blocks of 4,153,344 bytes, read in transfers of 1 MiB that end
+    // within groups of samples.
+    const LIMIT: u64 = 1 << 20;
+    let (transport, mut device) = open(FakePx::default());
+    set(
+        &mut device,
+        OptionKey::SampleLimit,
+        OptionValue::Integer(LIMIT),
+    );
+    for channel in [1, 2, 5] {
+        device.set_channel_enabled(channel, false).expect("disable");
+    }
+    let packets = run(&mut device, plan(Vec::new(), 50));
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+    let capture = capture(&packets);
+    assert_eq!(capture.len(), LIMIT);
+    for (channel, data) in capture.channels() {
+        assert!(
+            (0..LIMIT).all(|i| data.sample(i) == level(channel, i)),
+            "channel {channel}"
+        );
+    }
+    assert_eq!(
+        transport.device().capture.expect("a capture").block,
+        4_153_344
+    );
+    let transfers: Vec<usize> = transport
+        .calls()
+        .iter()
+        .filter_map(|call| match call {
+            UsbCall::BulkInSubmit { length, .. } => Some(*length),
+            _ => None,
+        })
+        .collect();
+    assert!(transfers.len() >= 16, "{transfers:?}");
+    assert!(transfers.iter().all(|&length| length == LARGEST_TRANSFER));
 }
 
 #[test]

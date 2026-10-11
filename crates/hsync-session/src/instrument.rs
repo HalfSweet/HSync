@@ -537,11 +537,13 @@ impl Ingest {
             ),
             EndReason::Failed(error) => (EndKind::Failed, Some(error)),
         };
-        log::info!(
-            "capture {} ended ({end:?}) with {} samples",
-            self.status.capture_id,
-            self.status.samples
-        );
+        let (id, samples) = (self.status.capture_id, self.status.samples);
+        match &error {
+            Some(error) => {
+                log::warn!("capture {id} ended ({end:?}) with {samples} samples: {error}");
+            }
+            None => log::info!("capture {id} ended ({end:?}) with {samples} samples"),
+        }
         self.status.samples = self.capture.read().len();
         self.status.phase = LivePhase::Ended;
         self.status.end = Some(end);

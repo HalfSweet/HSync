@@ -3,7 +3,9 @@
 `tests/fixtures/sequences.txt` holds what PXView's own `pxlogic` driver does on the wire for each
 case in `cases.txt`: the register reads and writes, cleared halts, uploads and transfers of opening
 a device (`hw_usb_open()`) and of starting a capture (`start_transfers()`). The `sequences` tests
-run the same cases through the Rust port against a simulated device and compare every operation.
+run the same cases through the Rust port against a simulated device and compare every operation
+but the transfers on the data endpoint: PXView reads whole blocks of up to 4 MiB, HSync reads them
+in transfers of at most 1 MiB (`MAX_TRANSFER` in `src/acquisition.rs` says why).
 
 To regenerate after changing `cases.txt`, with glib, libusb (headers only) and a C compiler
 installed, against a checkout of [PXLogic's libsigrok](https://github.com/PXLogic/libsigrok)

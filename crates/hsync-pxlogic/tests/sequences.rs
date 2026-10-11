@@ -295,6 +295,37 @@ fn starting_captures_matches_pxview() {
             .rposition(|step| step.starts_with("S "))
             .expect("transfers");
         got.truncate(last + 1);
-        assert_eq!(got, case.expected, "{:?}", case.values);
+        let (got, transfers) = split_transfers(&got);
+        let (expected, blocks) = split_transfers(&case.expected);
+        assert_eq!(got, expected, "{:?}", case.values);
+        // PXView reads whole blocks; HSync reads them in transfers of at most 1 MiB, whole
+        // packets, keeping at least as many bytes in flight.
+        let (asked, in_blocks) = (transfers.iter().sum::<usize>(), blocks.iter().sum());
+        assert!(
+            transfers
+                .iter()
+                .all(|&size| size <= MAX_TRANSFER && size % 1024 == 0),
+            "{transfers:?}"
+        );
+        assert!(
+            (in_blocks..in_blocks + MAX_TRANSFER).contains(&asked),
+            "{asked} for {blocks:?}"
+        );
     }
+}
+
+/// Longest transfer HSync asks for.
+const MAX_TRANSFER: usize = 1 << 20;
+
+/// The steps but the transfers on the data endpoint, and the sizes of those.
+fn split_transfers(steps: &[impl AsRef<str>]) -> (Vec<String>, Vec<usize>) {
+    let mut rest = Vec::new();
+    let mut transfers = Vec::new();
+    for step in steps {
+        match step.as_ref().strip_prefix("S 82 ") {
+            Some(size) => transfers.push(size.parse().expect("transfer size")),
+            None => rest.push(step.as_ref().to_owned()),
+        }
+    }
+    (rest, transfers)
 }
