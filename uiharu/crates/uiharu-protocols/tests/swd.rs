@@ -5,9 +5,15 @@
 use proptest::prelude::*;
 use serde::Serialize;
 use uiharu_core::testing::{Harness, assert_block_invariant};
-use uiharu_core::{GraphConfig, Item, LogicBlock, Tick, TickRange, TimeBase};
+use uiharu_core::{
+    EventSchema, GraphConfig, InputRef, InputSpec, Io, Item, LogicBlock, Node, NodeFuture,
+    NodeSpec, Outbox, OutputRef, OutputSpec, Props, Requires, SchemaId, Tick, TickRange, TimeBase,
+};
 use uiharu_protocols::swd::synth::{SwdPacket, SwdWaveform};
-use uiharu_protocols::swd::{Ack, EndReason, Interface, Swd, SwdConfig, SwdEvent, TxId};
+use uiharu_protocols::swd::{
+    Ack, Data, EndReason, Field, Interface, Next, Read, Request, Swd, SwdBus, SwdConfig, SwdEvent,
+    TxId,
+};
 
 /// SWCLK and SWDIO on channels 0 and 1.
 const CHANNELS: u8 = 2;
@@ -899,5 +905,338 @@ proptest! {
         cut.feed_cut(&block, &[], &sizes, &[1, 0, 2]);
         cut.end();
         prop_assert_eq!(cut.without_progress(), decoded);
+    }
+}
+
+/// What the test reader makes of an SWD stream.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Seen {
+    LineReset,
+    Switch(Interface),
+    /// A packet: the fields read and how the reading ended.
+    Packet {
+        request: Option<Request>,
+        ack: Option<Ack>,
+        data: Option<Data>,
+        end: String,
+    },
+}
+
+impl EventSchema for Seen {
+    const SCHEMA: SchemaId = SchemaId::new("test.swd-reader", 1);
+}
+
+/// How the test reader reads a packet.
+#[derive(Clone, Copy, Debug)]
+enum Mode {
+    /// Every field, then the end.
+    All,
+    /// The request alone; [`SwdBus::finish`] drains the rest.
+    RequestOnly,
+    /// Request, acknowledge and data with [`Packet::field`], which reports an end as an error.
+    ///
+    /// [`Packet::field`]: uiharu_protocols::swd::Packet::field
+    Strict,
+}
+
+/// A decoder built on SWD that reads every packet through the cursor.
+struct Reader {
+    mode: Mode,
+}
+
+impl Node for Reader {
+    fn spec(&self) -> NodeSpec {
+        NodeSpec {
+            name: "swd-reader".into(),
+            inputs: vec![InputSpec::new::<SwdEvent>(
+                "bus",
+                Requires::new().equals("turnaround", 1),
+            )],
+            outputs: vec![OutputSpec::new::<Seen>("seen", Props::new())],
+        }
+    }
+
+    fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
+        Box::pin(read(SwdBus::new(io.input(0)), io.output(0), self.mode))
+    }
+}
+
+async fn read(mut bus: SwdBus, mut out: Outbox<Seen>, mode: Mode) {
+    loop {
+        let seen = match bus.next().await {
+            Next::Packet(mut packet) => {
+                let (mut request, mut ack, mut data) = (None, None, None);
+                let mut take = |field: Field| match field {
+                    Field::Request(field) => request = Some(field),
+                    Field::Ack(field) => ack = Some(field),
+                    Field::Data(field) => data = Some(field),
+                };
+                let end = match mode {
+                    Mode::All => loop {
+                        match packet.field_or_end().await {
+                            Ok(Read::Field(field)) => take(field),
+                            Ok(Read::End(reason)) => break format!("{reason:?}"),
+                            Err(error) => break format!("{error:?}"),
+                        }
+                    },
+                    Mode::RequestOnly => match packet.field().await {
+                        Ok(field) => {
+                            take(field);
+                            "stopped".to_owned()
+                        }
+                        Err(error) => format!("{error:?}"),
+                    },
+                    Mode::Strict => {
+                        let mut end = "read three".to_owned();
+                        for _ in 0..3 {
+                            match packet.field().await {
+                                Ok(field) => take(field),
+                                Err(error) => {
+                                    end = format!("{error:?}");
+                                    break;
+                                }
+                            }
+                        }
+                        end
+                    }
+                };
+                Seen::Packet {
+                    request,
+                    ack,
+                    data,
+                    end,
+                }
+            }
+            Next::LineReset => Seen::LineReset,
+            Next::Switch(to) => Seen::Switch(to),
+            Next::Gap(range) => {
+                out.gap(range).await;
+                continue;
+            }
+            Next::Progress(tick) => {
+                out.progress(tick).await;
+                continue;
+            }
+            Next::End(tick) => {
+                out.end(tick).await;
+                return;
+            }
+        };
+        let seen = match (bus.finish().await, seen) {
+            (
+                Err(error),
+                Seen::Packet {
+                    request,
+                    ack,
+                    data,
+                    end,
+                },
+            ) => Seen::Packet {
+                request,
+                ack,
+                data,
+                end: format!("{end}, then {error:?}"),
+            },
+            (_, seen) => seen,
+        };
+        out.emit(bus.consumed(), seen).await;
+    }
+}
+
+fn reader_harness(mode: Mode, graph: GraphConfig) -> Harness<Seen> {
+    Harness::build(
+        CHANNELS,
+        TimeBase::new(1_000_000),
+        graph,
+        |graph, source| {
+            let swd = graph.add(Swd::new(SwdConfig::default()).expect("a valid configuration"));
+            graph.connect(source.samples, Swd::input(swd))?;
+            let reader = graph.add(Reader { mode });
+            graph.connect(Swd::events(swd), InputRef::of_node(reader, 0))?;
+            Ok(OutputRef::of_node(reader, 0))
+        },
+    )
+    .expect("builds")
+}
+
+fn request_of(packet: &SwdPacket) -> Request {
+    Request {
+        apndp: packet.apndp,
+        rnw: packet.rnw,
+        addr: packet.addr,
+        parity_ok: !packet.bad_request_parity,
+    }
+}
+
+fn data_of(packet: &SwdPacket) -> Data {
+    Data {
+        value: packet.data,
+        parity_ok: !packet.bad_data_parity,
+        from_target: packet.rnw,
+    }
+}
+
+#[test]
+fn a_decoder_built_on_swd_reads_packets_field_by_field() {
+    let packets = [
+        SwdPacket::read(false, 0x0, 0x2ba0_1477),
+        SwdPacket::write(false, 0x8, 0x0000_00f0),
+        SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait),
+        SwdPacket::write(false, 0x4, 0x5000_0000).with_ack(Ack::Fault),
+        SwdPacket {
+            bad_data_parity: true,
+            ..SwdPacket::read(true, 0x8, 0x0bad_c0de)
+        },
+    ];
+    let last = SwdPacket::read(false, 0x4, 0xf000_0000);
+    let mut waveform = waveform();
+    waveform.connect();
+    let first = waveform.position().get();
+    for packet in &packets {
+        waveform.packet(packet);
+        waveform.idle_cycles(1);
+    }
+    waveform.line_reset(50);
+    waveform.idle_cycles(2);
+    waveform.packet(&last);
+    waveform.idle(4);
+    let block = waveform.finish();
+
+    let whole = |packet: &SwdPacket, end: &str| Seen::Packet {
+        request: Some(request_of(packet)),
+        ack: Some(packet.ack),
+        data: (packet.ack == Ack::Ok).then(|| data_of(packet)),
+        end: end.to_owned(),
+    };
+    let connect = [
+        Seen::LineReset,
+        Seen::Switch(Interface::Swd),
+        Seen::LineReset,
+    ];
+    let expect = |ends: [&str; 6]| {
+        let mut expected = connect.to_vec();
+        for (packet, end) in packets.iter().zip(ends) {
+            expected.push(whole(packet, end));
+        }
+        expected.push(Seen::LineReset);
+        expected.push(whole(&last, ends[5]));
+        expected
+    };
+    let seen = |mode: Mode| {
+        let mut harness = reader_harness(mode, GraphConfig::default());
+        harness.run_all(&block);
+        harness.events()
+    };
+
+    let events = seen(Mode::All);
+    let payloads: Vec<Seen> = events.iter().map(|event| event.payload.clone()).collect();
+    assert_eq!(
+        payloads,
+        expect([
+            "Complete",
+            "Complete",
+            "Wait",
+            "Fault",
+            "ProtocolError",
+            "Complete"
+        ])
+    );
+    // The first packet covers its Start bit through its final turnaround.
+    let start = rise_at(first);
+    assert_eq!(
+        (events[3].span, events[3].settled),
+        (
+            TickRange::new(Tick(start), Tick(start + 45 * PERIOD + 1)),
+            Tick(start + 45 * PERIOD)
+        )
+    );
+
+    // `field` reports the end where a field was expected; draining finds it otherwise.
+    let payloads: Vec<Seen> = seen(Mode::Strict)
+        .into_iter()
+        .map(|event| event.payload)
+        .collect();
+    assert_eq!(
+        payloads,
+        expect([
+            "read three",
+            "read three",
+            "Ended(Wait)",
+            "Ended(Fault)",
+            "read three",
+            "read three"
+        ])
+    );
+
+    // A reader that takes the request alone leaves the rest to `finish`.
+    let payloads: Vec<Seen> = seen(Mode::RequestOnly)
+        .into_iter()
+        .map(|event| event.payload)
+        .collect();
+    let mut expected = connect.to_vec();
+    let request_only = |packet: &SwdPacket| Seen::Packet {
+        request: Some(request_of(packet)),
+        ack: None,
+        data: None,
+        end: "stopped".to_owned(),
+    };
+    expected.extend(packets.iter().map(request_only));
+    expected.push(Seen::LineReset);
+    expected.push(request_only(&last));
+    assert_eq!(payloads, expected);
+}
+
+#[test]
+fn a_reader_learns_that_a_packet_was_cut_off() {
+    let mut waveform = waveform();
+    waveform.connect();
+    let first = waveform.position().get();
+    let packet = SwdPacket::write(true, 0x4, 0x1234_5678);
+    waveform.packet(&packet);
+    waveform.idle_cycles(2);
+    waveform.packet(&SwdPacket::read(false, 0x0, 1));
+    waveform.idle(4);
+    let block = waveform.finish();
+    // Lose the middle of the write's data.
+    let gap = TickRange::new(Tick(first + 20 * PERIOD + 3), Tick(first + 30 * PERIOD));
+    let mut harness = reader_harness(Mode::All, GraphConfig::default());
+    harness.feed_with_gaps(&block, &[gap], &[71]);
+    harness.end();
+    let items = harness.without_progress();
+    let cut = Seen::Packet {
+        request: Some(request_of(&packet)),
+        ack: Some(Ack::Ok),
+        data: None,
+        end: "Aborted".to_owned(),
+    };
+    let payloads: Vec<Option<&Seen>> = items
+        .iter()
+        .map(|item| item.event().map(|event| &event.payload))
+        .collect();
+    assert_eq!(
+        payloads,
+        vec![
+            Some(&Seen::LineReset),
+            Some(&Seen::Switch(Interface::Swd)),
+            Some(&Seen::LineReset),
+            Some(&cut),
+            None,
+            None,
+        ]
+    );
+    assert_eq!(items[4], Item::Gap(gap));
+    assert!(items[5].is_end());
+}
+
+#[test]
+fn the_reader_sees_the_same_whatever_the_blocks() {
+    let block = rich_waveform();
+    let len = block.len();
+    let gaps = [
+        TickRange::new(Tick(len / 4), Tick(len / 4 + 41)),
+        TickRange::new(Tick(len * 9 / 10), Tick(len * 9 / 10 + 13)),
+    ];
+    for mode in [Mode::All, Mode::RequestOnly, Mode::Strict] {
+        assert_block_invariant(|graph| reader_harness(mode, graph), &block, &gaps);
     }
 }
