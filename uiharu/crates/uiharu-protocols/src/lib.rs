@@ -8,6 +8,7 @@
 pub mod eeprom24xx;
 pub mod i2c;
 pub mod i2s;
+pub mod jtag;
 pub mod modbus_rtu;
 pub mod parallel;
 pub mod pwm;
