@@ -39,6 +39,10 @@ use uiharu_protocols::ds18b20::{Ds18b20, Ds18b20Event};
 use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
 use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
+use uiharu_protocols::ir_nec::{Nec, NecEvent};
+use uiharu_protocols::ir_rc5::{Rc5, Rc5Event};
+use uiharu_protocols::ir_rc6::{Rc6, Rc6Event};
+use uiharu_protocols::ir_sirc::{Sirc, SircEvent};
 use uiharu_protocols::jtag::{Jtag, JtagEvent};
 use uiharu_protocols::lin::{Lin, LinEvent};
 use uiharu_protocols::mdio::{Mdio, MdioEvent};
@@ -308,6 +312,22 @@ fn build_usb_pd(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, UsbPd::new)
 }
 
+fn build_ir_nec(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Nec::new)
+}
+
+fn build_ir_rc5(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Rc5::new)
+}
+
+fn build_ir_rc6(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Rc6::new)
+}
+
+fn build_ir_sirc(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Sirc::new)
+}
+
 /// The node types a description may use, each with the configuration type it reads.
 pub const KINDS: &[Kind] = &[
     Kind {
@@ -449,6 +469,26 @@ pub const KINDS: &[Kind] = &[
         name: "usb-pd",
         build: build_usb_pd,
         writer: write_as::<UsbPdEvent>,
+    },
+    Kind {
+        name: "ir-nec",
+        build: build_ir_nec,
+        writer: write_as::<NecEvent>,
+    },
+    Kind {
+        name: "ir-rc5",
+        build: build_ir_rc5,
+        writer: write_as::<Rc5Event>,
+    },
+    Kind {
+        name: "ir-rc6",
+        build: build_ir_rc6,
+        writer: write_as::<Rc6Event>,
+    },
+    Kind {
+        name: "ir-sirc",
+        build: build_ir_sirc,
+        writer: write_as::<SircEvent>,
     },
 ];
 
