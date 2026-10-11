@@ -21,6 +21,7 @@ pub mod i2s;
 pub mod ir_nec;
 pub mod ir_rc5;
 pub mod ir_rc6;
+pub mod ir_sirc;
 pub mod jtag;
 pub mod lin;
 pub mod mdio;
