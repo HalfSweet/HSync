@@ -141,7 +141,7 @@ Only `word_or_end` ever returns the normal end; a body that returns before the e
 
 ## 8. NDJSON
 
-`uiharu decode` writes one line per item: `{"stream", "seq", "span": [start, end], "settled", "event"}` for events, `{"stream", "gap": [start, end]}`, `{"stream", "end": tick}`, and with `--progress` `{"stream", "progress": tick}`. Event payloads are the contracts' types as serde serializes them: a `kind` tag in kebab-case (`begin`, `word`, `end`, `address`, `data`, `unknown-command`) and the fields by name.
+`uiharu decode` writes one line per item: `{"stream", "seq", "span": [start, end], "settled", "event"}` for events, `{"stream", "gap": [start, end]}`, `{"stream", "end": tick}`, and with `--progress` `{"stream", "progress": tick}`. Event payloads are the contracts' types as serde serializes them: a `kind` tag in kebab-case (`begin`, `word`, `end`, `address`, `data`, `unknown-command`) and the fields by name. Ticks and counters are plain numbers. A field that may hold a value of 2^53 or more — a 1-Wire ROM code, the word of a parallel bus of more than 53 lines — is marked `#[serde(with = "uiharu_core::hex_u64")]` and written as a hexadecimal string (`"0x28ab0000c0ffee1d"`), which JavaScript's `JSON.parse` keeps exactly where it would round a number; binary formats get the integer.
 
 ## 9. Limits of this step
 

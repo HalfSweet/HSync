@@ -73,7 +73,7 @@ Every event carries `tx`, the transaction, numbered from 1.
 | `bits`        | `value: u8`, `count: u8`                                    | the 1 to 7 bits after the last whole byte when the transaction ended, the first as bit 0                                                                                         | their slots                     | where the transaction ended |
 | `end`         | `reason`: `reset`, `bad-slot` or `aborted`                  | the transaction ended: at the next reset, at a bad slot, or by a gap or the end of the samples                                                                                   | the slots read but not reported | where the transaction ended |
 
-A ROM code is a `u64` whose bit 0 is the first bit on the line: the family code is its low byte, the 48-bit serial number the next six, the CRC its high byte. `crcOk` says whether the CRC is the CRC-8 (x⁸ + x⁵ + x⁴ + 1, least significant bit first, from zero) of the first seven bytes. An `end` without slots to cover is an empty span at the reset's fall, the gap's start or the end of the samples.
+A ROM code is a `u64` whose bit 0 is the first bit on the line, written as a hexadecimal string in JSON (`"id": "0x5c000000a7b3d928"`) so that readers keep all 64 bits: the family code is its low byte, the 48-bit serial number the next six, the CRC its high byte. `crcOk` says whether the CRC is the CRC-8 (x⁸ + x⁵ + x⁴ + 1, least significant bit first, from zero) of the first seven bytes. An `end` without slots to cover is an empty span at the reset's fall, the gap's start or the end of the samples.
 
 ### Rules
 

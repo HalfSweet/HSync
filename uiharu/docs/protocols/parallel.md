@@ -43,4 +43,4 @@ The logic input requires `channels` of at least the highest channel read plus on
 ## Limits
 
 - At most 64 data lines.
-- Values of 2^53 and above, which only buses of more than 53 lines carry, are not kept exactly by JSON readers that parse numbers as doubles, such as JavaScript's `JSON.parse`.
+- `value` is written as a hexadecimal string in JSON (`"value": "0xf0"`): a bus of more than 53 lines carries values that JSON readers parsing numbers as doubles, such as JavaScript's `JSON.parse`, would not keep exactly.
