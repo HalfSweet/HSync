@@ -23,6 +23,8 @@
 //! - bits are reported in `shift` events of at most [`SHIFT_BATCH_BITS`] bits, packed least
 //!   significant bit first in the order they were shifted; a batch goes out when it is full
 //!   and on the clock that leaves the shift state, settled at its last bit;
+//! - progress is passed on, held back to the first bit of the batch not yet reported, since
+//!   the batch spans from there;
 //! - TRST, when connected, is active low and asynchronous: asserting it resets the controller
 //!   at once, aborting the scan under way, and holds it in Test-Logic-Reset, so TCK is ignored
 //!   while it is low; a TCK edge at the very tick TRST changes does not clock the controller;
@@ -283,6 +285,17 @@ impl Decoder {
         self.config.trst.is_some_and(|trst| !levels.high(trst))
     }
 
+    /// Progress to `tick`, held back to the first bit of the batch not yet reported, which
+    /// promises that nothing starting earlier follows.
+    fn hold(&self, tick: Tick) -> Tick {
+        let start = self
+            .scan
+            .as_ref()
+            .filter(|scan| scan.batch.bits > 0)
+            .map(|scan| scan.batch.first);
+        start.map_or(tick, |start| start.min(tick))
+    }
+
     /// Takes the bit of a clock in a shift state into the batch; the batch, once full.
     fn shift(&mut self, tick: Tick, levels: Levels) -> Option<(Provenance, JtagEvent)> {
         let config = &self.config;
@@ -460,7 +473,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<JtagEvent>, config: JtagC
             match signal.sample().await {
                 Sample::At { tick, levels } => break (tick, levels),
                 Sample::Gap(range) => out.gap(range).await,
-                Sample::Progress(tick) => out.progress(tick).await,
+                Sample::Progress(tick) => out.progress(decoder.hold(tick)).await,
                 Sample::End(tick) => {
                     out.end(tick).await;
                     return;
@@ -497,7 +510,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<JtagEvent>, config: JtagC
                 }
                 // Without a deadline the wait is never quiet.
                 Change::Quiet(_) => {}
-                Change::Progress(tick) => out.progress(tick).await,
+                Change::Progress(tick) => out.progress(decoder.hold(tick)).await,
                 Change::End(tick) => {
                     cut(&mut decoder, &mut out, tick).await;
                     out.end(tick).await;

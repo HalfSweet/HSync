@@ -687,6 +687,38 @@ fn batches_show_up_before_the_scan_ends() {
     );
 }
 
+#[test]
+fn progress_is_held_back_to_the_batch_under_way() {
+    let config = config();
+    let mut waveform = waveform(&config);
+    waveform.reset();
+    waveform.clock(false, true);
+    waveform.scan(Register::Dr, &pattern(88, 13, 7), &pattern(88, 51, 9), 700);
+    waveform.idle(4);
+    let block = waveform.finish();
+    let mut harness = harness(config, GraphConfig::default());
+    let mut from = Tick::ZERO;
+    // Bit n of the scan rises with clock 9 + n; the first batch is full with bit 255, and the
+    // second starts with the next.
+    let after = |n: u64| Tick(rise(n) + 1);
+    for (cut, held) in [
+        (after(109), Tick(rise(9))),
+        (after(264), after(264)),
+        (after(300), Tick(rise(265))),
+    ] {
+        let piece = block.slice(TickRange::new(from, cut)).expect("a slice");
+        harness.feed(&piece, &[u64::MAX]);
+        harness.collect();
+        assert_eq!(
+            harness.items.last(),
+            Some(&Item::Progress(held)),
+            "up to {cut}"
+        );
+        from = cut;
+    }
+    harness.assert_progress_promise();
+}
+
 /// Resets, scans of many lengths on both registers, a paused scan, TRST and idle time.
 fn rich_waveform(config: &JtagConfig) -> LogicBlock {
     let mut waveform = waveform(config);
