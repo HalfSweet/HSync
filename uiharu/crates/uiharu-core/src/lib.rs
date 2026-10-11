@@ -8,6 +8,7 @@
 
 pub mod exec;
 pub mod graph;
+pub mod hex_u64;
 pub mod node;
 pub mod schema;
 pub mod signal;

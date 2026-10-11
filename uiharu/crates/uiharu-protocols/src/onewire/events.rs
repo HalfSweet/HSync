@@ -90,7 +90,8 @@ pub enum OneWireEvent {
         /// The transaction.
         tx: TxId,
         /// The ROM code, its first bit on the line as bit 0: the family code is the low byte,
-        /// the CRC the high byte.
+        /// the CRC the high byte. Written as a hexadecimal string in JSON (`"0x…"`).
+        #[serde(with = "uiharu_core::hex_u64")]
         id: u64,
         /// The family code, the first byte of the ROM code.
         family: u8,
@@ -102,6 +103,8 @@ pub enum OneWireEvent {
         /// The transaction.
         tx: TxId,
         /// The direction bits the master wrote, the first as bit 0: the ROM code it selected.
+        /// Written as a hexadecimal string in JSON (`"0x…"`).
+        #[serde(with = "uiharu_core::hex_u64")]
         id: u64,
         /// Whether the last byte of `id` is the CRC-8 of the first seven.
         crc_ok: bool,
@@ -199,7 +202,7 @@ mod tests {
                 family: 0x28,
                 crc_ok: false
             }),
-            r#"{"kind":"rom","tx":2,"id":40,"family":40,"crcOk":false}"#
+            r#"{"kind":"rom","tx":2,"id":"0x28","family":40,"crcOk":false}"#
         );
         assert_eq!(
             json(&OneWireEvent::Search {
@@ -209,7 +212,7 @@ mod tests {
                 conflicts: 2,
                 unanswered: 0
             }),
-            r#"{"kind":"search","tx":2,"id":1,"crcOk":true,"conflicts":2,"unanswered":0}"#
+            r#"{"kind":"search","tx":2,"id":"0x1","crcOk":true,"conflicts":2,"unanswered":0}"#
         );
         assert_eq!(
             json(&OneWireEvent::Byte { tx, value: 0xbe }),

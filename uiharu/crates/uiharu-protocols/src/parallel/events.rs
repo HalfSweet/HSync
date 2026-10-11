@@ -18,7 +18,9 @@ pub const PARALLEL_EVENTS: SchemaId = SchemaId::new("parallel.events", 1);
 pub enum ParallelEvent {
     /// The data lines, read as one word.
     Word {
-        /// The word: bit `i` is the level of the `i`-th data line.
+        /// The word: bit `i` is the level of the `i`-th data line. Written as a hexadecimal
+        /// string in JSON (`"0x…"`), as it may be wider than JSON readers keep exactly.
+        #[serde(with = "uiharu_core::hex_u64")]
         value: u64,
         /// The data lines, 1 to 64: the width of `value`.
         bits: u8,
@@ -46,7 +48,7 @@ mod tests {
         .expect("serializes");
         assert_eq!(
             json,
-            r#"{"kind":"word","value":165,"bits":8,"initial":false}"#
+            r#"{"kind":"word","value":"0xa5","bits":8,"initial":false}"#
         );
         let json = serde_json::to_string(&ParallelEvent::Word {
             value: u64::MAX,
@@ -56,7 +58,7 @@ mod tests {
         .expect("serializes");
         assert_eq!(
             json,
-            r#"{"kind":"word","value":18446744073709551615,"bits":64,"initial":true}"#
+            r#"{"kind":"word","value":"0xffffffffffffffff","bits":64,"initial":true}"#
         );
     }
 }
