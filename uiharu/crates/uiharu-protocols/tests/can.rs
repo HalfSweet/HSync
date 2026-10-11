@@ -7,10 +7,15 @@ use std::sync::Arc;
 use proptest::prelude::*;
 use uiharu_core::testing::{self, Harness};
 use uiharu_core::{
-    GraphConfig, GraphError, Item, LogicBlock, SignalItem, Tick, TickRange, TimeBase,
+    EventSchema, GraphConfig, GraphError, InputSpec, Io, Item, LogicBlock, Node, NodeFuture,
+    NodeId, NodeSpec, Outbox, OutputRef, OutputSpec, Props, Requires, SchemaId, SignalItem, Tick,
+    TickRange, TimeBase,
 };
 use uiharu_protocols::can::synth::{BitKind, CanFrame, CanWaveform, EdgeShift, Faults, SentBit};
-use uiharu_protocols::can::{Can, CanConfig, CanEvent, DATA_BATCH, FrameId};
+use uiharu_protocols::can::{
+    Can, CanBus, CanConfig, CanEvent, Control, DATA_BATCH, EndReason, Ending, FrameId, Identifier,
+    Next,
+};
 
 const CHANNELS: u8 = 2;
 const RX: u8 = 1;
@@ -1334,6 +1339,243 @@ fn the_source_must_be_fast_and_wide_enough() {
             ..
         })
     ));
+}
+
+/// A decoder built on CAN for the test: what it read of each frame through the bus cursor.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Summary {
+    frame: FrameId,
+    partial: bool,
+    identifier: Option<Identifier>,
+    control: Option<Control>,
+    bytes: Vec<u8>,
+    ending: Ending,
+}
+
+impl EventSchema for Summary {
+    const SCHEMA: SchemaId = SchemaId::new("test.can-summary", 1);
+}
+
+/// Reads the identifier, the control field and up to `bytes` data bytes of each frame, and
+/// leaves the rest to the end.
+struct Summarize {
+    bytes: usize,
+}
+
+impl Summarize {
+    fn input(node: NodeId) -> uiharu_core::InputRef<CanEvent> {
+        uiharu_core::InputRef::of_node(node, 0)
+    }
+
+    fn output(node: NodeId) -> OutputRef<Summary> {
+        OutputRef::of_node(node, 0)
+    }
+}
+
+impl Node for Summarize {
+    fn spec(&self) -> NodeSpec {
+        NodeSpec {
+            name: "summarize".into(),
+            inputs: vec![InputSpec::new::<CanEvent>("can", Requires::new())],
+            outputs: vec![OutputSpec::new::<Summary>("summaries", Props::new())],
+        }
+    }
+
+    fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
+        let bus = CanBus::new(io.input(0));
+        Box::pin(summarize(bus, io.output(0), self.bytes))
+    }
+}
+
+async fn summarize(mut bus: CanBus, mut out: Outbox<Summary>, wanted: usize) {
+    loop {
+        match bus.next().await {
+            Next::Frame(mut frame) => {
+                let id = frame.id();
+                let partial = frame.is_partial();
+                let identifier = frame.identifier().await.ok();
+                let control = frame.control().await.ok();
+                let mut bytes = Vec::new();
+                while bytes.len() < wanted {
+                    match frame.byte().await {
+                        Ok(byte) => bytes.push(byte),
+                        Err(_) => break,
+                    }
+                }
+                let ending = frame.end().await.unwrap_or(Ending {
+                    reason: EndReason::Aborted,
+                    crc: None,
+                    acked: None,
+                });
+                let at = frame.consumed();
+                let summary = Summary {
+                    frame: id,
+                    partial,
+                    identifier,
+                    control,
+                    bytes,
+                    ending,
+                };
+                out.emit(at, summary).await;
+            }
+            Next::Gap(range) => out.gap(range).await,
+            Next::Progress(tick) => out.progress(tick).await,
+            Next::End(tick) => {
+                out.end(tick).await;
+                return;
+            }
+        }
+        // Whatever a frame left unread, `end` drained it.
+        let _ = bus.finish().await;
+    }
+}
+
+fn summaries(config: &CanConfig, block: &LogicBlock, wanted: usize) -> Vec<Item<Summary>> {
+    let mut harness = Harness::build(
+        CHANNELS,
+        TimeBase::new(RATE),
+        GraphConfig {
+            queue_capacity: 2,
+            budget: 3,
+        },
+        |graph, source| {
+            let can = graph.add(Can::new(config.clone()).expect("a valid configuration"));
+            graph.connect(source.samples, Can::input(can))?;
+            let summarize = graph.add(Summarize { bytes: wanted });
+            graph.connect(Can::events(can), Summarize::input(summarize))?;
+            Ok(Summarize::output(summarize))
+        },
+    )
+    .expect("builds");
+    harness.drain_on_full = 1;
+    harness.feed(block, &[57]);
+    harness.end();
+    testing::without_progress(&harness.items)
+}
+
+#[test]
+fn decoders_built_on_can_read_frames_through_the_bus_cursor() {
+    let config = config();
+    let classic = CanFrame::base(0x123, &[0xab, 0xcd, 0xef]);
+    let long = CanFrame::fd(0x456, &payload(64, 4)).with_brs();
+    let remote = CanFrame::remote(0x321, false, 4);
+    let mut waveform = bus_waveform(&config);
+    let first_sent = waveform.frame(&classic);
+    waveform.idle(3);
+    waveform.frame(&long);
+    waveform.idle(3);
+    waveform.frame(&remote);
+    waveform.idle(3);
+    let in_data = first(&first_sent, BitKind::Data) + 3;
+    waveform.frame_with(
+        &classic,
+        &Faults {
+            error_flag_at: Some(in_data),
+            ..Faults::default()
+        },
+    );
+    waveform.idle(5);
+    let block = waveform.finish();
+
+    // Reading every byte, across the batches of the long frame.
+    let all = summaries(&config, &block, 64);
+    let read: Vec<&Summary> = all
+        .iter()
+        .filter_map(Item::event)
+        .map(|e| &e.payload)
+        .collect();
+    assert_eq!(read.len(), 4);
+    assert_eq!(
+        read[0].identifier,
+        Some(Identifier {
+            id: 0x123,
+            extended: false
+        })
+    );
+    assert_eq!(read[0].bytes, classic.data);
+    assert!(read[0].ending.is_valid());
+    assert_eq!(read[0].ending.acked, Some(true));
+    assert_eq!(read[1].bytes, long.data);
+    assert_eq!(read[1].control.map(|control| control.length), Some(64));
+    assert!(
+        read[1]
+            .ending
+            .crc
+            .is_some_and(|crc| crc.stuff_count.is_some())
+    );
+    // A remote frame has no data to read.
+    assert!(read[2].control.is_some_and(|control| control.remote));
+    assert!(read[2].bytes.is_empty());
+    assert!(read[2].ending.is_valid());
+    // The frame the error flag cut short: its byte, and an end that is not valid.
+    assert_eq!(read[3].bytes, [0xa0]);
+    assert_eq!(read[3].ending.reason, EndReason::ErrorFrame);
+    assert_eq!(read[3].ending.crc, None);
+    assert!(!read[3].ending.is_valid());
+
+    // Reading two bytes and leaving the rest: the end drains it, and each summary covers its
+    // frame from the begin to the end.
+    let some = summaries(&config, &block, 2);
+    let decoded = decode(&config, &block);
+    let frames: Vec<(FrameId, TickRange, Tick)> = {
+        let events = events(&decoded);
+        let mut spans = Vec::new();
+        for event in &events {
+            if let CanEvent::End { frame, .. } = event.payload {
+                let begin = events
+                    .iter()
+                    .find(|begin| {
+                        matches!(begin.payload, CanEvent::Begin { frame: f, .. } if f == frame)
+                    })
+                    .expect("a begin");
+                spans.push((
+                    frame,
+                    TickRange::new(begin.span.start, event.span.end),
+                    event.settled,
+                ));
+            }
+        }
+        spans
+    };
+    let read: Vec<&uiharu_core::Event<Summary>> = some.iter().filter_map(Item::event).collect();
+    assert_eq!(read.len(), frames.len());
+    for (summary, (frame, span, settled)) in read.iter().zip(&frames) {
+        assert_eq!(summary.payload.frame, *frame);
+        assert!(summary.payload.bytes.len() <= 2);
+        assert_eq!(summary.span, *span);
+        assert_eq!(summary.settled, *settled);
+    }
+    assert_eq!(read[1].payload.bytes, long.data[..2]);
+    assert!(read[1].payload.ending.is_valid());
+    assert!(matches!(some.last(), Some(Item::End(_))));
+}
+
+#[test]
+fn a_partial_frame_reads_as_one() {
+    let config = config();
+    let frame = CanFrame::base(0x123, &payload(8, 1));
+    let mut waveform = bus_waveform(&config);
+    let sent = waveform.frame(&frame);
+    waveform.idle(5);
+    waveform.frame(&frame);
+    waveform.idle(5);
+    let block = waveform.finish();
+    let from = sent[first(&sent, BitKind::Data) + 2].start;
+    let tail = block
+        .slice(TickRange::new(from, block.end()))
+        .expect("a slice");
+    let read = summaries(&config, &tail, 8);
+    let read: Vec<&Summary> = read
+        .iter()
+        .filter_map(Item::event)
+        .map(|e| &e.payload)
+        .collect();
+    assert_eq!(read.len(), 2);
+    assert!(read[0].partial);
+    assert_eq!(read[0].identifier, None);
+    assert_eq!(read[0].ending.reason, EndReason::Aborted);
+    assert!(!read[1].partial);
+    assert_eq!(read[1].bytes, frame.data);
 }
 
 /// A waveform with a bit of everything, at 8 and 4 samples per bit.
