@@ -10,7 +10,7 @@ Single-line SPI decoded from logic samples: words shifted on the sampling edge o
 | `word`  | `tx`, `mosi: u8 \| null`, `miso: u8 \| null` | One word on both lines; a line that is not connected reads `null`.                                                                                                |
 | `end`   | `tx`, `reason: "cs-release" \| "aborted"`    | Chip select was released, or the samples ended or were lost while it was asserted.                                                                                |
 
-`tx` numbers transactions from 1; a bus without chip select is one unframed transaction `0` with words only, no `begin` or `end`.
+`tx` numbers transactions from 1; a bus without chip select is one unframed transaction `0` with words only, no `begin` or `end`: it is cut only by gaps and the end of the samples.
 
 Provenance: `begin` and `end` at the tick chip select changed (an aborted end at the gap's start or the end of the samples, with an empty span); a `word` spans its first bit's sampling edge to its last bit's sampling edge + 1, settled at the last.
 
@@ -42,7 +42,7 @@ At least one data line must be connected; the source must have more channels tha
 
 ## Reading the stream
 
-Decoders built on SPI read it through `spi::SpiBus` and `spi::Transaction`: `next()` waits for the next transaction, gap, progress or end; a transaction offers `word()` (the next word with both lines; the transaction's end is an error here), `word_or_end()` (the only read that returns the normal end), `drain()` and `consumed()` for the provenance of what was read. Byte order, field widths and which line a protocol reads are the consuming decoder's own code.
+Decoders built on SPI read it through `spi::SpiBus` and `spi::Transaction`: `next()` waits for the next transaction, gap, progress or end; a transaction offers `word()` (the next word with both lines; the transaction's end is an error here), `word_or_end()` (the only read that returns the normal end), `drain()` and `consumed()` for the provenance of what was read. On a bus without chip select, `next()` opens transaction `0` at its first word, and the transaction ends only at a gap or the end of the stream; `finish()` does not drain it, and calling `next()` again hands it back at the next word. Byte order, field widths and which line a protocol reads are the consuming decoder's own code.
 
 ## Limits
 
