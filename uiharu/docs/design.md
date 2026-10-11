@@ -84,13 +84,19 @@ The cursor keeps the levels just before its position across blocks and seeks, so
 
 Diagnostics name ports as `node#index.port` and say what was required and what was found, e.g. `spi-nor#1.bus requires wordBits = 8 of spi#0.events, which declares 4`.
 
+### Several inputs
+
+A node may read several inputs — two event streams, or a stream and the samples it refers to — on one condition: what it does must depend on the items alone, never on which input happened to fill first. It therefore waits until every input it still reads has an item (`ready_all`, which also takes a signal cursor), then takes the item whose time is earliest (`Item::time`: where an event's span starts, where a gap begins, the tick progress or the end announces), the lowest port on a tie. A node reading the samples beside a stream moves the cursor through them as the stream tells it (`seek` at every event and at every progress item), so that the blocks behind are let go: a seek drops the blocks, progress and gaps the position is past.
+
+Inputs that share an upstream — a decoder's events and the source's samples — tie the node to the source's queue: the node must keep the samples from the earliest start the upstream has not reported yet, and the source holds at most its configured number of blocks. A graph whose lookback exceeds that stalls: every node waits, nothing can be read, and the source is full. `Pipeline::push` then returns `PushError::Stalled`, naming what each node waits for, instead of handing the block back as merely full; the cure is a source holding more blocks, or an upstream that reports sooner.
+
 The command line builds graphs from a JSON description (`uiharu decode --graph`; the format is in the README): a source, named nodes with a type and a configuration deserialized by the node's config type, connections between `node.port` names, and the outputs to expose. It is the hand-written form of the graph description the DSL compiler will emit, and the registry of node types in `crates/uiharu-cli/src/pipeline.rs` — how to build each node from its configuration and how to write its output — is the one place a decoder is made available to the command line.
 
 The SPI output declares `wordBits`, `bitOrder`, `mode`, `cs`, `mosi`, `miso`; SPI NOR requires `wordBits = 8`, `bitOrder = "msb-first"`, `cs = true`, `mosi = true`, `miso = true`. The source declares `channels` and `rateHz`; SPI requires `channels >= ` the highest channel it reads + 1.
 
 ## 5. The executor
 
-`Pipeline::run` polls the nodes in topological order, each with a fresh budget of operations, and repeats the pass until no node completed an operation: every unfinished node then waits for input that has not arrived or for an output the caller has not read. A node that only ran out of budget goes on in the next pass, after the others. Everything runs on the caller's thread, in a fixed order, with no clocks or threads involved; given the same items in the same order the pipeline does the same thing. `RunReport` says what moved and what each node waits for; `Stats` reports every queue's length, capacity and high-water mark.
+`Pipeline::run` polls the nodes in topological order, each with a fresh budget of operations, and repeats the pass until no node completed an operation: every unfinished node then waits for input that has not arrived or for an output the caller has not read. A node that only ran out of budget goes on in the next pass, after the others. Everything runs on the caller's thread, in a fixed order, with no clocks or threads involved; given the same items in the same order the pipeline does the same thing. `RunReport` says what moved and what each node waits for; `Stats` reports every queue's length, capacity and high-water mark. A run that moved nothing, with nothing left for the caller to read, leaves the source full for good: the next `push` reports the stall (§4) rather than letting the caller spin.
 
 ### What determinism covers
 
@@ -147,6 +153,7 @@ Only `word_or_end` ever returns the normal end; a body that returns before the e
 
 - Sources have at most 64 channels; SPI words have at most 8 bits; SPI is single-line (no dual or quad I/O).
 - One pipeline runs on one thread; a capture thread hands blocks over through `Arc<LogicBlock>`.
+- A node with several inputs merges them by time itself (§4); the runtime offers the readiness wait and the ordering key, not a merge node, and a lookback longer than the source's queue stalls rather than being spilled.
 - `Progress` is generated only by the signal cursor, at the end of a block it used up while the next one was not there; every node passes it down, inside frames through the contract cursors, so that a reader of several streams can take the least of their watermarks.
 - The engine is not wired into HSync: an adapter from `hsync-capture` to `LogicBlock`s, and from exposed streams to the data stream and the timeline, comes with the integration.
 
