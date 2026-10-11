@@ -45,7 +45,7 @@ struct EndLine<'a> {
 
 /// Writes one item.
 pub fn write_item<T: Serialize>(
-    out: &mut impl Write,
+    out: &mut dyn Write,
     stream: &str,
     item: &Item<T>,
     progress: bool,
@@ -106,13 +106,8 @@ impl<T: Serialize> StreamWriter<T> {
         }
     }
 
-    /// Whether the stream's end was written.
-    pub fn is_ended(&self) -> bool {
-        self.ended
-    }
-
     /// Writes every item waiting, up to and including the end of the stream.
-    pub fn drain(&mut self, out: &mut impl Write, progress: bool) -> io::Result<()> {
+    pub fn drain(&mut self, out: &mut dyn Write, progress: bool) -> io::Result<()> {
         while !self.ended {
             let Some((end, written)) = self.exposed.with_next(|item| {
                 let is_event = matches!(item, Item::Event(_));
@@ -147,5 +142,42 @@ impl<T: Serialize> StreamWriter<T> {
             self.exposed.advance();
             self.ended = end;
         }
+    }
+}
+
+/// A writer of one exposed stream, whatever its event type: what a pipeline built from a
+/// description hands out.
+pub trait Writer {
+    /// The name the stream is written under.
+    fn name(&self) -> &str;
+    /// Whether the stream's end was written or read.
+    fn is_ended(&self) -> bool;
+    /// Writes every item waiting.
+    fn drain(&mut self, out: &mut dyn Write, progress: bool) -> io::Result<()>;
+    /// Reads every item waiting without writing it.
+    fn discard(&mut self);
+    /// Events written or discarded so far.
+    fn event_count(&self) -> u64;
+}
+
+impl<T: Serialize> Writer for StreamWriter<T> {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn is_ended(&self) -> bool {
+        self.ended
+    }
+
+    fn drain(&mut self, out: &mut dyn Write, progress: bool) -> io::Result<()> {
+        StreamWriter::drain(self, out, progress)
+    }
+
+    fn discard(&mut self) {
+        StreamWriter::discard(self);
+    }
+
+    fn event_count(&self) -> u64 {
+        self.events
     }
 }

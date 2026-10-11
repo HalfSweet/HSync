@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! `uiharu decode`: replays a raw binary capture through the pipeline and writes NDJSON.
+//! `uiharu decode`: replays a raw binary capture through a pipeline and writes NDJSON.
 
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Write};
@@ -10,11 +10,12 @@ use uiharu_core::{LogicBlock, PushError, SignalItem, Tick};
 
 use crate::Failure;
 use crate::args::{Args, UsageError};
-use crate::ndjson::StreamWriter;
+use crate::ndjson::Writer;
+use crate::pipeline::{self, Description};
 use crate::setup::{self, Setup};
 
 /// The options of the command, beyond the shared ones.
-pub const OPTIONS: &[&str] = &["chunk", "stream", "progress", "stats"];
+pub const OPTIONS: &[&str] = &["graph", "chunk", "stream", "progress", "stats"];
 
 /// The flags among [`OPTIONS`].
 pub const FLAGS: &[&str] = &["progress", "stats"];
@@ -26,8 +27,11 @@ uiharu decode [options] <capture>
   being channel 8 j + i; `-` for standard input) through the pipeline and writes every event
   as one line of JSON on standard output.
 
+      --graph <file>            the pipeline described in a JSON file (source, nodes,
+                                connections, exposed outputs; see the README); the bus options
+                                below are not used then
       --chunk <SAMPLES>         samples per block fed to the pipeline (default 65536)
-      --stream <spi|nor>        write only this stream; may be repeated (default: all)
+      --stream <name>           write only this exposed output; may be repeated (default: all)
       --progress                also write progress lines
       --stats                   print the queue statistics on standard error at the end
 ";
@@ -46,34 +50,39 @@ fn read_full(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<usize> {
     Ok(filled)
 }
 
-/// The writers of the exposed streams and whether each is written or only read.
-struct Output<W: Write> {
-    out: W,
+/// The exposed outputs: each written, or only read when it was not asked for.
+struct Output {
+    out: Box<dyn Write>,
     progress: bool,
-    spi: (StreamWriter<uiharu_protocols::spi::SpiEvent>, bool),
-    nor: Option<(StreamWriter<uiharu_protocols::spi_nor::NorEvent>, bool)>,
+    writers: Vec<(Box<dyn Writer>, bool)>,
 }
 
-impl<W: Write> Output<W> {
+impl Output {
     fn drain(&mut self) -> io::Result<()> {
-        let (spi, written) = &mut self.spi;
-        if *written {
-            spi.drain(&mut self.out, self.progress)?
-        } else {
-            spi.discard()
-        }
-        if let Some((nor, written)) = &mut self.nor {
+        for (writer, written) in &mut self.writers {
             if *written {
-                nor.drain(&mut self.out, self.progress)?
+                writer.drain(&mut *self.out, self.progress)?;
             } else {
-                nor.discard()
+                writer.discard();
             }
         }
         Ok(())
     }
 
     fn is_ended(&self) -> bool {
-        self.spi.0.is_ended() && self.nor.as_ref().is_none_or(|(nor, _)| nor.is_ended())
+        self.writers.iter().all(|(writer, _)| writer.is_ended())
+    }
+}
+
+/// The pipeline the arguments ask for: the described one, or the shared bus options' one.
+fn description(args: &Args) -> Result<Description, Failure> {
+    match args.value("graph") {
+        Some(path) => {
+            let file = File::open(path).map_err(|error| Failure::Io(format!("{path}: {error}")))?;
+            serde_json::from_reader(BufReader::new(file))
+                .map_err(|error| Failure::Usage(format!("{path}: {error}")))
+        }
+        None => Ok(Setup::from_args(args)?.description()),
     }
 }
 
@@ -81,7 +90,6 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     let mut known: Vec<&str> = setup::OPTIONS.to_vec();
     known.extend(OPTIONS);
     args.only(&known)?;
-    let setup = Setup::from_args(args)?;
     let path = args.positional().get(1).ok_or_else(|| {
         UsageError("decode needs the capture to read, or - for standard input".into())
     })?;
@@ -89,24 +97,35 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     if chunk == 0 {
         return Err(UsageError("--chunk 0: a block holds at least one sample".into()).into());
     }
+    let description = description(args)?;
     let streams: Vec<&str> = args.values("stream").collect();
     for stream in &streams {
-        if !matches!(*stream, "spi" | "nor") {
-            return Err(UsageError(format!("--stream {stream}: expected spi or nor")).into());
+        if !description.expose.contains_key(*stream) {
+            let known: Vec<&str> = description.expose.keys().map(String::as_str).collect();
+            return Err(UsageError(format!(
+                "--stream {stream}: the pipeline exposes {}",
+                known.join(", ")
+            ))
+            .into());
         }
     }
     let wanted = |name: &str| streams.is_empty() || streams.contains(&name);
 
-    let built = setup.build()?;
+    let built = pipeline::build(&description)?;
     let mut pipeline = built.pipeline;
     let source = built.source;
+    let channels = built.channels;
     let mut output = Output {
-        out: BufWriter::new(io::stdout().lock()),
+        out: Box::new(BufWriter::new(io::stdout().lock())),
         progress: args.flag("progress"),
-        spi: (StreamWriter::new("spi", built.spi), wanted("spi")),
-        nor: built
-            .nor
-            .map(|nor| (StreamWriter::new("nor", nor), wanted("nor"))),
+        writers: built
+            .writers
+            .into_iter()
+            .map(|writer| {
+                let written = wanted(writer.name());
+                (writer, written)
+            })
+            .collect(),
     };
 
     let mut reader: Box<dyn Read> = if path == "-" {
@@ -116,7 +135,7 @@ pub fn run(args: &Args) -> Result<(), Failure> {
             File::open(path).map_err(|error| Failure::Io(format!("{path}: {error}")))?,
         ))
     };
-    let unit = usize::from(setup.channels).div_ceil(8);
+    let unit = usize::from(channels).div_ceil(8);
     let mut buffer = vec![
         0u8;
         usize::try_from(chunk)
@@ -125,7 +144,7 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     ];
     let mut start = Tick::ZERO;
     let push = |pipeline: &mut uiharu_core::Pipeline,
-                output: &mut Output<_>,
+                output: &mut Output,
                 item: SignalItem|
      -> Result<(), Failure> {
         let mut item = item;
@@ -148,7 +167,7 @@ pub fn run(args: &Args) -> Result<(), Failure> {
         if samples == 0 {
             break;
         }
-        let block = LogicBlock::from_interleaved(start, setup.channels, &buffer[..samples * unit])
+        let block = LogicBlock::from_interleaved(start, channels, &buffer[..samples * unit])
             .map_err(|error| Failure::Io(error.to_string()))?;
         push(
             &mut pipeline,
@@ -171,12 +190,12 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     output.out.flush()?;
     if args.flag("stats") {
         let stats = pipeline.stats();
-        eprintln!(
-            "{} samples, {} spi events, {} nor events",
-            start,
-            output.spi.0.events,
-            output.nor.as_ref().map_or(0, |(nor, _)| nor.events)
-        );
+        let counts: Vec<String> = output
+            .writers
+            .iter()
+            .map(|(writer, _)| format!("{} {} events", writer.event_count(), writer.name()))
+            .collect();
+        eprintln!("{start} samples; {}", counts.join(", "));
         for queue in stats.queues {
             eprintln!(
                 "{}: {} of {} items at most",

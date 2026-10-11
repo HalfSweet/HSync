@@ -10,6 +10,7 @@ mod bench;
 mod decode;
 mod generate;
 mod ndjson;
+mod pipeline;
 mod setup;
 
 use std::fmt;
@@ -23,6 +24,7 @@ const USAGE: &str = "\
 uiharu — the uiharu decode engine on the command line
 
   uiharu decode [options] <capture>   decode a raw binary capture to NDJSON
+                                      (--graph <file> for a described pipeline)
   uiharu gen [options] <output>       write a synthetic SPI NOR capture
   uiharu bench [options]              measure throughput, latency and memory
   uiharu <command> --help             the command's options

@@ -9,7 +9,10 @@ use uiharu_core::{
 use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig, SpiConfigError, SpiEvent};
 use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
 
+use std::collections::BTreeMap;
+
 use crate::args::{Args, UsageError};
+use crate::pipeline::{Connection, Description, NodeDescription, SourceDescription};
 
 /// Which decoders the pipeline runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -118,7 +121,51 @@ impl Setup {
         })
     }
 
-    /// Builds the pipeline.
+    /// The same pipeline as a description, for `decode`.
+    pub fn description(&self) -> Description {
+        let mut nodes = BTreeMap::new();
+        nodes.insert(
+            "spi".to_owned(),
+            NodeDescription {
+                kind: "spi".into(),
+                config: serde_json::to_value(&self.spi).unwrap_or(serde_json::Value::Null),
+            },
+        );
+        let mut connections = vec![Connection {
+            from: "source".into(),
+            to: "spi.logic".into(),
+        }];
+        let mut expose = BTreeMap::new();
+        expose.insert("spi".to_owned(), "spi.events".to_owned());
+        if self.kind == Kind::SpiNor {
+            nodes.insert(
+                "flash".to_owned(),
+                NodeDescription {
+                    kind: "spi-nor".into(),
+                    config: serde_json::Value::Null,
+                },
+            );
+            connections.push(Connection {
+                from: "spi.events".into(),
+                to: "flash.bus".into(),
+            });
+            expose.insert("nor".to_owned(), "flash.operations".to_owned());
+        }
+        Description {
+            source: SourceDescription {
+                channels: self.channels,
+                rate: self.rate_hz,
+                blocks: None,
+            },
+            nodes,
+            connections,
+            expose,
+            queue: Some(self.graph.queue_capacity),
+            budget: Some(self.graph.budget),
+        }
+    }
+
+    /// Builds the pipeline with typed readers, for `gen` and `bench`.
     pub fn build(&self) -> Result<Built, GraphError> {
         let mut graph = Graph::with_config(self.graph);
         let source = graph.source(SourceSpec::new(
