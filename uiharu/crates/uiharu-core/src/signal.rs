@@ -177,15 +177,47 @@ impl LogicBlock {
         }
         let unit = usize::from(channels).div_ceil(8).max(1);
         let len = bytes.len() / unit;
-        let mut builder = LogicBlockBuilder::new(start, channels);
-        for sample in bytes.chunks_exact(unit).take(len) {
-            let mut levels = 0u64;
-            for (group, byte) in sample.iter().enumerate() {
-                levels |= u64::from(*byte) << (8 * group);
-            }
-            builder.push(Levels(levels));
+        if len == 0 {
+            return Err(BlockError::Empty);
         }
-        builder.finish()
+        let stride = len.div_ceil(64);
+        let channels_len = usize::from(channels);
+        let mut words = vec![0u64; stride * channels_len];
+        // 64 samples of one byte group are a 64 × 8 bit matrix, sample by channel: eight rows
+        // of eight samples each. Transposing each row's 8 × 8 bits, then the 8 × 8 bytes of
+        // the rows, gives the eight channels' words of the tile.
+        for (index, tile) in bytes[..len * unit].chunks(64 * unit).enumerate() {
+            for group in 0..channels_len.div_ceil(8) {
+                let mut rows = [0u64; 8];
+                for (row, samples) in tile.chunks(8 * unit).enumerate() {
+                    rows[row] = if unit == 1 && samples.len() == 8 {
+                        u64::from_le_bytes([
+                            samples[0], samples[1], samples[2], samples[3], samples[4], samples[5],
+                            samples[6], samples[7],
+                        ])
+                    } else {
+                        samples
+                            .chunks_exact(unit)
+                            .enumerate()
+                            .fold(0u64, |row, (sample, bytes)| {
+                                row | u64::from(bytes[group]) << (8 * sample)
+                            })
+                    };
+                }
+                let lanes = transpose_64x8(rows);
+                let first = 8 * group;
+                for channel in first..(first + 8).min(channels_len) {
+                    words[channel * stride + index] = lanes[channel - first];
+                }
+            }
+        }
+        Ok(Self {
+            start,
+            len: len as u64,
+            channels,
+            stride,
+            words,
+        })
     }
 
     /// The first tick of the block.
@@ -352,6 +384,41 @@ impl LogicBlock {
         }
         None
     }
+}
+
+/// Transposes an 8 × 8 bit matrix held as eight bytes: byte `r` is row `r`, bit `c` of it
+/// column `c`. Swaps the 1 × 1, 2 × 2 and 4 × 4 blocks across the diagonal in turn.
+fn transpose_8x8(mut matrix: u64) -> u64 {
+    let swap = (matrix ^ (matrix >> 7)) & 0x00aa_00aa_00aa_00aa;
+    matrix ^= swap ^ (swap << 7);
+    let swap = (matrix ^ (matrix >> 14)) & 0x0000_cccc_0000_cccc;
+    matrix ^= swap ^ (swap << 14);
+    let swap = (matrix ^ (matrix >> 28)) & 0x0000_0000_f0f0_f0f0;
+    matrix ^ swap ^ (swap << 28)
+}
+
+/// Transposes a 64 × 8 bit matrix: `rows[r]` holds samples `8 r .. 8 r + 8` as bytes, bit
+/// `c` of each being channel `c`; the result holds channel `c`'s 64 samples in element `c`.
+/// Each row's bits are transposed, then the bytes of the rows, by halves, quarters and single
+/// bytes.
+fn transpose_64x8(rows: [u64; 8]) -> [u64; 8] {
+    let mut t = rows.map(transpose_8x8);
+    for row in 0..4 {
+        let (a, b) = (t[row], t[row + 4]);
+        t[row] = (a & 0x0000_0000_ffff_ffff) | (b << 32);
+        t[row + 4] = (a >> 32) | (b & 0xffff_ffff_0000_0000);
+    }
+    for row in [0, 1, 4, 5] {
+        let (a, b) = (t[row], t[row + 2]);
+        t[row] = (a & 0x0000_ffff_0000_ffff) | ((b & 0x0000_ffff_0000_ffff) << 16);
+        t[row + 2] = ((a & 0xffff_0000_ffff_0000) >> 16) | (b & 0xffff_0000_ffff_0000);
+    }
+    for row in [0, 2, 4, 6] {
+        let (a, b) = (t[row], t[row + 1]);
+        t[row] = (a & 0x00ff_00ff_00ff_00ff) | ((b & 0x00ff_00ff_00ff_00ff) << 8);
+        t[row + 1] = ((a & 0xff00_ff00_ff00_ff00) >> 8) | (b & 0xff00_ff00_ff00_ff00);
+    }
+    t
 }
 
 impl fmt::Debug for LogicBlock {
@@ -800,6 +867,48 @@ mod tests {
         let four = LogicBlock::from_interleaved(Tick(5), 4, &[0x3, 0x0, 0xc]).expect("a block");
         assert_eq!(four.len(), 3);
         assert_eq!(four.levels(Tick(7)), Some(Levels(0xc)));
+    }
+
+    /// The sample-by-sample construction `from_interleaved` replaced.
+    fn interleaved_by_sample(
+        start: Tick,
+        channels: u8,
+        bytes: &[u8],
+    ) -> Result<LogicBlock, BlockError> {
+        let unit = usize::from(channels).div_ceil(8).max(1);
+        let len = bytes.len() / unit;
+        let mut builder = LogicBlockBuilder::new(start, channels);
+        for sample in bytes.chunks_exact(unit).take(len) {
+            let mut levels = 0u64;
+            for (group, byte) in sample.iter().enumerate() {
+                levels |= u64::from(*byte) << (8 * group);
+            }
+            builder.push(Levels(levels));
+        }
+        builder.finish()
+    }
+
+    proptest::proptest! {
+        #[test]
+        fn interleaved_matches_the_sample_by_sample_build(
+            channels in 0u8..=64,
+            bytes in proptest::collection::vec(proptest::prelude::any::<u8>(), 0..1200),
+        ) {
+            let fast = LogicBlock::from_interleaved(Tick(3), channels, &bytes);
+            let slow = interleaved_by_sample(Tick(3), channels, &bytes);
+            proptest::prop_assert_eq!(fast, slow);
+        }
+    }
+
+    #[test]
+    fn transposes_eight_by_eight() {
+        // Row 0 all ones becomes column 0 all ones; the identity stays itself.
+        assert_eq!(transpose_8x8(0xff), 0x0101_0101_0101_0101);
+        assert_eq!(transpose_8x8(0x0101_0101_0101_0101), 0xff);
+        let identity = (0..8).fold(0u64, |m, i| m | 1u64 << (9 * i));
+        assert_eq!(transpose_8x8(identity), identity);
+        // Element (row 2, column 5) moves to (row 5, column 2).
+        assert_eq!(transpose_8x8(1 << (8 * 2 + 5)), 1 << (8 * 5 + 2));
     }
 
     #[test]
