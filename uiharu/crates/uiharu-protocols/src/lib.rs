@@ -18,6 +18,7 @@ pub mod i2c;
 pub mod i2s;
 pub mod jtag;
 pub mod lin;
+pub mod mdio;
 pub mod midi;
 pub mod modbus_rtu;
 pub mod onewire;
