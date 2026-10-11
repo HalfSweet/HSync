@@ -5,6 +5,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod parallel;
 pub mod pwm;
 pub mod spi;
 pub mod spi_nor;
