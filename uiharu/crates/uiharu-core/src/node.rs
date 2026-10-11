@@ -333,6 +333,16 @@ pub trait Node: 'static {
     fn start(self: Box<Self>, io: Io) -> NodeFuture;
 }
 
+impl Node for Box<dyn Node> {
+    fn spec(&self) -> NodeSpec {
+        (**self).spec()
+    }
+
+    fn start(self: Box<Self>, io: Io) -> NodeFuture {
+        (*self).start(io)
+    }
+}
+
 /// The queues bound to a node's ports, handed to [`Node::start`], with what the node may need
 /// to know about them: the time base its inputs are on and the properties of the outputs they
 /// read.
