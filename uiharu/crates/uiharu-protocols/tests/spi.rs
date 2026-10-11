@@ -7,9 +7,9 @@ mod common;
 use std::sync::Arc;
 
 use common::{CHANNELS, Harness};
-use uiharu_core::{Levels, LogicBlockBuilder, SignalItem, Tick, TickRange};
+use uiharu_core::{Levels, LogicBlockBuilder, SignalItem, Tick, TickRange, TimeBase};
 use uiharu_protocols::spi::synth::SpiWaveform;
-use uiharu_protocols::spi::{BitOrder, SpiConfig};
+use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig};
 
 const HALF: u64 = 5;
 
@@ -243,18 +243,48 @@ fn blocks_of_any_size_decode_alike() {
     let block = waveform.finish();
     let mut whole = Harness::spi(config.clone());
     whole.run_all(&block);
-    let reference = common::without_progress(&whole.spi_items);
+    let reference = common::without_progress(whole.spi_items());
     assert!(reference.len() > 100);
     for sizes in [&[1u64][..], &[2, 3, 5, 7], &[64], &[63, 65, 1], &[1000, 1]] {
         let mut harness = Harness::spi(config.clone());
         harness.feed_sizes(&block, sizes);
         harness.end();
         assert_eq!(
-            common::without_progress(&harness.spi_items),
+            common::without_progress(harness.spi_items()),
             reference,
             "sizes {sizes:?}"
         );
     }
+}
+
+#[test]
+fn every_cut_and_pause_yields_the_same_events() {
+    let config = SpiConfig {
+        mode: 1,
+        ..SpiConfig::default()
+    };
+    let mut waveform = waveform(&config);
+    for n in 0..12u8 {
+        waveform
+            .transaction((0..(n % 4 + 1)).map(|i| (n.wrapping_mul(29) ^ i, i.wrapping_mul(17))));
+        waveform.idle(u64::from(n) * 2 + 3);
+    }
+    let block = waveform.finish();
+    let gap = TickRange::new(Tick(block.len() / 3), Tick(block.len() / 3 + 37));
+    let build = |graph_config| {
+        uiharu_core::testing::Harness::build(
+            CHANNELS,
+            TimeBase::new(1_000_000),
+            graph_config,
+            |graph, source| {
+                let spi = graph.add(Spi::new(config.clone()).expect("a valid configuration"));
+                graph.connect(source.samples, Spi::input(spi))?;
+                Ok(Spi::events(spi))
+            },
+        )
+        .expect("builds")
+    };
+    uiharu_core::testing::assert_block_invariant(build, &block, &[gap]);
 }
 
 #[test]

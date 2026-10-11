@@ -83,8 +83,8 @@ fn reference(
     }
     harness.end();
     (
-        without_progress(&harness.spi_items),
-        without_progress(&harness.nor_items),
+        without_progress(harness.spi_items()),
+        without_progress(&harness.nor_items()),
     )
 }
 
@@ -123,7 +123,7 @@ proptest! {
         let config = GraphConfig { queue_capacity, budget };
         let mut harness = Harness::build(SpiConfig { mode, ..SpiConfig::default() }, true, config)
             .expect("builds");
-        harness.drain_on_full = 1;
+        harness.drain_on_full(1);
         let mut pause = 0;
         let mut feed = |harness: &mut Harness, piece: &LogicBlock| {
             let mut at = piece.start();
@@ -155,9 +155,9 @@ proptest! {
         }
         harness.end();
 
-        prop_assert_eq!(without_progress(&harness.spi_items), spi_ref);
-        prop_assert_eq!(without_progress(&harness.nor_items), nor_ref);
-        let stats = harness.pipeline.stats();
+        prop_assert_eq!(without_progress(harness.spi_items()), spi_ref);
+        prop_assert_eq!(without_progress(&harness.nor_items()), nor_ref);
+        let stats = harness.pipeline().stats();
         prop_assert!(stats.within_capacity(), "{stats:?}");
         for queue in &stats.queues {
             prop_assert!(queue.high_water <= queue.capacity.max(1), "{queue:?}");
@@ -229,7 +229,7 @@ fn queues_and_state_stay_bounded_on_a_long_read() {
         budget: 64,
     };
     let mut harness = Harness::build(SpiConfig::default(), true, config).expect("builds");
-    harness.drain_on_full = 2;
+    harness.drain_on_full(2);
     let mut at = block.start();
     let mut biggest_batch = 0;
     while at < block.end() {
@@ -237,12 +237,12 @@ fn queues_and_state_stay_bounded_on_a_long_read() {
         let piece = block.slice(TickRange::new(at, end)).expect("a slice");
         harness.push(SignalItem::Data(Arc::new(piece)));
         harness.collect_some(3);
-        let stats = harness.pipeline.stats();
+        let stats = harness.pipeline().stats();
         assert!(stats.high_water() <= 8, "{stats:?}");
         at = end;
     }
     harness.end();
-    for item in &harness.nor_items {
+    for item in &harness.nor_items() {
         if let Item::Event(event) = item
             && let NorEvent::Data { bytes, .. } = &event.payload
         {
@@ -251,7 +251,7 @@ fn queues_and_state_stay_bounded_on_a_long_read() {
     }
     assert_eq!(biggest_batch, DATA_BATCH);
     let data: Vec<u8> = harness
-        .nor_items
+        .nor_items()
         .iter()
         .filter_map(Item::event)
         .filter_map(|event| match &event.payload {
@@ -261,7 +261,7 @@ fn queues_and_state_stay_bounded_on_a_long_read() {
         .flatten()
         .collect();
     assert_eq!(data, bytes);
-    assert!(harness.nor_items.iter().any(|item| matches!(
+    assert!(harness.nor_items().iter().any(|item| matches!(
         item,
         Item::Event(event) if matches!(event.payload, NorEvent::End { reason: NorEnd::Complete, .. })
     )));
