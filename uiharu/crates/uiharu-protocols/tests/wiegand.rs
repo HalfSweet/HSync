@@ -292,6 +292,20 @@ fn a_pulse_on_both_lines_aborts_the_frame() {
         format!("error BothLines [{start},{})@{}", start + 21, start + 20)
     );
     assert_eq!(lines.len(), 2, "{lines:?}");
+
+    // One line rising as the other falls is no overlap: two bits, the second pulse beginning
+    // where the first ends.
+    let mut waveform = new_waveform();
+    let start = waveform.position().get();
+    waveform.pulse(true, false, 40);
+    waveform.pulse(false, true, 40);
+    waveform.idle(GAP + 500);
+    let lines = decode(&waveform.finish());
+    let release = start + 80;
+    assert_eq!(
+        lines[0],
+        format!("frame f1 2 40 [{start},{})@{}", release + 1, release + GAP)
+    );
 }
 
 #[test]
