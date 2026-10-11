@@ -49,6 +49,7 @@ Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/proto
 | WS281x LEDs          | `ws281x`               | logic samples    | [ws281x.md](docs/protocols/ws281x.md)         |
 | USB low/full speed   | `usb`                  | logic samples    | [usb.md](docs/protocols/usb.md)               |
 | USB transactions     | `usb-transactions`     | `usb.packets`    | [usb.md](docs/protocols/usb.md)               |
+| USB Power Delivery   | `usb-pd`               | logic samples    | [usb-pd.md](docs/protocols/usb-pd.md)         |
 | JTAG                 | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
 | SWD                  | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
 | MDIO                 | `mdio`                 | logic samples    | [mdio.md](docs/protocols/mdio.md)             |
