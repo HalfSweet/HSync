@@ -4,6 +4,7 @@
 
 use std::sync::Arc;
 
+use proptest::prelude::*;
 use uiharu_core::testing::{Harness, assert_block_invariant, without_progress};
 use uiharu_core::{
     GraphConfig, GraphError, Item, LogicBlock, SignalItem, Tick, TickRange, TimeBase,
@@ -604,4 +605,158 @@ fn other_rates_and_timings_decode_alike() {
             release + 1_250
         )
     );
+}
+
+// Random traffic.
+
+/// A pulse that is no clean bit.
+#[derive(Clone, Copy, Debug)]
+enum Fault {
+    BothLines,
+    Short,
+    Long,
+}
+
+/// A run of pulses and the silence after it.
+#[derive(Clone, Debug)]
+struct Burst {
+    bits: Vec<bool>,
+    /// The width of its pulses, in ticks: some fall outside the window of 20 to 100.
+    pulse: u64,
+    /// From one pulse's fall to the next one's.
+    interval: u64,
+    fault: Option<(usize, Fault)>,
+    /// The silence after the last pulse's bit time, around the frame gap of 2000 ticks.
+    after: u64,
+}
+
+fn burst() -> impl Strategy<Value = Burst> {
+    let fault = prop_oneof![
+        Just(Fault::BothLines),
+        Just(Fault::Short),
+        Just(Fault::Long)
+    ];
+    (
+        prop::collection::vec(any::<bool>(), 1..70),
+        prop_oneof![8 => 20u64..100, 1 => 12u64..20, 1 => 101u64..140],
+        200u64..700,
+        prop::option::weighted(0.2, (0usize..70, fault)),
+        prop_oneof![3 => 2_000u64..4_000, 1 => 300u64..2_000],
+    )
+        .prop_map(|(bits, pulse, interval, fault, after)| Burst {
+            bits,
+            pulse,
+            interval,
+            fault,
+            after,
+        })
+}
+
+/// The configuration of the random traffic: a frame gap of 2 ms.
+fn quick() -> WiegandConfig {
+    WiegandConfig {
+        frame_gap_us: 2_000,
+        ..config()
+    }
+}
+
+fn bursts(bursts: &[Burst]) -> LogicBlock {
+    let mut waveform = WiegandWaveform::new(quick(), CHANNELS, TimeBase::new(RATE), Tick::ZERO);
+    waveform.idle(2_500);
+    for burst in bursts {
+        for (n, bit) in burst.bits.iter().enumerate() {
+            let low = match burst.fault {
+                Some((at, fault)) if at == n => {
+                    match fault {
+                        Fault::BothLines => waveform.pulse(true, true, 40),
+                        Fault::Short => waveform.pulse(!bit, *bit, 8),
+                        Fault::Long => waveform.pulse(!bit, *bit, 150),
+                    }
+                    match fault {
+                        Fault::BothLines => 40,
+                        Fault::Short => 8,
+                        Fault::Long => 150,
+                    }
+                }
+                _ => {
+                    waveform.pulse(!bit, *bit, burst.pulse);
+                    burst.pulse
+                }
+            };
+            waveform.idle(burst.interval.saturating_sub(low).max(1));
+        }
+        waveform.idle(burst.after);
+    }
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(32),
+        ..ProptestConfig::default()
+    })]
+
+    /// Blocks of any size, a reader that pauses at random and tiny queues and budgets yield the
+    /// events of one uninterrupted run; frames hold at most 64 bits, packed whole, and the
+    /// stream settles in order without progress passing a frame it still reports.
+    #[test]
+    fn random_traffic_decodes_alike_however_it_comes(
+        bursts_in in prop::collection::vec(burst(), 1..6),
+        sizes in prop::collection::vec(1u64..3_000, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        cut in prop::option::of(0.05f64..1.0),
+        gap in prop::option::of((0.05f64..0.95, 1u64..3_000)),
+    ) {
+        let whole = bursts(&bursts_in);
+        let block = match cut {
+            Some(cut) => {
+                let end = Tick(((whole.len() as f64) * cut) as u64).max(Tick(1));
+                whole.slice(TickRange::new(Tick::ZERO, end)).expect("a slice")
+            }
+            None => whole,
+        };
+        let gaps: Vec<TickRange> = gap
+            .and_then(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                let end = (start + len).min(block.len());
+                (start < end).then(|| TickRange::new(Tick(start), Tick(end)))
+            })
+            .into_iter()
+            .collect();
+        let reference = {
+            let mut harness = build(quick(), RATE, GraphConfig::default());
+            harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+            harness.end();
+            harness.without_progress()
+        };
+
+        let mut harness = build(quick(), RATE, GraphConfig { queue_capacity, budget });
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference.clone());
+        let stats = harness.pipeline().stats();
+        prop_assert!(stats.within_capacity(), "{stats:?}");
+
+        let mut seen = Tick::ZERO;
+        for item in &harness.items {
+            match item {
+                Item::Progress(tick) => seen = seen.max(*tick),
+                Item::Event(event) => prop_assert!(event.span.start >= seen, "{event:?} after {seen}"),
+                Item::Gap(_) | Item::End(_) => {}
+            }
+        }
+        let mut settled = Tick::ZERO;
+        for event in reference.iter().filter_map(Item::event) {
+            prop_assert!(event.settled >= settled, "{event:?} settled before {settled}");
+            settled = event.settled;
+            if let WiegandEvent::Frame { bits, data, parity_ok, .. } = &event.payload {
+                prop_assert!((1..=64).contains(bits));
+                prop_assert_eq!(data.len(), usize::from(bits.div_ceil(8)));
+                prop_assert_eq!(parity_ok.is_some(), *bits == 26);
+            }
+        }
+    }
 }
