@@ -32,11 +32,13 @@ use uiharu_core::{
     TimeBase,
 };
 use uiharu_protocols::i2s::{I2s, I2sEvent};
+use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
 use uiharu_protocols::pwm::{Pwm, PwmEvent};
 use uiharu_protocols::spi::{Spi, SpiEvent};
 use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
 use uiharu_protocols::timing::{Timing, TimingEvent};
+use uiharu_protocols::uart::{Uart, UartEvent};
 
 use crate::Failure;
 use crate::ndjson::{StreamWriter, Writer};
@@ -162,10 +164,16 @@ fn build_spi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Spi::new)
 }
 
-fn build_spi_nor(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+/// Checks that a node without configuration was given none.
+fn no_config(value: &serde_json::Value) -> Result<(), String> {
     if !matches!(value, serde_json::Value::Null) && value != &serde_json::json!({}) {
         return Err("takes no configuration".to_owned());
     }
+    Ok(())
+}
+
+fn build_spi_nor(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
     Ok(Box::new(SpiNorRead24::new()))
 }
 
@@ -183,6 +191,15 @@ fn build_timing(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
 
 fn build_parallel(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Parallel::new)
+}
+
+fn build_uart(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Uart::new)
+}
+
+fn build_modbus_rtu(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(ModbusRtu::new()))
 }
 
 /// The node types a description may use, each with the configuration type it reads.
@@ -216,6 +233,16 @@ pub const KINDS: &[Kind] = &[
         name: "parallel",
         build: build_parallel,
         writer: write_as::<ParallelEvent>,
+    },
+    Kind {
+        name: "uart",
+        build: build_uart,
+        writer: write_as::<UartEvent>,
+    },
+    Kind {
+        name: "modbus-rtu",
+        build: build_modbus_rtu,
+        writer: write_as::<ModbusEvent>,
     },
 ];
 

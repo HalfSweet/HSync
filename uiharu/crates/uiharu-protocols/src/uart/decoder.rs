@@ -163,6 +163,7 @@ impl BitOrder {
 
 /// How the line is wired and what its characters look like.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct UartConfig {
     /// The channel the line is on.
     pub line: u8,
