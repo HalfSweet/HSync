@@ -19,7 +19,7 @@ One decoder reads one line. A link with a receive and a transmit line takes two 
 | `inverted`     | `false`     | The line idles low: mark is low and space high         |
 | `sample_point` | 50          | Where each bit is read, in percent of the bit, 1 to 99 |
 
-The input port `logic` requires `channels >= line + 1` of the source.
+The input port `logic` requires of the source `channels >= line + 1` and `rateHz >= 2 × baud`: with fewer than two samples per bit the bits cannot be told apart, so the graph refuses the connection, for example `uart#0.logic requires rateHz >= 200000 of logic#0.samples, which declares 150000`.
 
 ## The stream: `uart.events` v1
 
@@ -69,7 +69,7 @@ Readers can rely on two promises that let them measure silences on the line:
 - After a character the search for the next start edge begins at its last stop bit's sample point, so a sender somewhat faster than the configured rate is followed and characters may follow each other without idle time.
 - The first sample of the stream and the first after a gap are never an edge. A line found at space there is a character under way, which is skipped: decoding starts at the next edge to space once the line is back at mark. That edge can lie inside a character whose start was not seen, so the first characters may be misaligned until the line idles; framing errors usually show it.
 - A character or break cut off by a gap or by the end of the samples is not reported. After a gap the search for a start edge resumes at the gap's end, or at the sample point the decoder was seeking when it met the gap, whichever is later.
-- With fewer than two ticks per bit at the source's rate the bits cannot be told apart: the decoder reports no characters and only passes gaps, progress and the end on.
+- A source with fewer than two ticks per bit is refused when it is connected. Should a decoder start on one all the same, it reports no characters and only passes gaps, progress and the end on.
 
 ## Limits
 
