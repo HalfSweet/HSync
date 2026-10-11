@@ -6,7 +6,7 @@ members = ["crates/*", "src-tauri"]
 version = "0.1.4"
 edition = "2024"
 rust-version = "1.90"
-license = "GPL-3.0-or-later"
+license = "Apache-2.0 OR GPL-3.0-or-later"
 authors = ["HalfSweet"]
 publish = false
 
