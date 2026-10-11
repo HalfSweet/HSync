@@ -39,4 +39,5 @@ pub mod timing;
 pub mod uart;
 pub mod usb;
 pub mod usb_pd;
+pub mod wiegand;
 pub mod ws281x;
