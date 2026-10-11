@@ -24,3 +24,4 @@ pub mod spi_nor;
 pub mod swd;
 pub mod timing;
 pub mod uart;
+pub mod usb;
