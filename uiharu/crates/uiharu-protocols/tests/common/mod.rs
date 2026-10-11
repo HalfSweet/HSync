@@ -11,7 +11,6 @@ use uiharu_core::{
 use uiharu_protocols::spi::{Spi, SpiConfig, SpiEvent};
 use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
 
-#[allow(unused_imports)]
 pub use uiharu_core::testing::without_progress;
 
 pub const CHANNELS: u8 = 4;
@@ -112,12 +111,19 @@ impl Harness {
         self.nor.as_ref().map(Tap::items).unwrap_or_default()
     }
 
+    /// The SPI items as lines, progress left out: it depends on how the samples were cut.
     pub fn spi_lines(&self) -> Vec<String> {
+        describe_spi(&without_progress(self.spi_items()))
+    }
+
+    /// The SPI items as lines, progress included.
+    pub fn spi_lines_with_progress(&self) -> Vec<String> {
         describe_spi(self.spi_items())
     }
 
+    /// The SPI NOR items as lines, progress left out.
     pub fn nor_lines(&self) -> Vec<String> {
-        describe_nor(&self.nor_items())
+        describe_nor(&without_progress(&self.nor_items()))
     }
 }
 

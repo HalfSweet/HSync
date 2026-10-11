@@ -444,9 +444,13 @@ pub enum Change {
         /// The levels of every channel at `tick`.
         levels: Levels,
     },
+    /// No watched channel changed before the deadline of [`SignalCursor::next_change_before`];
+    /// the cursor now stands at this tick.
+    Quiet(Tick),
     /// Samples are missing; the cursor now stands at the end of the gap.
     Gap(TickRange),
-    /// No change up to this tick, which the source has reached.
+    /// No change up to this tick, which the source has reached: either the source said so, or
+    /// the cursor used up the block ending there and the next one has not arrived.
     Progress(Tick),
     /// The samples have ended.
     End(Tick),
@@ -471,16 +475,25 @@ pub enum Sample {
 }
 
 /// A decoder's view of a source: a position in its samples, with the levels just before it.
+///
+/// The cursor moves forward only. [`SignalCursor::next_change`] scans for the next edge on the
+/// watched channels, [`SignalCursor::next_change_before`] does the same up to a deadline,
+/// [`SignalCursor::seek`] jumps ahead to a tick and [`SignalCursor::sample`] reads the levels
+/// where the cursor stands. Blocks the cursor has moved past are released; when it uses a block
+/// up and the next one has not arrived, it reports the block's end as progress once, so that
+/// decoders built on time can see time pass.
 pub struct SignalCursor {
     inbox: Inbox<Arc<LogicBlock>>,
     /// The block the cursor stands in, until it is used up.
     block: Option<Arc<LogicBlock>>,
     /// The next tick to look at.
     pos: Tick,
-    /// The levels at `pos - 1`, when known.
+    /// The levels at `prev_tick`, the last tick seen before `pos`.
     prev: Levels,
-    /// False at the start and right after a gap: the tick before `pos` was never seen.
-    prev_known: bool,
+    /// `None` at the start and right after a gap: no tick before `pos` was seen.
+    prev_tick: Option<Tick>,
+    /// The end of a block used up with the next one not yet there, until it is announced.
+    exhausted: Option<Tick>,
 }
 
 impl fmt::Debug for SignalCursor {
@@ -488,9 +501,17 @@ impl fmt::Debug for SignalCursor {
         f.debug_struct("SignalCursor")
             .field("pos", &self.pos)
             .field("prev", &self.prev)
-            .field("prev_known", &self.prev_known)
+            .field("prev_tick", &self.prev_tick)
             .finish_non_exhaustive()
     }
+}
+
+/// What the cursor found in the block it stands in.
+enum Found {
+    Change(Tick, ChannelMask, Levels),
+    Quiet(Tick),
+    /// The block is used up; its last levels were noted.
+    Exhausted,
 }
 
 impl SignalCursor {
@@ -500,13 +521,31 @@ impl SignalCursor {
             block: None,
             pos: Tick::ZERO,
             prev: Levels(0),
-            prev_known: false,
+            prev_tick: None,
+            exhausted: None,
         }
     }
 
     /// The next tick the cursor will look at.
     pub fn position(&self) -> Tick {
         self.pos
+    }
+
+    /// Moves the cursor forward to `tick`, to sample there or to wait for edges from there on;
+    /// a tick not after the position leaves the cursor where it is.
+    pub fn seek(&mut self, tick: Tick) {
+        if tick > self.pos {
+            self.pos = tick;
+        }
+    }
+
+    /// Notes the last levels of `block` and lets it go.
+    fn release(&mut self, block: &LogicBlock) {
+        let last = Tick(block.end().0 - 1);
+        self.prev = block.levels(last).unwrap_or_default();
+        self.prev_tick = Some(last);
+        self.exhausted = Some(block.end());
+        self.block = None;
     }
 
     /// Takes the next item from the source if one is waiting; `Pending` sets the node to wait
@@ -517,7 +556,9 @@ impl SignalCursor {
             Poll::Ready(item) => match &*item {
                 Item::Event(event) => {
                     self.block = Some(Arc::clone(&event.payload));
-                    self.pos = event.payload.start();
+                    // The first block decides where the samples start; later ones follow the
+                    // position, which may stand ahead of them after a seek.
+                    self.pos = self.pos.max(event.payload.start());
                     None
                 }
                 Item::Gap(range) => Some(Item::Gap(*range)),
@@ -530,13 +571,54 @@ impl SignalCursor {
             self.inbox.advance();
         }
         if let Some(Item::Gap(range)) = taken {
-            self.pos = range.end;
-            self.prev_known = false;
+            self.pos = self.pos.max(range.end);
+            self.prev_tick = None;
         }
+        self.exhausted = None;
         Poll::Ready(taken)
     }
 
-    fn poll_change(&mut self, mask: ChannelMask) -> Poll<Change> {
+    /// Scans the current block from the position for a change on `mask` before `until`.
+    fn scan(&mut self, block: &LogicBlock, mask: ChannelMask, until: Option<Tick>) -> Found {
+        if block.end() <= self.pos {
+            self.release(block);
+            return Found::Exhausted;
+        }
+        let limit = until.map_or(block.end(), |until| until.min(block.end()));
+        if limit <= self.pos {
+            return Found::Quiet(self.pos);
+        }
+        let before = Tick(self.pos.0.saturating_sub(1));
+        let (from, prev) = if self.prev_tick == Some(before) && self.pos > Tick::ZERO {
+            (self.pos, self.prev)
+        } else if self.pos > block.start() {
+            (self.pos, block.levels(before).unwrap_or_default())
+        } else {
+            // Nothing before the first sample of the stream or after a gap: it is no edge.
+            (self.pos.next(), block.levels(self.pos).unwrap_or_default())
+        };
+        if from < limit
+            && let Some((tick, changed)) = block.next_change(mask, from, prev)
+            && tick < limit
+        {
+            let levels = block.levels(tick).unwrap_or_default();
+            self.prev = levels;
+            self.prev_tick = Some(tick);
+            self.pos = tick.next();
+            return Found::Change(tick, changed, levels);
+        }
+        if limit < block.end() {
+            let last = Tick(limit.0 - 1);
+            self.prev = block.levels(last).unwrap_or_default();
+            self.prev_tick = Some(last);
+            self.pos = limit;
+            return Found::Quiet(limit);
+        }
+        self.release(block);
+        Found::Exhausted
+    }
+
+    fn poll_change(&mut self, mask: ChannelMask, until: Option<Tick>) -> Poll<Change> {
         let cx = self.inbox.cx().clone();
         if !cx.has_budget() {
             cx.wait(Wait::Budget);
@@ -544,21 +626,8 @@ impl SignalCursor {
         }
         loop {
             if let Some(block) = self.block.clone() {
-                if self.pos < block.end() {
-                    let (from, prev) = if self.prev_known {
-                        (self.pos, self.prev)
-                    } else {
-                        // Nothing before the first sample: it cannot be an edge.
-                        let first = block.levels(self.pos).unwrap_or_default();
-                        (self.pos.next(), first)
-                    };
-                    if from < block.end()
-                        && let Some((tick, changed)) = block.next_change(mask, from, prev)
-                    {
-                        let levels = block.levels(tick).unwrap_or_default();
-                        self.prev = levels;
-                        self.prev_known = true;
-                        self.pos = tick.next();
+                match self.scan(&block, mask, until) {
+                    Found::Change(tick, changed, levels) => {
                         cx.spend();
                         return Poll::Ready(Change::At {
                             tick,
@@ -566,15 +635,26 @@ impl SignalCursor {
                             levels,
                         });
                     }
-                    let last = Tick(block.end().0 - 1);
-                    self.prev = block.levels(last).unwrap_or_default();
-                    self.prev_known = true;
-                    self.pos = block.end();
+                    Found::Quiet(tick) => {
+                        cx.spend();
+                        return Poll::Ready(Change::Quiet(tick));
+                    }
+                    Found::Exhausted => {}
                 }
-                self.block = None;
+            } else if let Some(until) = until
+                && until <= self.pos
+            {
+                cx.spend();
+                return Poll::Ready(Change::Quiet(self.pos));
             }
             match self.poll_source() {
-                Poll::Pending => return Poll::Pending,
+                Poll::Pending => {
+                    if let Some(end) = self.exhausted.take() {
+                        cx.spend();
+                        return Poll::Ready(Change::Progress(end));
+                    }
+                    return Poll::Pending;
+                }
                 Poll::Ready(None) => continue,
                 Poll::Ready(Some(Item::Gap(range))) => {
                     cx.spend();
@@ -600,7 +680,7 @@ impl SignalCursor {
             return Poll::Pending;
         }
         loop {
-            if let Some(block) = &self.block {
+            if let Some(block) = self.block.clone() {
                 if let Some(levels) = block.levels(self.pos) {
                     cx.spend();
                     return Poll::Ready(Sample::At {
@@ -608,10 +688,16 @@ impl SignalCursor {
                         levels,
                     });
                 }
-                self.block = None;
+                self.release(&block);
             }
             match self.poll_source() {
-                Poll::Pending => return Poll::Pending,
+                Poll::Pending => {
+                    if let Some(end) = self.exhausted.take() {
+                        cx.spend();
+                        return Poll::Ready(Sample::Progress(end));
+                    }
+                    return Poll::Pending;
+                }
                 Poll::Ready(None) => continue,
                 Poll::Ready(Some(Item::Gap(range))) => {
                     cx.spend();
@@ -633,7 +719,18 @@ impl SignalCursor {
     /// Waits for the next tick at or after the cursor where a channel of `mask` changes level,
     /// and moves past it. Channels that change at the same tick are reported together.
     pub fn next_change(&mut self, mask: ChannelMask) -> impl Future<Output = Change> + '_ {
-        poll_fn(move |_| self.poll_change(mask))
+        poll_fn(move |_| self.poll_change(mask, None))
+    }
+
+    /// Like [`SignalCursor::next_change`], but gives up at `until`: when no watched channel
+    /// changes before that tick, the cursor moves there and [`Change::Quiet`] is returned.
+    /// With an empty mask this waits for the samples up to `until` to arrive.
+    pub fn next_change_before(
+        &mut self,
+        mask: ChannelMask,
+        until: Tick,
+    ) -> impl Future<Output = Change> + '_ {
+        poll_fn(move |_| self.poll_change(mask, Some(until)))
     }
 
     /// Waits for the sample at the cursor and reads every channel's level there, without
@@ -768,6 +865,169 @@ mod tests {
         assert_eq!(moved.range(), TickRange::new(Tick(500), Tick(503)));
         assert_eq!(moved.level(0, Tick(502)), Some(true));
         assert_eq!(moved.words(0), block.words(0));
+    }
+
+    use std::cell::RefCell;
+    use std::future::Future;
+    use std::pin::Pin;
+    use std::rc::Rc;
+    use std::task::{Context, Poll, Waker};
+
+    use crate::node::NodeCx;
+    use crate::stream::{Broadcast, Event};
+
+    fn poll<F: Future>(future: Pin<&mut F>) -> Poll<F::Output> {
+        future.poll(&mut Context::from_waker(Waker::noop()))
+    }
+
+    /// A cursor on a queue the test pushes into by hand.
+    fn cursor() -> (SignalCursor, Rc<RefCell<Broadcast<Arc<LogicBlock>>>>) {
+        let queue = Rc::new(RefCell::new(Broadcast::new(16)));
+        let cx = NodeCx::new();
+        cx.refill(1_000);
+        (SignalCursor::new(Inbox::new(Rc::clone(&queue), cx)), queue)
+    }
+
+    fn push(queue: &Rc<RefCell<Broadcast<Arc<LogicBlock>>>>, block: LogicBlock) {
+        let last = Tick(block.end().0 - 1);
+        let item = Item::Event(Event {
+            seq: 0,
+            span: block.range(),
+            settled: last,
+            payload: Arc::new(block),
+        });
+        queue
+            .borrow_mut()
+            .try_push(item)
+            .map_err(|_| ())
+            .expect("fits");
+    }
+
+    #[test]
+    fn seeks_ahead_and_keeps_the_level_before_the_position() {
+        let (mut cursor, queue) = cursor();
+        // Channel 0: low for 100 ticks, then high from 100 on; cut into blocks of 40.
+        let mut samples = vec![0u64; 100];
+        samples.extend(std::iter::repeat_n(1u64, 60));
+        let whole = block(0, &samples, 1);
+        for start in (0..160).step_by(40) {
+            push(
+                &queue,
+                whole
+                    .slice(TickRange::new(Tick(start), Tick(start + 40)))
+                    .expect("a slice"),
+            );
+        }
+        cursor.seek(Tick(100));
+        // The edge at exactly the sought tick is found: the level before it is known.
+        let change = poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut());
+        assert_eq!(
+            change,
+            Poll::Ready(Change::At {
+                tick: Tick(100),
+                changed: ChannelMask::one(0),
+                levels: Levels(1)
+            })
+        );
+        cursor.seek(Tick(50));
+        assert_eq!(cursor.position(), Tick(101), "a seek never moves back");
+        cursor.seek(Tick(130));
+        let sample = poll(Box::pin(cursor.sample()).as_mut());
+        assert_eq!(
+            sample,
+            Poll::Ready(Sample::At {
+                tick: Tick(130),
+                levels: Levels(1)
+            })
+        );
+    }
+
+    #[test]
+    fn a_deadline_ends_the_wait_quietly() {
+        let (mut cursor, queue) = cursor();
+        // Channel 0 rises at 30 and stays high.
+        let mut samples = vec![0u64; 50];
+        for sample in &mut samples[30..] {
+            *sample = 1;
+        }
+        push(&queue, block(0, &samples, 1));
+        let until =
+            poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(20))).as_mut());
+        assert_eq!(until, Poll::Ready(Change::Quiet(Tick(20))));
+        assert_eq!(cursor.position(), Tick(20));
+        let found =
+            poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(40))).as_mut());
+        assert!(matches!(
+            found,
+            Poll::Ready(Change::At { tick: Tick(30), .. })
+        ));
+        // A deadline already passed is quiet at once.
+        let past =
+            poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(10))).as_mut());
+        assert_eq!(past, Poll::Ready(Change::Quiet(Tick(31))));
+        // A deadline beyond the block waits for the next block.
+        let pending =
+            poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(80))).as_mut());
+        assert_eq!(
+            pending,
+            Poll::Ready(Change::Progress(Tick(50))),
+            "the used-up block is announced"
+        );
+        let pending =
+            poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(80))).as_mut());
+        assert_eq!(pending, Poll::Pending);
+        push(&queue, block(50, &[1u64; 50], 1));
+        let quiet =
+            poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(80))).as_mut());
+        assert_eq!(quiet, Poll::Ready(Change::Quiet(Tick(80))));
+    }
+
+    #[test]
+    fn a_used_up_block_is_announced_once() {
+        let (mut cursor, queue) = cursor();
+        push(&queue, block(0, &[0u64; 10], 1));
+        assert_eq!(
+            poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut()),
+            Poll::Ready(Change::Progress(Tick(10)))
+        );
+        assert_eq!(
+            poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut()),
+            Poll::Pending
+        );
+        assert_eq!(poll(Box::pin(cursor.sample()).as_mut()), Poll::Pending);
+        // The edge on the first sample of the next block is still found.
+        push(&queue, block(10, &[1u64; 10], 1));
+        assert!(matches!(
+            poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut()),
+            Poll::Ready(Change::At { tick: Tick(10), .. })
+        ));
+    }
+
+    #[test]
+    fn the_first_sample_after_a_gap_is_no_edge() {
+        let (mut cursor, queue) = cursor();
+        push(&queue, block(0, &[0u64; 10], 1));
+        queue
+            .borrow_mut()
+            .try_push(Item::Gap(TickRange::new(Tick(10), Tick(20))))
+            .map_err(|_| ())
+            .expect("fits");
+        push(&queue, block(20, &[1u64; 10], 1));
+        assert_eq!(
+            poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut()),
+            Poll::Ready(Change::Gap(TickRange::new(Tick(10), Tick(20))))
+        );
+        assert_eq!(
+            poll(Box::pin(cursor.sample()).as_mut()),
+            Poll::Ready(Sample::At {
+                tick: Tick(20),
+                levels: Levels(1)
+            })
+        );
+        assert_eq!(
+            poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut()),
+            Poll::Ready(Change::Progress(Tick(30)))
+        );
     }
 
     #[test]

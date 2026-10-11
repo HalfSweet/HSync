@@ -297,5 +297,8 @@ fn progress_is_reported_as_blocks_are_used_up() {
     harness.push(SignalItem::Data(block));
     harness.push(SignalItem::Progress(Tick(100)));
     harness.collect();
-    assert_eq!(harness.spi_lines(), vec!["progress 100"]);
+    // The source's progress and the cursor's own announcement of the used-up block fold into
+    // one item.
+    assert_eq!(harness.spi_lines_with_progress(), vec!["progress 100"]);
+    assert!(harness.spi_lines().is_empty());
 }

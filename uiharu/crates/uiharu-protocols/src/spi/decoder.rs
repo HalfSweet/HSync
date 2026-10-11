@@ -390,6 +390,8 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<SpiEvent>, config: SpiCon
                     out.gap(range).await;
                     continue 'resync;
                 }
+                // Without a deadline the wait is never quiet.
+                Change::Quiet(_) => {}
                 Change::Progress(tick) => out.progress(tick).await,
                 Change::End(tick) => {
                     if framed && let Some(transfer) = decoder.transfer.take() {
