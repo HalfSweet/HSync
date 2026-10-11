@@ -45,10 +45,10 @@
 //!   read; before a gap or the end goes out, progress is announced up to the gap's start or the
 //!   end, or up to the start of the character they cut off. A reader can therefore tell from
 //!   progress how long the line has been seen idle, as protocols framed by silences need;
-//! - with fewer than two ticks per bit at the source's rate, bits do not get a sample of their
-//!   own and cannot be told apart: the decoder reports no characters and only passes gaps,
-//!   progress and the end on. The configuration cannot check this, as the rate is the source's,
-//!   known only when the node starts.
+//! - with fewer than two ticks per bit, bits do not get a sample of their own and cannot be told
+//!   apart, so the input requires the source's `rateHz` to be at least twice the baud rate and
+//!   the graph refuses a slower source. Should a decoder start on one all the same, it reports no
+//!   characters and only passes gaps, progress and the end on.
 //!
 //! Limits: one line per decoder (a link with RX and TX takes two); 5 to 9 data bits; the sample
 //! point is a single sample per bit, without majority voting; nothing is reported about the idle
@@ -285,7 +285,9 @@ impl Node for Uart {
             name: "uart".into(),
             inputs: vec![InputSpec::new::<Arc<LogicBlock>>(
                 "logic",
-                Requires::new().at_least("channels", i64::from(self.config.line) + 1),
+                Requires::new()
+                    .at_least("channels", i64::from(self.config.line) + 1)
+                    .at_least("rateHz", 2 * i64::from(self.config.baud)),
             )],
             outputs: vec![OutputSpec::new::<UartEvent>("events", self.config.props())],
         }
@@ -592,18 +594,14 @@ mod tests {
         })
         .expect("valid");
         let spec = uart.spec();
-        assert!(
-            spec.inputs[0]
-                .requires
-                .unmet(&Props::new().with("channels", 6))
-                .is_none()
-        );
-        assert!(
-            spec.inputs[0]
-                .requires
-                .unmet(&Props::new().with("channels", 5))
-                .is_some()
-        );
+        let source = |channels: i64, rate: i64| {
+            let props = Props::new().with("channels", channels).with("rateHz", rate);
+            spec.inputs[0].requires.unmet(&props).map(|(key, _)| key)
+        };
+        // Six channels for channel 5, and two ticks per bit at 115200 baud.
+        assert_eq!(source(6, 230_400), None);
+        assert_eq!(source(5, 230_400), Some("channels"));
+        assert_eq!(source(6, 230_399), Some("rateHz"));
     }
 
     #[test]

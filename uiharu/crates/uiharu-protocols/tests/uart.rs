@@ -4,7 +4,7 @@
 
 use proptest::prelude::*;
 use uiharu_core::testing::{Harness, assert_block_invariant};
-use uiharu_core::{GraphConfig, Item, LogicBlock, Tick, TickRange, TimeBase};
+use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::uart::synth::{Faults, UartWaveform};
 use uiharu_protocols::uart::{
     BitOrder, Parity, ParityCheck, StopBits, Uart, UartConfig, UartEvent,
@@ -25,7 +25,12 @@ fn config() -> UartConfig {
     }
 }
 
-fn build(config: UartConfig, rate: u64, graph_config: GraphConfig) -> Harness<UartEvent> {
+/// Source → UART on a source of `rate` samples per second.
+fn try_build(
+    config: UartConfig,
+    rate: u64,
+    graph_config: GraphConfig,
+) -> Result<Harness<UartEvent>, GraphError> {
     Harness::build(
         CHANNELS,
         TimeBase::new(rate),
@@ -36,7 +41,10 @@ fn build(config: UartConfig, rate: u64, graph_config: GraphConfig) -> Harness<Ua
             Ok(Uart::events(uart))
         },
     )
-    .expect("builds")
+}
+
+fn build(config: UartConfig, rate: u64, graph_config: GraphConfig) -> Harness<UartEvent> {
+    try_build(config, rate, graph_config).expect("builds")
 }
 
 fn frame_text(value: u16, parity: Option<ParityCheck>, framing_ok: bool) -> String {
@@ -655,24 +663,26 @@ fn progress_never_passes_a_character_still_being_read() {
 }
 
 #[test]
-fn with_fewer_than_two_ticks_per_bit_no_character_is_read() {
+fn a_source_with_fewer_than_two_ticks_per_bit_is_refused() {
+    // 1.5 ticks per bit at 100 000 baud: bits cannot be told apart.
+    let error = try_build(config(), 150_000, GraphConfig::default()).expect_err("refused");
+    assert_eq!(
+        error,
+        GraphError::Requirement {
+            from: "logic#0.samples".into(),
+            to: "uart#0.logic".into(),
+            key: "rateHz",
+            requirement: ">= 200000".into(),
+            found: "150000".into(),
+        }
+    );
+    // Two ticks per bit are enough.
     let mut waveform = UartWaveform::new(config(), CHANNELS, 2, Tick::ZERO);
     waveform.idle(10);
     waveform.bytes([0x12, 0x34]);
     waveform.idle(10);
-    let block = waveform.finish();
-    let gap = TickRange::new(Tick(20), Tick(25));
-    // 1.5 ticks per bit: nothing can be read, gaps and the end still pass.
-    let mut harness = build(config(), 150_000, GraphConfig::default());
-    harness.feed_with_gaps(&block, &[gap], &[7]);
-    harness.end();
     assert_eq!(
-        describe(&harness.without_progress()),
-        vec!["gap 20..25", "eof 60"]
-    );
-    // Two ticks per bit are enough.
-    assert_eq!(
-        decode(config(), 200_000, &block),
+        decode(config(), 200_000, &waveform.finish()),
         vec!["frame 0x12 [10,30)@29", "frame 0x34 [30,50)@49", "eof 60"]
     );
 }
