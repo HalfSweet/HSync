@@ -26,7 +26,7 @@ Capture, trigger, decode and measure, with one app for logic analyzers from seve
   <img src="assets/screenshots/en-US/hero-light.webp" alt="HSync showing a capture of I²C, UART, SPI and CAN-FD buses, with decoded transfers above their waveforms and the I²C data stream below">
 </picture>
 
-HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic and ALIENTEK's ATK-Logic analyzers ([full list](#supported-devices)) and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, and 150 more protocol decoders are a search away. HSync opens and saves DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware, the decoders and the Python runtime they use.
+HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic and PXLogic's PX-Logic analyzers ([full list](#supported-devices)) and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, and 150 more protocol decoders are a search away. HSync opens and saves DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware, the decoders and the Python runtime they use.
 
 No hardware at hand? HSync opens its built-in **Demo device**, which plays back a recording of four buses, so you can try everything straight away.
 
@@ -34,10 +34,10 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 
 ### Capture
 
-- **Logic analyzers from several makers**: every DreamSourceLab DSLogic, plus ALIENTEK's ATK-Logic DL16 and DL16 Plus ([full list](#supported-devices)). HSync drives each one the way its maker's own app does, and loads the firmware and FPGA bitstreams they need by itself.
-- **Buffer and Stream modes**, with RLE compression for captures longer than the device's memory, and a warning when a capture would need more than half of your computer's memory.
+- **Logic analyzers from several makers**: every DreamSourceLab DSLogic, ALIENTEK's ATK-Logic DL16 and DL16 Plus, and PXLogic's PX-Logic 32, 16 Pro, 16 Plus and 16 Base ([full list](#supported-devices)). HSync drives each one the way its maker's own app does, and loads the firmware and FPGA bitstreams they need by itself.
+- **Buffer and Stream modes**, with RLE compression for captures longer than the device's memory where the device has it, and a warning when a capture would need more than half of your computer's memory.
 - **Single, Repeat, Loop and Instant capture.** Repeat keeps the last complete capture on screen while the next one records in the background; Loop keeps capturing and holds on to the most recent stretch.
-- **Device options** for the threshold voltage, glitch filter, external clock and more, remembered for next time.
+- **Device options** for the threshold voltage, glitch filter, external clock, external trigger input and more, remembered for next time.
 - **Hot-plug aware.** Plug in a logic analyzer while the demo is open and HSync offers to switch to it; if the USB connection drops for a moment, HSync reopens the device with its settings.
 
 ### Trigger
@@ -97,7 +97,7 @@ The firmware, the protocol decoders and the Python they run on are all included;
 
 - **macOS**: HSync isn't notarized by Apple yet, so the first time you open it, macOS says it can't verify the app. Close the message, open **System Settings → Privacy & Security** and click **Open Anyway** next to the note about HSync. You only need to do this once.
 - **Windows**: the installer isn't code-signed yet, so SmartScreen may stop it: click **More info → Run anyway**. HSync reaches logic analyzers through the WinUSB driver; if it says no usable USB driver is available, install WinUSB for the device with [Zadig](https://zadig.akeo.ie/) (**Options → List All Devices**, select the device, choose **WinUSB** and click **Install Driver** or **Replace Driver**).
-- **Linux**: to use a logic analyzer without root, add the udev rule for its maker, then plug the device in again. DSView installs the DreamSourceLab rule, so you can skip that one if you have it.
+- **Linux**: to use a logic analyzer without root, add the udev rule for its maker, then plug the device in again. DSView and PXView install rules of their own, so you can skip the ones they cover.
 
   ```sh
   # DreamSourceLab DSLogic
@@ -107,6 +107,11 @@ The firmware, the protocol decoders and the Python they run on are all included;
   # ALIENTEK ATK-Logic
   sudo tee /etc/udev/rules.d/60-atk-logic.rules > /dev/null <<'EOF'
   SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="ffcc", MODE="0666"
+  EOF
+  # PXLogic PX-Logic
+  sudo tee /etc/udev/rules.d/60-pxlogic.rules > /dev/null <<'EOF'
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5237", MODE="0666"
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="05dc", ATTRS{manufacturer}=="PX*", MODE="0666"
   EOF
   sudo udevadm control --reload-rules
   sudo udevadm trigger
@@ -142,9 +147,13 @@ The [user guide](docs/user-guide.md) covers every feature and keyboard shortcut.
 | DreamSourceLab | DSLogic U3Pro32     | 32       | 3.0      |
 | ALIENTEK       | ATK-Logic DL16      | 16       | 2.0      |
 | ALIENTEK       | ATK-Logic DL16 Plus | 16       | 2.0      |
+| PXLogic        | PX-Logic 32         | 32       | 3.0      |
+| PXLogic        | PX-Logic 16 Pro     | 16       | 3.0      |
+| PXLogic        | PX-Logic 16 Plus    | 16       | 3.0      |
+| PXLogic        | PX-Logic 16 Base    | 16       | 3.0      |
 | —              | Demo device         | 16       | built in |
 
-HSync talks to each device the way its maker's app does, byte for byte: to DSLogic devices like DSView and to ATK-Logic devices like ALIENTEK's ATK-Logic app. It has been tested on a DSLogic U2Pro16; if you use another model, please [let us know how it went](https://github.com/HalfSweet/HSync/issues/new). DSCope oscilloscopes, DSView's oscilloscope and data acquisition modes, and the PWM outputs of ATK-Logic devices aren't supported yet. To update the firmware of an ATK-Logic device, use ALIENTEK's ATK-Logic app.
+HSync talks to each device the way its maker's app does, byte for byte: to DSLogic devices like DSView, to ATK-Logic devices like ALIENTEK's ATK-Logic app and to PX-Logic devices like PXView. It has been tested on a DSLogic U2Pro16; if you use another model, please [let us know how it went](https://github.com/HalfSweet/HSync/issues/new). DSCope oscilloscopes, DSView's oscilloscope and data acquisition modes, the PWM outputs of ATK-Logic devices, and the trigger and PWM outputs of PX-Logic devices aren't supported yet. To update the firmware of an ATK-Logic device, use ALIENTEK's ATK-Logic app. When HSync opens a PX-Logic device that runs another firmware version, it first writes the firmware of PXView 1.6.5 into the device, as PXView does with its own.
 
 ## Questions
 
@@ -181,6 +190,7 @@ pnpm bundle       # build the installers for this machine
 - [DSView](https://github.com/DreamSourceLab/DSView) by DreamSourceLab: the DSLogic support and protocol decoders are ported from its libsigrok4DSL and libsigrokdecode4DSL, which grew out of the [sigrok](https://sigrok.org/) project.
 - The DSLogic firmware and FPGA bitstreams come from DreamSourceLab under the MIT license.
 - [ATK-Logic](https://github.com/alientek-openedv/atk-logic) by ALIENTEK: the support for ATK-Logic devices is ported from it.
+- [PXView](https://github.com/PXLogic/PXView) by PXLogic: the support for PX-Logic devices is ported from its `pxlogic` driver, and their firmware and FPGA bitstreams come from it.
 - [IBM Plex](https://github.com/IBM/plex) fonts, under the SIL Open Font License 1.1.
 - [Lucide](https://lucide.dev/) icons, under the ISC license.
 - Built with [Tauri](https://tauri.app/), [Vue](https://vuejs.org/) and [Rust](https://www.rust-lang.org/).

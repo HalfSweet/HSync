@@ -26,7 +26,7 @@
   <img src="assets/screenshots/zh-CN/hero-light.webp" alt="HSync 显示一段包含 I²C、UART、SPI 与 CAN-FD 总线的采集：解码结果位于对应波形上方，下方是 I²C 的数据流">
 </picture>
 
-HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic 与正点原子（ALIENTEK）的 ATK-Logic 系列（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，另有 150 种协议解码器搜索即用。HSync 能打开、保存 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件、解码器，以及解码器依赖的 Python 运行环境。
+HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic 与 PXLogic 的 PX-Logic 系列（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，另有 150 种协议解码器搜索即用。HSync 能打开、保存 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件、解码器，以及解码器依赖的 Python 运行环境。
 
 手边没有硬件？HSync 会打开内置的「演示设备」，回放一段包含四种总线的采集数据，所有功能都可以马上试用。
 
@@ -34,10 +34,10 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 
 ### 采集
 
-- **支持多家厂商的逻辑分析仪**：全部 DreamSourceLab DSLogic 型号，以及正点原子 ATK-Logic DL16 与 DL16 Plus（[完整列表](#支持的设备)）。HSync 按各厂商自家软件的方式驱动设备，所需的固件与 FPGA 位流自动加载。
-- **Buffer 与 Stream 两种模式**：时长超出设备内存时可启用 RLE 压缩；所需内存超过本机一半时会提前提醒。
+- **支持多家厂商的逻辑分析仪**：全部 DreamSourceLab DSLogic 型号、正点原子 ATK-Logic DL16 与 DL16 Plus，以及 PXLogic 的 PX-Logic 32、16 Pro、16 Plus 与 16 Base（[完整列表](#支持的设备)）。HSync 按各厂商自家软件的方式驱动设备，所需的固件与 FPGA 位流自动加载。
+- **Buffer 与 Stream 两种模式**：设备支持时，可启用 RLE 压缩让时长超出设备内存；所需内存超过本机一半时会提前提醒。
 - **单次、重复、循环、即时四种采集方式。** 重复采集时，屏幕保留上一次的完整结果，新的一次在后台采集；循环采集持续进行，只保留最新的一段。
-- **设备选项**：阈值电压、毛刺滤波、外部时钟等，设置会被记住。
+- **设备选项**：阈值电压、毛刺滤波、外部时钟、外部触发输入等，设置会被记住。
 - **支持热插拔。** 打开演示设备时插入逻辑分析仪，HSync 会提示切换过去；USB 短暂断开后，HSync 会重新打开设备并恢复设置。
 
 ### 触发
@@ -97,7 +97,7 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 
 - **macOS**：HSync 尚未经过 Apple 公证，第一次打开时 macOS 会提示无法验证此 App。关闭提示后，打开「系统设置 → 隐私与安全性」，在关于 HSync 的提示旁点击「仍要打开」。只需操作一次。
 - **Windows**：安装程序尚未签名，SmartScreen 可能会拦截：点击「更多信息 → 仍要运行」。HSync 通过 WinUSB 驱动访问逻辑分析仪；如果提示没有可用的 USB 驱动，用 [Zadig](https://zadig.akeo.ie/) 为设备安装 WinUSB（「Options → List All Devices」，选中该设备，选择「WinUSB」后点击「Install Driver」或「Replace Driver」）。
-- **Linux**：要以普通用户身份使用逻辑分析仪，为它的厂商添加 udev 规则，然后重新插拔设备。装过 DSView 的系统已有 DreamSourceLab 的规则，可以跳过这一条。
+- **Linux**：要以普通用户身份使用逻辑分析仪，为它的厂商添加 udev 规则，然后重新插拔设备。DSView 与 PXView 会安装各自的规则，已覆盖的可以跳过。
 
   ```sh
   # DreamSourceLab DSLogic
@@ -107,6 +107,11 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
   # 正点原子 ATK-Logic
   sudo tee /etc/udev/rules.d/60-atk-logic.rules > /dev/null <<'EOF'
   SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="ffcc", MODE="0666"
+  EOF
+  # PXLogic PX-Logic
+  sudo tee /etc/udev/rules.d/60-pxlogic.rules > /dev/null <<'EOF'
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5237", MODE="0666"
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="05dc", ATTRS{manufacturer}=="PX*", MODE="0666"
   EOF
   sudo udevadm control --reload-rules
   sudo udevadm trigger
@@ -142,9 +147,13 @@ HSync 每次启动时检查新版本（可在「设置 → 行为」里关闭）
 | DreamSourceLab | DSLogic U3Pro32     | 32     | 3.0  |
 | 正点原子       | ATK-Logic DL16      | 16     | 2.0  |
 | 正点原子       | ATK-Logic DL16 Plus | 16     | 2.0  |
+| PXLogic        | PX-Logic 32         | 32     | 3.0  |
+| PXLogic        | PX-Logic 16 Pro     | 16     | 3.0  |
+| PXLogic        | PX-Logic 16 Plus    | 16     | 3.0  |
+| PXLogic        | PX-Logic 16 Base    | 16     | 3.0  |
 | —              | 演示设备            | 16     | 内置 |
 
-HSync 与每台设备的通信方式都与其厂商的软件逐字节一致：DSLogic 同 DSView，ATK-Logic 同正点原子的 ATK-Logic 软件。已在 DSLogic U2Pro16 上实测；如果你在用其他型号，欢迎[反馈使用情况](https://github.com/HalfSweet/HSync/issues/new)。DSCope 示波器、DSView 的示波器与数据采集模式，以及 ATK-Logic 设备的 PWM 输出暂不支持。ATK-Logic 设备的固件请用正点原子的 ATK-Logic 软件更新。
+HSync 与每台设备的通信方式都与其厂商的软件逐字节一致：DSLogic 同 DSView，ATK-Logic 同正点原子的 ATK-Logic 软件，PX-Logic 同 PXView。已在 DSLogic U2Pro16 上实测；如果你在用其他型号，欢迎[反馈使用情况](https://github.com/HalfSweet/HSync/issues/new)。DSCope 示波器、DSView 的示波器与数据采集模式、ATK-Logic 设备的 PWM 输出，以及 PX-Logic 设备的触发输出与 PWM 输出暂不支持。ATK-Logic 设备的固件请用正点原子的 ATK-Logic 软件更新。HSync 打开固件版本不同的 PX-Logic 设备时，会先把 PXView 1.6.5 的固件写入设备，与 PXView 对待自家固件的做法相同。
 
 ## 常见问题
 
@@ -181,6 +190,7 @@ pnpm bundle       # 构建本机的安装包
 - DreamSourceLab 的 [DSView](https://github.com/DreamSourceLab/DSView)：DSLogic 的支持与协议解码器移植自其中的 libsigrok4DSL 与 libsigrokdecode4DSL，它们源自 [sigrok](https://sigrok.org/) 项目。
 - DSLogic 固件与 FPGA 位流来自 DreamSourceLab，以 MIT 许可分发。
 - 正点原子的 [ATK-Logic](https://github.com/alientek-openedv/atk-logic)：ATK-Logic 设备的支持移植自它。
+- PXLogic 的 [PXView](https://github.com/PXLogic/PXView)：PX-Logic 设备的支持移植自其中的 `pxlogic` 驱动，设备固件与 FPGA 位流也取自它。
 - [IBM Plex](https://github.com/IBM/plex) 字体，以 SIL Open Font License 1.1 许可分发。
 - [Lucide](https://lucide.dev/) 图标，以 ISC 许可分发。
 - 基于 [Tauri](https://tauri.app/)、[Vue](https://vuejs.org/) 与 [Rust](https://www.rust-lang.org/) 构建。
