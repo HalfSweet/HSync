@@ -6,3 +6,4 @@
 #![forbid(unsafe_code)]
 
 pub mod spi;
+pub mod spi_nor;
