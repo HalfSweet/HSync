@@ -5,10 +5,11 @@
 mod common;
 
 use common::{CHANNELS, Harness, RATE};
-use uiharu_core::{GraphConfig, GraphError, Tick, TickRange, TimeBase};
+use uiharu_core::testing::assert_progress_promise;
+use uiharu_core::{GraphConfig, GraphError, Item, Tick, TickRange, TimeBase};
 use uiharu_protocols::spi::synth::{SpiWaveform, nor_read_words};
 use uiharu_protocols::spi::{Spi, SpiConfig};
-use uiharu_protocols::spi_nor::{AddressBytes, Command, SpiNor, SpiNorConfig, synth};
+use uiharu_protocols::spi_nor::{AddressBytes, Command, NorEvent, SpiNor, SpiNorConfig, synth};
 
 const HALF: u64 = 3;
 
@@ -1028,4 +1029,41 @@ fn a_long_mixed_waveform_decodes_alike_however_it_is_cut() {
             .any(|item| matches!(item, uiharu_core::Item::Gap(_)))
     );
     uiharu_core::testing::assert_block_invariant(build, &block, &gaps);
+}
+
+#[test]
+fn progress_moves_inside_a_long_read() {
+    let bytes = data(240);
+    let mut waveform = waveform();
+    waveform.transaction(nor_read_words(0x000100, &bytes));
+    waveform.idle(10);
+    let block = waveform.finish();
+    let mut harness = Harness::nor(SpiConfig::default());
+    harness.feed_sizes(&block, &[64]);
+    harness.end();
+    let items = harness.nor_items();
+    let address = items
+        .iter()
+        .position(|item| matches!(item, Item::Event(event) if matches!(event.payload, NorEvent::Address { .. })))
+        .expect("the address is reported");
+    let end = items
+        .iter()
+        .rposition(|item| matches!(item, Item::Event(event) if matches!(event.payload, NorEvent::End { .. })))
+        .expect("the end is reported");
+    // The data is read in batches of 32 bytes: while a batch fills, the cursor passes the
+    // progress of every block on held back to the batch's first byte, so the watermark moves
+    // once per batch instead of standing still for the whole read.
+    let inside: Vec<Tick> = items[address..end]
+        .iter()
+        .filter_map(|item| match item {
+            Item::Progress(tick) => Some(*tick),
+            _ => None,
+        })
+        .collect();
+    assert!(inside.len() >= 240 / 32 - 1, "{inside:?}");
+    assert!(
+        inside.windows(2).all(|pair| pair[0] <= pair[1]),
+        "{inside:?}"
+    );
+    assert_progress_promise(&items);
 }

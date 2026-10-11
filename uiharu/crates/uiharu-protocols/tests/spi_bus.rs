@@ -272,3 +272,28 @@ fn the_listing_does_not_depend_on_blocks_pauses_or_queues() {
         &[TickRange::new(Tick(60), Tick(70))],
     );
 }
+
+#[test]
+fn progress_is_passed_on_inside_transaction_zero() {
+    let block = unframed_waveform().finish();
+    let mut harness = build(config(false), GraphConfig::default());
+    harness.feed(&block, &[16]);
+    harness.end();
+    let progress: Vec<Tick> = harness
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            uiharu_core::Item::Progress(tick) => Some(*tick),
+            _ => None,
+        })
+        .collect();
+    // Transaction 0 runs from the first word at 25 to the last at 285; the cursor passes the
+    // blocks' progress on all along, where before it swallowed it.
+    assert!(
+        progress
+            .iter()
+            .any(|tick| (Tick(30)..Tick(280)).contains(tick)),
+        "{progress:?}"
+    );
+    testing::assert_progress_promise(&harness.items);
+}

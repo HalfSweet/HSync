@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc d97d09b6f9a0f5825cafdf9ac8c346899cbe3ab6b31a4dcdc1a2d42ef6ac2157 # shrinks to steps = [Read { address: 0, words: [0] }, Short { keep: 18 }, Read { address: 0, words: [0] }, Read { address: 0, words: [0, 13] }, Read { address: 37534, words: [35901, 59170, 4001] }, Wral { value: 10133 }, Erase { address: 21040 }], wide = 133, half = 5, sizes = [7], pauses = [7, 9, 2, 2], queue_capacity = 2, budget = 15, cut = Some(0.25238508800858545), gap = None

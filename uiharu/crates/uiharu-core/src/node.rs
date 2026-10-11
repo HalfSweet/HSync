@@ -612,6 +612,59 @@ mod tests {
     }
 
     #[test]
+    fn a_sink_passes_progress_on_once_and_waits_for_room() {
+        let queue = shared::<u8>(1);
+        let cx = NodeCx::new();
+        cx.refill(10);
+        let mut inbox = Inbox::new(Rc::clone(&queue), Rc::clone(&cx));
+        let mut outbox = Outbox::new(Rc::clone(&queue), Rc::clone(&cx));
+        let sink = outbox.progress_sink();
+        assert_eq!(
+            poll(Box::pin(sink.progress(Tick(5))).as_mut()),
+            Poll::Ready(())
+        );
+        assert_eq!(sink.forwarded(), Some(Tick(5)));
+        // A tick at or before the one passed on is not sent again; a later one folds into it.
+        assert_eq!(
+            poll(Box::pin(sink.progress(Tick(3))).as_mut()),
+            Poll::Ready(())
+        );
+        assert_eq!(
+            poll(Box::pin(sink.progress(Tick(7))).as_mut()),
+            Poll::Ready(())
+        );
+        assert_eq!(queue.borrow().len(), 1);
+        assert!(matches!(
+            poll(Box::pin(inbox.recv()).as_mut()),
+            Poll::Ready(Item::Progress(Tick(7)))
+        ));
+        // Behind an event in a full queue, progress waits for room like any item.
+        assert_eq!(
+            poll(Box::pin(outbox.emit(Provenance::at(Tick(8)), 1)).as_mut()),
+            Poll::Ready(())
+        );
+        assert_eq!(
+            poll(Box::pin(sink.progress(Tick(9))).as_mut()),
+            Poll::Pending
+        );
+        assert_eq!(cx.waiting(), Wait::Output);
+        assert!(matches!(
+            poll(Box::pin(inbox.recv()).as_mut()),
+            Poll::Ready(Item::Event(_))
+        ));
+        assert_eq!(
+            poll(Box::pin(sink.progress(Tick(9))).as_mut()),
+            Poll::Ready(())
+        );
+        // Every sink of an output shares what the decoder says it holds.
+        let other = outbox.progress_sink();
+        other.hold(Some(Tick(4)));
+        assert_eq!(sink.held(), Some(Tick(4)));
+        sink.hold(None);
+        assert_eq!(other.held(), None);
+    }
+
+    #[test]
     fn dropping_an_inbox_detaches_its_reader() {
         let queue = shared::<u8>(1);
         let cx = NodeCx::new();
