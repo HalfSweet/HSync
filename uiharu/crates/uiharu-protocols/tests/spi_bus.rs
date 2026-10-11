@@ -9,7 +9,7 @@ use uiharu_core::{
     OutputRef, OutputSpec, Props, Provenance, Requires, SchemaId, Tick, TickRange, TimeBase,
 };
 use uiharu_protocols::spi::synth::SpiWaveform;
-use uiharu_protocols::spi::{Next, Read, Spi, SpiBus, SpiConfig, SpiEvent};
+use uiharu_protocols::spi::{Next, Read, ReadError, Spi, SpiBus, SpiConfig, SpiEvent};
 
 const CHANNELS: u8 = 4;
 const RATE: u64 = 1_000_000;
@@ -48,6 +48,7 @@ impl Lister {
                     // Transaction 0 opens at its first word, so the opening is reported
                     // with that word's provenance, after reading it.
                     let mut opened = false;
+                    let mut cut_at = None;
                     let outcome = loop {
                         match tx.word_or_end().await {
                             Ok(Read::Word(word)) => {
@@ -70,10 +71,22 @@ impl Lister {
                                 .await;
                             }
                             Ok(Read::End) => break "end".to_owned(),
-                            Err(error) => break error.to_string(),
+                            Err(error) => {
+                                // A cut-off is placed where the samples stop, not where the
+                                // last word was: that tick does not depend on progress.
+                                cut_at = match error {
+                                    ReadError::Gap(range) => Some(range.start),
+                                    ReadError::EndOfInput(tick) => Some(tick),
+                                    _ => None,
+                                };
+                                break error.to_string();
+                            }
                         }
                     };
-                    let at = tx.consumed();
+                    let at = match cut_at {
+                        Some(tick) => Provenance::at(tick),
+                        None => tx.consumed(),
+                    };
                     if !opened {
                         out.emit(
                             Provenance::at(at.span.start),
@@ -104,7 +117,11 @@ impl Node for Lister {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        Box::pin(Self::run(SpiBus::new(io.input(0)), io.output(0)))
+        let out = io.output(0);
+        Box::pin(Self::run(
+            SpiBus::new(io.input(0), out.progress_sink()),
+            out,
+        ))
     }
 }
 

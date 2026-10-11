@@ -39,7 +39,7 @@ use std::convert::Infallible;
 
 use uiharu_core::{
     InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec,
-    Props, Provenance, Requires, Tick, TickRange,
+    ProgressSink, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::bus::{LinkBus, LinkError, LinkNext};
@@ -90,8 +90,9 @@ impl Node for OneWireNetwork {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let link = LinkBus::new(io.input(0));
-        Box::pin(run(link, NetOut::new(io.output(0))))
+        let out = io.output(0);
+        let link = LinkBus::new(io.input(0), out.progress_sink());
+        Box::pin(run(link, NetOut::new(out)))
     }
 }
 
@@ -99,6 +100,7 @@ impl Node for OneWireNetwork {
 #[derive(Debug)]
 struct NetOut {
     out: Outbox<OneWireEvent>,
+    sink: ProgressSink,
     next_tx: u64,
     /// The bits of the transport byte under way, the first as bit 0.
     value: u8,
@@ -109,8 +111,14 @@ struct NetOut {
 }
 
 impl NetOut {
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        self.sink.hold(self.at.map(|at| at.span.start));
+    }
+
     fn new(out: Outbox<OneWireEvent>) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             next_tx: 1,
             value: 0,
@@ -133,11 +141,13 @@ impl NetOut {
     /// Adds a bit to the transport byte under way, which goes out once it has eight.
     async fn transport_bit(&mut self, tx: TxId, bit: bool, at: Provenance) {
         self.at = Some(self.at.map_or(at, |have| have.join(at)));
+        self.sync_hold();
         self.value |= u8::from(bit) << self.count;
         self.count += 1;
         if self.count == 8 {
             let value = self.value;
             let at = self.at.take().unwrap_or(at);
+            self.sync_hold();
             self.value = 0;
             self.count = 0;
             self.emit(at, OneWireEvent::Byte { tx, value }).await;
@@ -152,6 +162,7 @@ impl NetOut {
         }
         let (value, count) = (self.value, self.count);
         let mut at = self.at.take().unwrap_or(Provenance::at(decided));
+        self.sync_hold();
         at.settled = at.settled.max(decided);
         self.value = 0;
         self.count = 0;

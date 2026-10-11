@@ -15,7 +15,7 @@
 //! Provenance comes at the contract's grain: a bit read from a batch hands over the ticks of
 //! the whole batch, the `shift` event it came in.
 
-use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
+use uiharu_core::{Event, Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
 use super::events::{EndReason, JtagEvent, Register, ResetBy, SHIFT_BATCH_BITS, ScanId, TapState};
 
@@ -135,6 +135,7 @@ impl Batch {
 #[derive(Debug)]
 pub struct JtagBus {
     inbox: Inbox<JtagEvent>,
+    progress: ProgressSink,
     current: Option<Current>,
     batch: Batch,
     /// The ticks of the items consumed since [`Scan::consumed`] last took them.
@@ -145,9 +146,10 @@ pub struct JtagBus {
 
 impl JtagBus {
     /// A reader on `inbox`.
-    pub fn new(inbox: Inbox<JtagEvent>) -> Self {
+    pub fn new(inbox: Inbox<JtagEvent>, progress: ProgressSink) -> Self {
         Self {
             inbox,
+            progress,
             current: None,
             batch: Batch::default(),
             consumed: None,
@@ -163,6 +165,17 @@ impl JtagBus {
 
     /// The ticks of what was consumed since this was last called; an empty span where the
     /// last item was settled when nothing was.
+    /// Passes progress met inside a frame on, held back to what the decoder has read through
+    /// this cursor and not reported yet: what was consumed since it last took the provenance,
+    /// and what it says it still holds ([`ProgressSink::hold`]).
+    async fn forward_progress(&mut self, tick: Tick) {
+        let held = [self.consumed.map(|at| at.span.start), self.progress.held()]
+            .into_iter()
+            .flatten()
+            .fold(tick, Tick::min);
+        self.progress.progress(held).await;
+    }
+
     pub fn consumed(&mut self) -> Provenance {
         self.consumed
             .take()
@@ -249,7 +262,7 @@ impl JtagBus {
                         _ => Peeked::Foreign,
                     },
                     Item::Gap(range) => Peeked::Gap(*range),
-                    Item::Progress(_) => Peeked::Progress,
+                    Item::Progress(tick) => Peeked::Progress(*tick),
                     Item::End(tick) => Peeked::EndOfInput(*tick),
                 })
                 .await;
@@ -270,8 +283,9 @@ impl JtagBus {
                     self.consume(&event);
                     continue;
                 }
-                Peeked::Progress => {
+                Peeked::Progress(tick) => {
                     self.inbox.take();
+                    self.forward_progress(tick).await;
                     continue;
                 }
                 Peeked::End(event, EndReason::Complete) => {
@@ -309,7 +323,7 @@ enum Peeked {
     End(Event<JtagEvent>, EndReason),
     Foreign,
     Gap(TickRange),
-    Progress,
+    Progress(Tick),
     EndOfInput(Tick),
 }
 

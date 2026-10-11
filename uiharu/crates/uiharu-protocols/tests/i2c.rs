@@ -732,8 +732,9 @@ impl Node for Reader {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = I2cBus::new(io.input(0));
-        Box::pin(read_through_the_cursor(bus, io.output(0), self.strict))
+        let out = io.output(0);
+        let bus = I2cBus::new(io.input(0), out.progress_sink());
+        Box::pin(read_through_the_cursor(bus, out, self.strict))
     }
 }
 

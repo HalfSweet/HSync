@@ -8,7 +8,7 @@ use std::convert::Infallible;
 use serde::{Deserialize, Serialize};
 use uiharu_core::{
     InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec,
-    Props, Provenance, Requires, Tick, TickRange,
+    ProgressSink, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::commands::Phase;
@@ -109,9 +109,10 @@ impl Node for SpiNor {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = SpiBus::new(io.input(0));
+        let out = io.output(0);
+        let bus = SpiBus::new(io.input(0), out.progress_sink());
         let flash = Flash::new(self.config.address_bytes);
-        Box::pin(run(bus, NorOut::new(io.output(0)), flash))
+        Box::pin(run(bus, NorOut::new(out), flash))
     }
 }
 
@@ -171,6 +172,7 @@ enum Batch {
 #[derive(Debug)]
 struct NorOut {
     out: Outbox<NorEvent>,
+    sink: ProgressSink,
     next_op: u64,
     open: Option<OpId>,
     /// At most [`DATA_BATCH`] bytes waiting to go out.
@@ -183,8 +185,14 @@ struct NorOut {
 }
 
 impl NorOut {
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        self.sink.hold(self.batch_at.map(|at| at.span.start));
+    }
+
     fn new(out: Outbox<NorEvent>) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             next_op: 1,
             open: None,
@@ -238,6 +246,7 @@ impl NorOut {
             self.batch_at = Some(have.join(at));
         }
         self.batch.push(byte);
+        self.sync_hold();
         if matches!(of, Batch::Data(_)) {
             self.count = self.count.saturating_add(1);
         }
@@ -258,6 +267,7 @@ impl NorOut {
             (Some(at), _) => at,
             (None, decided) => Provenance::at(decided.unwrap_or(Tick::ZERO)),
         };
+        self.sync_hold();
         if let Some(decided) = decided {
             at.settled = at.settled.max(decided);
         }

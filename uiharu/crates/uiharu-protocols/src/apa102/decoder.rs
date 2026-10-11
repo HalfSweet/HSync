@@ -63,7 +63,7 @@
 
 use uiharu_core::{
     Inbox, InputRef, InputSpec, Io, Item, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef,
-    OutputSpec, PropValue, Props, Provenance, Requires, Tick, TickRange,
+    OutputSpec, ProgressSink, PropValue, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::events::{Apa102Event, EndReason, ErrorReason, FrameId};
@@ -119,9 +119,11 @@ impl Node for Apa102 {
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
         let framed = matches!(io.input_props(0).get("cs"), Some(PropValue::Bool(true)));
-        let frames = Frames::new(io.output(0));
+        let out = io.output(0);
+        let sink = out.progress_sink();
+        let frames = Frames::new(out);
         if framed {
-            Box::pin(framed_run(SpiBus::new(io.input(0)), frames))
+            Box::pin(framed_run(SpiBus::new(io.input(0), sink), frames))
         } else {
             Box::pin(unframed_run(io.input(0), frames))
         }
@@ -296,6 +298,7 @@ impl Open {
 #[derive(Debug)]
 struct Frames {
     out: Outbox<Apa102Event>,
+    sink: ProgressSink,
     next_id: u64,
     open: Option<Open>,
     /// The zero bytes just read, in a row.
@@ -304,8 +307,14 @@ struct Frames {
 }
 
 impl Frames {
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        self.sink.hold(self.held_from());
+    }
+
     fn new(out: Outbox<Apa102Event>) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             next_id: 1,
             open: None,
@@ -318,6 +327,7 @@ impl Frames {
     fn forget(&mut self) {
         self.zeros = 0;
         self.recent = Recent::EMPTY;
+        self.sync_hold();
     }
 
     /// A byte of the stream.
@@ -328,6 +338,7 @@ impl Frames {
             self.nonzero(value, at).await;
         }
         self.recent.push(at);
+        self.sync_hold();
     }
 
     async fn zero(&mut self, at: Provenance) {
@@ -463,6 +474,7 @@ impl Frames {
             reason: EndReason::Release,
         };
         out.emit(Provenance::over(span, at.settled), end).await;
+        self.sync_hold();
     }
 
     /// The bytes stopped at `tick`, cut off: the frame under way ends there.
@@ -481,24 +493,28 @@ impl Frames {
             reason: EndReason::Aborted,
         };
         out.emit(Provenance::over(span, tick), end).await;
+        self.sync_hold();
     }
 
     /// Progress of the stream: nothing comes before `tick`.
-    async fn progress(&mut self, tick: Tick) {
-        // Zero bytes that may become a start frame: the last four at most.
+    /// The first tick of whatever is still to be reported: the zero bytes that may become a
+    /// start frame (the last four at most), the LED frame being read and the one held back.
+    fn held_from(&self) -> Option<Tick> {
         let zeros = usize::try_from(self.zeros).unwrap_or(4).min(4);
-        let mut held = self
-            .recent
-            .back(zeros)
-            .map_or(tick, |first| first.span.start.min(tick));
+        let mut held = self.recent.back(zeros).map(|first| first.span.start);
         if let Some(frame) = &self.open {
             let starts = [
                 frame.end_span.map(|span| span.start),
                 frame.pending.and_then(|pending| pending.led.start()),
                 frame.led.start(),
             ];
-            held = starts.into_iter().flatten().fold(held, Tick::min);
+            held = starts.into_iter().flatten().chain(held).min();
         }
+        held
+    }
+
+    async fn progress(&mut self, tick: Tick) {
+        let held = self.held_from().map_or(tick, |held| held.min(tick));
         self.out.progress(held).await;
     }
 

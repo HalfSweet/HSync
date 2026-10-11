@@ -39,7 +39,7 @@
 
 use uiharu_core::{
     InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec,
-    Props, Provenance, Requires, Tick, TickRange,
+    ProgressSink, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::events::{
@@ -90,8 +90,9 @@ impl Node for Ds18b20 {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = OneWireBus::new(io.input(0));
-        Box::pin(run(bus, Out::new(io.output(0))))
+        let out = io.output(0);
+        let bus = OneWireBus::new(io.input(0), out.progress_sink());
+        Box::pin(run(bus, Out::new(out)))
     }
 }
 
@@ -99,6 +100,7 @@ impl Node for Ds18b20 {
 #[derive(Debug)]
 struct Out {
     out: Outbox<Ds18b20Event>,
+    sink: ProgressSink,
     /// The transaction whose command is under way.
     open: Option<TxId>,
     /// The scratchpad bytes the Read Scratchpad under way has read.
@@ -109,8 +111,14 @@ struct Out {
 }
 
 impl Out {
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        self.sink.hold(self.scratchpad_at.map(|at| at.span.start));
+    }
+
     fn new(out: Outbox<Ds18b20Event>) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             open: None,
             scratchpad: [0; SCRATCHPAD_LEN],
@@ -137,11 +145,13 @@ impl Out {
             self.read += 1;
         }
         self.scratchpad_at = Some(self.scratchpad_at.map_or(at, |have| have.join(at)));
+        self.sync_hold();
         if self.read < SCRATCHPAD_LEN {
             return;
         }
         let bytes = self.scratchpad;
         let at = self.scratchpad_at.take().unwrap_or(at);
+        self.sync_hold();
         self.read = 0;
         let [lsb, msb, th, tl, config, ..] = bytes;
         let event = Ds18b20Event::Scratchpad {
@@ -167,6 +177,7 @@ impl Out {
         let temperature_raw =
             (self.read >= 2).then(|| i16::from_le_bytes([self.scratchpad[0], self.scratchpad[1]]));
         let mut at = self.scratchpad_at.take().unwrap_or(Provenance::at(decided));
+        self.sync_hold();
         at.settled = at.settled.max(decided);
         self.read = 0;
         let event = Ds18b20Event::PartialScratchpad {

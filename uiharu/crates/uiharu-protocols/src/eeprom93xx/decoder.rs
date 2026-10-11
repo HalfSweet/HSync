@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use uiharu_core::{
     InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec,
-    PropValue, Props, Provenance, Requires, Tick, TickRange,
+    ProgressSink, PropValue, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::events::{Command, DATA_BATCH, Direction, Eeprom93xxEvent, EndReason, OpId};
@@ -143,8 +143,9 @@ impl Node for Eeprom93xx {
             data_bits: self.config.organisation.data_bits(),
             data_out: io.input_props(0).get("do") == Some(&PropValue::Bool(true)),
         };
-        let bus = MicrowireBus::new(io.input(0));
-        Box::pin(run(bus, Out::new(io.output(0)), layout))
+        let out = io.output(0);
+        let bus = MicrowireBus::new(io.input(0), out.progress_sink());
+        Box::pin(run(bus, Out::new(out), layout))
     }
 }
 
@@ -170,6 +171,7 @@ struct Open {
 #[derive(Debug)]
 struct Out {
     out: Outbox<Eeprom93xxEvent>,
+    sink: ProgressSink,
     next_op: u64,
     open: Option<Open>,
     /// At most [`DATA_BATCH`] words waiting to go out.
@@ -185,8 +187,14 @@ struct Out {
 }
 
 impl Out {
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        self.sink.hold(self.batch_at.map(|at| at.span.start));
+    }
+
     fn new(out: Outbox<Eeprom93xxEvent>) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             next_op: 1,
             open: None,
@@ -239,6 +247,7 @@ impl Out {
             self.batch_at = Some(have.join(at));
         }
         self.batch.push(value);
+        self.sync_hold();
         self.count = self.count.saturating_add(1);
         if self.batch.len() >= DATA_BATCH {
             self.flush(None).await;
@@ -259,6 +268,7 @@ impl Out {
             .batch_at
             .take()
             .unwrap_or(Provenance::at(decided.unwrap_or(Tick::ZERO)));
+        self.sync_hold();
         if let Some(decided) = decided {
             at.settled = at.settled.max(decided);
         }

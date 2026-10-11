@@ -195,8 +195,9 @@ impl Node for UsbTransactions {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = UsbBus::new(io.input(0));
-        Box::pin(run(bus, XactOut::new(io.output(0))))
+        let out = io.output(0);
+        let bus = UsbBus::new(io.input(0), out.progress_sink());
+        Box::pin(run(bus, XactOut::new(out)))
     }
 }
 

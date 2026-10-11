@@ -1421,8 +1421,9 @@ impl Node for Summarize {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = CanBus::new(io.input(0));
-        Box::pin(summarize(bus, io.output(0), self.bytes))
+        let out = io.output(0);
+        let bus = CanBus::new(io.input(0), out.progress_sink());
+        Box::pin(summarize(bus, out, self.bytes))
     }
 }
 

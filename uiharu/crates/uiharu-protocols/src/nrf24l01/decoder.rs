@@ -5,7 +5,7 @@
 
 use uiharu_core::{
     InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec,
-    Props, Provenance, Requires, Tick, TickRange,
+    ProgressSink, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::commands::{ACTIVATE, ACTIVATE_KEY, Decoded, Payload, decode};
@@ -54,8 +54,9 @@ impl Node for Nrf24l01 {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = SpiBus::new(io.input(0));
-        Box::pin(run(bus, Out::new(io.output(0))))
+        let out = io.output(0);
+        let bus = SpiBus::new(io.input(0), out.progress_sink());
+        Box::pin(run(bus, Out::new(out)))
     }
 }
 
@@ -63,6 +64,7 @@ impl Node for Nrf24l01 {
 #[derive(Debug)]
 struct Out {
     out: Outbox<Nrf24Event>,
+    sink: ProgressSink,
     next_op: u64,
     open: Option<OpId>,
     /// At most [`DATA_BATCH`] bytes waiting to go out, and which way they moved.
@@ -75,8 +77,14 @@ struct Out {
 }
 
 impl Out {
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        self.sink.hold(self.batch_at.map(|at| at.span.start));
+    }
+
     fn new(out: Outbox<Nrf24Event>) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             next_op: 1,
             open: None,
@@ -125,6 +133,7 @@ impl Out {
             self.batch_at = Some(have.join(at));
         }
         self.batch.push(byte);
+        self.sync_hold();
         self.count = self.count.saturating_add(1);
         if self.batch.len() >= DATA_BATCH {
             self.flush(op, None).await;
@@ -143,6 +152,7 @@ impl Out {
             .batch_at
             .take()
             .unwrap_or(Provenance::at(decided.unwrap_or(Tick::ZERO)));
+        self.sync_hold();
         if let Some(decided) = decided {
             at.settled = at.settled.max(decided);
         }
@@ -197,8 +207,11 @@ async fn activate(
     status: u8,
     head: Provenance,
 ) -> Result<(), ReadError> {
+    // The command byte's ticks are held until the next word says what the command was.
+    out.sink.hold(Some(head.span.start));
     let next = tx.word_or_end().await?;
     let at = tx.consumed();
+    out.sink.hold(None);
     let decided = Provenance::over(head.span, at.settled);
     match next {
         Read::Word(word) if word.mosi()? == ACTIVATE_KEY => {

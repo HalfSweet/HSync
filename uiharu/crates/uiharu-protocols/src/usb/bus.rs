@@ -14,7 +14,7 @@
 //! end, draining. What packets mean together — transactions, transfers — is the consuming
 //! decoder's own code.
 
-use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
+use uiharu_core::{Event, Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
 use super::events::{EndReason, PacketId, Pid, UsbEvent};
 
@@ -143,6 +143,7 @@ struct Current {
 #[derive(Debug)]
 pub struct UsbBus {
     inbox: Inbox<UsbEvent>,
+    progress: ProgressSink,
     current: Option<Current>,
     /// The ticks of the items consumed since [`UsbBus::consumed`] last took them.
     consumed: Option<Provenance>,
@@ -152,9 +153,10 @@ pub struct UsbBus {
 
 impl UsbBus {
     /// A reader on `inbox`.
-    pub fn new(inbox: Inbox<UsbEvent>) -> Self {
+    pub fn new(inbox: Inbox<UsbEvent>, progress: ProgressSink) -> Self {
         Self {
             inbox,
+            progress,
             current: None,
             consumed: None,
             last_settled: Tick::ZERO,
@@ -168,6 +170,17 @@ impl UsbBus {
 
     /// The ticks of what was consumed since this was last called; an empty span where the
     /// last item was settled when nothing was.
+    /// Passes progress met inside a frame on, held back to what the decoder has read through
+    /// this cursor and not reported yet: what was consumed since it last took the provenance,
+    /// and what it says it still holds ([`ProgressSink::hold`]).
+    async fn forward_progress(&mut self, tick: Tick) {
+        let held = [self.consumed.map(|at| at.span.start), self.progress.held()]
+            .into_iter()
+            .flatten()
+            .fold(tick, Tick::min);
+        self.progress.progress(held).await;
+    }
+
     pub fn consumed(&mut self) -> Provenance {
         self.consumed
             .take()
@@ -231,7 +244,7 @@ impl UsbBus {
                         None => Peeked::Foreign,
                     },
                     Item::Gap(range) => Peeked::Gap(*range),
-                    Item::Progress(_) => Peeked::Progress,
+                    Item::Progress(tick) => Peeked::Progress(*tick),
                     Item::End(tick) => Peeked::EndOfInput(*tick),
                 })
                 .await;
@@ -249,8 +262,9 @@ impl UsbBus {
                     }
                 }
                 // Progress inside a packet says nothing about its fields.
-                Peeked::Progress => {
+                Peeked::Progress(tick) => {
                     self.inbox.take();
+                    self.forward_progress(tick).await;
                     continue;
                 }
                 // Another packet's event, or the bus's: this packet never ended. It stays for
@@ -338,7 +352,7 @@ enum Peeked {
     Own(Provenance, Own),
     Foreign,
     Gap(TickRange),
-    Progress,
+    Progress(Tick),
     EndOfInput(Tick),
 }
 

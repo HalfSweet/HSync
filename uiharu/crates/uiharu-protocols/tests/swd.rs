@@ -997,7 +997,12 @@ impl Node for Reader {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        Box::pin(read(SwdBus::new(io.input(0)), io.output(0), self.mode))
+        let out = io.output(0);
+        Box::pin(read(
+            SwdBus::new(io.input(0), out.progress_sink()),
+            out,
+            self.mode,
+        ))
     }
 }
 

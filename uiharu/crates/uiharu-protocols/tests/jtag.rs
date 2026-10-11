@@ -837,7 +837,12 @@ impl Node for Reader {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        Box::pin(read(JtagBus::new(io.input(0)), io.output(0), self.limit))
+        let out = io.output(0);
+        Box::pin(read(
+            JtagBus::new(io.input(0), out.progress_sink()),
+            out,
+            self.limit,
+        ))
     }
 }
 

@@ -17,7 +17,7 @@
 //! The cursors offer the contracts' primitives and nothing more: what a device makes of the
 //! bytes — which command, which fields, byte order — is that device's own code.
 
-use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
+use uiharu_core::{Event, Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
 use super::events::{EndReason, LinkEvent, OneWireEvent, TxId};
 
@@ -62,6 +62,7 @@ pub enum LinkNext {
 #[derive(Debug)]
 pub struct LinkBus {
     inbox: Inbox<LinkEvent>,
+    progress: ProgressSink,
     /// The ticks of the items consumed since [`LinkBus::consumed`] last took them.
     consumed: Option<Provenance>,
     /// Where the last consumed item was settled.
@@ -74,7 +75,7 @@ enum LinkPeeked {
     BadSlot(Provenance, u64),
     Reset(Provenance),
     Gap(TickRange),
-    Progress,
+    Progress(Tick),
     End(Tick),
 }
 
@@ -84,9 +85,10 @@ fn provenance<T>(event: &Event<T>) -> Provenance {
 
 impl LinkBus {
     /// A reader on `inbox`.
-    pub fn new(inbox: Inbox<LinkEvent>) -> Self {
+    pub fn new(inbox: Inbox<LinkEvent>, progress: ProgressSink) -> Self {
         Self {
             inbox,
+            progress,
             consumed: None,
             last_settled: Tick::ZERO,
         }
@@ -99,6 +101,17 @@ impl LinkBus {
 
     /// The ticks of what was consumed since this was last called; an empty span where the
     /// last item was settled when nothing was.
+    /// Passes progress met inside a frame on, held back to what the decoder has read through
+    /// this cursor and not reported yet: what was consumed since it last took the provenance,
+    /// and what it says it still holds ([`ProgressSink::hold`]).
+    async fn forward_progress(&mut self, tick: Tick) {
+        let held = [self.consumed.map(|at| at.span.start), self.progress.held()]
+            .into_iter()
+            .flatten()
+            .fold(tick, Tick::min);
+        self.progress.progress(held).await;
+    }
+
     pub fn consumed(&mut self) -> Provenance {
         self.consumed
             .take()
@@ -139,7 +152,7 @@ impl LinkBus {
                         LinkEvent::Reset { .. } => LinkPeeked::Reset(provenance(event)),
                     },
                     Item::Gap(range) => LinkPeeked::Gap(*range),
-                    Item::Progress(_) => LinkPeeked::Progress,
+                    Item::Progress(tick) => LinkPeeked::Progress(*tick),
                     Item::End(tick) => LinkPeeked::End(*tick),
                 })
                 .await;
@@ -155,7 +168,10 @@ impl LinkBus {
                     return Err(LinkError::BadSlot { low_ticks });
                 }
                 // Progress between bits says nothing about them.
-                LinkPeeked::Progress => self.inbox.take(),
+                LinkPeeked::Progress(tick) => {
+                    self.inbox.take();
+                    self.forward_progress(tick).await;
+                }
                 LinkPeeked::Reset(at) => return Err(LinkError::Reset(at)),
                 LinkPeeked::Gap(range) => return Err(LinkError::Gap(range)),
                 LinkPeeked::End(tick) => return Err(LinkError::EndOfInput(tick)),
@@ -298,6 +314,7 @@ struct Current {
 #[derive(Debug)]
 pub struct OneWireBus {
     inbox: Inbox<OneWireEvent>,
+    progress: ProgressSink,
     current: Option<Current>,
     /// The ticks of the items consumed since [`OneWireBus::consumed`] last took them.
     consumed: Option<Provenance>,
@@ -311,15 +328,16 @@ enum Peeked {
     End(Provenance, EndReason),
     Foreign,
     Gap(TickRange),
-    Progress,
+    Progress(Tick),
     EndOfInput(Tick),
 }
 
 impl OneWireBus {
     /// A reader on `inbox`.
-    pub fn new(inbox: Inbox<OneWireEvent>) -> Self {
+    pub fn new(inbox: Inbox<OneWireEvent>, progress: ProgressSink) -> Self {
         Self {
             inbox,
+            progress,
             current: None,
             consumed: None,
             last_settled: Tick::ZERO,
@@ -333,6 +351,17 @@ impl OneWireBus {
 
     /// The ticks of what was consumed since this was last called; an empty span where the
     /// last item was settled when nothing was.
+    /// Passes progress met inside a frame on, held back to what the decoder has read through
+    /// this cursor and not reported yet: what was consumed since it last took the provenance,
+    /// and what it says it still holds ([`ProgressSink::hold`]).
+    async fn forward_progress(&mut self, tick: Tick) {
+        let held = [self.consumed.map(|at| at.span.start), self.progress.held()]
+            .into_iter()
+            .flatten()
+            .fold(tick, Tick::min);
+        self.progress.progress(held).await;
+    }
+
     pub fn consumed(&mut self) -> Provenance {
         self.consumed
             .take()
@@ -402,7 +431,7 @@ impl OneWireBus {
                     }
                     Item::Event(_) => Peeked::Foreign,
                     Item::Gap(range) => Peeked::Gap(*range),
-                    Item::Progress(_) => Peeked::Progress,
+                    Item::Progress(tick) => Peeked::Progress(*tick),
                     Item::End(tick) => Peeked::EndOfInput(*tick),
                 })
                 .await;
@@ -425,8 +454,9 @@ impl OneWireBus {
                     }
                 }
                 // Progress inside a transaction says nothing about its items.
-                Peeked::Progress => {
+                Peeked::Progress(tick) => {
                     self.inbox.take();
+                    self.forward_progress(tick).await;
                     continue;
                 }
                 // Another transaction's event: this one never ended. It stays for `next`.

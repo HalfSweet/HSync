@@ -19,7 +19,7 @@
 //! does not drain it; a decoder that loses its place on such a bus calls [`MicrowireBus::next`]
 //! again, which hands transaction `0` back at the next bit.
 
-use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
+use uiharu_core::{Event, Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
 use super::events::{EndReason, MicrowireEvent, TxId};
 
@@ -97,6 +97,7 @@ struct Current {
 #[derive(Debug)]
 pub struct MicrowireBus {
     inbox: Inbox<MicrowireEvent>,
+    progress: ProgressSink,
     current: Option<Current>,
     /// The ticks of the items consumed since [`Transaction::consumed`] last took them.
     consumed: Option<Provenance>,
@@ -124,15 +125,16 @@ enum Peeked {
     End(Event<MicrowireEvent>, EndReason, Option<bool>),
     Foreign,
     Gap(TickRange),
-    Progress,
+    Progress(Tick),
     EndOfInput(Tick),
 }
 
 impl MicrowireBus {
     /// A reader on `inbox`.
-    pub fn new(inbox: Inbox<MicrowireEvent>) -> Self {
+    pub fn new(inbox: Inbox<MicrowireEvent>, progress: ProgressSink) -> Self {
         Self {
             inbox,
+            progress,
             current: None,
             consumed: None,
             last_settled: Tick::ZERO,
@@ -147,6 +149,17 @@ impl MicrowireBus {
 
     /// The ticks of what was consumed since this was last called; an empty span where the
     /// last item was settled when nothing was.
+    /// Passes progress met inside a frame on, held back to what the decoder has read through
+    /// this cursor and not reported yet: what was consumed since it last took the provenance,
+    /// and what it says it still holds ([`ProgressSink::hold`]).
+    async fn forward_progress(&mut self, tick: Tick) {
+        let held = [self.consumed.map(|at| at.span.start), self.progress.held()]
+            .into_iter()
+            .flatten()
+            .fold(tick, Tick::min);
+        self.progress.progress(held).await;
+    }
+
     pub fn consumed(&mut self) -> Provenance {
         self.consumed
             .take()
@@ -252,7 +265,7 @@ impl MicrowireBus {
                         _ => Peeked::Foreign,
                     },
                     Item::Gap(range) => Peeked::Gap(*range),
-                    Item::Progress(_) => Peeked::Progress,
+                    Item::Progress(tick) => Peeked::Progress(*tick),
                     Item::End(tick) => Peeked::EndOfInput(*tick),
                 })
                 .await;
@@ -270,8 +283,9 @@ impl MicrowireBus {
                     Err(ReadError::Truncated)
                 }
                 // Progress inside a transaction says nothing about its bits.
-                Peeked::Progress => {
+                Peeked::Progress(tick) => {
                     self.inbox.take();
+                    self.forward_progress(tick).await;
                     continue;
                 }
                 // Another transaction's event: this one never ended. It stays for `next`.

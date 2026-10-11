@@ -51,7 +51,7 @@
 use serde::{Deserialize, Serialize};
 use uiharu_core::{
     InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec,
-    Props, Provenance, Requires, Tick, TickRange,
+    ProgressSink, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::events::{Command, DATA_BATCH, EepromEnd, EepromEvent, OpId};
@@ -171,8 +171,9 @@ impl Node for Eeprom24xx {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = I2cBus::new(io.input(0));
-        Box::pin(run(bus, EepromOut::new(io.output(0), self.config)))
+        let out = io.output(0);
+        let bus = I2cBus::new(io.input(0), out.progress_sink());
+        Box::pin(run(bus, EepromOut::new(out, self.config)))
     }
 }
 
@@ -204,6 +205,7 @@ struct PendingWrite {
 #[derive(Debug)]
 struct EepromOut {
     out: Outbox<EepromEvent>,
+    sink: ProgressSink,
     config: Eeprom24xxConfig,
     next_op: u64,
     open: Option<Open>,
@@ -214,8 +216,25 @@ struct EepromOut {
 }
 
 impl EepromOut {
+    /// Takes the pending write, telling the cursor what is held after it.
+    fn take_write(&mut self) -> Option<PendingWrite> {
+        let write = self.write.take();
+        self.sync_hold();
+        write
+    }
+
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        let starts = [
+            self.batch_at.map(|at| at.span.start),
+            self.write.as_ref().map(|write| write.control.span.start),
+        ];
+        self.sink.hold(starts.into_iter().flatten().min());
+    }
+
     fn new(out: Outbox<EepromEvent>, config: Eeprom24xxConfig) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             config,
             next_op: 1,
@@ -270,6 +289,7 @@ impl EepromOut {
         self.batch.push(byte);
         open.length += 1;
         let op = open.op;
+        self.sync_hold();
         if self.batch.len() >= DATA_BATCH {
             self.flush(op, at.settled).await;
         }
@@ -284,6 +304,7 @@ impl EepromOut {
         }
         let bytes = std::mem::replace(&mut self.batch, Vec::with_capacity(DATA_BATCH));
         let mut at = self.batch_at.take().unwrap_or(Provenance::at(decided));
+        self.sync_hold();
         at.settled = at.settled.max(decided);
         let data = EepromEvent::Data {
             op,
@@ -334,12 +355,13 @@ impl EepromOut {
             first: None,
             restart: None,
         });
+        self.sync_hold();
     }
 
     /// The write ended right after its control byte: the acknowledge poll that found the
     /// device ready.
     async fn polled(&mut self, at: Provenance) {
-        if let Some(write) = self.write.take() {
+        if let Some(write) = self.take_write() {
             self.ack_poll(write.tx, write.device, true, write.control.join(at))
                 .await;
         }
@@ -347,7 +369,7 @@ impl EepromOut {
 
     /// The write ended before its word address was whole: it fits no command.
     async fn short_address(&mut self, at: Provenance) {
-        if let Some(write) = self.write.take() {
+        if let Some(write) = self.take_write() {
             let unknown = EepromEvent::Unknown {
                 tx: write.tx,
                 device: write.device,
@@ -366,7 +388,7 @@ impl EepromOut {
     /// Reports the pending write as `command`, told at `decided`: its begin, its word address
     /// and the data byte it held.
     async fn tell(&mut self, command: Command, decided: Tick) {
-        let Some(write) = self.write.take() else {
+        let Some(write) = self.take_write() else {
             return;
         };
         let at = Provenance::over(write.control.span, decided);
@@ -428,7 +450,7 @@ impl EepromOut {
     /// The read after a set-address and a repeated START: a random read, told at its control
     /// byte, read with `at`.
     async fn random_read(&mut self, at: Provenance) {
-        let Some(write) = self.write.take() else {
+        let Some(write) = self.take_write() else {
             return;
         };
         let begin = Provenance::over(write.control.span.join(at.span), at.settled);

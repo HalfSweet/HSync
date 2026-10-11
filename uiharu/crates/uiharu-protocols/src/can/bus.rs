@@ -15,7 +15,7 @@
 //! make a value — is that protocol's own code, so that the contract stays as general as the
 //! bus.
 
-use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
+use uiharu_core::{Event, Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
 use super::events::{CanEvent, EndReason, FrameId};
 
@@ -130,7 +130,7 @@ enum Head {
     /// An event of another frame: this one never ended.
     Foreign,
     Gap(TickRange),
-    Progress,
+    Progress(Tick),
     EndOfInput(Tick),
 }
 
@@ -156,6 +156,7 @@ const RANK_DATA: u8 = 3;
 #[derive(Debug)]
 pub struct CanBus {
     inbox: Inbox<CanEvent>,
+    progress: ProgressSink,
     current: Option<Current>,
     /// The ticks of the items consumed since [`Frame::consumed`] last took them.
     consumed: Option<Provenance>,
@@ -165,9 +166,10 @@ pub struct CanBus {
 
 impl CanBus {
     /// A reader on `inbox`.
-    pub fn new(inbox: Inbox<CanEvent>) -> Self {
+    pub fn new(inbox: Inbox<CanEvent>, progress: ProgressSink) -> Self {
         Self {
             inbox,
+            progress,
             current: None,
             consumed: None,
             last_settled: Tick::ZERO,
@@ -181,6 +183,17 @@ impl CanBus {
 
     /// The ticks of what was consumed since this was last called; an empty span where the
     /// last item was settled when nothing was.
+    /// Passes progress met inside a frame on, held back to what the decoder has read through
+    /// this cursor and not reported yet: what was consumed since it last took the provenance,
+    /// and what it says it still holds ([`ProgressSink::hold`]).
+    async fn forward_progress(&mut self, tick: Tick) {
+        let held = [self.consumed.map(|at| at.span.start), self.progress.held()]
+            .into_iter()
+            .flatten()
+            .fold(tick, Tick::min);
+        self.progress.progress(held).await;
+    }
+
     pub fn consumed(&mut self) -> Provenance {
         self.consumed
             .take()
@@ -233,7 +246,7 @@ impl CanBus {
             .peek_with(move |item| match item {
                 Item::Event(event) => (head_of(event, frame, taken), Some(provenance(event))),
                 Item::Gap(range) => (Head::Gap(*range), None),
-                Item::Progress(_) => (Head::Progress, None),
+                Item::Progress(tick) => (Head::Progress(*tick), None),
                 Item::End(tick) => (Head::EndOfInput(*tick), None),
             })
             .await
@@ -263,7 +276,10 @@ impl CanBus {
             let (head, at) = self.head().await;
             match head {
                 // Progress inside a frame says nothing about its fields.
-                Head::Progress => self.take(None),
+                Head::Progress(tick) => {
+                    self.take(None);
+                    self.forward_progress(tick).await;
+                }
                 // The gap and the end stay in the stream, for `end` and `next` to report.
                 Head::Gap(range) => return Err(ReadError::Gap(range)),
                 Head::EndOfInput(tick) => return Err(ReadError::EndOfInput(tick)),
@@ -445,8 +461,9 @@ impl Frame<'_> {
                 // Another frame's event: this one never ended, its decoder lost it. The event
                 // stays for `next`.
                 Head::Foreign => EndReason::Aborted,
-                Head::Progress => {
+                Head::Progress(tick) => {
                     self.bus.take(None);
+                    self.bus.forward_progress(tick).await;
                     continue;
                 }
                 Head::Gap(range) => {

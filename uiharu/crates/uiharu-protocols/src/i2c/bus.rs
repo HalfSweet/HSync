@@ -13,7 +13,7 @@
 //! register address is, byte order — is that protocol's own code, so that the contract stays as
 //! general as the bus.
 
-use uiharu_core::{Inbox, Item, Provenance, Tick, TickRange};
+use uiharu_core::{Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
 use super::events::{EndReason, I2cEvent, TxId};
 
@@ -102,6 +102,7 @@ struct Current {
 #[derive(Debug)]
 pub struct I2cBus {
     inbox: Inbox<I2cEvent>,
+    progress: ProgressSink,
     current: Option<Current>,
     /// The ticks of the items consumed since [`Transaction::consumed`] last took them.
     consumed: Option<Provenance>,
@@ -115,15 +116,16 @@ enum Peeked {
     End(Provenance, EndReason),
     Foreign,
     Gap(TickRange),
-    Progress,
+    Progress(Tick),
     EndOfInput(Tick),
 }
 
 impl I2cBus {
     /// A reader on `inbox`.
-    pub fn new(inbox: Inbox<I2cEvent>) -> Self {
+    pub fn new(inbox: Inbox<I2cEvent>, progress: ProgressSink) -> Self {
         Self {
             inbox,
+            progress,
             current: None,
             consumed: None,
             last_settled: Tick::ZERO,
@@ -137,6 +139,17 @@ impl I2cBus {
 
     /// The ticks of what was consumed since this was last called; an empty span where the
     /// last item was settled when nothing was.
+    /// Passes progress met inside a frame on, held back to what the decoder has read through
+    /// this cursor and not reported yet: what was consumed since it last took the provenance,
+    /// and what it says it still holds ([`ProgressSink::hold`]).
+    async fn forward_progress(&mut self, tick: Tick) {
+        let held = [self.consumed.map(|at| at.span.start), self.progress.held()]
+            .into_iter()
+            .flatten()
+            .fold(tick, Tick::min);
+        self.progress.progress(held).await;
+    }
+
     pub fn consumed(&mut self) -> Provenance {
         self.consumed
             .take()
@@ -221,7 +234,7 @@ impl I2cBus {
                     }
                     Item::Event(_) => Peeked::Foreign,
                     Item::Gap(range) => Peeked::Gap(*range),
-                    Item::Progress(_) => Peeked::Progress,
+                    Item::Progress(tick) => Peeked::Progress(*tick),
                     Item::End(tick) => Peeked::EndOfInput(*tick),
                 })
                 .await;
@@ -239,8 +252,9 @@ impl I2cBus {
                     Err(ReadError::Truncated)
                 }
                 // Progress inside a transaction says nothing about its events.
-                Peeked::Progress => {
+                Peeked::Progress(tick) => {
                     self.inbox.take();
+                    self.forward_progress(tick).await;
                     continue;
                 }
                 // Another transaction's event: this one never ended. It stays for `next`.

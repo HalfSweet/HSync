@@ -451,9 +451,10 @@ impl Node for Reader {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
+        let out = io.output(0);
         Box::pin(read(
-            MicrowireBus::new(io.input(0)),
-            io.output(0),
+            MicrowireBus::new(io.input(0), out.progress_sink()),
+            out,
             self.least,
         ))
     }

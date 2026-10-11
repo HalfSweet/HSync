@@ -6,7 +6,7 @@
 use serde::{Deserialize, Serialize};
 use uiharu_core::{
     InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec,
-    Props, Provenance, Requires, Tick, TickRange,
+    ProgressSink, Props, Provenance, Requires, Tick, TickRange,
 };
 
 use super::commands::{
@@ -135,9 +135,10 @@ impl Node for SdCardSpi {
     }
 
     fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
-        let bus = SpiBus::new(io.input(0));
+        let out = io.output(0);
+        let bus = SpiBus::new(io.input(0), out.progress_sink());
         let card = Card::new(self.config.block_length);
-        Box::pin(run(bus, SdOut::new(io.output(0)), card))
+        Box::pin(run(bus, SdOut::new(out), card))
     }
 }
 
@@ -186,6 +187,7 @@ struct Busy {
 #[derive(Debug)]
 struct SdOut {
     out: Outbox<SdEvent>,
+    sink: ProgressSink,
     next_op: u64,
     open: Option<OpId>,
     /// The words read toward an event not sent yet; an end that comes first covers them.
@@ -200,8 +202,20 @@ struct SdOut {
 }
 
 impl SdOut {
+    /// Tells the cursor from where this writer holds items it has not reported yet.
+    fn sync_hold(&self) {
+        let starts = [
+            self.held,
+            self.batch_at,
+            self.busy.as_ref().map(|busy| busy.at),
+        ];
+        self.sink
+            .hold(starts.into_iter().flatten().map(|at| at.span.start).min());
+    }
+
     fn new(out: Outbox<SdEvent>) -> Self {
         Self {
+            sink: out.progress_sink(),
             out,
             next_op: 1,
             open: None,
@@ -216,16 +230,21 @@ impl SdOut {
 
     fn hold(&mut self, at: Provenance) {
         self.held = Some(self.held.map_or(at, |held| held.join(at)));
+        self.sync_hold();
     }
 
     /// What is held, joined with `at`.
     fn take_held(&mut self, at: Provenance) -> Provenance {
-        self.held.take().map_or(at, |held| held.join(at))
+        let at = self.held.take().map_or(at, |held| held.join(at));
+        self.sync_hold();
+        at
     }
 
     /// What is held; `last`, the last word held, when nothing is.
     fn take_held_or(&mut self, last: Provenance) -> Provenance {
-        self.held.take().unwrap_or(last)
+        let at = self.held.take().unwrap_or(last);
+        self.sync_hold();
+        at
     }
 
     async fn command(&mut self, tx: TxId, frame: Frame, acmd: bool, at: Provenance) -> OpId {
@@ -259,6 +278,7 @@ impl SdOut {
     /// Sends the R1b response once the busy period is over, as decided at `decided`.
     async fn busy_over(&mut self, op: OpId, decided: Tick) {
         if let Some(busy) = self.busy.take() {
+            self.sync_hold();
             let at = Provenance::over(busy.at.span, busy.at.settled.max(decided));
             let event = SdEvent::Response {
                 op,
@@ -283,6 +303,7 @@ impl SdOut {
             self.batch_at = Some(have.join(at));
         }
         self.batch.push(byte);
+        self.sync_hold();
         self.count = self.count.saturating_add(1);
         if self.batch.len() >= DATA_BATCH {
             self.flush(op, None).await;
@@ -301,6 +322,7 @@ impl SdOut {
             .batch_at
             .take()
             .unwrap_or(Provenance::at(decided.unwrap_or(Tick::ZERO)));
+        self.sync_hold();
         if let Some(decided) = decided {
             at.settled = at.settled.max(decided);
         }
@@ -328,6 +350,7 @@ impl SdOut {
         self.flush(op, Some(at.settled)).await;
         self.open = None;
         self.held = None;
+        self.sync_hold();
         self.out.emit(at, SdEvent::End { op, reason }).await;
     }
 
@@ -351,7 +374,10 @@ impl SdOut {
     async fn close_open(&mut self, reason: SdEnd, at: Provenance) {
         match self.open {
             Some(op) => self.end(op, reason, at).await,
-            None => self.held = None,
+            None => {
+                self.held = None;
+                self.sync_hold();
+            }
         }
     }
 }
@@ -470,6 +496,7 @@ async fn operation(
             count: 0,
             at: r1_at,
         });
+        out.sync_hold();
         return busy(tx, out, op).await;
     }
     out.hold(r1_at);
