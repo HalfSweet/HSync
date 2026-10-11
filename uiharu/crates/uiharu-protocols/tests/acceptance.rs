@@ -14,7 +14,7 @@ use proptest::prelude::*;
 use uiharu_core::{GraphConfig, Item, LogicBlock, SignalItem, Tick, TickRange};
 use uiharu_protocols::spi::synth::{SpiWaveform, nor_read_words};
 use uiharu_protocols::spi::{SpiConfig, SpiEvent};
-use uiharu_protocols::spi_nor::{DATA_BATCH, NorEnd, NorEvent};
+use uiharu_protocols::spi_nor::{DATA_BATCH, NorEnd, NorEvent, SpiNorConfig};
 
 /// One transaction of a scenario.
 #[derive(Clone, Debug)]
@@ -121,7 +121,8 @@ proptest! {
         let (spi_ref, nor_ref) = reference(&block, gap, mode);
 
         let config = GraphConfig { queue_capacity, budget };
-        let mut harness = Harness::build(SpiConfig { mode, ..SpiConfig::default() }, true, config)
+        let spi = SpiConfig { mode, ..SpiConfig::default() };
+        let mut harness = Harness::build(spi, Some(SpiNorConfig::default()), config)
             .expect("builds");
         harness.drain_on_full(1);
         let mut pause = 0;
@@ -228,7 +229,8 @@ fn queues_and_state_stay_bounded_on_a_long_read() {
         queue_capacity: 8,
         budget: 64,
     };
-    let mut harness = Harness::build(SpiConfig::default(), true, config).expect("builds");
+    let nor = Some(SpiNorConfig::default());
+    let mut harness = Harness::build(SpiConfig::default(), nor, config).expect("builds");
     harness.drain_on_full(2);
     let mut at = block.start();
     let mut biggest_batch = 0;

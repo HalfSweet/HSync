@@ -7,7 +7,7 @@ use uiharu_core::{
     Exposed, Graph, GraphConfig, GraphError, Pipeline, SourceId, SourceSpec, TimeBase,
 };
 use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig, SpiConfigError, SpiEvent};
-use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
+use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
 
 use std::collections::BTreeMap;
 
@@ -188,9 +188,9 @@ impl Setup {
         let nor_out = match self.kind {
             Kind::Spi => None,
             Kind::SpiNor => {
-                let nor = graph.add(SpiNorRead24::new());
-                graph.connect(Spi::events(spi), SpiNorRead24::input(nor))?;
-                Some(graph.expose("nor", SpiNorRead24::operations(nor))?)
+                let nor = graph.add(SpiNor::new(SpiNorConfig::default()));
+                graph.connect(Spi::events(spi), SpiNor::input(nor))?;
+                Some(graph.expose("nor", SpiNor::events(nor))?)
             }
         };
         let mut pipeline = graph.build()?;

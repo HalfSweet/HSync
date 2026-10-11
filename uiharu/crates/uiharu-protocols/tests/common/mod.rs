@@ -9,7 +9,7 @@ use uiharu_core::{
     GraphConfig, GraphError, Item, LogicBlock, Pipeline, SignalItem, Tick, TickRange, TimeBase,
 };
 use uiharu_protocols::spi::{Spi, SpiConfig, SpiEvent};
-use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
+use uiharu_protocols::spi_nor::{Direction, NorEvent, SpiNor, SpiNorConfig};
 
 pub use uiharu_core::testing::without_progress;
 
@@ -26,17 +26,22 @@ pub struct Harness {
 impl Harness {
     /// Source → SPI.
     pub fn spi(config: SpiConfig) -> Self {
-        Self::build(config, false, GraphConfig::default()).expect("builds")
+        Self::build(config, None, GraphConfig::default()).expect("builds")
     }
 
-    /// Source → SPI → SPI NOR.
+    /// Source → SPI → SPI NOR, addresses three bytes wide.
     pub fn nor(config: SpiConfig) -> Self {
-        Self::build(config, true, GraphConfig::default()).expect("builds")
+        Self::nor_with(config, SpiNorConfig::default())
+    }
+
+    /// Source → SPI → SPI NOR configured as `nor`.
+    pub fn nor_with(config: SpiConfig, nor: SpiNorConfig) -> Self {
+        Self::build(config, Some(nor), GraphConfig::default()).expect("builds")
     }
 
     pub fn build(
         config: SpiConfig,
-        nor: bool,
+        nor: Option<SpiNorConfig>,
         graph_config: GraphConfig,
     ) -> Result<Self, GraphError> {
         let mut nor_ref = None;
@@ -47,10 +52,10 @@ impl Harness {
             |graph, source| {
                 let spi = graph.add(Spi::new(config).expect("a valid configuration"));
                 graph.connect(source.samples, Spi::input(spi))?;
-                if nor {
-                    let nor = graph.add(SpiNorRead24::new());
-                    graph.connect(Spi::events(spi), SpiNorRead24::input(nor))?;
-                    nor_ref = Some(graph.expose("nor", SpiNorRead24::operations(nor))?);
+                if let Some(nor) = nor {
+                    let nor = graph.add(SpiNor::new(nor));
+                    graph.connect(Spi::events(spi), SpiNor::input(nor))?;
+                    nor_ref = Some(graph.expose("nor", SpiNor::events(nor))?);
                 }
                 Ok(Spi::events(spi))
             },
@@ -131,6 +136,11 @@ fn hex(value: Option<u8>) -> String {
     value.map_or("--".to_owned(), |value| format!("{value:02x}"))
 }
 
+/// Bytes as hex digits, two per byte.
+pub fn hex_bytes(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 fn at(span: TickRange, settled: Tick) -> String {
     if span.is_empty() {
         format!("@{settled}")
@@ -172,12 +182,34 @@ pub fn describe_nor(items: &[Item<NorEvent>]) -> Vec<String> {
                     NorEvent::Begin { op, tx, command } => {
                         format!("begin op{} tx{} {command:?}", op.0, tx.0)
                     }
-                    NorEvent::Address { op, address } => {
-                        format!("address op{} {address:06x}", op.0)
+                    NorEvent::Address { op, address, bytes } => {
+                        let digits = 2 * usize::from(*bytes);
+                        format!("address op{} {address:0digits$x}", op.0)
                     }
-                    NorEvent::Data { op, offset, bytes } => {
-                        let bytes: Vec<String> = bytes.iter().map(|b| format!("{b:02x}")).collect();
-                        format!("data op{} +{offset} {}", op.0, bytes.join(""))
+                    NorEvent::Dummy { op, bytes } => format!("dummy op{} {bytes}", op.0),
+                    NorEvent::Data {
+                        op,
+                        direction,
+                        offset,
+                        bytes,
+                    } => {
+                        let direction = match direction {
+                            Direction::In => "in",
+                            Direction::Out => "out",
+                        };
+                        format!("data op{} {direction} +{offset} {}", op.0, hex_bytes(bytes))
+                    }
+                    NorEvent::Status {
+                        op,
+                        register,
+                        value,
+                        written,
+                    } => {
+                        let how = if *written { "write" } else { "read" };
+                        format!("status op{} {how} sr{register} {value:02x}", op.0)
+                    }
+                    NorEvent::Id { op, scheme, bytes } => {
+                        format!("id op{} {scheme:?} {}", op.0, hex_bytes(bytes))
                     }
                     NorEvent::End { op, reason } => format!("end op{} {reason:?}", op.0),
                     NorEvent::UnknownCommand { tx, opcode } => {
