@@ -1,6 +1,6 @@
 # HSync user guide
 
-HSync is a logic analyzer app for DreamSourceLab DSLogic devices, ALIENTEK ATK-Logic devices (DL16 and DL16 Plus) and a built-in demo device, covering the logic analyzer features of DSView. This guide walks through the interface in the order you use it. Installing HSync is described in the [README](../README.md#download).
+HSync is a general-purpose logic analyzer app. It drives DreamSourceLab DSLogic devices, ALIENTEK ATK-Logic devices (DL16 and DL16 Plus), PXLogic PX-Logic devices (PX-Logic 32, 16 Pro, 16 Plus and 16 Base) and a built-in demo device, with the logic analyzer features of DSView. This guide walks through the interface in the order you use it. Installing HSync is described in the [README](../README.md#download).
 
 ## Interface
 
@@ -18,9 +18,10 @@ From top to bottom, the window has five parts:
 - Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**; click **Capture** and it plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD), with its decoders already set up the first time.
 - The first time you open a DSLogic, HSync loads the firmware and FPGA bitstream onto it automatically; this takes a few seconds.
 - An ATK-Logic is listed as **ATK-Logic** until it is opened, then by its model, such as **DL16 Plus**. HSync does not update its firmware: if it reports that the firmware needs an update, update it with ALIENTEK's ATK-Logic app, then plug the device in again.
+- A PX-Logic is likewise listed as **PXLogic** until it is opened (except the first 32-channel devices, named at once), then by its model, such as **PX-Logic 16 Plus**. HSync loads its FPGA bitstreams each time it opens it. If the device runs another firmware version than the one HSync brings (PXView 1.6.5's), HSync first writes its own into the device, which restarts and is opened again; this takes a few seconds more.
 - If you plug in a logic analyzer while the demo device is open, the status bar shows "… connected"; click **Switch** to use it. If a loose USB cable makes the device drop out briefly and it reappears within two seconds, HSync reopens it automatically and restores its settings.
 - If a USB 3.0 model is plugged into a USB 2.0 port, the status bar reminds you to move it to a USB 3.0 port; otherwise Stream mode's speed is limited.
-- The device's options sit in the acquisition settings (below): the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**) and, for Buffer mode, what happens **When stopped**. Each device lists only the options it has: an ATK-Logic has the operation mode and a **Threshold voltage** from −5 to 5 V.
+- The device's options sit in the acquisition settings (below): the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**), the **External trigger input** and, for Buffer mode, what happens **When stopped**. Each device lists only the options it has: an ATK-Logic has the operation mode and a **Threshold voltage** from −5 to 5 V; a PX-Logic has the operation and channel modes, a **Threshold voltage** from 0 to 6 V, the filter, the clock edge and the **External trigger input**.
 - HSync remembers the settings of each kind of device and restores them the next time you open it: the device options, enabled channels, triggers, channel colours and capture mode at once, the channel names and decoders with the first capture after it opens. Showing a file or another device's capture leaves the names and decoders remembered for this device alone; removing every decoder is remembered too.
 
 ## Acquisition settings
@@ -28,7 +29,7 @@ From top to bottom, the window has five parts:
 Click the sample rate │ duration │ channels button in the top bar:
 
 - **Sample rate** and **Duration**: durations are listed in a 1-2-5 sequence. When you change the sample rate, the duration stays as close as possible to what it was.
-- In Buffer mode, durations longer than the device memory can hold are marked **RLE**. Choosing one turns on RLE compression automatically (on a DSLogic, **RLE compression** must be allowed in the device options beside the lists). A compressed capture fits only while the signals change slowly enough; when they change too often, the capture stops and the status bar says so.
+- In Buffer mode, durations longer than the device memory can hold are marked **RLE**. Choosing one turns on RLE compression automatically (on a DSLogic, **RLE compression** must be allowed in the device options beside the lists). A compressed capture fits only while the signals change slowly enough; when they change too often, the capture stops and the status bar says so. Devices without RLE compression, such as a PX-Logic, list only the durations their memory holds.
 - If the selected capture needs more than half of this computer's memory, the pop-up warns you to shorten the duration or use fewer channels.
 - **Channels**: click a channel number to enable or disable it.
 - Beside the lists (below them in a narrow window) are the device's other options, listed under [Devices](#devices). While a capture runs they cannot be changed.
@@ -39,7 +40,7 @@ Click the sample rate │ duration │ channels button in the top bar:
 - Use the arrow to the right of **Capture** to choose how to capture:
   - **Single**: capture once.
   - **Repeat**: capture again a set time after each capture completes. With **Repeat** selected, set the interval under **Repeat every** in the same menu (0.1–10 s, default 1 s). From the second capture on, the screen keeps the previous complete result while the new one is captured in the background, and the new one replaces it in one go once complete. By default, stopping midway discards the new capture and keeps the previous one; to show the latest data instead, turn on **Show the latest data when a repeat stops** in the settings.
-  - **Loop**: capture continuously, keeping only the latest stretch (as long as the selected duration); when you stop, that last stretch is shown. Available only on devices that can loop (a DSLogic or an ATK-Logic in Stream mode, the demo device).
+  - **Loop**: capture continuously, keeping only the latest stretch (as long as the selected duration); when you stop, that last stretch is shown. Available only on devices that can loop (a DSLogic, an ATK-Logic or a PX-Logic in Stream mode, the demo device).
   - **Instant**: ignore the trigger conditions and start at once.
 - Successive captures with the same device keep the current zoom and position, so you can keep your eye on the same detail across repeated captures.
 - When the computer cannot take in the data fast enough, the status bar reports that data was lost ("USB bandwidth exceeded; some data was lost").
@@ -51,6 +52,7 @@ Click the sample rate │ duration │ channels button in the top bar:
   - **Position**: the share of the whole capture that comes before the trigger point (fixed at 1% in Stream mode).
   - **Stages** (a DSLogic in Buffer mode): up to 16 stages. Each stage has two patterns, **Pattern A** and **Pattern B**; you can **Invert** each one and **Combine** them as **A and B** or **A or B**. Once a stage has held the set number of times (**Count**; tick **In a row** to require consecutive matches), the trigger moves on to the next stage.
   - **Serial** (a DSLogic in Buffer mode): **Start**, **Stop** and **Clock** conditions, the **Data** channel, and a data **Value** of up to 16 bits (each bit 0, 1 or X).
+- **External trigger input** (a PX-Logic): in the device options, choose the edge or level on the device's trigger input that fires the trigger (**Rising edge**, **High level**, **Falling edge**, **Low level** or **Any edge**), or **Off** to ignore the input. An **Instant** capture ignores it too.
 
 ## Viewing waveforms
 

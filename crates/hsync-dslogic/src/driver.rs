@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use hsync_driver::usb::NusbTransport;
-use hsync_driver::{Candidate, CandidateStatus, Device, Driver, DriverError};
+use hsync_driver::{Candidate, CandidateStatus, Device, Driver, DriverError, FirmwareDir};
 
-use crate::boot::{self, FirmwareDir};
+use crate::boot;
 use crate::device::DslogicDevice;
 use crate::profiles::{
     DSCOPE_PRODUCT_IDS, PROFILES, PROFILES_PGL12_2, Profile, UsbSpeed, VENDOR_ID, find_profile,

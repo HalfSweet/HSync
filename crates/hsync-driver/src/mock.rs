@@ -34,6 +34,9 @@ pub enum UsbCall {
         endpoint: u8,
         length: usize,
     },
+    ClearHalt {
+        endpoint: u8,
+    },
 }
 
 /// The device behind a [`MockTransport`].
@@ -67,6 +70,11 @@ pub trait MockDevice: Send {
     /// nothing by default.
     fn cancel_in(&mut self, _endpoint: u8, _length: usize) -> Vec<u8> {
         Vec::new()
+    }
+
+    /// Clears a halt on an endpoint; nothing to do by default.
+    fn clear_halt(&mut self, _endpoint: u8) -> Result<(), UsbError> {
+        Ok(())
     }
 }
 
@@ -176,6 +184,11 @@ impl<D: MockDevice + 'static> UsbTransport for MockTransport<D> {
     ) -> Result<Vec<u8>, UsbError> {
         self.record(UsbCall::BulkRead { endpoint, length });
         self.device().bulk_read(endpoint, length)
+    }
+
+    fn clear_halt(&self, endpoint: u8) -> Result<(), UsbError> {
+        self.record(UsbCall::ClearHalt { endpoint });
+        self.device().clear_halt(endpoint)
     }
 
     fn bulk_in(&self, endpoint: u8) -> Result<Box<dyn BulkIn>, UsbError> {

@@ -1,0 +1,24 @@
+[package]
+name = "hsync-pxlogic"
+description = "PXLogic driver for HSync, ported from PXView's pxlogic driver onto nusb"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+hsync-core.workspace = true
+hsync-driver.workspace = true
+log.workspace = true
+nusb.workspace = true
+
+[dev-dependencies]
+hsync-capture.workspace = true
+log = { workspace = true, features = ["std"] }
+hsync-driver = { workspace = true, features = ["mock"] }
+
+[lints]
+workspace = true

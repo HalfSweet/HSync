@@ -75,6 +75,11 @@ pub trait UsbTransport: Send + Sync {
 
     /// A queue of bulk IN transfers on `endpoint`.
     fn bulk_in(&self, endpoint: u8) -> Result<Box<dyn BulkIn>, UsbError>;
+
+    /// Clears a halt on a bulk endpoint, as `libusb_clear_halt` does: the device gets a
+    /// `CLEAR_FEATURE(ENDPOINT_HALT)` and both sides restart the endpoint's data toggle. No
+    /// transfers may be pending on it.
+    fn clear_halt(&self, endpoint: u8) -> Result<(), UsbError>;
 }
 
 /// A queue of bulk IN transfers that complete in submission order.
@@ -251,6 +256,27 @@ impl UsbTransport for NusbTransport {
             unreachable!("the endpoint was just opened");
         };
         received(input.transfer_blocking(Buffer::new(length), timeout))
+    }
+
+    fn clear_halt(&self, endpoint: u8) -> Result<(), UsbError> {
+        // An endpoint is claimed once: one kept for single reads or writes clears its own halt.
+        if endpoint & 0x80 != 0 {
+            if let Some((address, input)) = lock(&self.bulk_read).as_mut()
+                && *address == endpoint
+            {
+                return Ok(input.clear_halt().wait()?);
+            }
+            let mut input = self.interface.endpoint::<Bulk, In>(endpoint)?;
+            Ok(input.clear_halt().wait()?)
+        } else {
+            if let Some((address, out)) = lock(&self.bulk_out).as_mut()
+                && *address == endpoint
+            {
+                return Ok(out.clear_halt().wait()?);
+            }
+            let mut out = self.interface.endpoint::<Bulk, Out>(endpoint)?;
+            Ok(out.clear_halt().wait()?)
+        }
     }
 
     fn bulk_in(&self, endpoint: u8) -> Result<Box<dyn BulkIn>, UsbError> {

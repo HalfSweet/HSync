@@ -7,12 +7,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use crossbeam_channel::Sender;
 use hsync_core::ChannelIndex;
 use hsync_driver::{
-    Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, Label, OptionKey,
-    OptionKind, OptionState, OptionValue, Packet, TriggerCaps,
+    Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, FirmwareDir, Label,
+    OptionKey, OptionKind, OptionState, OptionValue, Packet, TriggerCaps,
 };
 
 use crate::acquisition::{self, AcquisitionParams};
-use crate::boot::{self, FirmwareDir, SECURITY_EEPROM_ADDR, SECURITY_STEPS};
+use crate::boot::{self, SECURITY_EEPROM_ADDR, SECURITY_STEPS};
 use crate::profiles::{CHANNEL_MODES, ChannelMode, Profile, UsbSpeed, caps};
 use crate::protocol::{Control, REQUIRED_FIRMWARE_MAJOR, REQUIRED_HDL_VERSION, reg};
 use crate::setting::{SAMPLES_ALIGN, TriggerSetup, channel_depth};
@@ -534,10 +534,10 @@ impl Device for DslogicDevice {
                     }
                 };
             }
-            OptionKey::Pattern => {
-                return Err(DriverError::InvalidRequest(
-                    "DSLogic devices have no pattern option".into(),
-                ));
+            OptionKey::Pattern | OptionKey::ExternalTrigger => {
+                return Err(DriverError::InvalidRequest(format!(
+                    "DSLogic devices have no {key:?} option"
+                )));
             }
         }
         Ok(())

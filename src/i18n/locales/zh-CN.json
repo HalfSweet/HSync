@@ -161,6 +161,7 @@
       "rle": "启用 RLE 压缩（Buffer 模式可超出硬件深度）",
       "externalClock": "使用外部时钟",
       "clockFallingEdge": "在时钟下降沿采样",
+      "externalTrigger": "外部触发输入",
       "bufferOption": "停止时",
       "pattern": "信号"
     },
@@ -179,6 +180,14 @@
     "bufferOption": {
       "stop": "立即停止",
       "upload": "上传已采集的数据"
+    },
+    "externalTrigger": {
+      "off": "关闭",
+      "rise": "上升沿",
+      "high": "高电平",
+      "fall": "下降沿",
+      "low": "低电平",
+      "both": "任意沿"
     },
     "pattern": {
       "protocol": "协议演示",
@@ -645,6 +654,6 @@
       "restarting": "正在重启…"
     },
     "license": "HSync 是自由软件，以 GPL-3.0-or-later 许可发布。",
-    "credits": "设备驱动与协议解码移植自 DreamSourceLab 的 DSView（libsigrok4DSL、libsigrokdecode4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL）；DSLogic 固件与 FPGA 位流以 MIT 许可随附；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
+    "credits": "设备驱动与协议解码移植自 DreamSourceLab 的 DSView（libsigrok4DSL、libsigrokdecode4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL），PXLogic 驱动移植自 PXView（GPL），其固件与 FPGA 位流也取自 PXView；DSLogic 固件与 FPGA 位流以 MIT 许可随附；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
   }
 }

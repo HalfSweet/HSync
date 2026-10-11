@@ -1576,6 +1576,7 @@ dependencies = [
  "hsync-demo",
  "hsync-driver",
  "hsync-dslogic",
+ "hsync-pxlogic",
  "hsync-session",
  "hsync-srd",
  "log",
@@ -1688,6 +1689,18 @@ dependencies = [
  "ts-rs",
  "wellen",
  "zip 8.6.0",
+]
+
+[[package]]
+name = "hsync-pxlogic"
+version = "0.1.2"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-driver",
+ "log",
+ "nusb",
 ]
 
 [[package]]

@@ -16,6 +16,7 @@ export default {
         'driver',
         'dslogic',
         'atklogic',
+        'pxlogic',
         'demo',
         'decode',
         'fileio',

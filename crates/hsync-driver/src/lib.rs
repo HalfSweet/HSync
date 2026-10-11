@@ -5,6 +5,7 @@
 
 mod device;
 mod error;
+mod firmware;
 mod manager;
 #[cfg(feature = "mock")]
 pub mod mock;
@@ -18,6 +19,7 @@ pub use device::{
     DeviceSummary, Driver,
 };
 pub use error::DriverError;
+pub use firmware::FirmwareDir;
 pub use manager::{DeviceManager, WatchHandle};
 pub use options::{Choice, Label, OptionKey, OptionKind, OptionState, OptionValue};
 pub use packet::{EndReason, Packet};

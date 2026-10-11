@@ -1,0 +1,308 @@
+//! Running a capture (`start_transfers()`, `receive_transfer()`, `receive_data2()`): setting
+//! the registers up, the transfers on the data endpoint, polling the trigger while nothing
+//! arrives, and stopping at the sample limit.
+
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
+
+use crossbeam_channel::Sender;
+use hsync_core::{ChannelIndex, UiError};
+use hsync_driver::usb::BulkIn;
+use hsync_driver::{Acquisition, DriverError, EndReason, Packet};
+
+use crate::profiles::UsbSpeed;
+use crate::protocol::{
+    Control, EP_DATA, EP_REGISTER2_IN, EP_REGISTER2_OUT, VTH_PERIOD, block_size, regs,
+    sample_clock, vth_duty,
+};
+
+/// The trigger conditions of a capture: bit `n` stands for channel `n`.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(crate) struct TriggerMasks {
+    pub zero: u32,
+    pub one: u32,
+    pub rise: u32,
+    pub fall: u32,
+}
+
+impl TriggerMasks {
+    fn any(&self) -> bool {
+        self.zero | self.one | self.rise | self.fall != 0
+    }
+}
+
+/// Everything a capture needs, fixed when it starts.
+#[derive(Debug, Clone)]
+pub(crate) struct AcquisitionParams {
+    pub speed: UsbSpeed,
+    pub stream: bool,
+    pub samplerate: u64,
+    /// Samples per channel, a multiple of 64.
+    pub limit_samples: u64,
+    /// The enabled channels, ascending, and as a mask.
+    pub channels: Vec<ChannelIndex>,
+    pub enabled: u32,
+    pub vth: f64,
+    pub filter: bool,
+    pub clock_falling_edge: bool,
+    /// The external trigger register's value.
+    pub external_trigger: u32,
+    pub triggers: TriggerMasks,
+    /// Samples before the trigger.
+    pub trigger_position: u32,
+    /// Run on past the limit until stopped (Stream mode).
+    pub looping: bool,
+}
+
+/// Transfers in flight (`num_transfers`).
+const TRANSFERS: usize = 4;
+/// PWM0 at PXView's 1 kHz with half duty, switched off: the registers PXView writes before
+/// every capture (`PWM_CLK / pwm0_freq`).
+const PWM0_PERIOD: u32 = 125_000_000 / 1000;
+const PWM0_DUTY: u32 = PWM0_PERIOD / 2;
+/// Bit of the control register for Stream mode.
+const CONTROL_STREAM: u32 = 1 << 1;
+/// Bits of the control register while a capture is set up.
+const CONTROL_SETUP: u32 = 5;
+/// The bit of the control register pulsed during the setup.
+const CONTROL_PULSE: u32 = 1 << 4;
+/// How long one wait for a transfer lasts, and how often the trigger is polled; PXView's event
+/// source polls every 5 ms.
+const POLL_INTERVAL: Duration = Duration::from_millis(20);
+/// How long cancelled transfers may take to come back.
+const CANCEL_GRACE: Duration = Duration::from_secs(2);
+
+/// Writes the registers of a capture, in `start_transfers()`'s order. PXView goes on when a
+/// write fails; HSync gives up, as the capture would run on half its settings.
+fn set_up(ctl: &Control, params: &AcquisitionParams, block: u32) -> Result<(), DriverError> {
+    let channels = params.channels.len() as u32;
+    let stream = if params.stream { CONTROL_STREAM } else { 0 };
+    // The device sends a block more than the capture, so the last transfer fills.
+    let bytes = params.limit_samples * u64::from(channels) / 8 + u64::from(block);
+    let (clock, divider) = sample_clock(params.samplerate);
+
+    ctl.write(regs::PWM0_ENABLE, 0)?;
+    ctl.write(regs::PWM0_PERIOD, PWM0_PERIOD - 1)?;
+    ctl.write(regs::PWM0_DUTY, PWM0_DUTY - 1)?;
+    ctl.write(regs::PWM0_ENABLE, 0)?;
+    ctl.write(regs::PWM1_ENABLE, 0)?;
+    ctl.write(regs::BLOCK_START, 0)?;
+    ctl.clear_halt(EP_DATA);
+    ctl.clear_halt(EP_REGISTER2_OUT);
+    ctl.clear_halt(EP_REGISTER2_IN);
+    ctl.write(regs::VTH_PERIOD, VTH_PERIOD)?;
+    ctl.write(regs::VTH_DUTY, vth_duty(params.vth))?;
+    ctl.write(regs::CHANNELS, 0)?;
+    ctl.write(regs::CONTROL, CONTROL_SETUP | stream)?;
+    ctl.write(regs::CONTROL, CONTROL_SETUP | stream | CONTROL_PULSE)?;
+    ctl.write(regs::CONTROL, CONTROL_SETUP | stream)?;
+    ctl.write(regs::HOLD, u32::MAX)?;
+    ctl.write(regs::BLOCK, block)?;
+    ctl.write(regs::SYS_BLOCK, block)?;
+    ctl.write(regs::LIMIT_LOW, bytes as u32)?;
+    ctl.write(regs::LIMIT_HIGH, (bytes >> 32) as u32)?;
+    ctl.write(regs::EXTERNAL_TRIGGER, params.external_trigger)?;
+    ctl.write(regs::TRIGGER_OUT, 0)?;
+    ctl.write(
+        regs::CLOCK,
+        clock | (u32::from(params.clock_falling_edge) << 3),
+    )?;
+    ctl.write(regs::DIVIDER, divider)?;
+    ctl.write(regs::CHANNEL_COUNT, channels)?;
+    ctl.write(regs::TRIGGER_POSITION, params.trigger_position)?;
+    ctl.write(regs::BLOCK_START, 0)?;
+    let read_back = ctl.read(regs::DIVIDER)?;
+    log::debug!("sample clock {clock}, divider {divider} (reads {read_back})");
+    ctl.write(regs::CHANNELS, params.enabled)?;
+    ctl.write(regs::CONTROL, stream | (u32::from(params.filter) << 3))?;
+    ctl.write(regs::TRIGGER_ZERO, params.triggers.zero)?;
+    ctl.write(regs::TRIGGER_ONE, params.triggers.one)?;
+    ctl.write(regs::TRIGGER_RISE, params.triggers.rise)?;
+    ctl.write(regs::TRIGGER_FALL, params.triggers.fall)?;
+    ctl.write(regs::HOLD, 0)?;
+    Ok(())
+}
+
+/// `hw_dev_acquisition_start()`: sets the capture up, which starts it, and hands the
+/// transfers to a thread.
+pub(crate) fn start(
+    ctl: Control,
+    params: AcquisitionParams,
+    running: Arc<AtomicBool>,
+    sink: Sender<Packet>,
+) -> Result<Box<dyn Acquisition>, DriverError> {
+    let block = block_size(
+        params.samplerate,
+        params.channels.len() as u32,
+        params.speed,
+    );
+    set_up(&ctl, &params, block)?;
+    let mut bulk = ctl.usb().bulk_in(EP_DATA)?;
+    for _ in 0..TRANSFERS {
+        bulk.submit(block as usize);
+    }
+    log::info!(
+        "capturing {} samples at {} Hz on {} channels in {} mode ({TRANSFERS} transfers of \
+         {block} bytes)",
+        params.limit_samples,
+        params.samplerate,
+        params.channels.len(),
+        if params.stream { "Stream" } else { "Buffer" }
+    );
+
+    running.store(true, Ordering::Release);
+    let _ = sink.send(Packet::Start {
+        channels: params.channels.clone(),
+        samplerate: params.samplerate,
+    });
+    let stop = Arc::new(AtomicBool::new(false));
+    let worker = Worker {
+        ctl,
+        params,
+        bulk,
+        block,
+        sink,
+        stop: Arc::clone(&stop),
+    };
+    let thread = std::thread::Builder::new()
+        .name("pxlogic-acquisition".into())
+        .spawn(move || {
+            let (sink, reason) = worker.run();
+            running.store(false, Ordering::Release);
+            let _ = sink.send(Packet::End(reason));
+        })
+        .map_err(|error| DriverError::Protocol(format!("starting the capture thread: {error}")))?;
+    Ok(Box::new(PxAcquisition {
+        stop,
+        thread: Some(thread),
+    }))
+}
+
+struct PxAcquisition {
+    stop: Arc<AtomicBool>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Acquisition for PxAcquisition {
+    fn stop(&self) {
+        self.stop.store(true, Ordering::Release);
+    }
+
+    fn wait(mut self: Box<Self>) {
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+
+impl Drop for PxAcquisition {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Release);
+    }
+}
+
+struct Worker {
+    ctl: Control,
+    params: AcquisitionParams,
+    bulk: Box<dyn BulkIn>,
+    block: u32,
+    sink: Sender<Packet>,
+    stop: Arc<AtomicBool>,
+}
+
+impl Worker {
+    /// Runs the transfers until the capture ends, then cancels what is in flight; PXView sends
+    /// the device nothing when a capture ends.
+    fn run(mut self) -> (Sender<Packet>, EndReason) {
+        let reason = self.receive();
+        self.bulk.cancel_all();
+        let deadline = Instant::now() + CANCEL_GRACE;
+        while self.bulk.pending() > 0 && Instant::now() < deadline {
+            let _ = self.bulk.next(POLL_INTERVAL);
+        }
+        (self.sink, reason)
+    }
+
+    fn send(&self, packet: Packet) {
+        let _ = self.sink.send(packet);
+    }
+
+    fn receive(&mut self) -> EndReason {
+        let channels = self.params.channels.len() as u64;
+        let limit = self.params.limit_samples;
+        // A loop capture in Stream mode keeps no count and runs until stopped.
+        let counting = !(self.params.stream && self.params.looping);
+        let mut samples: u64 = 0;
+        let mut triggered = false;
+        let mut last_poll = Instant::now();
+        loop {
+            if self.stop.load(Ordering::Acquire) {
+                return EndReason::Stopped;
+            }
+            match self.bulk.next(POLL_INTERVAL) {
+                Some(Ok(mut data)) => {
+                    if !data.is_empty() {
+                        if counting {
+                            let arrived = data.len() as u64 * 8 / channels;
+                            if samples + arrived >= limit {
+                                let rest = (limit - samples) * channels / 8;
+                                data.truncate(usize::try_from(rest).unwrap_or(usize::MAX));
+                                samples = limit;
+                            } else {
+                                samples += arrived;
+                            }
+                        }
+                        if !data.is_empty() {
+                            self.send(Packet::Logic(data));
+                        }
+                    }
+                    if counting && samples >= limit {
+                        return EndReason::Completed;
+                    }
+                    self.bulk.submit(self.block as usize);
+                }
+                Some(Err(error)) => {
+                    return if error.is_disconnected() {
+                        EndReason::Detached
+                    } else {
+                        EndReason::Failed(UiError::from(&DriverError::Usb(error)))
+                    };
+                }
+                None => {}
+            }
+            // `receive_data2()`: until samples are counted, read where the capture is.
+            if samples == 0 && !triggered && last_poll.elapsed() >= POLL_INTERVAL {
+                last_poll = Instant::now();
+                triggered = self.poll_trigger();
+            }
+        }
+    }
+
+    /// Reads the capture state, reports the progress and, once the trigger fired, where;
+    /// returns whether it fired.
+    fn poll_trigger(&self) -> bool {
+        let state = match self.ctl.state() {
+            Ok(state) => state,
+            Err(error) => {
+                log::debug!("reading the capture state failed: {error}");
+                return false;
+            }
+        };
+        let position = u64::from(self.params.trigger_position);
+        self.send(Packet::Progress {
+            triggered: state.triggered,
+            captured: state.samples.min(position),
+        });
+        if state.triggered
+            && !(self.params.stream && self.params.looping)
+            && self.params.triggers.any()
+        {
+            self.send(Packet::Trigger {
+                sample: u64::from(state.trigger_position),
+            });
+        }
+        state.triggered
+    }
+}

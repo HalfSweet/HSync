@@ -3,4 +3,4 @@
 /**
  * A setting of a device.
  */
-export type OptionKey = "operationMode" | "channelMode" | "samplerate" | "sampleLimit" | "threshold" | "vth" | "filter" | "rle" | "externalClock" | "clockFallingEdge" | "bufferOption" | "pattern";
+export type OptionKey = "operationMode" | "channelMode" | "samplerate" | "sampleLimit" | "threshold" | "vth" | "filter" | "rle" | "externalClock" | "clockFallingEdge" | "externalTrigger" | "bufferOption" | "pattern";

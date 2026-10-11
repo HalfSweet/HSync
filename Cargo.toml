@@ -37,6 +37,7 @@ hsync-demo = { path = "crates/hsync-demo" }
 hsync-driver = { path = "crates/hsync-driver" }
 hsync-dslogic = { path = "crates/hsync-dslogic" }
 hsync-fileio = { path = "crates/hsync-fileio" }
+hsync-pxlogic = { path = "crates/hsync-pxlogic" }
 hsync-session = { path = "crates/hsync-session" }
 hsync-srd = { path = "crates/hsync-srd" }
 
