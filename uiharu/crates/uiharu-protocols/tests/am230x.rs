@@ -2,6 +2,7 @@
 
 //! The AM230x decoder on synthesized waveforms.
 
+use proptest::prelude::*;
 use uiharu_core::testing::{Harness, assert_block_invariant, without_progress};
 use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::am230x::synth::{Am230xWaveform, Timing, with_checksum};
@@ -572,5 +573,172 @@ fn a_faster_source_decodes_alike_and_a_slower_one_is_refused() {
     match result {
         Err(GraphError::Requirement { key, .. }) => assert_eq!(key, "rateHz"),
         other => panic!("expected the rate to be refused, got {other:?}"),
+    }
+}
+
+// Random traffic.
+
+/// One exchange of a random scenario.
+#[derive(Clone, Debug)]
+enum Exchange {
+    /// A reading with pulse lengths drawn around the datasheet's, some outside their windows.
+    Reading {
+        data: [u8; 4],
+        corrupt: bool,
+        timing: Timing,
+    },
+    /// A reading whose sensor stops after `bits` bits.
+    Stops { bits: usize },
+    /// The sensor's answer without a start signal.
+    NoStart,
+}
+
+/// Pulse lengths in microseconds around the datasheet's, in nanoseconds.
+fn timing() -> impl Strategy<Value = Timing> {
+    (
+        (prop_oneof![9 => 800u64..3_000, 1 => 300u64..800], 5u64..300),
+        (45u64..115, 45u64..115, 30u64..70),
+        (
+            prop_oneof![9 => 20u64..37, 1 => 37u64..49],
+            45u64..95,
+            30u64..70,
+        ),
+    )
+        .prop_map(
+            |(
+                (start, release),
+                (response_low, response_high, bit_low),
+                (zero_high, one_high, end_low),
+            )| Timing {
+                start: start * 1_000,
+                release: release * 1_000,
+                response_low: response_low * 1_000,
+                response_high: response_high * 1_000,
+                bit_low: bit_low * 1_000,
+                zero_high: zero_high * 1_000,
+                one_high: one_high * 1_000,
+                end_low: end_low * 1_000,
+            },
+        )
+}
+
+fn exchange() -> impl Strategy<Value = Exchange> {
+    prop_oneof![
+        8 => (any::<[u8; 4]>(), prop::bool::weighted(0.2), timing())
+            .prop_map(|(data, corrupt, timing)| Exchange::Reading { data, corrupt, timing }),
+        1 => (0usize..40).prop_map(|bits| Exchange::Stops { bits }),
+        1 => Just(Exchange::NoStart),
+    ]
+}
+
+fn exchanges(exchanges: &[Exchange], idle_us: &[u64]) -> LogicBlock {
+    let mut waveform = new_waveform(Model::Am2302);
+    for (n, exchange) in exchanges.iter().enumerate() {
+        let typical = Timing::of(Model::Am2302);
+        match exchange {
+            Exchange::Reading {
+                data,
+                corrupt,
+                timing,
+            } => {
+                let mut bytes = with_checksum(*data);
+                if *corrupt {
+                    bytes[4] ^= 0x41;
+                }
+                waveform.set_timing(*timing);
+                waveform.reading(bytes);
+            }
+            Exchange::Stops { bits } => {
+                waveform.set_timing(typical);
+                waveform.start_signal();
+                waveform.response();
+                for bit in 0..*bits {
+                    waveform.bit(bit % 3 == 0);
+                }
+            }
+            Exchange::NoStart => {
+                waveform.set_timing(typical);
+                waveform.response();
+                waveform.bytes(&[0x12, 0x34]);
+                waveform.end();
+            }
+        }
+        waveform.idle_us(idle_us[n % idle_us.len()]);
+    }
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(32),
+        ..ProptestConfig::default()
+    })]
+
+    /// Blocks of any size, a reader that pauses at random and tiny queues and budgets yield the
+    /// events of one uninterrupted run, and the stream settles in order without progress
+    /// passing a reading it still reports.
+    #[test]
+    fn random_traffic_decodes_alike_however_it_comes(
+        exchanges_in in prop::collection::vec(exchange(), 1..6),
+        idle_us in prop::collection::vec(prop_oneof![3 => 300u64..2_000, 1 => 20u64..300], 1..4),
+        sizes in prop::collection::vec(1u64..2_000, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        cut in prop::option::of(0.05f64..1.0),
+        gap in prop::option::of((0.05f64..0.95, 1u64..800)),
+    ) {
+        let whole = exchanges(&exchanges_in, &idle_us);
+        let block = match cut {
+            Some(cut) => {
+                let end = Tick(((whole.len() as f64) * cut) as u64).max(Tick(1));
+                whole.slice(TickRange::new(Tick::ZERO, end)).expect("a slice")
+            }
+            None => whole,
+        };
+        let gaps: Vec<TickRange> = gap
+            .and_then(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                let end = (start + len).min(block.len());
+                (start < end).then(|| TickRange::new(Tick(start), Tick(end)))
+            })
+            .into_iter()
+            .collect();
+        let reference = {
+            let mut harness = build(Model::Am2302, RATE, GraphConfig::default());
+            harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+            harness.end();
+            harness.without_progress()
+        };
+
+        let mut harness = build(Model::Am2302, RATE, GraphConfig { queue_capacity, budget });
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference.clone());
+        let stats = harness.pipeline().stats();
+        prop_assert!(stats.within_capacity(), "{stats:?}");
+
+        let mut seen = Tick::ZERO;
+        for item in &harness.items {
+            match item {
+                Item::Progress(tick) => seen = seen.max(*tick),
+                Item::Event(event) => prop_assert!(event.span.start >= seen, "{event:?} after {seen}"),
+                Item::Gap(_) | Item::End(_) => {}
+            }
+        }
+        let mut settled = Tick::ZERO;
+        for event in reference.iter().filter_map(Item::event) {
+            prop_assert!(event.settled >= settled, "{event:?} settled before {settled}");
+            settled = event.settled;
+            if let Am230xEvent::Reading { bytes, checksum_ok, humidity_raw, temperature_raw } =
+                event.payload
+            {
+                let sum = bytes[..4].iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte));
+                prop_assert_eq!(checksum_ok, sum == bytes[4]);
+                prop_assert_eq!(humidity_raw, u16::from_be_bytes([bytes[0], bytes[1]]));
+                prop_assert_eq!(temperature_raw, u16::from_be_bytes([bytes[2], bytes[3]]));
+            }
+        }
     }
 }
