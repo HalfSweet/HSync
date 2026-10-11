@@ -48,6 +48,7 @@ const KEYS: readonly OptionKey[] = [
   'channelMode',
   'externalClock',
   'clockFallingEdge',
+  'externalTrigger',
   'samplerate',
   'sampleLimit',
   'threshold',

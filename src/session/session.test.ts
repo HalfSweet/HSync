@@ -29,6 +29,25 @@ describe('sessions', () => {
     expect(session?.decoders).toEqual([{ id: '1:i2c' }])
   })
 
+  it('keep the external trigger of PXLogic devices', () => {
+    const session = parseSession(
+      JSON.stringify({
+        format: 'hsync-session',
+        version: 1,
+        device: { driver: 'PXLogic', model: 'PX-Logic 16 Plus' },
+        options: [
+          ['channelMode', { type: 'choice', value: '2' }],
+          ['externalTrigger', { type: 'choice', value: 'fall' }],
+        ],
+      }),
+    )
+    expect(session?.options).toEqual([
+      ['channelMode', { type: 'choice', value: '2' }],
+      ['externalTrigger', { type: 'choice', value: 'fall' }],
+    ])
+    expect(optionRank('channelMode')).toBeLessThan(optionRank('externalTrigger'))
+  })
+
   it('read what they can of DSView sessions', () => {
     const session = parseSession(
       JSON.stringify({
