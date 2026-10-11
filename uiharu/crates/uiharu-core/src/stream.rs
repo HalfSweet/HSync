@@ -343,12 +343,12 @@ mod tests {
         let mut queue = Broadcast::new(8);
         let reader = queue.add_reader();
         for payload in 0..3 {
-            queue.try_push(event(payload)).unwrap();
+            queue.try_push(event(payload)).expect("fits");
         }
         queue
             .try_push(Item::Gap(TickRange::new(Tick(1), Tick(2))))
-            .unwrap();
-        queue.try_push(event(3)).unwrap();
+            .expect("fits");
+        queue.try_push(event(3)).expect("fits");
         let mut seqs = Vec::new();
         while let Some(item) = queue.peek(reader) {
             if let Some(event) = item.event() {
@@ -363,13 +363,13 @@ mod tests {
     fn progress_folds_and_the_end_stays() {
         let mut queue: Broadcast<u32> = Broadcast::new(1);
         let reader = queue.add_reader();
-        queue.try_push(Item::Progress(Tick(5))).unwrap();
-        queue.try_push(Item::Progress(Tick(9))).unwrap();
-        queue.try_push(Item::Progress(Tick(7))).unwrap();
+        queue.try_push(Item::Progress(Tick(5))).expect("fits");
+        queue.try_push(Item::Progress(Tick(9))).expect("fits");
+        queue.try_push(Item::Progress(Tick(7))).expect("fits");
         assert_eq!(queue.len(), 1);
         assert_eq!(queue.peek(reader), Some(&Item::Progress(Tick(9))));
         queue.advance(reader);
-        queue.try_push(Item::End(Tick(10))).unwrap();
+        queue.try_push(Item::End(Tick(10))).expect("fits");
         assert!(queue.is_ended());
         queue.advance(reader);
         queue.advance(reader);
@@ -382,7 +382,7 @@ mod tests {
         let mut queue = Broadcast::new(4);
         let gone = queue.add_reader();
         let stays = queue.add_reader();
-        queue.try_push(event(1)).unwrap();
+        queue.try_push(event(1)).expect("fits");
         queue.advance(stays);
         assert_eq!(queue.len(), 1);
         queue.remove_reader(gone);

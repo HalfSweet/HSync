@@ -179,9 +179,9 @@ mod tests {
 
     #[test]
     fn ranges_serialize_as_pairs() {
-        let json = serde_json::to_string(&TickRange::new(Tick(1), Tick(3))).unwrap();
+        let json = serde_json::to_string(&TickRange::new(Tick(1), Tick(3))).expect("serializes");
         assert_eq!(json, "[1,3]");
-        let back: TickRange = serde_json::from_str("[1,3]").unwrap();
+        let back: TickRange = serde_json::from_str("[1,3]").expect("parses");
         assert_eq!(back, TickRange::new(Tick(1), Tick(3)));
     }
 
