@@ -628,6 +628,68 @@ fn pushes_must_be_contiguous() {
 }
 
 #[test]
+fn graphs_can_be_wired_by_port_names() {
+    let mut graph = Graph::new();
+    let source = graph
+        .source(SourceSpec::new("logic", 2, TimeBase::new(1_000)))
+        .expect("adds the source");
+    let counter = graph.add(EdgeCounter { channel: 0 });
+    let doubler = graph.add(Doubler::new());
+    let samples = graph.source_output(source.id).expect("the source output");
+    graph
+        .connect_dyn(samples, graph.input(counter, "logic").expect("the input"))
+        .expect("connects");
+    let counts = graph.output(counter, "count").expect("the output");
+    assert_eq!(graph.schema_of(counts), Ok(Num::SCHEMA));
+    graph
+        .connect_dyn(counts, graph.input(doubler, "numbers").expect("the input"))
+        .expect("connects");
+    assert_eq!(
+        graph.output(counter, "counts"),
+        Err(GraphError::UnknownPortName {
+            owner: "edges#0".into(),
+            direction: "output",
+            name: "counts".into(),
+        })
+    );
+    assert!(matches!(
+        graph.input(doubler, "number"),
+        Err(GraphError::UnknownPortName {
+            direction: "input",
+            ..
+        })
+    ));
+    assert!(matches!(
+        graph.source_output(uiharu_core::SourceId::from_index(3)),
+        Err(GraphError::UnknownPort { .. })
+    ));
+    let doubled = graph
+        .expose_dyn(
+            "doubled",
+            graph.output(doubler, "doubled").expect("the output"),
+        )
+        .expect("exposes");
+    let mut pipeline = graph.build().expect("builds");
+    // The wrong event type is refused, and does not take the reader.
+    assert!(pipeline.exposed_dyn::<Text>(doubled).is_none());
+    let doubled = pipeline
+        .exposed_dyn::<Num>(doubled)
+        .expect("the exposed reader");
+    pipeline
+        .push(source.id, SignalItem::Data(toggling(0, 50, 10)))
+        .expect("pushes");
+    pipeline
+        .push(source.id, SignalItem::End(Tick(50)))
+        .expect("pushes");
+    pipeline.run();
+    let found: Vec<u32> = events(&drain(&doubled))
+        .into_iter()
+        .map(|event| event.3.0)
+        .collect();
+    assert_eq!(found, vec![2, 4, 6, 8]);
+}
+
+#[test]
 fn connections_are_checked() {
     let mut graph = Graph::new();
     let source = graph

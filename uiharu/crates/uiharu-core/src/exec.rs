@@ -14,7 +14,9 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::{Context, Waker};
 
-use crate::graph::{ExposedRef, Exposure, GraphConfig, Owner, PortKey, SourceId, SourceSpec};
+use crate::graph::{
+    DynExposedRef, ExposedRef, Exposure, GraphConfig, Owner, PortKey, SourceId, SourceSpec,
+};
 use crate::node::{Io, Node, NodeCx, NodeFuture, NodeSpec, SharedQueue, Wait};
 use crate::schema::Props;
 use crate::signal::{LogicBlock, SignalItem};
@@ -431,12 +433,30 @@ impl Pipeline {
     }
 
     /// Takes the reader of an exposed output; `None` once taken.
+    ///
+    /// # Panics
+    ///
+    /// When `T` is not the output's event type, which a typed [`ExposedRef`] rules out.
     pub fn exposed<T: 'static>(&mut self, exposed: ExposedRef<T>) -> Option<Exposed<T>> {
+        let name = self.exposed.get(exposed.index)?.name.clone();
+        let taken = self.exposed_dyn::<T>(DynExposedRef {
+            index: exposed.index,
+        });
+        if taken.is_none() && self.exposed[exposed.index].reader.is_some() {
+            panic!("exposed output {name} carries another event type");
+        }
+        taken
+    }
+
+    /// Takes the reader of an output exposed by name, as `T` events; `None` once taken or when
+    /// the output carries another event type, which a caller working from a description finds
+    /// out this way.
+    pub fn exposed_dyn<T: 'static>(&mut self, exposed: DynExposedRef) -> Option<Exposed<T>> {
         let entry = self.exposed.get_mut(exposed.index)?;
-        let reader = entry.reader.take()?;
         let queue = Rc::clone(&entry.queue)
             .downcast::<RefCell<Broadcast<T>>>()
-            .unwrap_or_else(|_| panic!("exposed output {} carries another event type", entry.name));
+            .ok()?;
+        let reader = entry.reader.take()?;
         Some(Exposed {
             name: entry.name.clone(),
             queue,

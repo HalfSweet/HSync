@@ -153,6 +153,26 @@ impl<T> fmt::Debug for ExposedRef<T> {
     }
 }
 
+/// An output port named at run time, for graphs built from a description rather than from
+/// typed code; see [`Graph::output`] and [`Graph::connect_dyn`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DynOutput {
+    key: PortKey,
+}
+
+/// An input port named at run time; see [`Graph::input`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DynInput {
+    node: usize,
+    index: usize,
+}
+
+/// An output exposed through [`Graph::expose_dyn`], read with [`Pipeline::exposed_dyn`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DynExposedRef {
+    pub(crate) index: usize,
+}
+
 /// A source of logic samples, as [`Graph::source`] takes it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SourceSpec {
@@ -304,6 +324,16 @@ pub enum GraphError {
     /// Two exposed outputs share a name.
     #[error("an output named {0} is already exposed")]
     DuplicateExposure(String),
+    /// A port named at run time does not exist.
+    #[error("{owner} has no {direction} port named {name}")]
+    UnknownPortName {
+        /// The source or node.
+        owner: String,
+        /// `input` or `output`.
+        direction: &'static str,
+        /// The name asked for.
+        name: String,
+    },
 }
 
 struct NodeEntry {
@@ -467,10 +497,112 @@ impl Graph {
         from: OutputRef<T>,
         to: InputRef<T>,
     ) -> Result<(), GraphError> {
-        let output = self.output_spec(from.key)?;
-        let input = self.input_spec(to.node, to.index)?.clone();
-        let from_name = self.port_name(from.key.owner, output.name);
-        let to_name = self.port_name(Owner::Node(to.node), input.name);
+        self.connect_keys(from.key, to.node, to.index)
+    }
+
+    /// Exposes an output under `name`, to be read from the pipeline.
+    pub fn expose<T: EventSchema>(
+        &mut self,
+        name: impl Into<String>,
+        from: OutputRef<T>,
+    ) -> Result<ExposedRef<T>, GraphError> {
+        let index = self.expose_key(name.into(), from.key)?;
+        Ok(ExposedRef {
+            index,
+            _payload: PhantomData,
+        })
+    }
+
+    /// The samples output of `source`, for a graph built from a description.
+    pub fn source_output(&self, source: SourceId) -> Result<DynOutput, GraphError> {
+        if source.0 >= self.sources.len() {
+            return Err(GraphError::UnknownPort {
+                owner: self.owner_name(Owner::Source(source.0)),
+                direction: "output",
+                index: 0,
+            });
+        }
+        Ok(DynOutput {
+            key: PortKey {
+                owner: Owner::Source(source.0),
+                index: 0,
+            },
+        })
+    }
+
+    /// Output port `name` of `node`, for a graph built from a description.
+    pub fn output(&self, node: NodeId, name: &str) -> Result<DynOutput, GraphError> {
+        let entry = self
+            .nodes
+            .get(node.0)
+            .ok_or(GraphError::UnknownNode(node.0))?;
+        let index = entry
+            .spec
+            .outputs
+            .iter()
+            .position(|output| output.name == name)
+            .ok_or_else(|| GraphError::UnknownPortName {
+                owner: self.owner_name(Owner::Node(node.0)),
+                direction: "output",
+                name: name.to_owned(),
+            })?;
+        Ok(DynOutput {
+            key: PortKey {
+                owner: Owner::Node(node.0),
+                index,
+            },
+        })
+    }
+
+    /// Input port `name` of `node`, for a graph built from a description.
+    pub fn input(&self, node: NodeId, name: &str) -> Result<DynInput, GraphError> {
+        let entry = self
+            .nodes
+            .get(node.0)
+            .ok_or(GraphError::UnknownNode(node.0))?;
+        let index = entry
+            .spec
+            .inputs
+            .iter()
+            .position(|input| input.name == name)
+            .ok_or_else(|| GraphError::UnknownPortName {
+                owner: self.owner_name(Owner::Node(node.0)),
+                direction: "input",
+                name: name.to_owned(),
+            })?;
+        Ok(DynInput {
+            node: node.0,
+            index,
+        })
+    }
+
+    /// Connects ports named at run time, with the checks of [`Graph::connect`]; the schema
+    /// check is what keeps the event types straight here.
+    pub fn connect_dyn(&mut self, from: DynOutput, to: DynInput) -> Result<(), GraphError> {
+        self.connect_keys(from.key, to.node, to.index)
+    }
+
+    /// Exposes an output named at run time under `name`.
+    pub fn expose_dyn(
+        &mut self,
+        name: impl Into<String>,
+        from: DynOutput,
+    ) -> Result<DynExposedRef, GraphError> {
+        Ok(DynExposedRef {
+            index: self.expose_key(name.into(), from.key)?,
+        })
+    }
+
+    /// The schema of the output behind a port named at run time.
+    pub fn schema_of(&self, output: DynOutput) -> Result<SchemaId, GraphError> {
+        self.output_spec(output.key).map(|spec| spec.schema)
+    }
+
+    fn connect_keys(&mut self, from: PortKey, node: usize, index: usize) -> Result<(), GraphError> {
+        let output = self.output_spec(from)?;
+        let input = self.input_spec(node, index)?.clone();
+        let from_name = self.port_name(from.owner, output.name);
+        let to_name = self.port_name(Owner::Node(node), input.name);
         if output.schema != input.schema {
             return Err(GraphError::SchemaMismatch {
                 from: from_name,
@@ -496,33 +628,21 @@ impl Graph {
                 found,
             });
         }
-        let slot = &mut self.nodes[to.node].inputs[to.index];
+        let slot = &mut self.nodes[node].inputs[index];
         if slot.is_some() {
             return Err(GraphError::AlreadyConnected { to: to_name });
         }
-        *slot = Some(from.key);
+        *slot = Some(from);
         Ok(())
     }
 
-    /// Exposes an output under `name`, to be read from the pipeline.
-    pub fn expose<T: EventSchema>(
-        &mut self,
-        name: impl Into<String>,
-        from: OutputRef<T>,
-    ) -> Result<ExposedRef<T>, GraphError> {
-        let name = name.into();
-        self.output_spec(from.key)?;
+    fn expose_key(&mut self, name: String, from: PortKey) -> Result<usize, GraphError> {
+        self.output_spec(from)?;
         if self.exposed.iter().any(|exposure| exposure.name == name) {
             return Err(GraphError::DuplicateExposure(name));
         }
-        self.exposed.push(Exposure {
-            name,
-            from: from.key,
-        });
-        Ok(ExposedRef {
-            index: self.exposed.len() - 1,
-            _payload: PhantomData,
-        })
+        self.exposed.push(Exposure { name, from });
+        Ok(self.exposed.len() - 1)
     }
 
     /// The nodes in an order where every node comes after the ones it reads.
