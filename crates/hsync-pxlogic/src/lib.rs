@@ -5,10 +5,12 @@
 
 mod acquisition;
 mod device;
+mod driver;
 pub mod profiles;
 pub mod protocol;
 
 pub use device::{ExternalTrigger, MAX_SOFTWARE_DEPTH, MIN_SAMPLES, PxlogicDevice, Settings};
+pub use driver::PxlogicDriver;
 
 /// Driver name, also recorded in capture files; devices whose model is not yet known are
 /// listed under it.
