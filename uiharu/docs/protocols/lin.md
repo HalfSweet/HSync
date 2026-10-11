@@ -22,10 +22,10 @@ The master and the slaves share LIN's single wire, so one UART stream carries th
 
 `LinConfig`, checked by `Lin::new`:
 
-| Field            | Default | Meaning                                                                                                                                                                                                                         |
-| ---------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `length_by_id`   | `false` | End a frame with its checksum after the number of data bytes bits 4 and 5 of its identifier code, as LIN 1.x allowed: 2 for identifiers 0 to 31, 4 for 32 to 47, 8 for 48 to 63. Otherwise a frame ends at the next break field |
-| `min_break_bits` | 13      | The shortest UART break taken as a break field, in nominal bit times, 9 to 13. A master sends at least 13; LIN slaves detect a break from 11, which also takes the breaks of a master whose clock runs somewhat fast            |
+| Field            | Default | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ---------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `length_by_id`   | `false` | End a frame with its checksum after the number of data bytes bits 4 and 5 of its identifier code, as LIN 1.x allowed: 2 for identifiers 0 to 31, 4 for 32 to 47, 8 for 48 to 63. Otherwise a frame ends at the next break field                                                                                                                                                                                                              |
+| `min_break_bits` | 11      | The shortest UART break taken as a break field, in nominal bit times, 9 to 13. 11 is the threshold LIN slaves detect a break with (§2.3.1.1): a master sends at least 13, but one whose clock runs a little fast sends breaks that measure just under 13 at the nominal bit time. 13 takes only breaks as long as a master must send them; 9 takes every break the UART reports, as receivers with an accurate clock may, from 9.5 bit times |
 
 ## Requirements
 
@@ -108,7 +108,7 @@ The checksum is the inverted eight-bit sum with carry — the bytes added, 255 s
 
 ## Decoding rules
 
-- A break field is a UART break at least `min_break_bits` nominal bit times long, `⌊min_break_bits × rate / baud⌋` ticks with `rate` the source's samples per second: rounded down, so a break of exactly that many bit times is taken whatever the phase of the samples.
+- A break field is a UART break at least `min_break_bits` nominal bit times long, 11 by default, `⌊min_break_bits × rate / baud⌋` ticks with `rate` the source's samples per second: rounded down, so a break of exactly that many bit times is taken whatever the phase of the samples.
 - Every break ends the frame under way, since the master begins each frame with one; a break long enough begins the next frame. After a shorter one, characters are skipped up to the next break field.
 - The character after the break field must be the sync byte, 0x55 without a framing error; then comes the protected identifier, and the header goes out.
 - Every character after it is the response, up to the frame's end: the next break, a gap or the end of the samples, or, with `length_by_id`, the checksum after the data length the identifier codes, after which characters are skipped up to the next break field.
@@ -122,5 +122,5 @@ The checksum is the inverted eight-bit sum with carry — the bytes added, 255 s
 
 - The data length of a frame is not on the bus but in the cluster's description, so without `length_by_id` a response ends at the next break field, and the last frame of a capture ends `aborted`.
 - Signals, diagnostic requests and the transport layer are not interpreted.
-- The frame's timing is not checked against the maximum length of §2.3.2, and collisions of event triggered frames are not told apart from other errors.
+- The frame-time maximum of §2.3.2, `TFrame_Maximum`, 1.4 times the nominal time of the header and of the response, is not checked, though the specification asks tools to check it; collisions of event triggered frames are not told apart from other errors.
 - A wake-up signal long enough to be a break begins a frame, which reports nothing unless a byte follows it.

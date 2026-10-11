@@ -16,10 +16,11 @@
 //!   bit first and a stop bit, so the input requires 8 data bits, no parity, one stop bit and
 //!   the least significant bit first; the bit time is taken from the stream's `baud` and the
 //!   source's rate;
-//! - a break field is a UART break at least `min_break_bits` nominal bit times long: 13 by
-//!   default, what a master must send, while LIN slaves detect a break from 11. That length is
-//!   `⌊min_break_bits × rate / baud⌋` ticks, rounded down, so that a break of exactly that many
-//!   bit times is taken whatever the phase of the samples;
+//! - a break field is a UART break at least `min_break_bits` nominal bit times long: 11 by
+//!   default, the threshold LIN slaves detect a break with (§2.3.1.1), since a master sends at
+//!   least 13 but one whose clock runs a little fast sends breaks that measure just under 13
+//!   nominal bit times. That length is `⌊min_break_bits × rate / baud⌋` ticks, rounded down, so
+//!   that a break of exactly that many bit times is taken whatever the phase of the samples;
 //! - every break ends the frame under way, since the master begins each frame with one, and a
 //!   break long enough begins the next frame; after a shorter one, characters are skipped up to
 //!   the next break field;
@@ -63,7 +64,7 @@
 //!
 //! Limits: the data length of a frame is not on the bus but in the cluster's description, so
 //! without `length_by_id` a response ends at the next break field; signals are not interpreted;
-//! the frame's timing is not checked against the maximum length of §2.3.2; a wake-up signal long
+//! the frame-time maximum of §2.3.2, `TFrame_Maximum`, is not checked; a wake-up signal long
 //! enough to be a break begins a frame that reports nothing unless a byte follows it. One decoder
 //! reads one UART stream: the master and the slaves share LIN's single wire.
 
@@ -89,9 +90,11 @@ pub struct LinConfig {
     /// identifier code, as LIN 1.x allowed — 2 for identifiers 0 to 31, 4 for 32 to 47, 8 for
     /// 48 to 63 — instead of at the next break field.
     pub length_by_id: bool,
-    /// The shortest UART break taken as a break field, in nominal bit times, 9 to 13. A master
-    /// sends at least 13; LIN slaves detect a break from 11, which also takes the breaks of a
-    /// master whose clock runs somewhat fast.
+    /// The shortest UART break taken as a break field, in nominal bit times, 9 to 13. The
+    /// default, 11, is the threshold LIN slaves detect a break with: a master sends at least 13,
+    /// but one whose clock runs a little fast sends breaks that measure just under 13 at the
+    /// nominal bit time. 13 takes only breaks as long as a master must send them; 9 takes every
+    /// break the UART reports, as receivers with an accurate clock may, from 9.5 bit times.
     pub min_break_bits: u8,
 }
 
@@ -99,7 +102,7 @@ impl Default for LinConfig {
     fn default() -> Self {
         Self {
             length_by_id: false,
-            min_break_bits: 13,
+            min_break_bits: 11,
         }
     }
 }
@@ -600,13 +603,17 @@ mod tests {
     fn configurations_read_from_json() {
         let config: LinConfig =
             serde_json::from_str(r#"{"length_by_id":true}"#).expect("a configuration");
+        // The threshold LIN slaves detect a break with, unless told otherwise.
         assert_eq!(
             config,
             LinConfig {
                 length_by_id: true,
-                min_break_bits: 13,
+                min_break_bits: 11,
             }
         );
+        let config: LinConfig =
+            serde_json::from_str(r#"{"min_break_bits":13}"#).expect("a configuration");
+        assert_eq!(config.min_break_bits, 13);
         assert!(serde_json::from_str::<LinConfig>(r#"{"break":13}"#).is_err());
     }
 

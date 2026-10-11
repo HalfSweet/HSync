@@ -650,32 +650,42 @@ fn a_framing_error_marks_the_frame() {
     );
 }
 
-#[test]
-fn a_short_break_begins_no_frame() {
+/// Breaks of 10 bit times, 13, one tick short of 11, exactly 11 and 13 again, each followed by
+/// a header and a response; returns the samples, the response and where the last four breaks
+/// began.
+fn breaks_of_every_length() -> (LogicBlock, Vec<u8>, [u64; 4]) {
     let data = [0x55, 0xaa];
     let response = with_checksum(&data, enhanced(PID_10, &data));
     let mut waveform = waveform(200);
-    // Twelve bit times at dominant: not a break field.
-    send_header_after(&mut waveform, 12 * BIT, 0x55, PID_10);
+    send_header_after(&mut waveform, 10 * BIT, 0x55, PID_10);
     waveform.bytes(response.iter().copied());
     waveform.idle(300);
-    // A frame that a break one tick short of 13 bit times ends; what follows it is skipped.
-    let first = send_header(&mut waveform, PID_10);
-    waveform.bytes(response.iter().copied());
-    waveform.idle(300);
-    let short = send_header_after(&mut waveform, BREAK - 1, 0x55, PID_10);
-    waveform.bytes(response.iter().copied());
-    waveform.idle(300);
-    // Exactly 13 bit times.
-    let second = send_header(&mut waveform, PID_10);
-    waveform.bytes(response.iter().copied());
-    waveform.idle(300);
-    let third = send_header(&mut waveform, PID_10);
-    let block = waveform.finish();
+    let mut starts = [0; 4];
+    for (start, break_samples) in starts
+        .iter_mut()
+        .zip([BREAK, 11 * BIT - 1, 11 * BIT, BREAK])
+    {
+        *start = send_header_after(&mut waveform, break_samples, 0x55, PID_10);
+        waveform.bytes(response.iter().copied());
+        waveform.idle(300);
+    }
+    (waveform.finish(), response, starts)
+}
+
+#[test]
+fn a_break_shorter_than_the_threshold_is_not_a_break_field() {
+    // The threshold LIN slaves detect a break with.
+    assert_eq!(LinConfig::default().min_break_bits, 11);
+    let (block, response, [first, short, second, third]) = breaks_of_every_length();
     let lines = decode(&block);
-    let end = short + BREAK - 1;
+    // The break of 10 bit times begins no frame. The one a tick short of 11 bit times ends
+    // the first frame and begins none: what follows it is skipped.
+    let end = short + 11 * BIT - 1;
+    // After a break of 11 bit times the header is 20 ticks shorter than after one of 13.
+    let header = second + 11 * BIT + DELIMITER + 2 * CHAR;
+    let next = recognized(third);
     assert_eq!(
-        lines[..8],
+        lines[..9],
         [
             header_line(1, first, PID_10),
             format!("data f1 +0 55aa {}@{end}", bytes_at(first, 0, 2)),
@@ -685,31 +695,44 @@ fn a_short_break_begins_no_frame() {
                 bytes_at(first, 2, 3)
             ),
             format!("end f1 Complete [{short},{short})@{end}"),
-            header_line(2, second, PID_10),
             format!(
-                "data f2 +0 55aa {}@{}",
-                bytes_at(second, 0, 2),
-                recognized(third)
+                "header f2 50 id 10 [{second},{header})@{}",
+                header - CHAR + STOP
             ),
+            format!("data f2 +0 55aa [{header},{})@{next}", header + 2 * CHAR),
             format!(
-                "checksum f2 {:02x} enhanced {}@{}",
+                "checksum f2 {:02x} enhanced [{},{})@{next}",
                 response[2],
-                bytes_at(second, 2, 3),
-                recognized(third)
+                header + 2 * CHAR,
+                header + 3 * CHAR
             ),
             ended_by_break(2, "Complete", third),
+            header_line(3, third, PID_10),
         ]
     );
-    // A slave's threshold of 11 bit times takes both short breaks.
-    let slave = LinConfig {
-        min_break_bits: 11,
-        ..LinConfig::default()
+}
+
+#[test]
+fn the_break_threshold_is_configurable() {
+    let (block, _, _) = breaks_of_every_length();
+    let headers = |min_break_bits| {
+        let config = LinConfig {
+            min_break_bits,
+            ..LinConfig::default()
+        };
+        decode_with(config, &block)
+            .iter()
+            .filter(|line| line.starts_with("header"))
+            .count()
     };
-    let headers = decode_with(slave, &block)
-        .iter()
-        .filter(|line| line.starts_with("header"))
-        .count();
-    assert_eq!(headers, 5);
+    // From 11 bit times, the default: the breaks of 13, 11 and 13 bit times.
+    assert_eq!(headers(11), 3);
+    // Only breaks as long as a master must send them.
+    assert_eq!(headers(13), 2);
+    assert_eq!(headers(12), 2);
+    // Every break the UART reports.
+    assert_eq!(headers(10), 5);
+    assert_eq!(headers(9), 5);
 }
 
 #[test]
@@ -954,9 +977,13 @@ fn busy_bus(waveform: &mut UartWaveform) -> Vec<u64> {
     waveform.idle(BIT);
     waveform.bytes([0x0f, 0x00]);
     waveform.idle(200);
-    // A short break, and what follows it.
+    // A break of 11 bit times, a break field unless the threshold is higher, and what follows.
     starts.push(send_header_after(waveform, 11 * BIT, 0x55, PID_10));
     waveform.bytes([0x01, 0x02, 0x03]);
+    waveform.idle(200);
+    // A break too short to be a break field whatever the threshold, and what follows it.
+    starts.push(send_header_after(waveform, 10 * BIT, 0x55, PID_10));
+    waveform.bytes([0x04, 0x05]);
     waveform.idle(200);
     // A long break, with a long delimiter, and a frame whose bytes come with spaces.
     starts.push(waveform.position().0);
@@ -1006,7 +1033,7 @@ fn every_cut_and_pause_yields_the_same_frames() {
         LinConfig::default(),
         LinConfig {
             length_by_id: true,
-            min_break_bits: 11,
+            min_break_bits: 13,
         },
     ] {
         let reference = {
@@ -1100,7 +1127,8 @@ struct Scenario {
 
 fn scenario() -> impl Strategy<Value = Scenario> {
     (
-        prop_oneof![6 => Just(13u64), 1 => 10u64..13, 1 => 14u64..20],
+        // Nine bit times make a 0x00 byte, ten a break shorter than the threshold.
+        prop_oneof![6 => Just(13u64), 1 => 9u64..11, 1 => 11u64..13, 1 => 14u64..20],
         prop_oneof![9 => Just(0x55u8), 1 => any::<u8>()],
         0u8..64,
         prop::bool::weighted(0.1),
