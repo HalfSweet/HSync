@@ -67,6 +67,7 @@ pub struct Clock {
 
 /// How the bus is wired.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ParallelConfig {
     /// The data lines' channels, least significant bit first: 1 to 64 of them.
     pub data: Vec<u8>,

@@ -95,6 +95,7 @@ pub enum SampleEdge {
 
 /// How the bus is wired and how its words are framed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct I2sConfig {
     /// The serial clock's channel.
     pub sck: u8,

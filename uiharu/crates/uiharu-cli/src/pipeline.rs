@@ -25,13 +25,18 @@
 use std::collections::BTreeMap;
 
 use serde::Deserialize;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
 use uiharu_core::{
     DynExposedRef, DynOutput, Graph, GraphConfig, Node, NodeId, Pipeline, SourceId, SourceSpec,
     TimeBase,
 };
-use uiharu_protocols::spi::{Spi, SpiConfig, SpiEvent};
+use uiharu_protocols::i2s::{I2s, I2sEvent};
+use uiharu_protocols::parallel::{Parallel, ParallelEvent};
+use uiharu_protocols::pwm::{Pwm, PwmEvent};
+use uiharu_protocols::spi::{Spi, SpiEvent};
 use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
+use uiharu_protocols::timing::{Timing, TimingEvent};
 
 use crate::Failure;
 use crate::ndjson::{StreamWriter, Writer};
@@ -125,22 +130,36 @@ fn config<T: DeserializeOwned>(value: &serde_json::Value) -> Result<T, String> {
     serde_json::from_value(value).map_err(|error| error.to_string())
 }
 
-fn build_spi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
-    let config: SpiConfig = config(value)?;
-    Spi::new(config)
+/// Builds a node from its configuration with `make`, which validates it.
+fn build_node<C, N, E>(
+    value: &serde_json::Value,
+    make: fn(C) -> Result<N, E>,
+) -> Result<Box<dyn Node>, String>
+where
+    C: DeserializeOwned,
+    N: Node,
+    E: std::fmt::Display,
+{
+    let config: C = config(value)?;
+    make(config)
         .map(|node| Box::new(node) as Box<dyn Node>)
         .map_err(|error| error.to_string())
 }
 
-fn write_spi(
+/// Makes the writer of an output carrying `T` events.
+fn write_as<T: Serialize + 'static>(
     pipeline: &mut Pipeline,
     exposed: DynExposedRef,
     name: String,
 ) -> Option<Box<dyn Writer>> {
     Some(Box::new(StreamWriter::new(
         name,
-        pipeline.exposed_dyn::<SpiEvent>(exposed)?,
+        pipeline.exposed_dyn::<T>(exposed)?,
     )))
+}
+
+fn build_spi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Spi::new)
 }
 
 fn build_spi_nor(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
@@ -150,28 +169,53 @@ fn build_spi_nor(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     Ok(Box::new(SpiNorRead24::new()))
 }
 
-fn write_spi_nor(
-    pipeline: &mut Pipeline,
-    exposed: DynExposedRef,
-    name: String,
-) -> Option<Box<dyn Writer>> {
-    Some(Box::new(StreamWriter::new(
-        name,
-        pipeline.exposed_dyn::<NorEvent>(exposed)?,
-    )))
+fn build_i2s(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, I2s::new)
 }
 
-/// The node types a description may use.
+fn build_pwm(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Pwm::new)
+}
+
+fn build_timing(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Timing::new)
+}
+
+fn build_parallel(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Parallel::new)
+}
+
+/// The node types a description may use, each with the configuration type it reads.
 pub const KINDS: &[Kind] = &[
     Kind {
         name: "spi",
         build: build_spi,
-        writer: write_spi,
+        writer: write_as::<SpiEvent>,
     },
     Kind {
         name: "spi-nor",
         build: build_spi_nor,
-        writer: write_spi_nor,
+        writer: write_as::<NorEvent>,
+    },
+    Kind {
+        name: "i2s",
+        build: build_i2s,
+        writer: write_as::<I2sEvent>,
+    },
+    Kind {
+        name: "pwm",
+        build: build_pwm,
+        writer: write_as::<PwmEvent>,
+    },
+    Kind {
+        name: "timing",
+        build: build_timing,
+        writer: write_as::<TimingEvent>,
+    },
+    Kind {
+        name: "parallel",
+        build: build_parallel,
+        writer: write_as::<ParallelEvent>,
     },
 ];
 
@@ -295,6 +339,7 @@ mod tests {
     use std::sync::Arc;
 
     use uiharu_core::{SignalItem, Tick};
+    use uiharu_protocols::spi::SpiConfig;
     use uiharu_protocols::spi::synth::{SpiWaveform, nor_read_words};
 
     use super::*;

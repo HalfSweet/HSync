@@ -59,6 +59,7 @@ impl Polarity {
 
 /// Which line carries the signal and which of its levels is active.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct PwmConfig {
     /// The line's channel.
     pub channel: u8,

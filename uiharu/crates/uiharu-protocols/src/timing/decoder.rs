@@ -63,6 +63,7 @@ impl Edges {
 
 /// Which line is timed and which of its edges are reported.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct TimingConfig {
     /// The line's channel.
     pub channel: u8,
