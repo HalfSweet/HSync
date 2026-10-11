@@ -1,0 +1,76 @@
+# uiharu
+
+**A streaming protocol decode engine, written in Rust, licensed under Apache-2.0.**
+
+uiharu decodes digital captures while they are being taken: decoders run as resumable state machines over blocks of logic samples, hand typed events to each other through bounded streams with backpressure, and are wired into a decode graph that checks its connections. The same code decodes a live capture and a file replayed later, and produces the same events however the samples are cut into blocks and however often the reader pauses.
+
+It replaces the sigrok decoders in [HSync](../README.md) and is meant to be embedded in logic analyzer software, automated test tools and waveform analysis tools. The requirements are in [docs/prd.md](docs/prd.md); how the runtime meets them is in [docs/design.md](docs/design.md).
+
+## Status
+
+The first step of the plan: the runtime and the first layered pipeline, **SPI → SPI NOR**, written by hand in Rust in the shape the TypeScript DSL will take, with the acceptance tests of the requirements. The DSL, its compiler and the decoder IR come next; the engine is not wired into HSync yet.
+
+| Crate                     | Contents                                                                                                                                                                          |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/uiharu-core`      | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor         |
+| `crates/uiharu-protocols` | The reference protocols: SPI (four modes, 1–8 bit words, either bit order, with or without chip select) and SPI NOR `READ` with a three-byte address, plus a waveform synthesizer |
+| `crates/uiharu-cli`       | The `uiharu` command: `decode` a raw capture to NDJSON, `gen` a synthetic capture, `bench` the pipeline                                                                           |
+| `docs/`                   | The requirements (`prd.md`) and the design of the runtime (`design.md`)                                                                                                           |
+
+The crates are members of the repository's Cargo workspace but depend on nothing outside `uiharu/` except `serde`, `serde_json` and `thiserror`.
+
+## Quick start
+
+```sh
+cargo build -p uiharu-cli
+target/debug/uiharu gen flash.bin --reads 16 --bytes 64     # a synthetic SPI NOR capture
+target/debug/uiharu decode flash.bin > events.ndjson        # SPI and SPI NOR events
+target/debug/uiharu decode flash.bin --stream nor --chunk 4096 --stats
+target/debug/uiharu bench --samples 50000000                # throughput, latency, memory
+```
+
+`decode` reads raw binary captures: one sample after the other, ⌈channels / 8⌉ bytes each, bit _i_ of byte _j_ being channel 8 _j_ + _i_ — the layout of HSync's binary export. The bus is described with `--clk`, `--cs`, `--mosi`, `--miso` (`none` for a line that is not connected), `--mode`, `--word-bits`, `--lsb-first` and `--cs-active-high`; `uiharu decode --help` lists everything.
+
+Every event is one line of JSON: the stream it belongs to, its number in that stream, the ticks it covers, the tick at which it became certain, and the event itself as the stream's contract spells it. Gaps and the end of each stream are lines too.
+
+```json
+{"stream":"spi","seq":1,"span":[48,105],"settled":104,"event":{"kind":"word","tx":1,"mosi":3,"miso":255}}
+{"stream":"nor","seq":0,"span":[40,105],"settled":104,"event":{"kind":"begin","op":1,"tx":1,"command":"read"}}
+{"stream":"nor","seq":1,"span":[112,297],"settled":296,"event":{"kind":"address","op":1,"address":14069354}}
+{"stream":"nor","seq":2,"span":[304,2345],"settled":2344,"event":{"kind":"data","op":1,"offset":0,"bytes":[3,126,243]}}
+{"stream":"nor","seq":3,"span":[2352,2353],"settled":2352,"event":{"kind":"end","op":1,"reason":"complete"}}
+{"stream":"nor","gap":[5000,5200]}
+{"stream":"nor","end":14664}
+```
+
+The lines of one stream are the same whatever the block size, queue size or budget; lines of different streams interleave in the order the decoders produced them, which does depend on the blocks, so compare streams one at a time (`--stream`).
+
+## Embedding
+
+```rust
+use std::sync::Arc;
+use uiharu_core::{Graph, SignalItem, SourceSpec, TimeBase};
+use uiharu_protocols::spi::{Spi, SpiConfig};
+use uiharu_protocols::spi_nor::SpiNorRead24;
+
+let mut graph = Graph::new();
+let logic = graph.source(SourceSpec::new("logic", 4, TimeBase::new(25_000_000)))?;
+let spi = graph.add(Spi::new(SpiConfig::default())?);
+let flash = graph.add(SpiNorRead24::new());
+graph.connect(logic.samples, Spi::input(spi))?;            // checks the channel count
+graph.connect(Spi::events(spi), SpiNorRead24::input(flash))?; // checks word width, bit order, lines
+let operations = graph.expose("flash-operations", SpiNorRead24::operations(flash))?;
+let mut pipeline = graph.build()?;                          // checks for cycles and unconnected inputs
+let operations = pipeline.exposed(operations).expect("exposed once");
+
+// As blocks of samples arrive (a `LogicBlock`, bit-packed per channel):
+pipeline.push(logic.id, SignalItem::Data(Arc::new(block)))?; // `Err(Full)` hands the block back
+pipeline.run();                                              // until every decoder waits
+while let Some(item) = operations.next() { /* events, gaps, progress, the end */ }
+```
+
+A source that cannot hold its samples back announces what it lost with `SignalItem::Gap`; the engine never drops samples itself. `pipeline.stats()` reports every queue's size and high-water mark.
+
+## License
+
+uiharu is licensed under the [Apache License 2.0](LICENSE). It is written from scratch: nothing in `uiharu/` is ported from DSView, libsigrok or libsigrokdecode, and it depends on none of HSync's GPL-licensed parts. Every source file starts with `// SPDX-License-Identifier: Apache-2.0`.
