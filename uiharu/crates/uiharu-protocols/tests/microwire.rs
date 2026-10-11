@@ -609,3 +609,42 @@ fn the_cursor_has_no_do_level_without_the_line() {
         "Failed { tx: 1, error: NoDataOut } [20,31)@30"
     );
 }
+
+#[test]
+fn without_chip_select_the_cursor_opens_transaction_zero_at_its_first_bit() {
+    let config = MicrowireConfig {
+        cs: None,
+        ..MicrowireConfig::default()
+    };
+    let mut waveform = waveform(config);
+    waveform.bits([(true, false), (false, true), (true, true)]);
+    waveform.idle(30);
+    waveform.bits([(true, true)]);
+    waveform.idle(10);
+    let block = waveform.finish();
+    // Read whole: one transaction 0 from the first bit, cut by the end of the samples; the
+    // reader's provenance shows every bit went through the cursor.
+    let mut harness = reader(config, 4);
+    harness.run_all(&block);
+    assert_eq!(
+        seen(&harness.items),
+        vec![
+            "Failed { tx: 0, error: EndOfInput(Tick(100)) } [25,91)@90",
+            "eof 100",
+        ]
+    );
+    // A gap cuts transaction 0; the next bit opens it again.
+    let gap = TickRange::new(Tick(60), Tick(70));
+    let mut harness = reader(config, 3);
+    harness.feed_with_gaps(&block, &[gap], &[7]);
+    harness.end();
+    assert_eq!(
+        seen(&harness.items),
+        vec![
+            "Failed { tx: 0, error: Gap(TickRange { start: Tick(60), end: Tick(70) }) } [25,51)@50",
+            "gap 60..70",
+            "Failed { tx: 0, error: EndOfInput(Tick(100)) } [85,91)@90",
+            "eof 100",
+        ]
+    );
+}
