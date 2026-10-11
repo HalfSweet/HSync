@@ -2,6 +2,7 @@
 
 //! The PS/2 decoder on synthesized waveforms.
 
+use proptest::prelude::*;
 use uiharu_core::testing::{Harness, assert_block_invariant, without_progress};
 use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::ps2::synth::{Faults, Ps2Waveform, Timing, frame_bits};
@@ -550,5 +551,175 @@ fn a_source_too_slow_for_the_clock_is_refused() {
     match result {
         Err(GraphError::Requirement { key, .. }) => assert_eq!(key, "rateHz"),
         other => panic!("expected the rate to be refused, got {other:?}"),
+    }
+}
+
+// Random traffic.
+
+/// One piece of a random scenario.
+#[derive(Clone, Debug)]
+enum Piece {
+    Device {
+        value: u8,
+        faults: Faults,
+    },
+    Host {
+        value: u8,
+        faults: Faults,
+        ack: bool,
+    },
+    /// The device's first `bits` bits, then the host's inhibit — a request to send its own
+    /// byte, when given.
+    Inhibited {
+        bits: usize,
+        inhibit_us: u64,
+        request: Option<u8>,
+    },
+    /// The device's first `bits` bits, then a pause.
+    Paused {
+        bits: usize,
+        pause_us: u64,
+    },
+}
+
+fn faults() -> impl Strategy<Value = Faults> {
+    (
+        prop::bool::weighted(0.1),
+        prop::bool::weighted(0.15),
+        prop::bool::weighted(0.1),
+    )
+        .prop_map(|(start, parity, stop)| Faults {
+            start,
+            parity,
+            stop,
+        })
+}
+
+fn piece() -> impl Strategy<Value = Piece> {
+    prop_oneof![
+        5 => (any::<u8>(), faults()).prop_map(|(value, faults)| Piece::Device { value, faults }),
+        3 => (any::<u8>(), faults(), prop::bool::weighted(0.8)).prop_map(|(value, faults, ack)| {
+            let faults = Faults { start: false, ..faults };
+            Piece::Host { value, faults, ack }
+        }),
+        1 => (1usize..10, 100u64..400, prop::option::of(any::<u8>())).prop_map(
+            |(bits, inhibit_us, request)| Piece::Inhibited {
+                bits,
+                inhibit_us,
+                request,
+            }
+        ),
+        1 => (1usize..10, 1_500u64..3_000)
+            .prop_map(|(bits, pause_us)| Piece::Paused { bits, pause_us }),
+    ]
+}
+
+fn traffic(pieces: &[Piece], half_us: u64, setup_us: u64, idle_us: &[u64]) -> LogicBlock {
+    let mut waveform = new_waveform();
+    waveform.set_timing(Timing {
+        half_period: half_us * 1_000,
+        setup: setup_us * 1_000,
+        ..Timing::NOMINAL
+    });
+    for (n, piece) in pieces.iter().enumerate() {
+        match piece {
+            Piece::Device { value, faults } => waveform.device_byte_with(*value, *faults),
+            Piece::Host { value, faults, ack } => {
+                waveform.host_byte_with(*value, *faults, *ack);
+            }
+            Piece::Inhibited {
+                bits,
+                inhibit_us,
+                request,
+            } => {
+                let mut frame = vec![false];
+                frame.extend(frame_bits(0xa5, Faults::NONE));
+                waveform.device_bits(frame.into_iter().take(*bits));
+                match request {
+                    Some(value) => waveform.host_byte(*value),
+                    None => waveform.inhibit_us(*inhibit_us),
+                }
+            }
+            Piece::Paused { bits, pause_us } => {
+                let mut frame = vec![false];
+                frame.extend(frame_bits(0x5a, Faults::NONE));
+                waveform.device_bits(frame.into_iter().take(*bits));
+                waveform.idle_us(*pause_us);
+            }
+        }
+        waveform.idle_us(idle_us[n % idle_us.len()]);
+    }
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(48),
+        ..ProptestConfig::default()
+    })]
+
+    /// Blocks of any size, a reader that pauses at random and tiny queues and budgets yield the
+    /// events of one uninterrupted run, and the stream settles in order without progress
+    /// passing a frame it still reports.
+    #[test]
+    fn random_traffic_decodes_alike_however_it_comes(
+        pieces in prop::collection::vec(piece(), 1..10),
+        half_us in 30u64..51,
+        setup_us in 5u64..26,
+        idle_us in prop::collection::vec(prop_oneof![3 => 120u64..800, 1 => 20u64..120], 1..4),
+        sizes in prop::collection::vec(1u64..400, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        cut in prop::option::of(0.05f64..1.0),
+        gap in prop::option::of((0.05f64..0.95, 1u64..500)),
+    ) {
+        let whole = traffic(&pieces, half_us, setup_us.min(half_us - 5), &idle_us);
+        let block = match cut {
+            Some(cut) => {
+                let end = Tick(((whole.len() as f64) * cut) as u64).max(Tick(1));
+                whole.slice(TickRange::new(Tick::ZERO, end)).expect("a slice")
+            }
+            None => whole,
+        };
+        let gaps: Vec<TickRange> = gap
+            .and_then(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                let end = (start + len).min(block.len());
+                (start < end).then(|| TickRange::new(Tick(start), Tick(end)))
+            })
+            .into_iter()
+            .collect();
+        let reference = {
+            let mut harness = build(RATE, GraphConfig::default());
+            harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+            harness.end();
+            harness.without_progress()
+        };
+
+        let mut harness = build(RATE, GraphConfig { queue_capacity, budget });
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference.clone());
+        let stats = harness.pipeline().stats();
+        prop_assert!(stats.within_capacity(), "{stats:?}");
+
+        let mut seen = Tick::ZERO;
+        for item in &harness.items {
+            match item {
+                Item::Progress(tick) => seen = seen.max(*tick),
+                Item::Event(event) => prop_assert!(event.span.start >= seen, "{event:?} after {seen}"),
+                Item::Gap(_) | Item::End(_) => {}
+            }
+        }
+        let mut settled = Tick::ZERO;
+        for event in reference.iter().filter_map(Item::event) {
+            prop_assert!(event.settled >= settled, "{event:?} settled before {settled}");
+            settled = event.settled;
+            if let Ps2Event::Frame { direction, ack, .. } = event.payload {
+                prop_assert_eq!(ack.is_some(), direction == Direction::HostToDevice);
+            }
+        }
     }
 }
