@@ -10,6 +10,7 @@
 #![forbid(unsafe_code)]
 
 pub mod apa102;
+pub mod avr_isp;
 pub mod can;
 pub mod dmx512;
 pub mod ds18b20;
