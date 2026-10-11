@@ -1,6 +1,6 @@
 [package]
 name = "uiharu-protocols"
-description = "Protocol decoders of the uiharu decode engine: SPI, SPI NOR, SD card SPI, APA102, AVR ISP, nRF24L01+, I²C, 24xx EEPROM, UART, Modbus RTU, LIN, MIDI, DMX512, CAN, 1-Wire, DS18B20, USB, USB PD, I²S, PWM, timing, parallel, WS281x, JTAG, SWD, MDIO and the NEC, RC-5, RC-6 and SIRC infrared remote controls, each with its contract, synthesizer and tests"
+description = "Protocol decoders of the uiharu decode engine: SPI, SPI NOR, SD card SPI, APA102, AVR ISP, nRF24L01+, Microwire, 93Cxx EEPROM, I²C, 24xx EEPROM, UART, Modbus RTU, LIN, MIDI, DMX512, CAN, 1-Wire, DS18B20, USB, USB PD, I²S, PWM, timing, parallel, WS281x, JTAG, SWD, MDIO, PS/2, Wiegand, the AM2302/DHT22/DHT11 sensors and the NEC, RC-5, RC-6 and SIRC infrared remote controls, each with its contract, synthesizer and tests"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true

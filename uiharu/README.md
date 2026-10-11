@@ -23,40 +23,45 @@ The crates are members of the repository's Cargo workspace but depend on nothing
 
 Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/protocols/` that spells out its contract (the event kinds and their fields), its configuration and its rules. Every decoder was written from the protocol's public specification.
 
-| Decoder              | Type in pipeline files | Reads            | Page                                          |
-| -------------------- | ---------------------- | ---------------- | --------------------------------------------- |
-| SPI                  | `spi`                  | logic samples    | [spi.md](docs/protocols/spi.md)               |
-| SPI NOR flash        | `spi-nor`              | `spi.events`     | [spi-nor.md](docs/protocols/spi-nor.md)       |
-| SD card, SPI mode    | `sdcard-spi`           | `spi.events`     | [sdcard-spi.md](docs/protocols/sdcard-spi.md) |
-| APA102 / SK9822 LEDs | `apa102`               | `spi.events`     | [apa102.md](docs/protocols/apa102.md)         |
-| AVR ISP              | `avr-isp`              | `spi.events`     | [avr-isp.md](docs/protocols/avr-isp.md)       |
-| nRF24L01+            | `nrf24l01`             | `spi.events`     | [nrf24l01.md](docs/protocols/nrf24l01.md)     |
-| I²C                  | `i2c`                  | logic samples    | [i2c.md](docs/protocols/i2c.md)               |
-| 24xx EEPROM          | `eeprom24xx`           | `i2c.events`     | [eeprom24xx.md](docs/protocols/eeprom24xx.md) |
-| UART                 | `uart`                 | logic samples    | [uart.md](docs/protocols/uart.md)             |
-| Modbus RTU           | `modbus-rtu`           | `uart.events`    | [modbus-rtu.md](docs/protocols/modbus-rtu.md) |
-| LIN                  | `lin`                  | `uart.events`    | [lin.md](docs/protocols/lin.md)               |
-| MIDI                 | `midi`                 | `uart.events`    | [midi.md](docs/protocols/midi.md)             |
-| DMX512               | `dmx512`               | `uart.events`    | [dmx512.md](docs/protocols/dmx512.md)         |
-| CAN 2.0 and CAN FD   | `can`                  | logic samples    | [can.md](docs/protocols/can.md)               |
-| 1-Wire link layer    | `onewire-link`         | logic samples    | [onewire.md](docs/protocols/onewire.md)       |
-| 1-Wire network       | `onewire`              | `onewire.link`   | [onewire.md](docs/protocols/onewire.md)       |
-| DS18B20              | `ds18b20`              | `onewire.events` | [ds18b20.md](docs/protocols/ds18b20.md)       |
-| I²S                  | `i2s`                  | logic samples    | [i2s.md](docs/protocols/i2s.md)               |
-| PWM                  | `pwm`                  | logic samples    | [pwm.md](docs/protocols/pwm.md)               |
-| Edge timing          | `timing`               | logic samples    | [timing.md](docs/protocols/timing.md)         |
-| Parallel bus         | `parallel`             | logic samples    | [parallel.md](docs/protocols/parallel.md)     |
-| WS281x LEDs          | `ws281x`               | logic samples    | [ws281x.md](docs/protocols/ws281x.md)         |
-| USB low/full speed   | `usb`                  | logic samples    | [usb.md](docs/protocols/usb.md)               |
-| USB transactions     | `usb-transactions`     | `usb.packets`    | [usb.md](docs/protocols/usb.md)               |
-| USB Power Delivery   | `usb-pd`               | logic samples    | [usb-pd.md](docs/protocols/usb-pd.md)         |
-| JTAG                 | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
-| SWD                  | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
-| MDIO                 | `mdio`                 | logic samples    | [mdio.md](docs/protocols/mdio.md)             |
-| NEC infrared         | `ir-nec`               | logic samples    | [ir-nec.md](docs/protocols/ir-nec.md)         |
-| RC-5 infrared        | `ir-rc5`               | logic samples    | [ir-rc5.md](docs/protocols/ir-rc5.md)         |
-| RC-6 infrared        | `ir-rc6`               | logic samples    | [ir-rc6.md](docs/protocols/ir-rc6.md)         |
-| Sony SIRC infrared   | `ir-sirc`              | logic samples    | [ir-sirc.md](docs/protocols/ir-sirc.md)       |
+| Decoder                | Type in pipeline files | Reads              | Page                                          |
+| ---------------------- | ---------------------- | ------------------ | --------------------------------------------- |
+| SPI                    | `spi`                  | logic samples      | [spi.md](docs/protocols/spi.md)               |
+| SPI NOR flash          | `spi-nor`              | `spi.events`       | [spi-nor.md](docs/protocols/spi-nor.md)       |
+| SD card, SPI mode      | `sdcard-spi`           | `spi.events`       | [sdcard-spi.md](docs/protocols/sdcard-spi.md) |
+| APA102 / SK9822 LEDs   | `apa102`               | `spi.events`       | [apa102.md](docs/protocols/apa102.md)         |
+| AVR ISP                | `avr-isp`              | `spi.events`       | [avr-isp.md](docs/protocols/avr-isp.md)       |
+| nRF24L01+              | `nrf24l01`             | `spi.events`       | [nrf24l01.md](docs/protocols/nrf24l01.md)     |
+| Microwire              | `microwire`            | logic samples      | [microwire.md](docs/protocols/microwire.md)   |
+| 93Cxx EEPROM           | `eeprom93xx`           | `microwire.events` | [microwire.md](docs/protocols/microwire.md)   |
+| I²C                    | `i2c`                  | logic samples      | [i2c.md](docs/protocols/i2c.md)               |
+| 24xx EEPROM            | `eeprom24xx`           | `i2c.events`       | [eeprom24xx.md](docs/protocols/eeprom24xx.md) |
+| UART                   | `uart`                 | logic samples      | [uart.md](docs/protocols/uart.md)             |
+| Modbus RTU             | `modbus-rtu`           | `uart.events`      | [modbus-rtu.md](docs/protocols/modbus-rtu.md) |
+| LIN                    | `lin`                  | `uart.events`      | [lin.md](docs/protocols/lin.md)               |
+| MIDI                   | `midi`                 | `uart.events`      | [midi.md](docs/protocols/midi.md)             |
+| DMX512                 | `dmx512`               | `uart.events`      | [dmx512.md](docs/protocols/dmx512.md)         |
+| CAN 2.0 and CAN FD     | `can`                  | logic samples      | [can.md](docs/protocols/can.md)               |
+| 1-Wire link layer      | `onewire-link`         | logic samples      | [onewire.md](docs/protocols/onewire.md)       |
+| 1-Wire network         | `onewire`              | `onewire.link`     | [onewire.md](docs/protocols/onewire.md)       |
+| DS18B20                | `ds18b20`              | `onewire.events`   | [ds18b20.md](docs/protocols/ds18b20.md)       |
+| I²S                    | `i2s`                  | logic samples      | [i2s.md](docs/protocols/i2s.md)               |
+| PWM                    | `pwm`                  | logic samples      | [pwm.md](docs/protocols/pwm.md)               |
+| Edge timing            | `timing`               | logic samples      | [timing.md](docs/protocols/timing.md)         |
+| Parallel bus           | `parallel`             | logic samples      | [parallel.md](docs/protocols/parallel.md)     |
+| WS281x LEDs            | `ws281x`               | logic samples      | [ws281x.md](docs/protocols/ws281x.md)         |
+| USB low/full speed     | `usb`                  | logic samples      | [usb.md](docs/protocols/usb.md)               |
+| USB transactions       | `usb-transactions`     | `usb.packets`      | [usb.md](docs/protocols/usb.md)               |
+| USB Power Delivery     | `usb-pd`               | logic samples      | [usb-pd.md](docs/protocols/usb-pd.md)         |
+| JTAG                   | `jtag`                 | logic samples      | [jtag.md](docs/protocols/jtag.md)             |
+| SWD                    | `swd`                  | logic samples      | [swd.md](docs/protocols/swd.md)               |
+| MDIO                   | `mdio`                 | logic samples      | [mdio.md](docs/protocols/mdio.md)             |
+| NEC infrared           | `ir-nec`               | logic samples      | [ir-nec.md](docs/protocols/ir-nec.md)         |
+| RC-5 infrared          | `ir-rc5`               | logic samples      | [ir-rc5.md](docs/protocols/ir-rc5.md)         |
+| RC-6 infrared          | `ir-rc6`               | logic samples      | [ir-rc6.md](docs/protocols/ir-rc6.md)         |
+| Sony SIRC infrared     | `ir-sirc`              | logic samples      | [ir-sirc.md](docs/protocols/ir-sirc.md)       |
+| PS/2                   | `ps2`                  | logic samples      | [ps2.md](docs/protocols/ps2.md)               |
+| Wiegand                | `wiegand`              | logic samples      | [wiegand.md](docs/protocols/wiegand.md)       |
+| AM2302 / DHT22 / DHT11 | `am230x`               | logic samples      | [am230x.md](docs/protocols/am230x.md)         |
 
 ## Quick start
 
