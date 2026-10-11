@@ -1,11 +1,11 @@
 # AVR in-system programming
 
-The AVR ISP decoder reads the serial programming interface of AVR microcontrollers over an SPI bus: it turns `spi.events` into `avr_isp.events`, one event per four-byte instruction. It follows the serial programming sections of Microchip (formerly Atmel) AVR datasheets — the "Serial Downloading" description and the "Serial Programming Instruction Set" table of the ATmega48A/PA/88A/PA/168A/PA/328/P datasheet, with the Load Extended Address byte of the larger devices such as the ATmega640/1280/2560.
+The AVR ISP decoder reads the serial programming interface of AVR microcontrollers over an SPI bus: it turns `spi.events` into `avrisp.events`, one event per four-byte instruction. It follows the serial programming sections of Microchip (formerly Atmel) AVR datasheets — the "Serial Downloading" description and the "Serial Programming Instruction Set" table of the ATmega48A/PA/88A/PA/168A/PA/328/P datasheet, with the Load Extended Address byte of the larger devices such as the ATmega640/1280/2560.
 
 | Node      | `AvrIsp` (`avr-isp`)                                                                           |
 | --------- | ---------------------------------------------------------------------------------------------- |
 | Input     | `bus`: `spi.events` version 1                                                                  |
-| Output    | `events`: `avr_isp.events` version 1                                                           |
+| Output    | `events`: `avrisp.events` version 1                                                            |
 | Requires  | `wordBits` = 8, `bitOrder` = `"msb-first"`, `mosi` = true, `miso` = true; chip select optional |
 | Declares  | nothing                                                                                        |
 | Configure | nothing                                                                                        |

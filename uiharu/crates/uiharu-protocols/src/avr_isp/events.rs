@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `avr_isp.events` contract: what the AVR serial programming decoder emits.
+//! The `avrisp.events` contract: what the AVR serial programming decoder emits.
 
 use serde::{Deserialize, Serialize};
 use uiharu_core::{EventSchema, SchemaId};
@@ -8,7 +8,7 @@ use uiharu_core::{EventSchema, SchemaId};
 use crate::spi::TxId;
 
 /// The schema of AVR serial programming event streams.
-pub const AVR_ISP_EVENTS: SchemaId = SchemaId::new("avr_isp.events", 1);
+pub const AVR_ISP_EVENTS: SchemaId = SchemaId::new("avrisp.events", 1);
 
 /// The bytes of an instruction.
 pub const INSTRUCTION_BYTES: usize = 4;

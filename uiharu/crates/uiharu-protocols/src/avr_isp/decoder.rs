@@ -23,7 +23,7 @@ pub const SYNC_BYTES: [u8; 2] = [0xac, 0x53];
 /// What a device in sync echoes during Programming Enable's third byte: its second byte.
 const ECHO: u8 = SYNC_BYTES[1];
 
-/// The AVR serial programming decoder node: `spi.events` in, `avr_isp.events` out.
+/// The AVR serial programming decoder node: `spi.events` in, `avrisp.events` out.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct AvrIsp;
 
