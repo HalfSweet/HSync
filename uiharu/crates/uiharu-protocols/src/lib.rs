@@ -12,6 +12,7 @@ pub mod jtag;
 pub mod modbus_rtu;
 pub mod parallel;
 pub mod pwm;
+pub mod sdcard_spi;
 pub mod spi;
 pub mod spi_nor;
 pub mod swd;
