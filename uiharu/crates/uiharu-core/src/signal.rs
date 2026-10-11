@@ -250,6 +250,7 @@ impl LogicBlock {
         }
         let offset = self.start.until(tick);
         let (index, bit) = ((offset / 64) as usize, offset % 64);
+        // A plain indexed loop; iterator adaptors over the strided words measured slower.
         let mut levels = 0u64;
         for channel in 0..self.channels {
             levels |= (self.word(channel, index) >> bit & 1) << channel;
@@ -289,48 +290,65 @@ impl LogicBlock {
         from: Tick,
         prev: Levels,
     ) -> Option<(Tick, ChannelMask)> {
-        if !self.contains(from) || mask.is_empty() {
+        if !self.contains(from) {
+            return None;
+        }
+        // The watched channels the block has; a channel it does not have never changes.
+        let present = if self.channels >= MAX_CHANNELS {
+            u64::MAX
+        } else {
+            (1u64 << self.channels) - 1
+        };
+        let watched = mask.0 & present;
+        if watched == 0 {
             return None;
         }
         let first = self.start.until(from) as usize;
         let (first_word, shift) = (first / 64, first % 64);
-        for index in first_word..self.stride {
+        let (stride, words) = (self.stride, &self.words);
+        // Where the samples of `channel` in word `index` differ from the sample before each:
+        // the last sample of the previous word stands before the first of this one, and `prev`
+        // before `from`. Bits below `shift` in the first word are masked out by the caller.
+        let edges = |channel: usize, index: usize| -> u64 {
+            let current = words[channel * stride + index];
+            let before = if index == first_word {
+                ((current << 1) & !(1u64 << shift)) | (u64::from(prev.high(channel as u8)) << shift)
+            } else {
+                (current << 1) | (words[channel * stride + index - 1] >> 63)
+            };
+            current ^ before
+        };
+        let last_word = stride - 1;
+        let valid_in_last = self.len - 64 * last_word as u64;
+        for index in first_word..stride {
             let mut diff = 0u64;
-            for channel in mask.iter() {
-                if channel >= self.channels {
-                    continue;
-                }
-                let current = self.word(channel, index);
-                // Each bit against the one before it; `prev` stands in for the tick before
-                // `from`, and the last bit of the previous word for the first of this one.
-                let before = if index == first_word {
-                    ((current << 1) & !(1u64 << shift)) | (u64::from(prev.high(channel)) << shift)
-                } else {
-                    (current << 1) | (self.word(channel, index - 1) >> 63)
-                };
-                diff |= current ^ before;
+            let mut bits = watched;
+            while bits != 0 {
+                let channel = bits.trailing_zeros() as usize;
+                bits &= bits - 1;
+                diff |= edges(channel, index);
             }
             if index == first_word {
                 diff &= u64::MAX << shift;
             }
-            if index == self.stride - 1 {
-                let valid = self.len - 64 * index as u64;
-                if valid < 64 {
-                    diff &= (1u64 << valid) - 1;
-                }
+            if index == last_word && valid_in_last < 64 {
+                diff &= (1u64 << valid_in_last) - 1;
             }
-            if diff != 0 {
-                let tick = self
-                    .start
-                    .offset(64 * index as u64 + u64::from(diff.trailing_zeros()));
-                let before = if tick == from {
-                    prev
-                } else {
-                    self.levels(Tick(tick.0 - 1))?
-                };
-                let changed = self.levels(tick)?.changed_from(before, mask);
-                return Some((tick, changed));
+            if diff == 0 {
+                continue;
             }
+            let bit = diff.trailing_zeros();
+            let tick = self.start.offset(64 * index as u64 + u64::from(bit));
+            // The channels that changed at `tick`, from the same edge words: no second look
+            // at the samples.
+            let mut changed = 0u64;
+            let mut bits = watched;
+            while bits != 0 {
+                let channel = bits.trailing_zeros() as usize;
+                bits &= bits - 1;
+                changed |= (edges(channel, index) >> bit & 1) << channel;
+            }
+            return Some((tick, ChannelMask(changed)));
         }
         None
     }
@@ -625,8 +643,14 @@ impl SignalCursor {
             return Poll::Pending;
         }
         loop {
-            if let Some(block) = self.block.clone() {
-                match self.scan(&block, mask, until) {
+            // The block is taken out while it is scanned, which spares an Arc clone on the
+            // hottest path, and put back unless the scan used it up.
+            if let Some(block) = self.block.take() {
+                let found = self.scan(&block, mask, until);
+                if !matches!(found, Found::Exhausted) {
+                    self.block = Some(block);
+                }
+                match found {
                     Found::Change(tick, changed, levels) => {
                         cx.spend();
                         return Poll::Ready(Change::At {
@@ -680,8 +704,9 @@ impl SignalCursor {
             return Poll::Pending;
         }
         loop {
-            if let Some(block) = self.block.clone() {
+            if let Some(block) = self.block.take() {
                 if let Some(levels) = block.levels(self.pos) {
+                    self.block = Some(block);
                     cx.spend();
                     return Poll::Ready(Sample::At {
                         tick: self.pos,
