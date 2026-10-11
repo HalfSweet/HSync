@@ -161,6 +161,7 @@
       "rle": "RLE compression (buffer mode may exceed the hardware depth)",
       "externalClock": "Use an external clock",
       "clockFallingEdge": "Sample on the falling clock edge",
+      "externalTrigger": "External trigger input",
       "bufferOption": "When stopped",
       "pattern": "Signals"
     },
@@ -179,6 +180,14 @@
     "bufferOption": {
       "stop": "Stop immediately",
       "upload": "Upload captured data"
+    },
+    "externalTrigger": {
+      "off": "Off",
+      "rise": "Rising edge",
+      "high": "High level",
+      "fall": "Falling edge",
+      "low": "Low level",
+      "both": "Any edge"
     },
     "pattern": {
       "protocol": "Protocol demo",
