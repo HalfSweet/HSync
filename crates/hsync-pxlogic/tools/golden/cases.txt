@@ -1,0 +1,22 @@
+# Opening: the logic mode picks the model; another firmware version is written into the flash
+open profile=2 lm=0 fw=56900028
+open profile=2 lm=1 fw=56900028
+open profile=3 lm=2 fw=56900028
+open profile=2 lm=3 fw=56900028
+open profile=0 lm=0 fw=56900028
+open profile=2 lm=1 fw=56900027
+open profile=3 lm=0 fw=56900000
+# Buffer captures
+start profile=2 mode=buffer chmode=0 rate=250000000 limit=1048576 en=0xffffffff vth=2.0 filter=0 edge=0 ext=0 pos=50 loop=0 trig=RXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+start profile=2 mode=buffer chmode=3 rate=1000000000 limit=100000000 en=0xff vth=3.3 filter=1 edge=1 ext=1 pos=10 loop=0 trig=X0X1XFXC
+start profile=4 mode=buffer chmode=2 rate=500000000 limit=1000000 en=0x00ff vth=1.6 filter=0 edge=0 ext=5 pos=90 loop=0 trig=XXXXXXXXXXXXXXXX
+start profile=8 mode=buffer chmode=1 rate=2000 limit=4096 en=0x0001 vth=0.0 filter=0 edge=0 ext=3 pos=1 loop=0 trig=F
+start profile=3 mode=buffer chmode=2 rate=25000000 limit=12345678 en=0xa5a5 vth=6.0 filter=1 edge=0 ext=2 pos=33 loop=0 trig=XXRXXXXXXXXXXXX0
+start profile=6 mode=buffer chmode=2 rate=125000000 limit=100000000 en=0xffff vth=2.5 filter=0 edge=1 ext=4 pos=75 loop=0 trig=CXXXXXXXXXXXXXXX
+# Stream captures, over USB 3.0 and 2.0
+start profile=2 mode=stream chmode=5 rate=125000000 limit=10000000 en=0xffff vth=2.0 filter=0 edge=0 ext=0 pos=1 loop=0 trig=XXXXXXXXXXXXXXXX
+start profile=2 mode=stream chmode=8 rate=1000000000 limit=1048576 en=0x3 vth=1.2 filter=1 edge=0 ext=0 pos=1 loop=0 trig=RF
+start profile=3 mode=stream chmode=13 rate=10000000 limit=50000000 en=0xffff vth=2.0 filter=0 edge=0 ext=0 pos=1 loop=1 trig=XXXXXXXXXXXXXXXX
+start profile=5 mode=stream chmode=9 rate=200000000 limit=2000000 en=0x1 vth=2.0 filter=0 edge=0 ext=1 pos=1 loop=0 trig=1
+start profile=7 mode=stream chmode=11 rate=40000 limit=100032 en=0x5 vth=4.4 filter=0 edge=1 ext=0 pos=1 loop=0 trig=XX0X
+start profile=9 mode=stream chmode=12 rate=5000000 limit=640000 en=0xf0 vth=2.0 filter=0 edge=0 ext=0 pos=1 loop=0 trig=XXXXRXXX
