@@ -49,7 +49,11 @@
 //! Every event is placed on the ticks it covers: a bit spans its fall through the later of its
 //! release and its sampling point, and is settled there; a reset spans its fall through the
 //! end of the presence pulse, or through the end of the presence window when no slave
-//! answered, and is settled there; a bad slot spans its low pulse and its release.
+//! answered, and is settled there; a bad slot spans its low pulse and its release. Progress is
+//! passed on, but never past the start of the pulse under way — its fall or, for a low already
+//! under way where the samples begin or resume, the first sample seen — until the pulse is
+//! reported or dropped, which for a reset comes after its presence window; so no event that
+//! follows starts before the progress passed on.
 
 use std::sync::Arc;
 
@@ -195,6 +199,7 @@ impl Node for OneWireLink {
             data: self.config.data,
             mask: ChannelMask::one(self.config.data),
             windows,
+            under_way: None,
             held_progress: None,
             pending_gap: None,
         }))
@@ -336,12 +341,26 @@ enum State {
     Unseen(Tick),
 }
 
+impl State {
+    /// Where the low pulse the state follows began; `None` while the line is high.
+    fn start(self) -> Option<Tick> {
+        match self {
+            State::Idle => None,
+            State::Low { fall, .. } => Some(fall),
+            State::Unseen(from) => Some(from),
+        }
+    }
+}
+
 struct Link {
     signal: SignalCursor,
     out: Outbox<LinkEvent>,
     data: u8,
     mask: ChannelMask,
     windows: Windows,
+    /// Where the pulse being followed began, while one is: whatever it turns out to be starts
+    /// there, so progress goes no further.
+    under_way: Option<Tick>,
     /// Progress the last timed wait saw past its deadline, passed on after the result it
     /// would otherwise precede.
     held_progress: Option<Tick>,
@@ -354,10 +373,16 @@ impl Link {
         self.out.emit(Provenance::over(span, settled), event).await;
     }
 
+    /// Passes progress to `tick` on, held back to the start of the pulse under way.
+    async fn progress(&mut self, tick: Tick) {
+        let tick = self.under_way.map_or(tick, |start| start.min(tick));
+        self.out.progress(tick).await;
+    }
+
     /// Passes on the progress the last timed wait held back, and hands out the gap it found.
     async fn flush(&mut self) -> Result<(), Cut> {
         if let Some(tick) = self.held_progress.take() {
-            self.out.progress(tick).await;
+            self.progress(tick).await;
         }
         self.pending_gap
             .take()
@@ -370,7 +395,7 @@ impl Link {
         loop {
             match self.signal.next_change(self.mask).await {
                 Change::At { tick, .. } => return Ok(tick),
-                Change::Progress(tick) => self.out.progress(tick).await,
+                Change::Progress(tick) => self.progress(tick).await,
                 Change::Gap(range) => return Err(Cut::Gap(range)),
                 Change::End(tick) => return Err(Cut::End(tick)),
                 // Without a deadline the wait is never quiet.
@@ -387,7 +412,7 @@ impl Link {
             match self.signal.next_change_before(self.mask, deadline).await {
                 Change::At { tick, .. } => return Ok(Some(tick)),
                 Change::Quiet(_) => return Ok(None),
-                Change::Progress(tick) if tick < deadline => self.out.progress(tick).await,
+                Change::Progress(tick) if tick < deadline => self.progress(tick).await,
                 // Every sample before `tick` was seen without a change: the deadline passed.
                 Change::Progress(tick) => {
                     self.held_progress = Some(tick);
@@ -408,6 +433,8 @@ impl Link {
 
     /// Follows the line from `state` to the next state, reporting what it completes.
     async fn step(&mut self, state: State) -> Result<State, Cut> {
+        // Nothing this step reports starts before the pulse it follows began.
+        self.under_way = state.start();
         match state {
             State::Idle => Ok(State::Low {
                 fall: self.edge().await?,
@@ -522,6 +549,8 @@ async fn run(mut link: Link) {
     // Each round of this loop starts where the line's level is unknown: at the first sample
     // and after every gap.
     'resync: loop {
+        // A pulse cut off by a gap was dropped: nothing is under way until the line is read.
+        link.under_way = None;
         let mut state = loop {
             match link.signal.sample().await {
                 Sample::At { tick, levels } => {
@@ -532,7 +561,7 @@ async fn run(mut link: Link) {
                     };
                 }
                 Sample::Gap(range) => link.out.gap(range).await,
-                Sample::Progress(tick) => link.out.progress(tick).await,
+                Sample::Progress(tick) => link.progress(tick).await,
                 Sample::End(tick) => {
                     link.out.end(tick).await;
                     return;

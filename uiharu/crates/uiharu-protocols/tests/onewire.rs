@@ -75,25 +75,27 @@ fn at(span: TickRange, settled: Tick) -> String {
     }
 }
 
+/// The line of one item.
+fn link_line(item: &Item<LinkEvent>) -> String {
+    match item {
+        Item::Event(event) => {
+            let what = match event.payload {
+                LinkEvent::Reset { presence: true } => "reset+".to_owned(),
+                LinkEvent::Reset { presence: false } => "reset-".to_owned(),
+                LinkEvent::Bit { value } => format!("bit {}", u8::from(value)),
+                LinkEvent::BadSlot { low_ticks } => format!("bad {low_ticks}"),
+            };
+            format!("{what} {}", at(event.span, event.settled))
+        }
+        Item::Gap(range) => format!("gap {range}"),
+        Item::Progress(tick) => format!("progress {tick}"),
+        Item::End(tick) => format!("eof {tick}"),
+    }
+}
+
 /// One line per item, progress left out: it depends on how the samples were cut.
 fn link_lines(items: &[Item<LinkEvent>]) -> Vec<String> {
-    without_progress(items)
-        .iter()
-        .map(|item| match item {
-            Item::Event(event) => {
-                let what = match event.payload {
-                    LinkEvent::Reset { presence: true } => "reset+".to_owned(),
-                    LinkEvent::Reset { presence: false } => "reset-".to_owned(),
-                    LinkEvent::Bit { value } => format!("bit {}", u8::from(value)),
-                    LinkEvent::BadSlot { low_ticks } => format!("bad {low_ticks}"),
-                };
-                format!("{what} {}", at(event.span, event.settled))
-            }
-            Item::Gap(range) => format!("gap {range}"),
-            Item::Progress(tick) => format!("progress {tick}"),
-            Item::End(tick) => format!("eof {tick}"),
-        })
-        .collect()
+    without_progress(items).iter().map(link_line).collect()
 }
 
 fn describe(event: &OneWireEvent) -> String {
@@ -508,6 +510,69 @@ fn link_events_do_not_depend_on_blocks_pauses_or_queues() {
         assert!(lines.iter().any(|line| line.starts_with("reset+")));
         assert!(lines.iter().any(|line| line.starts_with("reset-")));
         testing::assert_block_invariant(|graph| link(speed, rate, graph), &block, &gaps);
+    }
+}
+
+#[test]
+fn progress_waits_at_the_fall_of_the_pulse_under_way() {
+    // The reset falls at 100, is released at 600 and answered from 630 to 750; the 1 falls at
+    // 1140 and is sampled at 1155. Blocks of 50 ticks, each read as it comes, end inside both.
+    let mut waveform = waveform(Speed::Standard, MHZ);
+    waveform.reset(true);
+    waveform.idle(60);
+    waveform.bit(true);
+    let mut harness = link(Speed::Standard, MHZ, GraphConfig::default());
+    harness.feed_cut(&waveform.finish(), &[], &[50], &[usize::MAX]);
+    harness.end();
+    let mut lines: Vec<String> = Vec::new();
+    for line in harness.items.iter().map(link_line) {
+        // Progress that repeats the line before makes no new line.
+        if lines.last() != Some(&line) {
+            lines.push(line);
+        }
+    }
+    // Progress follows the blocks up to a fall and waits there until the pulse is reported —
+    // the reset with its presence pulse — then follows them again.
+    assert_eq!(
+        lines,
+        [
+            "progress 50",
+            "progress 100",
+            "reset+ [100,751)@750",
+            "progress 800",
+            "progress 850",
+            "progress 900",
+            "progress 950",
+            "progress 1000",
+            "progress 1050",
+            "progress 1100",
+            "progress 1140",
+            "bit 1 [1140,1156)@1155",
+            "progress 1200",
+            "progress 1210",
+            "eof 1210",
+        ]
+    );
+}
+
+#[test]
+fn progress_never_passes_a_pulse_under_way_however_it_ends() {
+    // A reset already under way at the first sample; then resets released at 600 whose
+    // presence window closes every way: answered, unanswered (the pulse comes too late), or by
+    // a pulse too early, too short, too long, or long enough to be a reset of its own.
+    let mut builder = LogicBlockBuilder::new(Tick::ZERO, CHANNELS);
+    builder.push_repeated(Levels(0), 480);
+    builder.push_repeated(Levels(1 << DATA), 1000);
+    let mut blocks = vec![builder.finish().expect("a block")];
+    for (wait, low) in [(15, 60), (14, 60), (61, 60), (15, 59), (15, 286), (15, 500)] {
+        let mut waveform = waveform(Speed::Standard, MHZ);
+        waveform.low(500);
+        waveform.idle(wait);
+        waveform.pulse(low, 800);
+        blocks.push(waveform.finish());
+    }
+    for block in &blocks {
+        testing::assert_block_invariant(|graph| link(Speed::Standard, MHZ, graph), block, &[]);
     }
 }
 
