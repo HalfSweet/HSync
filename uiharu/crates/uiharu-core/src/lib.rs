@@ -6,12 +6,19 @@
 
 #![forbid(unsafe_code)]
 
+pub mod exec;
+pub mod graph;
 pub mod node;
 pub mod schema;
 pub mod signal;
 pub mod stream;
 pub mod time;
 
+pub use exec::{Exposed, Pipeline, PushError, QueueStat, RunReport, Stats};
+pub use graph::{
+    ExposedRef, Graph, GraphConfig, GraphError, InputRef, NodeId, OutputRef, SourceHandle,
+    SourceId, SourceSpec,
+};
 pub use node::{Inbox, Io, Node, NodeCx, NodeFuture, NodeSpec, Outbox, Provenance, Wait};
 pub use schema::{
     EventSchema, InputSpec, OutputSpec, PropValue, Props, Requirement, Requires, SchemaId,
