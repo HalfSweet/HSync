@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The reference protocols of uiharu: SPI, decoded from logic samples, and SPI NOR flash
-//! commands, decoded from SPI events.
+//! The protocol decoders of uiharu, each a module with its contract (the events it emits),
+//! its decoder node, a waveform synthesizer and tests: buses decoded from logic samples (SPI,
+//! I²C, UART, CAN, 1-Wire, I²S, PWM, timing, parallel, JTAG, SWD) and protocols decoded from a
+//! bus's events (SPI NOR flash and SD cards over SPI, 24xx EEPROMs over I²C, Modbus RTU over
+//! UART, the 1-Wire network layer and the DS18B20 over 1-Wire).
 
 #![forbid(unsafe_code)]
 

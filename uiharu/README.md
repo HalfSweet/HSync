@@ -13,11 +13,35 @@ The first step of the plan: the runtime and the first layered pipeline, **SPI �
 | Crate                     | Contents                                                                                                                                                                                                          |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `crates/uiharu-core`      | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor                                         |
-| `crates/uiharu-protocols` | The reference protocols: SPI (four modes, 1–8 bit words, either bit order, with or without chip select) and SPI NOR flash commands (single-line I/O), plus a waveform synthesizer                                 |
+| `crates/uiharu-protocols` | The protocol decoders, each with its contract, synthesizer and tests: see [Protocols](#protocols)                                                                                                                 |
 | `crates/uiharu-cli`       | The `uiharu` command: `decode` a raw capture to NDJSON, `gen` a synthetic capture, `bench` the pipeline                                                                                                           |
 | `docs/`                   | The architecture (`design.md`), how to write a decoder (`writing-decoders.md`), one page per protocol (`protocols/`) and the performance study with the comparison against the sigrok decoders (`performance.md`) |
 
 The crates are members of the repository's Cargo workspace but depend on nothing outside `uiharu/` except `serde`, `serde_json` and `thiserror`.
+
+## Protocols
+
+Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/protocols/` that spells out its contract (the event kinds and their fields), its configuration and its rules. Every decoder was written from the protocol's public specification.
+
+| Decoder            | Type in pipeline files | Reads            | Page                                          |
+| ------------------ | ---------------------- | ---------------- | --------------------------------------------- |
+| SPI                | `spi`                  | logic samples    | [spi.md](docs/protocols/spi.md)               |
+| SPI NOR flash      | `spi-nor`              | `spi.events`     | [spi-nor.md](docs/protocols/spi-nor.md)       |
+| SD card, SPI mode  | `sdcard-spi`           | `spi.events`     | [sdcard-spi.md](docs/protocols/sdcard-spi.md) |
+| I²C                | `i2c`                  | logic samples    | [i2c.md](docs/protocols/i2c.md)               |
+| 24xx EEPROM        | `eeprom24xx`           | `i2c.events`     | [eeprom24xx.md](docs/protocols/eeprom24xx.md) |
+| UART               | `uart`                 | logic samples    | [uart.md](docs/protocols/uart.md)             |
+| Modbus RTU         | `modbus-rtu`           | `uart.events`    | [modbus-rtu.md](docs/protocols/modbus-rtu.md) |
+| CAN 2.0 and CAN FD | `can`                  | logic samples    | [can.md](docs/protocols/can.md)               |
+| 1-Wire link layer  | `onewire-link`         | logic samples    | [onewire.md](docs/protocols/onewire.md)       |
+| 1-Wire network     | `onewire`              | `onewire.link`   | [onewire.md](docs/protocols/onewire.md)       |
+| DS18B20            | `ds18b20`              | `onewire.events` | [ds18b20.md](docs/protocols/ds18b20.md)       |
+| I²S                | `i2s`                  | logic samples    | [i2s.md](docs/protocols/i2s.md)               |
+| PWM                | `pwm`                  | logic samples    | [pwm.md](docs/protocols/pwm.md)               |
+| Edge timing        | `timing`               | logic samples    | [timing.md](docs/protocols/timing.md)         |
+| Parallel bus       | `parallel`             | logic samples    | [parallel.md](docs/protocols/parallel.md)     |
+| JTAG               | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
+| SWD                | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
 
 ## Quick start
 
