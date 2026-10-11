@@ -173,6 +173,35 @@ impl<T> Inbox<T> {
         self.queue.borrow_mut().advance(self.reader);
     }
 
+    /// Waits for the next item and reads it through `f` without taking it. Waits for budget
+    /// first, so that a node looking at many items yields like one taking them.
+    pub fn peek_with<'a, R, F>(&'a self, f: F) -> impl Future<Output = R> + 'a
+    where
+        F: FnOnce(&Item<T>) -> R + 'a,
+    {
+        let mut f = Some(f);
+        poll_fn(move |_| {
+            if !self.cx.has_budget() {
+                self.cx.wait(Wait::Budget);
+                return Poll::Pending;
+            }
+            let item = match self.poll_peek() {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(item) => item,
+            };
+            match f.take() {
+                Some(f) => Poll::Ready(f(&item)),
+                None => Poll::Pending,
+            }
+        })
+    }
+
+    /// Takes the item last peeked at: moves past it and counts the operation.
+    pub fn take(&self) {
+        self.advance();
+        self.cx.spend();
+    }
+
     /// Waits for the next item and takes it; the end of the stream is returned again and
     /// again.
     pub fn recv(&mut self) -> impl Future<Output = Item<T>> + '_
