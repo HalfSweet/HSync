@@ -19,6 +19,7 @@ pub mod eeprom24xx;
 pub mod i2c;
 pub mod i2s;
 pub mod ir_nec;
+pub mod ir_rc5;
 pub mod jtag;
 pub mod lin;
 pub mod mdio;
