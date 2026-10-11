@@ -12,6 +12,8 @@
 //! - a cycle is reported once the next leading edge is seen; it covers the ticks from its own
 //!   leading edge up to that one and is settled there; duty cycle and frequency are the
 //!   reader's business, the stream carries ticks;
+//! - progress is passed on, held back to the leading edge of the cycle under way, whose period
+//!   is not known yet;
 //! - the first sample of the stream and the first after a gap are never edges, so the first
 //!   cycle begins at the first leading edge seen after them;
 //! - a cycle cut short by a gap or by the end of the samples is not reported, and a line that
@@ -168,7 +170,11 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<PwmEvent>, config: PwmCon
             }
             // Without a deadline the wait is never quiet.
             Change::Quiet(_) => {}
-            Change::Progress(tick) => out.progress(tick).await,
+            // The cycle under way will span from its leading edge.
+            Change::Progress(tick) => {
+                let held = leading.map_or(tick, |start| start.min(tick));
+                out.progress(held).await;
+            }
             Change::End(tick) => {
                 out.end(tick).await;
                 return;

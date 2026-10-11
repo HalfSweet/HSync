@@ -213,6 +213,33 @@ fn a_cycle_shows_up_at_the_next_leading_edge() {
     }
 }
 
+#[test]
+fn progress_is_held_back_to_the_cycle_under_way() {
+    let config = PwmConfig::default();
+    let mut waveform = PwmWaveform::new(&config, CHANNELS, Tick::ZERO);
+    waveform.level(false, 10);
+    waveform.cycles([(50, 20); 3]);
+    let block = waveform.finish();
+    let mut harness = harness(&config, GraphConfig::default());
+    let mut from = Tick::ZERO;
+    // Nothing is under way before the leading edge at 10; from there on, the cycle of the
+    // last leading edge seen, at 10, 60 and 110.
+    for (cut, held) in [(5, 5), (40, 10), (61, 60), (110, 60), (111, 110)] {
+        let piece = block
+            .slice(TickRange::new(from, Tick(cut)))
+            .expect("a slice");
+        harness.feed(&piece, &[u64::MAX]);
+        harness.collect();
+        assert_eq!(
+            harness.items.last(),
+            Some(&Item::Progress(Tick(held))),
+            "up to {cut}"
+        );
+        from = Tick(cut);
+    }
+    harness.assert_progress_promise();
+}
+
 /// A long, irregular pulse train on channel 1, with channel 0 busy too.
 fn irregular() -> LogicBlock {
     let mut builder = LogicBlockBuilder::new(Tick::ZERO, CHANNELS);
