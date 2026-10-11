@@ -67,3 +67,4 @@ Progress never passes the start of a frame still being read, nor the fall of a c
 - The decoder reports bytes: scan codes, mouse packets and commands are the next layer's business.
 - Clock frequencies, setup and hold times are not checked; a frame is read as long as its edges come within the limits above.
 - A host frame is read as ten clock pulses and an acknowledge whatever its stop bit: after a stop bit of 0, the eleventh pulse is taken as the acknowledge.
+- A host that takes the clock after a device's tenth pulse makes the frame's eleventh falling edge itself, which on the lines cannot be told from the device's: the frame is read whole, and the inhibit follows it.
