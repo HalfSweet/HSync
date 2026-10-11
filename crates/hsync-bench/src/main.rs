@@ -13,7 +13,11 @@
 //!
 //! The Python decoder walks the samples one edge at a time in the interpreter, so it gets a
 //! workload `--python-divisor` times shorter; the rates stay comparable.
+//!
+//! `--compare` runs no benchmark: it decodes the demo capture's I²C, UART, CAN FD and SPI with
+//! uiharu and with the native decoders and reports where they disagree (see `compare`).
 
+mod compare;
 mod decoders;
 mod workload;
 
@@ -43,6 +47,7 @@ hsync-bench [options]
       --only <DECODER>         run this decoder only; may be repeated
       --workload <NAME>        run this workload only (demo, nor); may be repeated
       --json                   print the results as JSON
+      --compare                cross-check uiharu against the native decoders on the demo
       --case <DECODER:WORKLOAD>  run one case in this process and print one JSON line
 ";
 
@@ -58,6 +63,7 @@ struct Options {
     decoders: Vec<Decoder>,
     workloads: Vec<Workload>,
     json: bool,
+    compare: bool,
     case: Option<(Decoder, Workload)>,
 }
 
@@ -74,12 +80,17 @@ impl Options {
             decoders: Vec::new(),
             workloads: Vec::new(),
             json: false,
+            compare: false,
             case: None,
         };
         let mut args = args.into_iter();
         while let Some(arg) = args.next() {
             if arg == "--json" {
                 options.json = true;
+                continue;
+            }
+            if arg == "--compare" {
+                options.compare = true;
                 continue;
             }
             if arg == "--help" || arg == "-h" {
@@ -384,8 +395,34 @@ fn print_table(results: &[CaseResult], out: &mut impl Write) -> std::io::Result<
     Ok(())
 }
 
+/// Cross-checks uiharu against the native decoders on the demo capture; fails when they
+/// disagree.
+fn run_compare(options: &Options) -> Result<(), String> {
+    let reports = compare::demo(&repo_root(), options.chunk)?;
+    let mut out = std::io::stdout().lock();
+    for report in &reports {
+        write!(out, "{}", report.render()).map_err(|error| error.to_string())?;
+    }
+    let disagreeing: Vec<&str> = reports
+        .iter()
+        .filter(|report| !report.agrees())
+        .map(|report| report.bus)
+        .collect();
+    if disagreeing.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "the engines disagree on {}",
+            disagreeing.join(", ")
+        ))
+    }
+}
+
 fn run() -> Result<(), String> {
     let options = Options::parse(std::env::args().skip(1))?;
+    if options.compare {
+        return run_compare(&options);
+    }
     if let Some((decoder, workload)) = options.case {
         return run_case(decoder, workload, &options);
     }
