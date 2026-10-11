@@ -55,6 +55,7 @@ use uiharu_protocols::swd::{Swd, SwdEvent};
 use uiharu_protocols::timing::{Timing, TimingEvent};
 use uiharu_protocols::uart::{Uart, UartEvent};
 use uiharu_protocols::usb::{TransactionEvent, UsbEvent, UsbPackets, UsbTransactions};
+use uiharu_protocols::usb_pd::{UsbPd, UsbPdEvent};
 use uiharu_protocols::ws281x::{Ws281x, Ws281xEvent};
 
 use crate::Failure;
@@ -303,6 +304,10 @@ fn build_nrf24l01(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     Ok(Box::new(Nrf24l01::new()))
 }
 
+fn build_usb_pd(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, UsbPd::new)
+}
+
 /// The node types a description may use, each with the configuration type it reads.
 pub const KINDS: &[Kind] = &[
     Kind {
@@ -439,6 +444,11 @@ pub const KINDS: &[Kind] = &[
         name: "nrf24l01",
         build: build_nrf24l01,
         writer: write_as::<Nrf24Event>,
+    },
+    Kind {
+        name: "usb-pd",
+        build: build_usb_pd,
+        writer: write_as::<UsbPdEvent>,
     },
 ];
 
