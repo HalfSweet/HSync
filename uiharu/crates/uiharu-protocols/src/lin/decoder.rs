@@ -167,7 +167,7 @@ impl Lin {
             .equals("parity", "none")
             .equals("stopBits", "one")
             .equals("bitOrder", "lsb-first")
-            .at_least("baud", 1)
+            .within("baud", 1_000, 20_000)
     }
 }
 

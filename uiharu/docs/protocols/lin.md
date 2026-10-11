@@ -31,13 +31,13 @@ The master and the slaves share LIN's single wire, so one UART stream carries th
 
 The input port `uart` requires of the UART stream LIN's byte field, a start bit, eight data bits least significant bit first and a stop bit:
 
-| Property   | Requirement                           |
-| ---------- | ------------------------------------- |
-| `dataBits` | `= 8`                                 |
-| `parity`   | `= "none"`                            |
-| `stopBits` | `= "one"`                             |
-| `bitOrder` | `= "lsb-first"`                       |
-| `baud`     | `>= 1`; the bit time is taken from it |
+| Property   | Requirement                                                                |
+| ---------- | -------------------------------------------------------------------------- |
+| `dataBits` | `= 8`                                                                      |
+| `parity`   | `= "none"`                                                                 |
+| `stopBits` | `= "one"`                                                                  |
+| `bitOrder` | `= "lsb-first"`                                                            |
+| `baud`     | `in 1000..=20000`, the bit rates LIN allows; the bit time is taken from it |
 
 A connection that does not meet them is refused, for example `lin#1.uart requires parity = "none" of uart#0.events, which declares "even"`.
 
