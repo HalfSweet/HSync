@@ -22,6 +22,8 @@ export default {
         'fileio',
         'session',
         'app',
+        // The uiharu decode engine (uiharu/)
+        'uiharu',
         // Frontend
         'ui',
         'timeline',
