@@ -257,6 +257,14 @@ impl LogicBlock {
         Some(Levels(levels))
     }
 
+    /// The same samples starting at `start` instead.
+    pub fn rebased(&self, start: Tick) -> LogicBlock {
+        LogicBlock {
+            start,
+            ..self.clone()
+        }
+    }
+
     /// The part of the block covering `range`, or `None` when `range` reaches outside it or
     /// is empty.
     pub fn slice(&self, range: TickRange) -> Option<LogicBlock> {
@@ -751,6 +759,15 @@ mod tests {
         }
         assert!(block.slice(TickRange::new(Tick(999), Tick(1001))).is_none());
         assert!(block.slice(TickRange::at(Tick(1001))).is_none());
+    }
+
+    #[test]
+    fn rebasing_moves_the_samples() {
+        let block = block(10, &[1, 0, 1], 1);
+        let moved = block.rebased(Tick(500));
+        assert_eq!(moved.range(), TickRange::new(Tick(500), Tick(503)));
+        assert_eq!(moved.level(0, Tick(502)), Some(true));
+        assert_eq!(moved.words(0), block.words(0));
     }
 
     #[test]
