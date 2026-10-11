@@ -11,6 +11,12 @@
 //! The cursor offers the contract's primitives and nothing more: the next word, the normal
 //! end, draining. What a protocol makes of the words — which line it reads, byte order, field
 //! widths — is that protocol's own code, so that the contract stays as general as the bus.
+//!
+//! A bus without chip select carries one unframed transaction, `0`, which has no `begin` or
+//! `end` event: the cursor opens it at its first word, and it ends only at a gap or the end of
+//! the stream. Draining it would consume the rest of the samples, so [`SpiBus::finish`] does
+//! not drain it; a decoder that loses its place on such a bus calls [`SpiBus::next`] again,
+//! which hands transaction `0` back at the next word.
 
 use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
 
@@ -79,7 +85,8 @@ pub enum Read {
 /// What [`SpiBus::next`] finds.
 #[derive(Debug)]
 pub enum Next<'a> {
-    /// A transaction begins.
+    /// A transaction begins; on a bus without chip select, transaction `0` continues from
+    /// its next word.
     Transaction(Transaction<'a>),
     /// Samples, and whatever was on the bus, are missing.
     Gap(TickRange),
@@ -135,34 +142,64 @@ impl SpiBus {
 
     /// Waits for the next transaction, gap, progress or end. Words and ends outside a
     /// transaction are skipped: their beginning was consumed by an earlier transaction that
-    /// was not drained, which [`SpiBus::finish`] prevents.
+    /// was not drained, which [`SpiBus::finish`] prevents. The words of a bus without chip
+    /// select belong to transaction `0`, which has no beginning: it opens at its first word,
+    /// which is left for the transaction to read.
     pub async fn next(&mut self) -> Next<'_> {
         loop {
-            match self.inbox.recv().await {
-                Item::Event(event) => match event.payload {
-                    SpiEvent::Begin { tx, partial } => {
-                        self.record(&event);
-                        self.current = Some(Current {
-                            tx,
-                            partial,
-                            ended: false,
-                        });
-                        return Next::Transaction(Transaction { bus: self });
-                    }
-                    SpiEvent::Word { .. } | SpiEvent::End { .. } => self.record(&event),
-                },
-                Item::Gap(range) => return Next::Gap(range),
-                Item::Progress(tick) => return Next::Progress(tick),
-                Item::End(tick) => return Next::End(tick),
-            }
+            let start = self
+                .inbox
+                .peek_with(|item| match item {
+                    Item::Event(event) => match event.payload {
+                        SpiEvent::Begin { tx, partial } => Start::Begin(event.clone(), tx, partial),
+                        SpiEvent::Word { tx: UNFRAMED, .. } => Start::Unframed,
+                        SpiEvent::Word { .. } | SpiEvent::End { .. } => Start::Skip(event.clone()),
+                    },
+                    Item::Gap(range) => Start::Gap(*range),
+                    Item::Progress(tick) => Start::Progress(*tick),
+                    Item::End(tick) => Start::End(*tick),
+                })
+                .await;
+            let (tx, partial) = match start {
+                Start::Begin(event, tx, partial) => {
+                    self.consume(&event);
+                    (tx, partial)
+                }
+                Start::Unframed => (UNFRAMED, false),
+                Start::Skip(event) => {
+                    self.consume(&event);
+                    continue;
+                }
+                Start::Gap(range) => {
+                    self.inbox.take();
+                    return Next::Gap(range);
+                }
+                Start::Progress(tick) => {
+                    self.inbox.take();
+                    return Next::Progress(tick);
+                }
+                Start::End(tick) => {
+                    self.inbox.take();
+                    return Next::End(tick);
+                }
+            };
+            self.current = Some(Current {
+                tx,
+                partial,
+                ended: false,
+            });
+            return Next::Transaction(Transaction { bus: self });
         }
     }
 
     /// Consumes what is left of the current transaction, if the decoder left it open.
-    /// Returns how the transaction ended when it did not end normally.
+    /// Returns how the transaction ended when it did not end normally. Transaction `0` of a
+    /// bus without chip select has nothing to drain to and is simply handed back.
     pub async fn finish(&mut self) -> Result<(), ReadError> {
         let result = match &self.current {
-            Some(current) if !current.ended => Transaction { bus: self }.drain().await,
+            Some(current) if !current.ended && current.tx != UNFRAMED => {
+                Transaction { bus: self }.drain().await
+            }
             _ => Ok(()),
         };
         self.current = None;
@@ -234,6 +271,19 @@ impl SpiBus {
         self.inbox.take();
         self.record(event);
     }
+}
+
+/// The transaction of a bus without chip select: every word's, never begun or ended.
+const UNFRAMED: TxId = TxId(0);
+
+/// What the next item of the stream means to a reader waiting for a transaction.
+enum Start {
+    Begin(Event<SpiEvent>, TxId, bool),
+    Unframed,
+    Skip(Event<SpiEvent>),
+    Gap(TickRange),
+    Progress(Tick),
+    End(Tick),
 }
 
 /// What the next item of the stream means to the transaction being read.
