@@ -22,15 +22,15 @@ A MIDI cable carries messages in one direction; a device's MIDI In and MIDI Out 
 
 The input port `uart` requires of the UART stream:
 
-| Property   | Requirement     |
-| ---------- | --------------- |
-| `baud`     | `= 31250`       |
-| `dataBits` | `= 8`           |
-| `parity`   | `= "none"`      |
-| `stopBits` | `= "one"`       |
-| `bitOrder` | `= "lsb-first"` |
+| Property   | Requirement                          |
+| ---------- | ------------------------------------ |
+| `baud`     | `in 30938..=31562`, 31.25 kbaud ±1 % |
+| `dataBits` | `= 8`                                |
+| `parity`   | `= "none"`                           |
+| `stopBits` | `= "one"`                            |
+| `bitOrder` | `= "lsb-first"`                      |
 
-A connection that does not meet them is refused, for example `midi#1.uart requires baud = 31250 of uart#0.events, which declares 38400`.
+A connection that does not meet them is refused, for example `midi#1.uart requires baud in 30938..=31562 of uart#0.events, which declares 38400`.
 
 ## The stream: `midi.events` v1
 

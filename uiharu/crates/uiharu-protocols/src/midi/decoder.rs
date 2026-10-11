@@ -78,6 +78,8 @@ pub struct Midi;
 impl Midi {
     /// MIDI's bit rate: 31.25 kbaud.
     pub const BAUD: u32 = 31_250;
+    /// How far from [`Midi::BAUD`] a stream may be declared: the specification's ±1 %.
+    pub const BAUD_TOLERANCE: u32 = Self::BAUD / 100;
 
     /// A decoder.
     pub fn new() -> Self {
@@ -98,7 +100,11 @@ impl Midi {
     /// of 8 data bits least significant bit first, no parity and one stop bit.
     pub fn requires() -> Requires {
         Requires::new()
-            .equals("baud", i64::from(Self::BAUD))
+            .within(
+                "baud",
+                i64::from(Self::BAUD - Self::BAUD_TOLERANCE),
+                i64::from(Self::BAUD + Self::BAUD_TOLERANCE),
+            )
             .equals("dataBits", 8)
             .equals("parity", "none")
             .equals("stopBits", "one")
@@ -500,8 +506,14 @@ mod tests {
         let requires = Midi::requires();
         let unmet = |props: &Props| requires.unmet(props).map(|(key, _)| key);
         assert_eq!(unmet(&uart(31_250, 8, "none", "one", "lsb-first")), None);
+        assert_eq!(unmet(&uart(31_562, 8, "none", "one", "lsb-first")), None);
+        assert_eq!(unmet(&uart(30_938, 8, "none", "one", "lsb-first")), None);
         assert_eq!(
-            unmet(&uart(31_000, 8, "none", "one", "lsb-first")),
+            unmet(&uart(31_563, 8, "none", "one", "lsb-first")),
+            Some("baud")
+        );
+        assert_eq!(
+            unmet(&uart(30_937, 8, "none", "one", "lsb-first")),
             Some("baud")
         );
         assert_eq!(

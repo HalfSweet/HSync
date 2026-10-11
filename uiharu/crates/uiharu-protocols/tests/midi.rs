@@ -546,7 +546,7 @@ fn the_uart_stream_must_carry_midi_characters() {
             from: "uart#0.events".into(),
             to: "midi#1.uart".into(),
             key: "baud",
-            requirement: "= 31250".into(),
+            requirement: "in 30938..=31562".into(),
             found: "38400".into(),
         }
     );
