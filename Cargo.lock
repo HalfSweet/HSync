@@ -1606,6 +1606,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-bench"
+version = "0.1.4"
+dependencies = [
+ "hsync-capture",
+ "hsync-core",
+ "hsync-decode",
+ "hsync-fileio",
+ "hsync-srd",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "uiharu-core",
+ "uiharu-protocols",
+]
+
+[[package]]
 name = "hsync-capture"
 version = "0.1.4"
 dependencies = [
