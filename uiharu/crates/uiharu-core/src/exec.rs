@@ -49,6 +49,16 @@ pub enum PushError {
     /// The source has ended.
     #[error("the source has ended")]
     Ended,
+    /// The source is full, the last run moved nothing and no exposed output has anything to
+    /// read: the pipeline can make no progress, however it is driven. A node that waits on
+    /// one input while another holds the source's queue does this; see design.md §4.
+    #[error(
+        "the pipeline is stalled: the source is full, nothing can be read and every node waits ({waiting:?})"
+    )]
+    Stalled {
+        /// What each unfinished node waited for when the last run ended.
+        waiting: Vec<(String, Wait)>,
+    },
     /// No such source.
     #[error("no source {0} in the pipeline")]
     UnknownSource(usize),
@@ -80,8 +90,19 @@ struct QueueEntry {
 struct ExposedEntry {
     name: String,
     queue: Rc<dyn Any>,
+    control: Rc<dyn QueueControl>,
+    /// The reader's id, kept to count what it has not read.
+    reader_id: ReaderId,
     /// The reader, until the caller takes it.
     reader: Option<ReaderId>,
+}
+
+/// What the last run left behind, to tell a stall from a source that is merely full.
+#[derive(Clone, Debug)]
+struct LastRun {
+    ops: u64,
+    exposed_pending: usize,
+    waiting: Vec<(String, Wait)>,
 }
 
 /// What one run of the pipeline did.
@@ -146,6 +167,8 @@ pub struct Pipeline {
     nodes: Vec<Running>,
     queues: Vec<QueueEntry>,
     exposed: Vec<ExposedEntry>,
+    /// What the last `run` did, until the next push changes things.
+    last_run: Option<LastRun>,
 }
 
 impl fmt::Debug for Pipeline {
@@ -230,6 +253,8 @@ impl Pipeline {
                 ExposedEntry {
                     name: exposure.name,
                     queue: handles.any,
+                    control: handles.control,
+                    reader_id: reader,
                     reader: Some(reader),
                 }
             })
@@ -277,6 +302,7 @@ impl Pipeline {
             nodes,
             queues,
             exposed,
+            last_run: None,
         })
     }
 
@@ -336,7 +362,7 @@ impl Pipeline {
             let mut queue = state.queue.borrow_mut();
             if queue.is_full() {
                 drop(queue);
-                return Err(PushError::Full(item));
+                return Err(full_error(self.last_run.as_ref(), &self.exposed, item));
             }
             let _ = queue.try_push(Item::Progress(expected));
             drop(queue);
@@ -365,10 +391,11 @@ impl Pipeline {
                 Item::Progress(tick) => SignalItem::Progress(tick),
                 Item::End(tick) => SignalItem::End(tick),
             };
-            return Err(PushError::Full(item));
+            return Err(full_error(self.last_run.as_ref(), &self.exposed, item));
         }
         state.next = Some(next);
         state.ended = ended;
+        self.last_run = None;
         Ok(())
     }
 
@@ -420,6 +447,11 @@ impl Pipeline {
             .filter(|node| node.future.is_some())
             .map(|node| (node.name.clone(), node.cx.waiting()))
             .collect();
+        self.last_run = Some(LastRun {
+            ops: report.ops,
+            exposed_pending: exposed_pending(&self.exposed),
+            waiting: report.waiting.clone(),
+        });
         report
     }
 
@@ -476,6 +508,31 @@ impl Pipeline {
             reader,
         })
     }
+}
+
+/// The error for a full source: a stall when the last run moved nothing and nothing has been
+/// readable since — the caller can neither push, read nor run anything to a change.
+fn full_error(last_run: Option<&LastRun>, exposed: &[ExposedEntry], item: SignalItem) -> PushError {
+    match last_run {
+        Some(last)
+            if last.ops == 0 && last.exposed_pending == 0 && exposed_pending(exposed) == 0 =>
+        {
+            PushError::Stalled {
+                waiting: last.waiting.clone(),
+            }
+        }
+        _ => PushError::Full(item),
+    }
+}
+
+/// The items the caller's exposed readers have not read; an output exposed but never taken
+/// counts as read, since nobody will ever drain it.
+fn exposed_pending(exposed: &[ExposedEntry]) -> usize {
+    exposed
+        .iter()
+        .filter(|entry| entry.reader.is_none())
+        .map(|entry| entry.control.pending(entry.reader_id))
+        .sum()
 }
 
 /// The caller's reader on an exposed output.
