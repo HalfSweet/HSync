@@ -1691,6 +1691,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-pxlogic"
+version = "0.1.2"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-driver",
+ "log",
+ "nusb",
+]
+
+[[package]]
 name = "hsync-session"
 version = "0.1.2"
 dependencies = [
