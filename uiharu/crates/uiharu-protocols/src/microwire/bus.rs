@@ -12,6 +12,12 @@
 //! The cursor offers the contract's primitives and nothing more: the next bit, the normal end
 //! with DO's level there, draining. What a device makes of the bits — start bits, opcodes,
 //! address and word widths — is that device's own code.
+//!
+//! A bus without chip select carries one unframed transaction, `0`, which has no `begin` or
+//! `end` event: the cursor opens it at its first bit, and it ends only at a gap or the end of
+//! the stream. Draining it would consume the rest of the samples, so [`MicrowireBus::finish`]
+//! does not drain it; a decoder that loses its place on such a bus calls [`MicrowireBus::next`]
+//! again, which hands transaction `0` back at the next bit.
 
 use uiharu_core::{Event, Inbox, Item, Provenance, Tick, TickRange};
 
@@ -99,6 +105,20 @@ pub struct MicrowireBus {
 }
 
 /// What the next item of the stream means to the transaction being read.
+/// The transaction of a bus without chip select: every bit's, never begun or ended.
+const UNFRAMED: TxId = TxId(0);
+
+/// What the next item of the stream means to a reader waiting for a transaction.
+enum Start {
+    Begin(Event<MicrowireEvent>, TxId, bool),
+    Unframed,
+    Skip(Event<MicrowireEvent>),
+    Gap(TickRange),
+    Progress(Tick),
+    End(Tick),
+}
+
+/// What the next item of the stream means to the transaction being read.
 enum Peeked {
     Bit(Event<MicrowireEvent>, Bit),
     End(Event<MicrowireEvent>, EndReason, Option<bool>),
@@ -135,33 +155,68 @@ impl MicrowireBus {
 
     /// Waits for the next transaction, gap, progress or end. Bits and ends outside a
     /// transaction are skipped: their beginning was consumed by an earlier transaction that
-    /// was not drained, which [`MicrowireBus::finish`] prevents.
+    /// was not drained, which [`MicrowireBus::finish`] prevents. The bits of a bus without
+    /// chip select belong to transaction `0`, which has no beginning: it opens at its first
+    /// bit, which is left for the transaction to read.
     pub async fn next(&mut self) -> Next<'_> {
         loop {
-            match self.inbox.recv().await {
-                Item::Event(event) => {
-                    self.record(&event);
-                    if let MicrowireEvent::Begin { tx, partial } = event.payload {
-                        self.current = Some(Current {
-                            tx,
-                            partial,
-                            ended: false,
-                        });
-                        return Next::Transaction(Transaction { bus: self });
-                    }
+            let start = self
+                .inbox
+                .peek_with(|item| match item {
+                    Item::Event(event) => match event.payload {
+                        MicrowireEvent::Begin { tx, partial } => {
+                            Start::Begin(event.clone(), tx, partial)
+                        }
+                        MicrowireEvent::Bit { tx: UNFRAMED, .. } => Start::Unframed,
+                        MicrowireEvent::Bit { .. } | MicrowireEvent::End { .. } => {
+                            Start::Skip(event.clone())
+                        }
+                    },
+                    Item::Gap(range) => Start::Gap(*range),
+                    Item::Progress(tick) => Start::Progress(*tick),
+                    Item::End(tick) => Start::End(*tick),
+                })
+                .await;
+            let (tx, partial) = match start {
+                Start::Begin(event, tx, partial) => {
+                    self.consume(&event);
+                    (tx, partial)
                 }
-                Item::Gap(range) => return Next::Gap(range),
-                Item::Progress(tick) => return Next::Progress(tick),
-                Item::End(tick) => return Next::End(tick),
-            }
+                Start::Unframed => (UNFRAMED, false),
+                Start::Skip(event) => {
+                    self.consume(&event);
+                    continue;
+                }
+                Start::Gap(range) => {
+                    self.inbox.take();
+                    return Next::Gap(range);
+                }
+                Start::Progress(tick) => {
+                    self.inbox.take();
+                    return Next::Progress(tick);
+                }
+                Start::End(tick) => {
+                    self.inbox.take();
+                    return Next::End(tick);
+                }
+            };
+            self.current = Some(Current {
+                tx,
+                partial,
+                ended: false,
+            });
+            return Next::Transaction(Transaction { bus: self });
         }
     }
 
     /// Consumes what is left of the current transaction, if the decoder left it open.
-    /// Returns how the transaction ended when it did not end normally.
+    /// Returns how the transaction ended when it did not end normally. Transaction `0` of a
+    /// bus without chip select has nothing to drain to and is simply handed back.
     pub async fn finish(&mut self) -> Result<(), ReadError> {
         let result = match &self.current {
-            Some(current) if !current.ended => Transaction { bus: self }.drain().await,
+            Some(current) if !current.ended && current.tx != UNFRAMED => {
+                Transaction { bus: self }.drain().await
+            }
             _ => Ok(()),
         };
         self.current = None;
