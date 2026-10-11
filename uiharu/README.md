@@ -32,6 +32,8 @@ Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/proto
 | 24xx EEPROM        | `eeprom24xx`           | `i2c.events`     | [eeprom24xx.md](docs/protocols/eeprom24xx.md) |
 | UART               | `uart`                 | logic samples    | [uart.md](docs/protocols/uart.md)             |
 | Modbus RTU         | `modbus-rtu`           | `uart.events`    | [modbus-rtu.md](docs/protocols/modbus-rtu.md) |
+| LIN                | `lin`                  | `uart.events`    | [lin.md](docs/protocols/lin.md)               |
+| MIDI               | `midi`                 | `uart.events`    | [midi.md](docs/protocols/midi.md)             |
 | CAN 2.0 and CAN FD | `can`                  | logic samples    | [can.md](docs/protocols/can.md)               |
 | 1-Wire link layer  | `onewire-link`         | logic samples    | [onewire.md](docs/protocols/onewire.md)       |
 | 1-Wire network     | `onewire`              | `onewire.link`   | [onewire.md](docs/protocols/onewire.md)       |
