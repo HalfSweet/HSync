@@ -29,7 +29,26 @@ target/debug/uiharu decode flash.bin --stream nor --chunk 4096 --stats
 target/debug/uiharu bench --samples 50000000                # throughput, latency, memory
 ```
 
-`decode` reads raw binary captures: one sample after the other, ⌈channels / 8⌉ bytes each, bit _i_ of byte _j_ being channel 8 _j_ + _i_ — the layout of HSync's binary export. The bus is described with `--clk`, `--cs`, `--mosi`, `--miso` (`none` for a line that is not connected), `--mode`, `--word-bits`, `--lsb-first` and `--cs-active-high`; `uiharu decode --help` lists everything.
+`decode` reads raw binary captures: one sample after the other, ⌈channels / 8⌉ bytes each, bit _i_ of byte _j_ being channel 8 _j_ + _i_ — the layout of HSync's binary export. The SPI bus is described with `--clk`, `--cs`, `--mosi`, `--miso` (`none` for a line that is not connected), `--mode`, `--word-bits`, `--lsb-first` and `--cs-active-high`; `uiharu decode --help` lists everything.
+
+Any pipeline can be described in a JSON file instead — the source, the nodes with their type and configuration, the connections between ports named as the nodes declare them, and the outputs to write — and run with `uiharu decode --graph flash.json capture.bin`:
+
+```json
+{
+  "source": { "channels": 4, "rate": 25000000 },
+  "nodes": {
+    "spi": { "type": "spi", "config": { "clk": 0, "cs": 1, "mosi": 2, "miso": 3, "mode": 0 } },
+    "flash": { "type": "spi-nor" }
+  },
+  "connections": [
+    { "from": "source", "to": "spi.logic" },
+    { "from": "spi.events", "to": "flash.bus" }
+  ],
+  "expose": { "spi": "spi.events", "nor": "flash.operations" }
+}
+```
+
+A configuration may leave fields out (they take the node's defaults); a connection the decoders cannot accept is refused with the graph's diagnostic, such as `flash#1.bus requires wordBits = 8 of spi#0.events, which declares 4`. The node types the command line knows are listed in `crates/uiharu-cli/src/pipeline.rs`; each protocol page in `docs/protocols/` names its type, ports and configuration.
 
 Every event is one line of JSON: the stream it belongs to, its number in that stream, the ticks it covers, the tick at which it became certain, and the event itself as the stream's contract spells it. Gaps and the end of each stream are lines too.
 

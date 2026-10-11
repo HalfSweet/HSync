@@ -79,6 +79,8 @@ The cursor keeps the levels just before its position across blocks and seeks, so
 
 Diagnostics name ports as `node#index.port` and say what was required and what was found, e.g. `spi-nor-read24#1.bus requires wordBits = 8 of spi#0.events, which declares 4`.
 
+The command line builds graphs from a JSON description (`uiharu decode --graph`; the format is in the README): a source, named nodes with a type and a configuration deserialized by the node's config type, connections between `node.port` names, and the outputs to expose. It is the hand-written form of the graph description the DSL compiler will emit, and the registry of node types in `crates/uiharu-cli/src/pipeline.rs` — how to build each node from its configuration and how to write its output — is the one place a decoder is made available to the command line.
+
 The SPI output declares `wordBits`, `bitOrder`, `mode`, `cs`, `mosi`, `miso`; SPI NOR requires `wordBits = 8`, `bitOrder = "msb-first"`, `cs = true`, `mosi = true`, `miso = true`. The source declares `channels` and `rateHz`; SPI requires `channels >= ` the highest channel it reads + 1.
 
 ## 5. The executor
