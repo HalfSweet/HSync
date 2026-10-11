@@ -17,6 +17,7 @@ pub mod can;
 pub mod dmx512;
 pub mod ds18b20;
 pub mod eeprom24xx;
+pub mod eeprom93xx;
 pub mod i2c;
 pub mod i2s;
 pub mod ir_nec;
