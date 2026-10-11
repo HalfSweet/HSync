@@ -16,6 +16,8 @@ Rust's `async` lowering is the "resumable state machine" of the PRD: the future'
 
 Handwritten decoders follow three rules the compiler will enforce for DSL code: no buffer grows without a declared bound (the NOR data batch holds at most 32 bytes); nothing holds a whole transaction; every `await` is one of the runtime's operations.
 
+Contracts stay generic. The cursor over a contract offers that contract's primitives and nothing more — for `spi.events`, the next word with both lines' values (`Transaction::word`), the next word or the normal end (`word_or_end`), and draining (`drain`). Which line a protocol reads, byte order and field widths are the consuming decoder's own code: the NOR decoder assembles its 24-bit address from three words itself. A contract is the more useful the less it knows about the protocols above it, and a sequence of plain reads already has the property the PRD asks of a multi-byte read: pausing between them keeps what was read, because that is the state of the future.
+
 ## 2. Streams
 
 ### Envelope
@@ -94,26 +96,26 @@ The SPI NOR decoder reads through a `Transaction` cursor whose reads return an e
 | the end of the stream           | `EndOfInput(tick)` | `end { reason: "aborted" }`              | the end is passed on                              |
 | a partial transaction           | —                  | nothing                                  | its words are drained                             |
 
-Only `read_u8_or_end` ever returns the normal end; a body that returns before the end has the rest of its transaction drained for it. An incomplete transaction is never called complete: `complete` is emitted only by the body, after `read_u8_or_end` saw the normal end.
+Only `word_or_end` ever returns the normal end; a body that returns before the end has the rest of its transaction drained for it. An incomplete transaction is never called complete: `complete` is emitted only by the body, after `word_or_end` saw the normal end.
 
 ## 7. From the DSL to the Rust API
 
-| PRD (TypeScript)                         | Phase 1 (Rust)                                                                         |
-| ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| `eventSchema<SpiEvent>("spi.events", 1)` | `impl EventSchema for SpiEvent { const SCHEMA = SchemaId::new("spi.events", 1) }`      |
-| `defineDecoder({ input, output, … })`    | `impl Node` with a `NodeSpec` of `InputSpec`/`OutputSpec`                              |
-| `requires: { wordBits: 8, … }`           | `Requires::new().equals("wordBits", 8)…`                                               |
-| `async transaction(tx, out)`             | `async fn transaction(tx: Transaction<'_>, out: &mut NorOut) -> Result<(), ReadError>` |
-| `tx.readU8("mosi")`                      | `tx.read_u8(Line::Mosi).await?`                                                        |
-| `tx.readU24BE("mosi")`                   | `tx.read_u24_be(Line::Mosi).await?`                                                    |
-| `tx.readU8OrEnd("miso")`                 | `tx.read_u8_or_end(Line::Miso).await?` → `Read::Value(u8)` or `Read::End`              |
-| `tx.drain()`                             | `tx.drain().await?`                                                                    |
-| `out.begin("read", tx.id)`               | `out.begin(Command::Read, tx.id(), tx.consumed()).await`                               |
-| `recovery: { truncated, gap }`           | `recover()` around the body, as in §6                                                  |
-| `g.source("logic")`                      | `graph.source(SourceSpec::new(…))`                                                     |
-| `g.node(SpiDecoder, { clk, … })`         | `graph.add(Spi::new(SpiConfig { … })?)`                                                |
-| `g.connect(a.outputs.x, b.inputs.y)`     | `graph.connect(Spi::events(spi), SpiNorRead24::input(nor))?`                           |
-| `g.expose(name, port)`                   | `graph.expose(name, port)?` then `pipeline.exposed(ref)`                               |
+| PRD (TypeScript)                         | Phase 1 (Rust)                                                                                |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `eventSchema<SpiEvent>("spi.events", 1)` | `impl EventSchema for SpiEvent { const SCHEMA = SchemaId::new("spi.events", 1) }`             |
+| `defineDecoder({ input, output, … })`    | `impl Node` with a `NodeSpec` of `InputSpec`/`OutputSpec`                                     |
+| `requires: { wordBits: 8, … }`           | `Requires::new().equals("wordBits", 8)…`                                                      |
+| `async transaction(tx, out)`             | `async fn transaction(tx: Transaction<'_>, out: &mut NorOut) -> Result<(), ReadError>`        |
+| `(await tx.word()).mosi`                 | `tx.word().await?.mosi()?` (`Word { mosi, miso }`; a line the input requires is never `None`) |
+| `address = (address << 8) \| …`          | plain code in the decoder: `(address << 8) \| u32::from(tx.word().await?.mosi()?)`            |
+| `tx.wordOrEnd()`                         | `tx.word_or_end().await?` → `Read::Word(word)` or `Read::End`                                 |
+| `tx.drain()`                             | `tx.drain().await?`                                                                           |
+| `out.begin("read", tx.id)`               | `out.begin(Command::Read, tx.id(), tx.consumed()).await`                                      |
+| `recovery: { truncated, gap }`           | `recover()` around the body, as in §6                                                         |
+| `g.source("logic")`                      | `graph.source(SourceSpec::new(…))`                                                            |
+| `g.node(SpiDecoder, { clk, … })`         | `graph.add(Spi::new(SpiConfig { … })?)`                                                       |
+| `g.connect(a.outputs.x, b.inputs.y)`     | `graph.connect(Spi::events(spi), SpiNorRead24::input(nor))?`                                  |
+| `g.expose(name, port)`                   | `graph.expose(name, port)?` then `pipeline.exposed(ref)`                                      |
 
 ## 8. NDJSON
 

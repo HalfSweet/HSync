@@ -100,7 +100,7 @@ export const SpiNorRead24 = defineDecoder({
   },
 
   async transaction(tx, out) {
-    const opcode = await tx.readU8('mosi')
+    const opcode = (await tx.word()).mosi
 
     if (opcode !== 0x03) {
       await out.unknownCommand(tx.id, opcode)
@@ -110,18 +110,21 @@ export const SpiNorRead24 = defineDecoder({
 
     const op = await out.begin('read', tx.id)
 
-    const address = await tx.readU24BE('mosi')
+    let address = 0
+    for (let i = 0; i < 3; i++) {
+      address = (address << 8) | (await tx.word()).mosi
+    }
     await out.address(op, address)
 
     while (true) {
-      const item = await tx.readU8OrEnd('miso')
+      const item = await tx.wordOrEnd()
 
       if (item.kind === 'end') {
         await out.end(op, 'complete')
         return
       }
 
-      await out.data(op, item.value)
+      await out.data(op, item.miso)
     }
   },
 
@@ -134,16 +137,18 @@ export const SpiNorRead24 = defineDecoder({
 
 `norEventsV1` defines the events for an operation's beginning, its address, pieces of data, its end and an unknown command; `out` is the typed writer derived from the output schema.
 
+The cursor `tx` offers the contract's primitives and nothing more: the next word with every line's value (`word()`), the next word or the transaction's normal end (`wordOrEnd()`), and draining (`drain()`). Which line a protocol reads, byte order and field widths are the decoder's own code or shared helper functions, never operations of the bus contract: a contract is the more useful the less it knows about the protocols above it. Because the input requires `mosi: true` and `miso: true`, the compiler types `mosi` and `miso` as `U8` in the body, not `U8 | null`.
+
 The code must have these semantics:
 
-| Operation       | Required behaviour                                                                                                                     |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `transaction()` | Starts when an SPI `begin` arrives; `tx` is a cursor over the stream, not a copy of the whole transaction.                             |
-| `readU24BE()`   | May read across input blocks; when it pauses it keeps the bytes read so far and the value accumulated, and never consumes input twice. |
-| `readU8OrEnd()` | Returns `end` only for a normal chip select release; an abnormal end or a gap goes down the recovery path.                             |
-| `out.data()`    | Emits data continuously, without waiting for the read to finish; the physical transfer may batch.                                      |
-| `await`         | Saves the state when input is short or output has no room, and continues once the condition holds — without a JavaScript runtime.      |
-| `recovery`      | Aborts the operation under way and emits an abnormal end; a gap in addition invalidates the related state and resynchronizes.          |
+| Operation       | Required behaviour                                                                                                                                                                                                                          |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `transaction()` | Starts when an SPI `begin` arrives; `tx` is a cursor over the stream, not a copy of the whole transaction.                                                                                                                                  |
+| `word()`        | May wait across input blocks; a sequence of reads that pauses between them (here, the address bytes) keeps what it has read so far and never consumes input twice. The transaction's end here is an error that goes down the recovery path. |
+| `wordOrEnd()`   | Returns `end` only for a normal chip select release; an abnormal end or a gap goes down the recovery path.                                                                                                                                  |
+| `out.data()`    | Emits data continuously, without waiting for the read to finish; the physical transfer may batch.                                                                                                                                           |
+| `await`         | Saves the state when input is short or output has no room, and continues once the condition holds — without a JavaScript runtime.                                                                                                           |
+| `recovery`      | Aborts the operation under way and emits an abnormal end; a gap in addition invalidates the related state and resynchronizes.                                                                                                               |
 
 **Both reading and writing can pause.** After pausing on output backpressure, a decoder must neither read its input again nor send an event twice; when both input and output are available, several `await`s complete in one run.
 
