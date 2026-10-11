@@ -673,6 +673,31 @@ fn progress_is_passed_on() {
     assert_eq!(harness.items, vec![Item::Progress(Tick(100))]);
 }
 
+#[test]
+fn progress_is_held_back_to_the_byte_under_way() {
+    let mut waveform = new_waveform();
+    waveform.transaction(write_10bit(0x2a5, &[0x77]));
+    waveform.idle(10);
+    let block = waveform.finish();
+    let mut harness = build(GraphConfig::default());
+    let mut from = Tick::ZERO;
+    // The address spans both its bytes, [16,153); the data byte's first bit rises at 160.
+    for (cut, held) in [(50, 16), (120, 16), (153, 153), (190, 160)] {
+        let piece = block
+            .slice(TickRange::new(from, Tick(cut)))
+            .expect("a slice");
+        harness.feed(&piece, &[u64::MAX]);
+        harness.collect();
+        assert_eq!(
+            harness.items.last(),
+            Some(&Item::Progress(Tick(held))),
+            "up to {cut}"
+        );
+        from = Tick(cut);
+    }
+    harness.assert_progress_promise();
+}
+
 /// What a reader on the transaction cursor found, one line per read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct Seen(String);
@@ -1004,6 +1029,7 @@ proptest! {
         harness.drain_on_full = 1;
         harness.feed_cut(&block, &[], &sizes, &pauses);
         harness.end();
+        harness.assert_progress_promise();
         prop_assert_eq!(harness.without_progress(), items);
     }
 }

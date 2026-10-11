@@ -36,6 +36,9 @@
 //!   `restart`);
 //! - a gap or the end of the samples while a transaction is open ends it with reason
 //!   `aborted`, at the gap's start or the end of the samples;
+//! - progress is passed on, held back to the first bit of the byte under way, or to the first
+//!   byte of a 10-bit write address whose second byte is still to come, since the event they
+//!   make spans from there;
 //! - clock stretching, SCL held low by a target [Clock stretching], needs nothing: only SCL's
 //!   rising edges are sampled.
 //!
@@ -310,6 +313,16 @@ impl Transfer {
     fn dropped_by_condition(&self) -> u8 {
         self.bits.saturating_sub(1)
     }
+
+    /// Where the address or data event under way will start: the first byte of a 10-bit write
+    /// address whose second byte is still to come, or else the first bit of the byte being
+    /// clocked in; `None` between bytes.
+    fn in_flight(&self) -> Option<Tick> {
+        match self.next {
+            Expect::TenBitLow { first, .. } => Some(first.start),
+            Expect::Address | Expect::Data => (self.bits > 0).then_some(self.first_bit),
+        }
+    }
 }
 
 /// Where the bus stands.
@@ -365,6 +378,16 @@ impl Decoder {
         let tx = TxId(self.next_tx);
         self.next_tx += 1;
         tx
+    }
+
+    /// Progress to `tick`, held back to the start of the event under way, which promises that
+    /// nothing starting earlier follows.
+    fn hold(&self, tick: Tick) -> Tick {
+        let start = match &self.state {
+            State::Active(transfer) => transfer.in_flight(),
+            State::Idle | State::Partial(_) => None,
+        };
+        start.map_or(tick, |start| start.min(tick))
     }
 
     /// Learns the bus at the first sample, or the first after a gap: free with both lines
@@ -533,7 +556,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<I2cEvent>, config: I2cCon
             match signal.sample().await {
                 Sample::At { tick, levels } => break decoder.resync(tick, levels),
                 Sample::Gap(range) => out.gap(range).await,
-                Sample::Progress(tick) => out.progress(tick).await,
+                Sample::Progress(tick) => out.progress(decoder.hold(tick)).await,
                 Sample::End(tick) => {
                     out.end(tick).await;
                     return;
@@ -559,7 +582,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<I2cEvent>, config: I2cCon
                 }
                 // Without a deadline the wait is never quiet.
                 Change::Quiet(_) => {}
-                Change::Progress(tick) => out.progress(tick).await,
+                Change::Progress(tick) => out.progress(decoder.hold(tick)).await,
                 Change::End(tick) => {
                     let decided = decoder.cut(tick);
                     emit(&mut out, decided).await;
