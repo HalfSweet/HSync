@@ -4,3 +4,5 @@
 //! commands, decoded from SPI events.
 
 #![forbid(unsafe_code)]
+
+pub mod spi;
