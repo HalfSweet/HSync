@@ -550,7 +550,7 @@ fn gaps_and_progress_pass_through() {
         .collect();
     assert_eq!(
         ticks,
-        vec!["e10", "e20", "p30", "gap30..45", "e50", "end60"]
+        vec!["p0", "e10", "e20", "p30", "gap30..45", "e50", "end60"]
     );
 }
 

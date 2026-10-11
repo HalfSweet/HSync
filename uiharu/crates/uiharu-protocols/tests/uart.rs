@@ -58,6 +58,19 @@ fn frame_text(value: u16, parity: Option<ParityCheck>, framing_ok: bool) -> Stri
 }
 
 /// One line per item, readable in assertions.
+/// Drops a progress line that repeats the one before it: whether two progress items fold in
+/// the queue depends on when the reader ran, which is not what these tests check.
+fn folded(lines: Vec<String>) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for line in lines {
+        if line.starts_with("progress ") && out.last() == Some(&line) {
+            continue;
+        }
+        out.push(line);
+    }
+    out
+}
+
 fn describe(items: &[Item<UartEvent>]) -> Vec<String> {
     items
         .iter()
@@ -497,10 +510,16 @@ fn a_character_cut_off_by_the_end_of_the_samples_is_not_reported() {
         .expect("a slice");
     let mut harness = build(config(), RATE, GraphConfig::default());
     harness.run_all(&head);
-    // Progress goes no further than the start of the character that was cut off.
+    // Progress goes no further than the start of the character that was cut off. (The
+    // stream starts with the progress its source announces at its first tick.)
     assert_eq!(
-        describe(&harness.items),
-        vec!["frame 0x41 [20,120)@115", "progress 140", "eof 200"]
+        folded(describe(&harness.items)),
+        vec![
+            "progress 0",
+            "frame 0x41 [20,120)@115",
+            "progress 140",
+            "eof 200"
+        ]
     );
 }
 
@@ -521,8 +540,9 @@ fn a_gap_drops_the_character_it_cuts_and_decoding_resumes_after_it() {
     harness.feed_with_gaps(&block, &[gap], &[u64::MAX]);
     harness.end();
     assert_eq!(
-        describe(&harness.items),
+        folded(describe(&harness.items)),
         vec![
+            "progress 0",
             "frame 0x41 [20,120)@115",
             "progress 140",
             "gap 162..178",
@@ -537,8 +557,13 @@ fn a_gap_drops_the_character_it_cuts_and_decoding_resumes_after_it() {
     harness.feed_with_gaps(&block, &[gap], &[u64::MAX]);
     harness.end();
     assert_eq!(
-        describe(&harness.items)[..3],
-        ["frame 0x41 [20,120)@115", "progress 125", "gap 125..135"]
+        describe(&harness.items)[..4],
+        [
+            "progress 0",
+            "frame 0x41 [20,120)@115",
+            "progress 125",
+            "gap 125..135"
+        ]
     );
 }
 

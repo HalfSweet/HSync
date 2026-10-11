@@ -288,9 +288,10 @@ impl Pipeline {
             .map(|(index, source)| (SourceId(index), source.name.as_str(), source.time_base))
     }
 
-    /// Feeds `item` to `source`. The first item decides where the stream starts; after it,
-    /// blocks must follow each other or a gap without a hole. The item is handed back when
-    /// the source is full.
+    /// Feeds `item` to `source`. The first item decides where the stream starts, and a
+    /// progress item at that tick goes ahead of it so that readers know nothing came before;
+    /// after it, blocks must follow each other or a gap without a hole. The item is handed
+    /// back when the source is full.
     pub fn push(&mut self, source: SourceId, item: SignalItem) -> Result<(), PushError> {
         let state = self
             .sources
@@ -328,6 +329,18 @@ impl Pipeline {
         };
         if found != expected {
             return Err(PushError::Discontinuity { expected, found });
+        }
+        // The first item decides where the stream starts; a progress item ahead of it tells
+        // every reader so, which decoders built on time need to know (nothing came before).
+        if state.next.is_none() {
+            let mut queue = state.queue.borrow_mut();
+            if queue.is_full() {
+                drop(queue);
+                return Err(PushError::Full(item));
+            }
+            let _ = queue.try_push(Item::Progress(expected));
+            drop(queue);
+            state.next = Some(expected);
         }
         let (queued, next, ended) = match item {
             SignalItem::Data(block) => {
