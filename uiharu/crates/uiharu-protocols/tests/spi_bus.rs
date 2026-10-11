@@ -6,7 +6,7 @@
 use uiharu_core::testing::{self, Harness, assert_block_invariant};
 use uiharu_core::{
     EventSchema, GraphConfig, InputRef, InputSpec, Io, Node, NodeFuture, NodeId, NodeSpec, Outbox,
-    OutputRef, OutputSpec, Props, Requires, SchemaId, Tick, TickRange, TimeBase,
+    OutputRef, OutputSpec, Props, Provenance, Requires, SchemaId, Tick, TickRange, TimeBase,
 };
 use uiharu_protocols::spi::synth::SpiWaveform;
 use uiharu_protocols::spi::{Next, Read, Spi, SpiBus, SpiConfig, SpiEvent};
@@ -45,13 +45,23 @@ impl Lister {
                 Next::Transaction(mut tx) => {
                     let id = tx.id().0;
                     let partial = tx.is_partial();
-                    out.emit(tx.consumed(), Seen::Open { tx: id, partial })
-                        .await;
+                    // Transaction 0 opens at its first word, so the opening is reported
+                    // with that word's provenance, after reading it.
+                    let mut opened = false;
                     let outcome = loop {
                         match tx.word_or_end().await {
                             Ok(Read::Word(word)) => {
+                                let at = tx.consumed();
+                                if !opened {
+                                    opened = true;
+                                    out.emit(
+                                        Provenance::at(at.span.start),
+                                        Seen::Open { tx: id, partial },
+                                    )
+                                    .await;
+                                }
                                 out.emit(
-                                    tx.consumed(),
+                                    at,
                                     Seen::Word {
                                         tx: id,
                                         mosi: word.mosi,
@@ -63,8 +73,15 @@ impl Lister {
                             Err(error) => break error.to_string(),
                         }
                     };
-                    out.emit(tx.consumed(), Seen::Closed { tx: id, outcome })
+                    let at = tx.consumed();
+                    if !opened {
+                        out.emit(
+                            Provenance::at(at.span.start),
+                            Seen::Open { tx: id, partial },
+                        )
                         .await;
+                    }
+                    out.emit(at, Seen::Closed { tx: id, outcome }).await;
                 }
                 Next::Gap(range) => out.gap(range).await,
                 Next::Progress(tick) => out.progress(tick).await,
