@@ -22,9 +22,9 @@ Each event is tagged with its `kind`. "A bit" below is the tick at which SWCLK r
 | Kind         | Fields                                                                     | What happened on the wire                                                                                                                                                                     | Span and settled tick                                                                     |
 | ------------ | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | `begin`      | `tx`                                                                       | A packet begins with its Start bit.                                                                                                                                                           | The Start bit; settled at the first low bit after it, which shows it is no line reset     |
-| `request`    | `tx`, `apndp`, `rnw`, `addr`, `parity_ok`                                  | The host's request: an access port (`apndp`) or debug port request, a read (`rnw`) or write, A\[3:2\] as the byte address `0x0`, `0x4`, `0x8` or `0xC`, and whether the parity bit was right. | Start through Park; settled at Park                                                       |
+| `request`    | `tx`, `apndp`, `rnw`, `addr`, `parityOk`                                   | The host's request: an access port (`apndp`) or debug port request, a read (`rnw`) or write, A\[3:2\] as the byte address `0x0`, `0x4`, `0x8` or `0xC`, and whether the parity bit was right. | Start through Park; settled at Park                                                       |
 | `ack`        | `tx`, `value`: `ok`, `wait`, `fault` or `{"other": n}`                     | The target's acknowledge, read least significant bit first (OK is 1, 0, 0 on the wire); `other` carries any other value, such as 7 when no target drove the line.                             | The three acknowledge bits; settled at the last                                           |
-| `data`       | `tx`, `value`, `parity_ok`, `from_target`                                  | The 32-bit data word, least significant bit first, whether its parity bit was right, and whether the target sent it (a read) or the host (a write).                                           | The data bits through the parity bit; settled at the parity bit                           |
+| `data`       | `tx`, `value`, `parityOk`, `fromTarget`                                    | The 32-bit data word, least significant bit first, whether its parity bit was right, and whether the target sent it (a read) or the host (a write).                                           | The data bits through the parity bit; settled at the parity bit                           |
 | `end`        | `tx`, `reason`: `complete`, `wait`, `fault`, `protocol-error` or `aborted` | How the packet ended (see below).                                                                                                                                                             | The bit that ended it; empty at the gap's start or the end of the samples for `aborted`   |
 | `line-reset` | —                                                                          | SWDIO was high for at least 50 clocks in a row.                                                                                                                                               | The run of high bits; settled at the first low bit after it, or where the samples stopped |
 | `switch`     | `to`: `swd` or `jtag`                                                      | A select sequence followed a line reset: JTAG-to-SWD (`0xE79E`) or SWD-to-JTAG (`0xE73C`), sent least significant bit first.                                                                  | The sixteen bits; settled at the last                                                     |
@@ -42,9 +42,9 @@ Packets are numbered from 1. A packet ends:
 
 ```json
 {"kind":"begin","tx":1}
-{"kind":"request","tx":1,"apndp":false,"rnw":true,"addr":0,"parity_ok":true}
+{"kind":"request","tx":1,"apndp":false,"rnw":true,"addr":0,"parityOk":true}
 {"kind":"ack","tx":1,"value":"ok"}
-{"kind":"data","tx":1,"value":731911287,"parity_ok":true,"from_target":true}
+{"kind":"data","tx":1,"value":731911287,"parityOk":true,"fromTarget":true}
 {"kind":"end","tx":1,"reason":"complete"}
 ```
 

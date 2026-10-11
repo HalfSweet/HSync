@@ -20,7 +20,11 @@ pub enum Slope {
 
 /// What travels on an edge timing stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum TimingEvent {
     /// The line changed level.
     Edge {
@@ -49,7 +53,7 @@ mod tests {
         .expect("serializes");
         assert_eq!(
             json,
-            r#"{"kind":"edge","slope":"rising","since_previous":250}"#
+            r#"{"kind":"edge","slope":"rising","sincePrevious":250}"#
         );
         let json = serde_json::to_string(&TimingEvent::Edge {
             slope: Slope::Falling,
@@ -58,7 +62,7 @@ mod tests {
         .expect("serializes");
         assert_eq!(
             json,
-            r#"{"kind":"edge","slope":"falling","since_previous":null}"#
+            r#"{"kind":"edge","slope":"falling","sincePrevious":null}"#
         );
     }
 }

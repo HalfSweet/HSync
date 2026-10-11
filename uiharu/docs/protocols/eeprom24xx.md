@@ -22,7 +22,7 @@ The output declares `addressBytes`: `1` or `2`.
 | Kind       | Fields                          | Meaning                                                      |
 | ---------- | ------------------------------- | ------------------------------------------------------------ |
 | `begin`    | `op`, `tx`, `device`, `command` | A command was told                                           |
-| `address`  | `op`, `word_address`            | The word address the command gave                            |
+| `address`  | `op`, `wordAddress`             | The word address the command gave                            |
 | `data`     | `op`, `offset`, `bytes`         | Bytes written or read, in order, at most 32 per event        |
 | `end`      | `op`, `reason`, `length`        | The operation ended                                          |
 | `ack-poll` | `tx`, `device`, `acked`         | A control byte with nothing after it: the controller polling |
@@ -40,7 +40,7 @@ The output declares `addressBytes`: `1` or `2`.
   | `random-read`          | a set-address, a repeated START and a read from the address it set                       |
   | `write`                | a write cut off by a gap or the end of the samples before it could be told which         |
 
-- `word_address` is the address as sent, one or two bytes, most significant first.
+- `wordAddress` is the address as sent, one or two bytes, most significant first.
 - `offset` is the position of the event's first byte, counted from the operation's first data byte; it is not a memory address.
 - `reason` is `complete` when the command ran to its end; `incomplete` when the controller ended it before it was whole — a read of no byte, or a byte or page write ended by a repeated START, which the device does not program; `aborted` when a gap or the end of the samples cut it off.
 - `length` counts the data bytes of the operation; a sequential read is a read whose `length` is more than 1.
@@ -75,7 +75,7 @@ The word address, and the data byte held while a write's command was not known, 
 
 ```json
 {"stream":"eeprom","seq":0,"span":[10,81],"settled":306,"event":{"kind":"begin","op":1,"tx":1,"device":80,"command":"byte-write"}}
-{"stream":"eeprom","seq":1,"span":[88,225],"settled":306,"event":{"kind":"address","op":1,"word_address":291}}
+{"stream":"eeprom","seq":1,"span":[88,225],"settled":306,"event":{"kind":"address","op":1,"wordAddress":291}}
 {"stream":"eeprom","seq":2,"span":[232,297],"settled":306,"event":{"kind":"data","op":1,"offset":0,"bytes":[170]}}
 {"stream":"eeprom","seq":3,"span":[306,307],"settled":306,"event":{"kind":"end","op":1,"reason":"complete","length":1}}
 ```

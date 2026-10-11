@@ -163,7 +163,11 @@ pub enum NorEnd {
 
 /// What travels on an SPI NOR event stream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum NorEvent {
     /// A command was recognised.
     Begin {

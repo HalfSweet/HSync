@@ -25,13 +25,13 @@ The input port `logic` requires of the source `channels >= line + 1` and `rateHz
 
 The stream is unframed: every character is one event, decided when its last stop bit has been read. There is no `begin` or `end`, and nothing is ever aborted: a character the decoder could not read to its end is not reported.
 
-| Kind    | Fields                                              | Meaning                                                                                                                                                                                                                                                   |
-| ------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `frame` | `value: u16`, `parity: ok/error/null`, `framing_ok` | A character. `value` holds the data bits, the first received being bit 0 (least significant bit first) or the highest bit (most significant first); `parity` is `null` on a line without a parity bit; `framing_ok` says whether every stop bit read mark |
-| `break` | `ticks: u64`                                        | The line was held at space through a whole character, stop bits included, then returned to mark; `ticks` is how long it was at space                                                                                                                      |
+| Kind    | Fields                                             | Meaning                                                                                                                                                                                                                                                  |
+| ------- | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `frame` | `value: u16`, `parity: ok/error/null`, `framingOk` | A character. `value` holds the data bits, the first received being bit 0 (least significant bit first) or the highest bit (most significant first); `parity` is `null` on a line without a parity bit; `framingOk` says whether every stop bit read mark |
+| `break` | `ticks: u64`                                       | The line was held at space through a whole character, stop bits included, then returned to mark; `ticks` is how long it was at space                                                                                                                     |
 
 ```json
-{"kind":"frame","value":65,"parity":"ok","framing_ok":true}
+{"kind":"frame","value":65,"parity":"ok","framingOk":true}
 {"kind":"break","ticks":1234}
 ```
 

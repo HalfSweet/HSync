@@ -189,7 +189,11 @@ pub enum EndReason {
 
 /// What travels on a JTAG event stream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum JtagEvent {
     /// The controller moved to another state.
     State {

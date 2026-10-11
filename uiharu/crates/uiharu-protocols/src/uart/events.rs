@@ -25,7 +25,11 @@ pub enum ParityCheck {
 
 /// What travels on a UART event stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum UartEvent {
     /// A character: a start bit, the data bits, the parity bit if the line has one, and the stop
     /// bits.
@@ -65,7 +69,7 @@ mod tests {
         .expect("serializes");
         assert_eq!(
             json,
-            r#"{"kind":"frame","value":65,"parity":"ok","framing_ok":true}"#
+            r#"{"kind":"frame","value":65,"parity":"ok","framingOk":true}"#
         );
         let json = serde_json::to_string(&UartEvent::Frame {
             value: 0x1ff,
@@ -75,7 +79,7 @@ mod tests {
         .expect("serializes");
         assert_eq!(
             json,
-            r#"{"kind":"frame","value":511,"parity":null,"framing_ok":false}"#
+            r#"{"kind":"frame","value":511,"parity":null,"framingOk":false}"#
         );
         let json = serde_json::to_string(&UartEvent::Frame {
             value: 0,

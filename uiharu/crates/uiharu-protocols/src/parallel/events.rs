@@ -10,7 +10,11 @@ pub const PARALLEL_EVENTS: SchemaId = SchemaId::new("parallel.events", 1);
 
 /// What travels on a parallel bus event stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum ParallelEvent {
     /// The data lines, read as one word.
     Word {

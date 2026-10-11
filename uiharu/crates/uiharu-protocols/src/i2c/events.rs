@@ -36,7 +36,11 @@ pub enum EndReason {
 
 /// What travels on an I²C event stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum I2cEvent {
     /// A START condition, or a transaction found under way.
     Begin {
@@ -130,7 +134,7 @@ mod tests {
                 read: false,
                 ack: true,
             }),
-            r#"{"kind":"address","tx":3,"address":677,"ten_bit":true,"read":false,"ack":true}"#
+            r#"{"kind":"address","tx":3,"address":677,"tenBit":true,"read":false,"ack":true}"#
         );
         assert_eq!(
             json(I2cEvent::Data {
@@ -145,7 +149,7 @@ mod tests {
                 tx: TxId(3),
                 dropped_bits: 0,
             }),
-            r#"{"kind":"restart","tx":3,"dropped_bits":0}"#
+            r#"{"kind":"restart","tx":3,"droppedBits":0}"#
         );
         assert_eq!(
             json(I2cEvent::End {
@@ -153,7 +157,7 @@ mod tests {
                 reason: EndReason::Stop,
                 dropped_bits: 2,
             }),
-            r#"{"kind":"end","tx":3,"reason":"stop","dropped_bits":2}"#
+            r#"{"kind":"end","tx":3,"reason":"stop","droppedBits":2}"#
         );
         assert_eq!(
             json(I2cEvent::End {
@@ -161,7 +165,7 @@ mod tests {
                 reason: EndReason::Restart,
                 dropped_bits: 0,
             }),
-            r#"{"kind":"end","tx":4,"reason":"restart","dropped_bits":0}"#
+            r#"{"kind":"end","tx":4,"reason":"restart","droppedBits":0}"#
         );
         assert_eq!(
             json(I2cEvent::End {
@@ -169,7 +173,7 @@ mod tests {
                 reason: EndReason::Aborted,
                 dropped_bits: 0,
             }),
-            r#"{"kind":"end","tx":5,"reason":"aborted","dropped_bits":0}"#
+            r#"{"kind":"end","tx":5,"reason":"aborted","droppedBits":0}"#
         );
     }
 

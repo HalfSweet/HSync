@@ -21,7 +21,11 @@ pub enum Channel {
 
 /// What travels on an I²S event stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum I2sEvent {
     /// One word: an audio sample of one channel.
     Sample {

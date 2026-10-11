@@ -11,14 +11,14 @@ The `timing` decoder reports the edges of one line, each with the ticks since th
 
 ## Events (`timing.events` v1)
 
-| Kind   | Fields                    | Meaning                |
-| ------ | ------------------------- | ---------------------- |
-| `edge` | `slope`, `since_previous` | The line changed level |
+| Kind   | Fields                   | Meaning                |
+| ------ | ------------------------ | ---------------------- |
+| `edge` | `slope`, `sincePrevious` | The line changed level |
 
-| Field            | Meaning                                                                                                              |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `slope`          | `rising` (low to high) or `falling` (high to low)                                                                    |
-| `since_previous` | Ticks since the previous edge the stream reported; `null` for the first edge after the start of the samples or a gap |
+| Field           | Meaning                                                                                                              |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `slope`         | `rising` (low to high) or `falling` (high to low)                                                                    |
+| `sincePrevious` | Ticks since the previous edge the stream reported; `null` for the first edge after the start of the samples or a gap |
 
 With every edge reported, the interval is the time the line spent at a level; with only rising or only falling edges, it is the signal's period. Periods and frequencies in seconds are the reader's to compute, with the source's `rateHz`. An edge covers the single tick where the line has its new level and is settled there.
 

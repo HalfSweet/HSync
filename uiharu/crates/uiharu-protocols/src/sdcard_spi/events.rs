@@ -68,7 +68,11 @@ pub enum SdEnd {
 
 /// What travels on an SD card event stream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum SdEvent {
     /// A command frame from the host: it begins an operation.
     Command {
@@ -170,7 +174,7 @@ mod tests {
                 crc7: 0x43,
                 crc_ok: true,
             }),
-            r#"{"kind":"command","op":2,"tx":1,"index":8,"acmd":false,"argument":426,"crc7":67,"crc_ok":true}"#
+            r#"{"kind":"command","op":2,"tx":1,"index":8,"acmd":false,"argument":426,"crc7":67,"crcOk":true}"#
         );
         assert_eq!(
             json(&SdEvent::Response {
@@ -179,7 +183,7 @@ mod tests {
                 bytes: vec![0],
                 busy_bytes: 3,
             }),
-            r#"{"kind":"response","op":2,"format":"r1b","bytes":[0],"busy_bytes":3}"#
+            r#"{"kind":"response","op":2,"format":"r1b","bytes":[0],"busyBytes":3}"#
         );
         assert_eq!(
             json(&SdEvent::Token {
@@ -204,7 +208,7 @@ mod tests {
                 crc_ok: true,
                 length: 512,
             }),
-            r#"{"kind":"block-end","op":2,"crc16":32673,"crc_ok":true,"length":512}"#
+            r#"{"kind":"block-end","op":2,"crc16":32673,"crcOk":true,"length":512}"#
         );
         assert_eq!(
             json(&SdEvent::End {

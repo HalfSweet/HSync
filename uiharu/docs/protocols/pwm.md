@@ -11,14 +11,14 @@ The `pwm` decoder measures the cycles of a pulse-width modulated line and writes
 
 ## Events (`pwm.events` v1)
 
-| Kind    | Fields                         | Meaning                                                             |
-| ------- | ------------------------------ | ------------------------------------------------------------------- |
-| `cycle` | `period_ticks`, `active_ticks` | One cycle, from a leading edge (inactive to active) to the next one |
+| Kind    | Fields                       | Meaning                                                             |
+| ------- | ---------------------------- | ------------------------------------------------------------------- |
+| `cycle` | `periodTicks`, `activeTicks` | One cycle, from a leading edge (inactive to active) to the next one |
 
-| Field          | Meaning                                                                          |
-| -------------- | -------------------------------------------------------------------------------- |
-| `period_ticks` | Ticks from the leading edge to the next one                                      |
-| `active_ticks` | Ticks the line was active: from the leading edge to the trailing edge in between |
+| Field         | Meaning                                                                          |
+| ------------- | -------------------------------------------------------------------------------- |
+| `periodTicks` | Ticks from the leading edge to the next one                                      |
+| `activeTicks` | Ticks the line was active: from the leading edge to the trailing edge in between |
 
 Duty cycle (`active_ticks / period_ticks`) and frequency (the source's `rateHz / period_ticks`) are the reader's to compute. A cycle covers its ticks, from its leading edge up to the next one, and is settled at that next leading edge, where it became certain.
 

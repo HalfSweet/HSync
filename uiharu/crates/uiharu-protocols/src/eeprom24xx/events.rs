@@ -56,7 +56,11 @@ pub enum EepromEnd {
 
 /// What travels on a 24xx EEPROM event stream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum EepromEvent {
     /// A command was told.
     Begin {
@@ -142,7 +146,7 @@ mod tests {
                 op: OpId(1),
                 word_address: 0x1234,
             }),
-            r#"{"kind":"address","op":1,"word_address":4660}"#
+            r#"{"kind":"address","op":1,"wordAddress":4660}"#
         );
         assert_eq!(
             json(&EepromEvent::Data {

@@ -10,7 +10,11 @@ pub const PWM_EVENTS: SchemaId = SchemaId::new("pwm.events", 1);
 
 /// What travels on a PWM event stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum PwmEvent {
     /// One cycle, from a leading edge, where the line turned active, to the next one.
     Cycle {
@@ -39,7 +43,7 @@ mod tests {
         .expect("serializes");
         assert_eq!(
             json,
-            r#"{"kind":"cycle","period_ticks":1000,"active_ticks":250}"#
+            r#"{"kind":"cycle","periodTicks":1000,"activeTicks":250}"#
         );
     }
 }

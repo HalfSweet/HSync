@@ -82,7 +82,11 @@ pub enum Interface {
 
 /// What travels on an SWD event stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum SwdEvent {
     /// A packet begins with its Start bit.
     Begin {
@@ -163,7 +167,7 @@ mod tests {
                 addr: 0xc,
                 parity_ok: true
             }),
-            r#"{"kind":"request","tx":7,"apndp":true,"rnw":false,"addr":12,"parity_ok":true}"#
+            r#"{"kind":"request","tx":7,"apndp":true,"rnw":false,"addr":12,"parityOk":true}"#
         );
         assert_eq!(
             json(&SwdEvent::Ack {
@@ -186,7 +190,7 @@ mod tests {
                 parity_ok: false,
                 from_target: true
             }),
-            r#"{"kind":"data","tx":7,"value":66051,"parity_ok":false,"from_target":true}"#
+            r#"{"kind":"data","tx":7,"value":66051,"parityOk":false,"fromTarget":true}"#
         );
         assert_eq!(
             json(&SwdEvent::End {

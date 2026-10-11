@@ -15,18 +15,18 @@ Both lines are required, on two different channels below 64. There is nothing el
 
 Every event names the transaction it belongs to, `tx`, numbered from 1.
 
-| Kind      | Fields                                    | On the bus                                                                        |
-| --------- | ----------------------------------------- | --------------------------------------------------------------------------------- |
-| `begin`   | `tx`, `partial`                           | A START condition; with `partial: true`, a transaction found under way            |
-| `address` | `tx`, `address`, `ten_bit`, `read`, `ack` | The address after a START or repeated START                                       |
-| `data`    | `tx`, `byte`, `ack`                       | A data byte                                                                       |
-| `restart` | `tx`, `dropped_bits`                      | A repeated START: the transaction goes on with another address                    |
-| `end`     | `tx`, `reason`, `dropped_bits`            | The end of the transaction: `stop`, `restart` (partial transactions) or `aborted` |
+| Kind      | Fields                                   | On the bus                                                                        |
+| --------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
+| `begin`   | `tx`, `partial`                          | A START condition; with `partial: true`, a transaction found under way            |
+| `address` | `tx`, `address`, `tenBit`, `read`, `ack` | The address after a START or repeated START                                       |
+| `data`    | `tx`, `byte`, `ack`                      | A data byte                                                                       |
+| `restart` | `tx`, `droppedBits`                      | A repeated START: the transaction goes on with another address                    |
+| `end`     | `tx`, `reason`, `droppedBits`            | The end of the transaction: `stop`, `restart` (partial transactions) or `aborted` |
 
-- `address` is the 7-bit address, or the 10-bit address when `ten_bit` is true; `read` is the R/W̄ bit (true: the controller reads from the target).
+- `address` is the 7-bit address, or the 10-bit address when `tenBit` is true; `read` is the R/W̄ bit (true: the controller reads from the target).
 - `ack` is true when SDA was low on the ninth clock. The receiver drives it: the target when the controller writes, the controller when it reads. For a 10-bit write address, both its bytes must have been acknowledged.
 - `byte` is the data byte, sent most significant bit first.
-- `dropped_bits` counts the bits of an unfinished byte that the repeated START, STOP, gap or end of the samples cut short; they make no byte.
+- `droppedBits` counts the bits of an unfinished byte that the repeated START, STOP, gap or end of the samples cut short; they make no byte.
 - `reason` is `stop` for a STOP condition (the transaction is whole); `restart` for a START condition that ended a partial transaction, the next transaction beginning at the same tick; `aborted` for a gap or the end of the samples while the transaction was under way.
 
 Within a transaction whose START was seen, the first event, and the first after every `restart`, is an `address`, and addresses come nowhere else. A partial transaction carries no `address`, `data` or `restart`.
@@ -47,9 +47,9 @@ As NDJSON lines (see `design.md` §8), a write of `0x12` to `0x50` sampled at ei
 
 ```json
 {"stream":"i2c","seq":0,"span":[10,11],"settled":10,"event":{"kind":"begin","tx":1,"partial":false}}
-{"stream":"i2c","seq":1,"span":[16,81],"settled":80,"event":{"kind":"address","tx":1,"address":80,"ten_bit":false,"read":false,"ack":true}}
+{"stream":"i2c","seq":1,"span":[16,81],"settled":80,"event":{"kind":"address","tx":1,"address":80,"tenBit":false,"read":false,"ack":true}}
 {"stream":"i2c","seq":2,"span":[88,153],"settled":152,"event":{"kind":"data","tx":1,"byte":18,"ack":true}}
-{"stream":"i2c","seq":3,"span":[162,163],"settled":162,"event":{"kind":"end","tx":1,"reason":"stop","dropped_bits":0}}
+{"stream":"i2c","seq":3,"span":[162,163],"settled":162,"event":{"kind":"end","tx":1,"reason":"stop","droppedBits":0}}
 ```
 
 ## Props
@@ -70,7 +70,7 @@ The input requires the source to have at least `max(scl, sda) + 1` channels.
 - A bit is SDA's level at SCL's rising edge. The rising edge on which a START or STOP then happens belongs to the condition, not to a byte: it is the clock a controller raises to make one.
 - A byte is eight bits, most significant first, then the acknowledge bit on the ninth rising edge: SDA low is ACK, high is NACK. The byte is reported at that edge, so a START or STOP during the acknowledge clock comes after it; eight bits followed directly by a STOP read as an acknowledged byte, as a STOP raises SCL with SDA low.
 - The first byte after a START or repeated START is the address. `1111 0xx` with R/W̄ = 0 begins a 10-bit address that the next byte completes (A9 and A8 from the first byte, A7–A0 from the second); one `address` covers both. `1111 0xx` with R/W̄ = 1 reads from the 10-bit address the transaction last addressed for writing, if its two high bits match and no other address came between.
-- A `1111 0xx` byte whose other part was not seen — the first byte of a write address followed by a STOP, a repeated START, a gap or the end of the samples; a read with no matching write address before it — is reported as the 7-bit address it is (`0x78`–`0x7b`, `ten_bit: false`).
+- A `1111 0xx` byte whose other part was not seen — the first byte of a write address followed by a STOP, a repeated START, a gap or the end of the samples; a read with no matching write address before it — is reported as the 7-bit address it is (`0x78`–`0x7b`, `tenBit: false`).
 - Reserved addresses — the general call (`0x00`, write), the START byte (`0x00`, read), CBUS, Hs-mode controller codes, device ID (`0x7c`–`0x7f`) — are reported as addresses like any other; what the bytes after them mean is for the decoders above.
 - A repeated START stays in the transaction: `restart`, then another `address`.
 - Bits clocked since the last whole byte when a START, STOP, gap or the end of the samples interrupts them make no byte; the `restart` or `end` counts them. At a gap or the end of the samples, a bit whose clock is still high is not counted: it could have turned into a condition.
