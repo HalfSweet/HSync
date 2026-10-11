@@ -31,7 +31,9 @@ use uiharu_core::{
     DynExposedRef, DynOutput, Graph, GraphConfig, Node, NodeId, Pipeline, SourceId, SourceSpec,
     TimeBase,
 };
+use uiharu_protocols::apa102::{Apa102, Apa102Event};
 use uiharu_protocols::can::{Can, CanEvent};
+use uiharu_protocols::dmx512::{Dmx512, Dmx512Event};
 use uiharu_protocols::ds18b20::{Ds18b20, Ds18b20Event};
 use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
 use uiharu_protocols::i2c::{I2c, I2cEvent};
@@ -50,6 +52,7 @@ use uiharu_protocols::swd::{Swd, SwdEvent};
 use uiharu_protocols::timing::{Timing, TimingEvent};
 use uiharu_protocols::uart::{Uart, UartEvent};
 use uiharu_protocols::usb::{TransactionEvent, UsbEvent, UsbPackets, UsbTransactions};
+use uiharu_protocols::ws281x::{Ws281x, Ws281xEvent};
 
 use crate::Failure;
 use crate::ndjson::{StreamWriter, Writer};
@@ -269,6 +272,20 @@ fn build_midi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     Ok(Box::new(Midi::new()))
 }
 
+fn build_ws281x(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Ws281x::new)
+}
+
+fn build_dmx512(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Dmx512::new()))
+}
+
+fn build_apa102(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Apa102::new()))
+}
+
 /// The node types a description may use, each with the configuration type it reads.
 pub const KINDS: &[Kind] = &[
     Kind {
@@ -375,6 +392,21 @@ pub const KINDS: &[Kind] = &[
         name: "midi",
         build: build_midi,
         writer: write_as::<MidiEvent>,
+    },
+    Kind {
+        name: "ws281x",
+        build: build_ws281x,
+        writer: write_as::<Ws281xEvent>,
+    },
+    Kind {
+        name: "dmx512",
+        build: build_dmx512,
+        writer: write_as::<Dmx512Event>,
+    },
+    Kind {
+        name: "apa102",
+        build: build_apa102,
+        writer: write_as::<Apa102Event>,
     },
 ];
 
