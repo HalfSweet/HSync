@@ -12,6 +12,8 @@ pub mod node;
 pub mod schema;
 pub mod signal;
 pub mod stream;
+#[cfg(feature = "testing")]
+pub mod testing;
 pub mod time;
 
 pub use exec::{Exposed, Pipeline, PushError, QueueStat, RunReport, Stats};

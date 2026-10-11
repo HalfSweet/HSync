@@ -12,6 +12,10 @@ publish = false
 serde.workspace = true
 thiserror.workspace = true
 
+[features]
+# Harnesses for testing decoders (`uiharu_core::testing`), for dev-dependencies.
+testing = []
+
 [dev-dependencies]
 proptest.workspace = true
 serde_json.workspace = true

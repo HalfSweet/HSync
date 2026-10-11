@@ -16,6 +16,7 @@ uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
 [dev-dependencies]
 proptest.workspace = true
 serde_json.workspace = true
+uiharu-core = { path = "../uiharu-core", version = "0.1.0", features = ["testing"] }
 
 [lints]
 workspace = true
