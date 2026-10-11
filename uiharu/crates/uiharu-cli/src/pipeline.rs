@@ -31,12 +31,14 @@ use uiharu_core::{
     DynExposedRef, DynOutput, Graph, GraphConfig, Node, NodeId, Pipeline, SourceId, SourceSpec,
     TimeBase,
 };
+use uiharu_protocols::am230x::{Am230x, Am230xEvent};
 use uiharu_protocols::apa102::{Apa102, Apa102Event};
 use uiharu_protocols::avr_isp::{AvrIsp, IspEvent};
 use uiharu_protocols::can::{Can, CanEvent};
 use uiharu_protocols::dmx512::{Dmx512, Dmx512Event};
 use uiharu_protocols::ds18b20::{Ds18b20, Ds18b20Event};
 use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
+use uiharu_protocols::eeprom93xx::{Eeprom93xx, Eeprom93xxEvent};
 use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
 use uiharu_protocols::ir_nec::{Nec, NecEvent};
@@ -46,11 +48,13 @@ use uiharu_protocols::ir_sirc::{Sirc, SircEvent};
 use uiharu_protocols::jtag::{Jtag, JtagEvent};
 use uiharu_protocols::lin::{Lin, LinEvent};
 use uiharu_protocols::mdio::{Mdio, MdioEvent};
+use uiharu_protocols::microwire::{Microwire, MicrowireEvent};
 use uiharu_protocols::midi::{Midi, MidiEvent};
 use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
 use uiharu_protocols::nrf24l01::{Nrf24Event, Nrf24l01};
 use uiharu_protocols::onewire::{LinkEvent, OneWireEvent, OneWireLink, OneWireNetwork};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
+use uiharu_protocols::ps2::{Ps2, Ps2Event};
 use uiharu_protocols::pwm::{Pwm, PwmEvent};
 use uiharu_protocols::sdcard_spi::{SdCardSpi, SdEvent};
 use uiharu_protocols::spi::{Spi, SpiEvent};
@@ -60,6 +64,7 @@ use uiharu_protocols::timing::{Timing, TimingEvent};
 use uiharu_protocols::uart::{Uart, UartEvent};
 use uiharu_protocols::usb::{TransactionEvent, UsbEvent, UsbPackets, UsbTransactions};
 use uiharu_protocols::usb_pd::{UsbPd, UsbPdEvent};
+use uiharu_protocols::wiegand::{Wiegand, WiegandEvent};
 use uiharu_protocols::ws281x::{Ws281x, Ws281xEvent};
 
 use crate::Failure;
@@ -328,6 +333,26 @@ fn build_ir_sirc(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Sirc::new)
 }
 
+fn build_wiegand(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Wiegand::new)
+}
+
+fn build_ps2(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Ps2::new)
+}
+
+fn build_am230x(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Am230x::new)
+}
+
+fn build_microwire(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Microwire::new)
+}
+
+fn build_eeprom93xx(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Eeprom93xx::new)
+}
+
 /// The node types a description may use, each with the configuration type it reads.
 pub const KINDS: &[Kind] = &[
     Kind {
@@ -489,6 +514,31 @@ pub const KINDS: &[Kind] = &[
         name: "ir-sirc",
         build: build_ir_sirc,
         writer: write_as::<SircEvent>,
+    },
+    Kind {
+        name: "wiegand",
+        build: build_wiegand,
+        writer: write_as::<WiegandEvent>,
+    },
+    Kind {
+        name: "ps2",
+        build: build_ps2,
+        writer: write_as::<Ps2Event>,
+    },
+    Kind {
+        name: "am230x",
+        build: build_am230x,
+        writer: write_as::<Am230xEvent>,
+    },
+    Kind {
+        name: "microwire",
+        build: build_microwire,
+        writer: write_as::<MicrowireEvent>,
+    },
+    Kind {
+        name: "eeprom93xx",
+        build: build_eeprom93xx,
+        writer: write_as::<Eeprom93xxEvent>,
     },
 ];
 
