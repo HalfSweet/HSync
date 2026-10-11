@@ -5,11 +5,14 @@
 use serde::Serialize;
 use uiharu_core::testing::{Harness, assert_block_invariant};
 use uiharu_core::{
-    GraphConfig, Item, Levels, LogicBlock, LogicBlockBuilder, Tick, TickRange, TimeBase,
+    EventSchema, GraphConfig, GraphError, InputRef, InputSpec, Io, Item, Levels, LogicBlock,
+    LogicBlockBuilder, Node, NodeFuture, NodeSpec, Outbox, OutputRef, OutputSpec, Props, Requires,
+    SchemaId, Tick, TickRange, TimeBase,
 };
 use uiharu_protocols::jtag::synth::JtagWaveform;
 use uiharu_protocols::jtag::{
-    InitialState, Jtag, JtagConfig, JtagEvent, Register, SHIFT_BATCH_BITS, TapState,
+    InitialState, Jtag, JtagBus, JtagConfig, JtagEvent, Next, Read, Register, ResetBy,
+    SHIFT_BATCH_BITS, TapState,
 };
 
 /// TCK, TMS, TDI, TDO and TRST on channels 0 to 4.
@@ -735,7 +738,7 @@ fn every_cut_and_pause_yields_the_same_events() {
         };
         let block = rich_waveform(&config);
         let len = block.len();
-        // One gap inside the long DR scan, one in idle time, one through a reset.
+        // Gaps inside two long DR scans, and one through the final reset.
         let gaps = [
             TickRange::new(Tick(len / 5), Tick(len / 5 + 37)),
             TickRange::new(Tick(len / 2), Tick(len / 2 + 3)),
@@ -760,5 +763,305 @@ fn every_cut_and_pause_yields_the_same_events() {
             );
         }
         assert_block_invariant(|graph| harness(config.clone(), graph), &block, &gaps);
+    }
+}
+
+/// What the test reader makes of a JTAG stream.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Seen {
+    State(TapState),
+    Reset(ResetBy),
+    /// A scan: its register, the bits read, the first 64 of them on each line, and how the
+    /// reading ended.
+    Scan {
+        register: Register,
+        bits: u32,
+        tdi: u64,
+        tdo: u64,
+        end: String,
+    },
+}
+
+impl EventSchema for Seen {
+    const SCHEMA: SchemaId = SchemaId::new("test.jtag-reader", 1);
+}
+
+/// A decoder built on JTAG: it reads each scan through the cursor, at most `limit` bits of it,
+/// and leaves the rest to [`JtagBus::finish`].
+struct Reader {
+    limit: Option<u32>,
+}
+
+impl Node for Reader {
+    fn spec(&self) -> NodeSpec {
+        NodeSpec {
+            name: "jtag-reader".into(),
+            inputs: vec![InputSpec::new::<JtagEvent>(
+                "bus",
+                Requires::new().equals("tdi", true).equals("tdo", true),
+            )],
+            outputs: vec![OutputSpec::new::<Seen>("seen", Props::new())],
+        }
+    }
+
+    fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
+        Box::pin(read(JtagBus::new(io.input(0)), io.output(0), self.limit))
+    }
+}
+
+async fn read(mut bus: JtagBus, mut out: Outbox<Seen>, limit: Option<u32>) {
+    loop {
+        let seen = match bus.next().await {
+            Next::Scan(mut scan) => {
+                let register = scan.register();
+                let (mut bits, mut tdi, mut tdo) = (0u32, 0u64, 0u64);
+                let end = loop {
+                    if limit.is_some_and(|limit| bits >= limit) {
+                        break "stopped".to_owned();
+                    }
+                    match scan.bit_or_end().await {
+                        Ok(Read::Bit(bit)) => {
+                            if bits < 64 {
+                                tdi |= u64::from(bit.tdi().expect("TDI is connected")) << bits;
+                                tdo |= u64::from(bit.tdo().expect("TDO is connected")) << bits;
+                            }
+                            bits += 1;
+                        }
+                        Ok(Read::End) => break "complete".to_owned(),
+                        Err(error) => break format!("{error:?}"),
+                    }
+                };
+                Seen::Scan {
+                    register,
+                    bits,
+                    tdi,
+                    tdo,
+                    end,
+                }
+            }
+            Next::State(state) => Seen::State(state),
+            Next::Reset(by) => Seen::Reset(by),
+            Next::Gap(range) => {
+                out.gap(range).await;
+                continue;
+            }
+            Next::Progress(tick) => {
+                out.progress(tick).await;
+                continue;
+            }
+            Next::End(tick) => {
+                out.end(tick).await;
+                return;
+            }
+        };
+        let seen = match (bus.finish().await, seen) {
+            (
+                Err(error),
+                Seen::Scan {
+                    register,
+                    bits,
+                    tdi,
+                    tdo,
+                    end,
+                },
+            ) => Seen::Scan {
+                register,
+                bits,
+                tdi,
+                tdo,
+                end: format!("{end}, then {error:?}"),
+            },
+            (_, seen) => seen,
+        };
+        out.emit(bus.consumed(), seen).await;
+    }
+}
+
+fn reader_harness(config: JtagConfig, limit: Option<u32>, graph: GraphConfig) -> Harness<Seen> {
+    Harness::build(
+        CHANNELS,
+        TimeBase::new(1_000_000),
+        graph,
+        |graph, source| {
+            let jtag = graph.add(Jtag::new(config).expect("a valid configuration"));
+            graph.connect(source.samples, Jtag::input(jtag))?;
+            let reader = graph.add(Reader { limit });
+            graph.connect(Jtag::events(jtag), InputRef::of_node(reader, 0))?;
+            Ok(OutputRef::of_node(reader, 0))
+        },
+    )
+    .expect("builds")
+}
+
+fn low_bits(bytes: &[u8], bits: u32) -> u64 {
+    (0..bits.min(64)).fold(0, |value, i| {
+        value | u64::from(bytes[i as usize / 8] >> (i % 8) & 1) << i
+    })
+}
+
+/// A reset, then scans of 35, 4 and 300 bits.
+fn scans_waveform(tdi: &[u8], tdo: &[u8]) -> LogicBlock {
+    let mut waveform = waveform(&config());
+    waveform.reset();
+    waveform.clock(false, true);
+    waveform.scan(Register::Dr, tdi, tdo, 35);
+    waveform.scan(Register::Ir, tdi, tdo, 4);
+    waveform.scan(Register::Dr, tdi, tdo, 300);
+    waveform.idle(4);
+    waveform.finish()
+}
+
+#[test]
+fn a_decoder_built_on_jtag_reads_scans_bit_by_bit() {
+    let tdi = pattern(38, 37, 11);
+    let tdo = pattern(38, 91, 5);
+    let block = scans_waveform(&tdi, &tdo);
+    let scan = |register, bits, end: &str| Seen::Scan {
+        register,
+        bits,
+        tdi: low_bits(&tdi, bits),
+        tdo: low_bits(&tdo, bits),
+        end: end.to_owned(),
+    };
+    let to_shift = |register| match register {
+        Register::Dr => vec![
+            Seen::State(TapState::SelectDrScan),
+            Seen::State(TapState::CaptureDr),
+            Seen::State(TapState::ShiftDr),
+        ],
+        Register::Ir => vec![
+            Seen::State(TapState::SelectDrScan),
+            Seen::State(TapState::SelectIrScan),
+            Seen::State(TapState::CaptureIr),
+            Seen::State(TapState::ShiftIr),
+        ],
+    };
+    let after = |update| vec![Seen::State(update), Seen::State(TapState::RunTestIdle)];
+    let mut expected = vec![
+        Seen::Reset(ResetBy::Tms),
+        Seen::State(TapState::TestLogicReset),
+        Seen::State(TapState::RunTestIdle),
+    ];
+    expected.extend(to_shift(Register::Dr));
+    expected.push(scan(Register::Dr, 35, "complete"));
+    expected.extend(after(TapState::UpdateDr));
+    expected.extend(to_shift(Register::Ir));
+    expected.push(scan(Register::Ir, 4, "complete"));
+    expected.extend(after(TapState::UpdateIr));
+    expected.extend(to_shift(Register::Dr));
+    expected.push(scan(Register::Dr, 300, "complete"));
+    expected.extend(after(TapState::UpdateDr));
+
+    let mut harness = reader_harness(config(), None, GraphConfig::default());
+    harness.run_all(&block);
+    let events = harness.events();
+    let seen: Vec<Seen> = events.iter().map(|event| event.payload.clone()).collect();
+    assert_eq!(seen, expected);
+    // The first scan covers its beginning through its end: clocks 8 to 44.
+    let first = events
+        .iter()
+        .find(|event| matches!(event.payload, Seen::Scan { .. }))
+        .expect("a scan");
+    assert_eq!(
+        (first.span, first.settled),
+        (
+            TickRange::new(Tick(rise(8)), Tick(rise(44) + 1)),
+            Tick(rise(44))
+        )
+    );
+
+    // A reader that stops after four bits leaves the rest of each scan to `finish`.
+    let mut harness = reader_harness(config(), Some(4), GraphConfig::default());
+    harness.run_all(&block);
+    let seen: Vec<Seen> = harness
+        .events()
+        .into_iter()
+        .map(|event| event.payload)
+        .collect();
+    let stopped: Vec<Seen> = expected
+        .iter()
+        .map(|seen| match seen {
+            Seen::Scan { register, .. } => scan(*register, 4, "stopped"),
+            other => other.clone(),
+        })
+        .collect();
+    assert_eq!(seen, stopped);
+}
+
+#[test]
+fn a_reader_learns_how_a_scan_was_cut_off() {
+    let tdi = pattern(38, 37, 11);
+    let tdo = pattern(38, 91, 5);
+    let block = scans_waveform(&tdi, &tdo);
+    // The 300-bit scan begins on clock 58 and shifts from clock 59; lose clocks 101 to 109.
+    // The JTAG decoder aborts the scan before it passes the gap on.
+    let gap = TickRange::new(Tick(rise(100) + 1), Tick(rise(110)));
+    for limit in [None, Some(200)] {
+        let mut harness = reader_harness(config(), limit, GraphConfig::default());
+        harness.feed_with_gaps(&block, &[gap], &[53]);
+        harness.end();
+        let items = harness.without_progress();
+        let cut = items
+            .iter()
+            .filter_map(Item::event)
+            .filter_map(|event| match &event.payload {
+                Seen::Scan { bits: 42, end, .. } => Some(end.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(cut, vec!["Aborted".to_owned()], "limit {limit:?}");
+        assert!(
+            items.contains(&Item::Gap(gap)),
+            "the gap is passed on: {items:?}"
+        );
+    }
+}
+
+#[test]
+fn a_reader_requires_the_lines_it_reads() {
+    let error = Harness::build(
+        CHANNELS,
+        TimeBase::new(1_000_000),
+        GraphConfig::default(),
+        |graph, source| {
+            let config = JtagConfig {
+                tdo: None,
+                ..config()
+            };
+            let jtag = graph.add(Jtag::new(config).expect("a valid configuration"));
+            graph.connect(source.samples, Jtag::input(jtag))?;
+            let reader = graph.add(Reader { limit: None });
+            graph.connect(Jtag::events(jtag), InputRef::of_node(reader, 0))?;
+            Ok(OutputRef::<Seen>::of_node(reader, 0))
+        },
+    )
+    .expect_err("rejected");
+    assert_eq!(
+        error,
+        GraphError::Requirement {
+            from: "jtag#0.events".into(),
+            to: "jtag-reader#1.bus".into(),
+            key: "tdo",
+            requirement: "= true".into(),
+            found: "false".into(),
+        }
+    );
+}
+
+#[test]
+fn the_reader_sees_the_same_whatever_the_blocks() {
+    let config = config();
+    let block = rich_waveform(&config);
+    let len = block.len();
+    let gaps = [
+        TickRange::new(Tick(len / 5), Tick(len / 5 + 37)),
+        TickRange::new(Tick(len * 2 / 3), Tick(len * 2 / 3 + 5)),
+    ];
+    for limit in [None, Some(3)] {
+        assert_block_invariant(
+            |graph| reader_harness(config.clone(), limit, graph),
+            &block,
+            &gaps,
+        );
     }
 }
