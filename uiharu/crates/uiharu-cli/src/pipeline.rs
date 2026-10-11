@@ -32,6 +32,7 @@ use uiharu_core::{
     TimeBase,
 };
 use uiharu_protocols::apa102::{Apa102, Apa102Event};
+use uiharu_protocols::avr_isp::{AvrIsp, IspEvent};
 use uiharu_protocols::can::{Can, CanEvent};
 use uiharu_protocols::dmx512::{Dmx512, Dmx512Event};
 use uiharu_protocols::ds18b20::{Ds18b20, Ds18b20Event};
@@ -40,8 +41,10 @@ use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
 use uiharu_protocols::jtag::{Jtag, JtagEvent};
 use uiharu_protocols::lin::{Lin, LinEvent};
+use uiharu_protocols::mdio::{Mdio, MdioEvent};
 use uiharu_protocols::midi::{Midi, MidiEvent};
 use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
+use uiharu_protocols::nrf24l01::{Nrf24Event, Nrf24l01};
 use uiharu_protocols::onewire::{LinkEvent, OneWireEvent, OneWireLink, OneWireNetwork};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
 use uiharu_protocols::pwm::{Pwm, PwmEvent};
@@ -286,6 +289,20 @@ fn build_apa102(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     Ok(Box::new(Apa102::new()))
 }
 
+fn build_mdio(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Mdio::new)
+}
+
+fn build_avr_isp(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(AvrIsp::new()))
+}
+
+fn build_nrf24l01(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Nrf24l01::new()))
+}
+
 /// The node types a description may use, each with the configuration type it reads.
 pub const KINDS: &[Kind] = &[
     Kind {
@@ -407,6 +424,21 @@ pub const KINDS: &[Kind] = &[
         name: "apa102",
         build: build_apa102,
         writer: write_as::<Apa102Event>,
+    },
+    Kind {
+        name: "mdio",
+        build: build_mdio,
+        writer: write_as::<MdioEvent>,
+    },
+    Kind {
+        name: "avr-isp",
+        build: build_avr_isp,
+        writer: write_as::<IspEvent>,
+    },
+    Kind {
+        name: "nrf24l01",
+        build: build_nrf24l01,
+        writer: write_as::<Nrf24Event>,
     },
 ];
 
