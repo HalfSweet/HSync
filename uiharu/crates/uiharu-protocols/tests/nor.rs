@@ -53,11 +53,21 @@ fn decodes_a_read_in_batches() {
         lines[2],
         format!("data op1 +0 {} {}", hex(&bytes[..32]), word_span(4, 36))
     );
+    // The last batch is decided by the end of the command, where it settles.
+    let release = 10 + HALF + 44 * word_len + HALF;
+    let last_start = first_bit + 36 * word_len;
+    let last_end = first_bit + 43 * word_len + 7 * 2 * HALF + 1;
     assert_eq!(
         lines[3],
-        format!("data op1 +32 {} {}", hex(&bytes[32..]), word_span(36, 44))
+        format!(
+            "data op1 +32 {} [{last_start},{last_end})@{release}",
+            hex(&bytes[32..])
+        )
     );
-    assert!(lines[4].starts_with("end op1 Complete "), "{lines:?}");
+    assert_eq!(
+        lines[4],
+        format!("end op1 Complete [{release},{})@{release}", release + 1)
+    );
     assert!(lines[5].starts_with("eof "), "{lines:?}");
     assert_eq!(lines.len(), 6);
 }
@@ -131,13 +141,13 @@ fn a_read_cut_off_by_the_end_of_the_samples_is_aborted() {
     harness.run_all(&block);
     let lines = harness.nor_lines();
     assert!(lines[2].starts_with("data op1 +0 "), "{lines:?}");
-    assert_eq!(
-        lines[3],
-        format!(
-            "data op1 +32 {} {}",
-            hex(&bytes[32..]),
-            lines[3].rsplit(' ').next().expect("ticks")
-        )
+    assert!(
+        lines[3].starts_with(&format!("data op1 +32 {} [", hex(&bytes[32..]))),
+        "{lines:?}"
+    );
+    assert!(
+        lines[3].ends_with(&format!(")@{}", block.end())),
+        "{lines:?}"
     );
     assert_eq!(lines[4], format!("end op1 Aborted @{}", block.end()));
     assert_eq!(lines[5], format!("eof {}", block.end()));
@@ -166,6 +176,7 @@ fn a_gap_aborts_the_read_and_skips_the_rest_of_the_transaction() {
         lines[2].starts_with(&format!("data op1 +0 {} ", hex(&bytes[..5]))),
         "{lines:?}"
     );
+    assert!(lines[2].ends_with(&format!(")@{}", gap.start)), "{lines:?}");
     assert_eq!(lines[3], format!("end op1 Aborted @{}", gap.start));
     assert_eq!(lines[4], format!("gap {gap}"));
     // The transaction found under way after the gap is skipped; the next read is whole.

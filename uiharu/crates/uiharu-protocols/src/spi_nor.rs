@@ -201,16 +201,20 @@ impl NorOut {
         self.batch.push(byte);
         self.read_count += 1;
         if self.batch.len() >= DATA_BATCH {
-            self.flush(op).await;
+            self.flush(op, at.settled).await;
         }
     }
 
-    async fn flush(&mut self, op: OpId) {
+    /// Sends the batch, if any. A batch is settled when it is decided: by its last byte when
+    /// it is full, by the operation's end otherwise, so that a stream's events settle in
+    /// order.
+    async fn flush(&mut self, op: OpId, decided: Tick) {
         if self.batch.is_empty() {
             return;
         }
         let bytes = std::mem::replace(&mut self.batch, Vec::with_capacity(DATA_BATCH));
-        let at = self.batch_at.take().unwrap_or(Provenance::at(Tick::ZERO));
+        let mut at = self.batch_at.take().unwrap_or(Provenance::at(decided));
+        at.settled = at.settled.max(decided);
         self.out
             .emit(
                 at,
@@ -224,7 +228,7 @@ impl NorOut {
     }
 
     async fn end(&mut self, op: OpId, reason: NorEnd, at: Provenance) {
-        self.flush(op).await;
+        self.flush(op, at.settled).await;
         self.open = None;
         self.out.emit(at, NorEvent::End { op, reason }).await;
     }
