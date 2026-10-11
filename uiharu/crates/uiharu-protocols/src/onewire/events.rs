@@ -27,9 +27,9 @@ pub enum LinkEvent {
         /// The bit: `true` for a 1.
         value: bool,
     },
-    /// A low pulse that fits no window: longer than a slot and shorter than a reset, a pulse
-    /// in a presence window that is no presence pulse, or a slot whose sampling point fell
-    /// into the next pulse.
+    /// A low pulse that fits no window: longer than a slot without being a reset, a pulse in
+    /// a presence window that is no presence pulse, or a slot whose sampling point fell into
+    /// the next pulse.
     BadSlot {
         /// How long the line was low, in ticks.
         low_ticks: u64,

@@ -25,9 +25,9 @@
 //!   merge. The first fall in the presence window decides: when it is no presence pulse, the
 //!   reset is reported without presence and that pulse as a bad slot (or as a reset, if it is
 //!   one), never as a bit;
-//! - any other low is a bad slot: longer than a slot and shorter than a reset, or in a
-//!   presence window without being a presence pulse; so is a 1 whose sampling point falls into
-//!   the next pulse;
+//! - any other low is a bad slot: longer than a slot without being a reset (at overdrive, 16 to
+//!   48 µs or 80 to 480 µs), or in a presence window without being a presence pulse; so is a 1
+//!   whose sampling point falls into the next pulse;
 //! - a low found at the first sample or after a gap began unseen and is dropped, unless what
 //!   was seen of it is already a standard-speed reset, which is then reported from the first
 //!   sample seen;
