@@ -107,6 +107,7 @@ pub const MIN_TICKS_PER_BIT: u64 = 4;
 
 /// How the bus is wired and timed.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct CanConfig {
     /// The channel carrying the receive line, as the transceiver puts it out.
     pub rx: u8,

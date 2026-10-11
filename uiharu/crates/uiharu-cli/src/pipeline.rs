@@ -31,6 +31,7 @@ use uiharu_core::{
     DynExposedRef, DynOutput, Graph, GraphConfig, Node, NodeId, Pipeline, SourceId, SourceSpec,
     TimeBase,
 };
+use uiharu_protocols::can::{Can, CanEvent};
 use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
 use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
@@ -202,6 +203,10 @@ fn build_parallel(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Parallel::new)
 }
 
+fn build_can(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Can::new)
+}
+
 fn build_i2c(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, I2c::new)
 }
@@ -293,6 +298,11 @@ pub const KINDS: &[Kind] = &[
         name: "sdcard-spi",
         build: build_sdcard_spi,
         writer: write_as::<SdEvent>,
+    },
+    Kind {
+        name: "can",
+        build: build_can,
+        writer: write_as::<CanEvent>,
     },
 ];
 
