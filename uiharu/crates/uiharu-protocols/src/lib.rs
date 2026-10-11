@@ -7,3 +7,4 @@
 
 pub mod spi;
 pub mod spi_nor;
+pub mod timing;
