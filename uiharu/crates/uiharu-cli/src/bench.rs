@@ -56,7 +56,8 @@ pub struct Report {
     pub peak_rss_bytes: Option<u64>,
 }
 
-/// The peak resident set size of this process, where the platform tells.
+/// The resident set size of this process: its peak on Linux (`VmHWM`), the size at the end of
+/// the run on macOS, where reading the peak needs `getrusage`.
 pub fn peak_rss() -> Option<u64> {
     #[cfg(target_os = "linux")]
     {
@@ -209,10 +210,15 @@ pub fn run(args: &Args) -> Result<(), Failure> {
         match report.peak_rss_bytes {
             Some(bytes) => writeln!(
                 out,
-                "peak memory: {:.1} MiB",
+                "{}: {:.1} MiB",
+                if cfg!(target_os = "linux") {
+                    "peak memory"
+                } else {
+                    "memory at the end"
+                },
                 bytes as f64 / (1024.0 * 1024.0)
             )?,
-            None => writeln!(out, "peak memory: not available on this platform")?,
+            None => writeln!(out, "memory: not available on this platform")?,
         }
     }
     Ok(())
