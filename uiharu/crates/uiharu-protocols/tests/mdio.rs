@@ -2,6 +2,7 @@
 
 //! The MDIO decoder on synthesized waveforms.
 
+use proptest::prelude::*;
 use serde::Serialize;
 use uiharu_core::testing::{Harness, assert_block_invariant};
 use uiharu_core::{GraphConfig, Item, LogicBlock, Tick, TickRange, TimeBase};
@@ -523,5 +524,178 @@ fn progress_never_passes_a_frame_under_way() {
             }
         }
         assert!(progress > 10, "blocks of {sizes:?}");
+    }
+}
+
+/// One frame of a random scenario and the time after it.
+#[derive(Clone, Debug)]
+struct Sent {
+    preamble: u32,
+    frame: Frame,
+    /// Samples with MDC stopped after the frame.
+    idle: u64,
+}
+
+/// The six starts that make a frame, as ST and OP codes, with the line the decoder writes for
+/// them and whether the device drives the data.
+const STARTS: [(u8, u8, &str, bool); 6] = [
+    (0b01, 0b10, "c22 read", true),
+    (0b01, 0b01, "c22 write", false),
+    (0b00, 0b00, "c45 address", false),
+    (0b00, 0b01, "c45 write", false),
+    (0b00, 0b11, "c45 read", true),
+    (0b00, 0b10, "c45 post-read-increment", true),
+];
+
+/// A frame of any codes, the starts of no frame among them, after any preamble.
+fn any_sent() -> impl Strategy<Value = Sent> {
+    (
+        prop_oneof![3 => Just(32u32), 3 => 0u32..4, 1 => 0u32..80],
+        0u8..4,
+        0u8..4,
+        any::<u8>(),
+        any::<u8>(),
+        prop_oneof![3 => Just(0b10u8), 1 => 0u8..4],
+        any::<u16>(),
+        0u64..20,
+    )
+        .prop_map(
+            |(preamble, st, op, phy, reg, turnaround, data, idle)| Sent {
+                preamble,
+                frame: Frame {
+                    st,
+                    op,
+                    phy,
+                    reg,
+                    turnaround,
+                    data,
+                },
+                idle,
+            },
+        )
+}
+
+/// A well-formed frame after a preamble of up to 40 ones.
+fn good_sent() -> impl Strategy<Value = (usize, Sent)> {
+    (
+        0usize..STARTS.len(),
+        0u32..41,
+        0u8..32,
+        0u8..32,
+        prop_oneof![3 => Just(0b10u8), 1 => 0u8..4],
+        any::<u16>(),
+        0u64..20,
+    )
+        .prop_map(|(start, preamble, phy, reg, turnaround, data, idle)| {
+            let (st, op, _, _) = STARTS[start];
+            let frame = Frame {
+                st,
+                op,
+                phy,
+                reg,
+                turnaround,
+                data,
+            };
+            (
+                start,
+                Sent {
+                    preamble,
+                    frame,
+                    idle,
+                },
+            )
+        })
+}
+
+fn scenario_waveform(sent: &[Sent]) -> LogicBlock {
+    let mut waveform = waveform();
+    for sent in sent {
+        waveform.frame(sent.preamble, &sent.frame);
+        waveform.idle(sent.idle);
+    }
+    waveform.ones(3);
+    waveform.idle(5);
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        // The default is enough for every run; PROPTEST_CASES raises it for a stress run.
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(64),
+        ..ProptestConfig::default()
+    })]
+
+    /// Random traffic cut into blocks of any size, read with random pauses through tiny
+    /// queues and budgets, with or without a gap, yields the events of one uninterrupted run.
+    #[test]
+    fn blocks_pauses_queues_and_budgets_do_not_change_the_events(
+        sent in prop::collection::vec(any_sent(), 1..8),
+        sizes in prop::collection::vec(1u64..300, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        gap in prop::option::of((0.05f64..0.95, 1u64..200)),
+    ) {
+        let block = scenario_waveform(&sent);
+        let gaps: Vec<TickRange> = gap
+            .map(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                TickRange::new(Tick(start), Tick((start + len).min(block.len())))
+            })
+            .into_iter()
+            .filter(|gap| !gap.is_empty())
+            .collect();
+        let reference = {
+            let mut harness = harness(GraphConfig::default());
+            harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+            harness.end();
+            harness.without_progress()
+        };
+        let mut harness = harness(GraphConfig { queue_capacity, budget });
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference);
+    }
+
+    /// Well-formed frames after a first full preamble are decoded as they were sent, whatever
+    /// preamble each of the others has, with an error for every turnaround that breaks its
+    /// rule.
+    #[test]
+    fn frames_in_sync_are_decoded_as_sent(sent in prop::collection::vec(good_sent(), 1..10)) {
+        let mut frames: Vec<Sent> = sent.iter().map(|(_, sent)| sent.clone()).collect();
+        frames[0].preamble = frames[0].preamble.max(32);
+        let block = scenario_waveform(&frames);
+        let mut expected = Vec::new();
+        for ((start, _), sent) in sent.iter().zip(&frames) {
+            let (_, _, name, device_drives) = STARTS[*start];
+            let frame = sent.frame;
+            let turnaround_ok = if device_drives {
+                frame.turnaround & 1 == 0
+            } else {
+                frame.turnaround == 0b10
+            };
+            if !turnaround_ok {
+                expected.push("error turnaround".to_owned());
+            }
+            expected.push(format!(
+                "frame {name} phy{} reg{} ta{:02b} data{:04x} pre{}",
+                frame.phy,
+                frame.reg,
+                frame.turnaround,
+                frame.data,
+                sent.preamble.min(32)
+            ));
+        }
+        let lines: Vec<String> = decode(&block)
+            .into_iter()
+            .filter(|line| !line.starts_with("eof "))
+            .map(|line| {
+                line.rsplit_once(' ')
+                    .map_or(line.as_str(), |(what, _)| what)
+                    .to_owned()
+            })
+            .collect();
+        prop_assert_eq!(lines, expected);
     }
 }
