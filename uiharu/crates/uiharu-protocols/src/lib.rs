@@ -6,6 +6,7 @@
 #![forbid(unsafe_code)]
 
 pub mod can;
+pub mod ds18b20;
 pub mod eeprom24xx;
 pub mod i2c;
 pub mod i2s;
