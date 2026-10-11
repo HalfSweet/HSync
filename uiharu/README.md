@@ -40,6 +40,8 @@ Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/proto
 | PWM                | `pwm`                  | logic samples    | [pwm.md](docs/protocols/pwm.md)               |
 | Edge timing        | `timing`               | logic samples    | [timing.md](docs/protocols/timing.md)         |
 | Parallel bus       | `parallel`             | logic samples    | [parallel.md](docs/protocols/parallel.md)     |
+| USB low/full speed | `usb`                  | logic samples    | [usb.md](docs/protocols/usb.md)               |
+| USB transactions   | `usb-transactions`     | `usb.packets`    | [usb.md](docs/protocols/usb.md)               |
 | JTAG               | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
 | SWD                | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
 
