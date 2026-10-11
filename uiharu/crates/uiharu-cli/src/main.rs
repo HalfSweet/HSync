@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! `uiharu`: replays captures through a decode pipeline and exports the events as NDJSON, and
-//! generates captures to try it on.
+//! `uiharu`: replays captures through a decode pipeline and exports the events as NDJSON,
+//! generates captures to try it on and benchmarks it.
 
 #![forbid(unsafe_code)]
 
 mod args;
+mod bench;
 mod decode;
 mod generate;
 mod ndjson;
@@ -23,6 +24,7 @@ uiharu — the uiharu decode engine on the command line
 
   uiharu decode [options] <capture>   decode a raw binary capture to NDJSON
   uiharu gen [options] <output>       write a synthetic SPI NOR capture
+  uiharu bench [options]              measure throughput, latency and memory
   uiharu <command> --help             the command's options
 
   Options shared by every command:
@@ -83,6 +85,7 @@ fn usage(command: Option<&str>) -> String {
     let command_usage = match command {
         Some("decode") => decode::USAGE,
         Some("gen") => generate::USAGE,
+        Some("bench") => bench::USAGE,
         _ => USAGE,
     };
     format!("{command_usage}\n{}\n", setup::USAGE)
@@ -101,10 +104,12 @@ fn run() -> Result<(), Failure> {
     }
     let mut flags: Vec<&str> = setup::FLAGS.to_vec();
     flags.extend(decode::FLAGS);
+    flags.extend(bench::FLAGS);
     let args = Args::parse(raw.iter().cloned(), &flags)?;
     match command {
         Some("decode") => decode::run(&args),
         Some("gen") => generate::run(&args),
+        Some("bench") => bench::run(&args),
         Some(other) => Err(Failure::Usage(format!("unknown command {other}"))),
         None => Ok(()),
     }
