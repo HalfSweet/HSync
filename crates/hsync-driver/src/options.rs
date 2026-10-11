@@ -31,6 +31,8 @@ pub enum OptionKey {
     ExternalClock,
     /// Sample on the falling edge of the external clock.
     ClockFallingEdge,
+    /// What on the external trigger input fires the trigger.
+    ExternalTrigger,
     /// What a stop in buffer mode does with the samples already captured.
     BufferOption,
     /// Signal pattern of the demo device.

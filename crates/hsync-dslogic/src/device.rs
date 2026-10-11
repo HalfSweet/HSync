@@ -534,10 +534,10 @@ impl Device for DslogicDevice {
                     }
                 };
             }
-            OptionKey::Pattern => {
-                return Err(DriverError::InvalidRequest(
-                    "DSLogic devices have no pattern option".into(),
-                ));
+            OptionKey::Pattern | OptionKey::ExternalTrigger => {
+                return Err(DriverError::InvalidRequest(format!(
+                    "DSLogic devices have no {key:?} option"
+                )));
             }
         }
         Ok(())
