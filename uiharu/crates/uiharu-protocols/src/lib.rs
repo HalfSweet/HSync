@@ -11,6 +11,7 @@ pub mod i2c;
 pub mod i2s;
 pub mod jtag;
 pub mod modbus_rtu;
+pub mod onewire;
 pub mod parallel;
 pub mod pwm;
 pub mod sdcard_spi;
