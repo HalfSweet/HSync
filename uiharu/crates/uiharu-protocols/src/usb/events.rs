@@ -150,7 +150,11 @@ pub enum EndReason {
 
 /// What travels on a USB packet stream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum UsbEvent {
     /// A SYNC pattern: a packet begins.
     Begin {

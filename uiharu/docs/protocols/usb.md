@@ -83,13 +83,13 @@ Each packet is framed by `begin` and `end` and numbered (`pkt`) from 1; the bus'
 
 ## `usb.transactions`
 
-| Kind        | Fields                                                                   | On the bus                                                                    |
-| ----------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
-| `begin`     | `xact`, `token`, `address`, `endpoint`, `frame`                          | a token: `setup`, `in`, `out`, `ping` or `sof`; ADDR and ENDP, or SOF's frame |
-| `setup`     | `xact`, `bm_request_type`, `b_request`, `w_value`, `w_index`, `w_length` | a SETUP transaction's 8 data bytes, the 16-bit fields little-endian           |
-| `data`      | `xact`, `pid`, `offset`, `bytes`                                         | the data packet's payload in batches of at most 32, with its data PID         |
-| `handshake` | `xact`, `pid`                                                            | ACK, NAK, STALL or NYET within the transaction                                |
-| `end`       | `xact`, `reason`                                                         | `complete`, `nak`, `stall`, `no-response`, `error` or `aborted`               |
+| Kind        | Fields                                                             | On the bus                                                                    |
+| ----------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `begin`     | `xact`, `token`, `address`, `endpoint`, `frame`                    | a token: `setup`, `in`, `out`, `ping` or `sof`; ADDR and ENDP, or SOF's frame |
+| `setup`     | `xact`, `bmRequestType`, `bRequest`, `wValue`, `wIndex`, `wLength` | a SETUP transaction's 8 data bytes, the 16-bit fields little-endian           |
+| `data`      | `xact`, `pid`, `offset`, `bytes`                                   | the data packet's payload in batches of at most 32, with its data PID         |
+| `handshake` | `xact`, `pid`                                                      | ACK, NAK, STALL or NYET within the transaction                                |
+| `end`       | `xact`, `reason`                                                   | `complete`, `nak`, `stall`, `no-response`, `error` or `aborted`               |
 
 Transactions are numbered (`xact`) from 1. `address` and `endpoint` are `null` for SOF, `frame` for the other tokens. The field holding the token is named `token` because `kind` is the event's tag.
 
@@ -114,7 +114,7 @@ Transactions are numbered (`xact`) from 1. `address` and `endpoint` are `null` f
 - Packets no transaction expects — data or handshakes with none open, ERR, the reserved PID — start none; nor do PRE and SPLIT, which announce traffic this decoder cannot follow.
 - A gap or the end of the stream ends the open transaction `aborted`.
 
-The setup packet's numbers are reported as they are. For reading them, USB 2.0 §9.3 and §9.4: `bm_request_type` holds the direction in bit 7 (1: device to host), the type in bits 6–5 (0 standard, 1 class, 2 vendor) and the recipient in bits 4–0 (0 device, 1 interface, 2 endpoint, 3 other); the standard requests (`b_request`) are GET_STATUS (0), CLEAR_FEATURE (1), SET_FEATURE (3), SET_ADDRESS (5), GET_DESCRIPTOR (6), SET_DESCRIPTOR (7), GET_CONFIGURATION (8), SET_CONFIGURATION (9), GET_INTERFACE (10), SET_INTERFACE (11) and SYNCH_FRAME (12).
+The setup packet's numbers are reported as they are. For reading them, USB 2.0 §9.3 and §9.4: `bmRequestType` holds the direction in bit 7 (1: device to host), the type in bits 6–5 (0 standard, 1 class, 2 vendor) and the recipient in bits 4–0 (0 device, 1 interface, 2 endpoint, 3 other); the standard requests (`bRequest`) are GET_STATUS (0), CLEAR_FEATURE (1), SET_FEATURE (3), SET_ADDRESS (5), GET_DESCRIPTOR (6), SET_DESCRIPTOR (7), GET_CONFIGURATION (8), SET_CONFIGURATION (9), GET_INTERFACE (10), SET_INTERFACE (11) and SYNCH_FRAME (12).
 
 ## Reading packets from another decoder
 

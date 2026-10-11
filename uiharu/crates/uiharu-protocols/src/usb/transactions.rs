@@ -90,7 +90,11 @@ pub enum XactEnd {
 
 /// What travels on a USB transaction stream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum TransactionEvent {
     /// A token began a transaction.
     Begin {
@@ -578,7 +582,7 @@ mod tests {
                 w_index: 0,
                 w_length: 64,
             }),
-            r#"{"kind":"setup","xact":1,"bm_request_type":128,"b_request":6,"w_value":256,"w_index":0,"w_length":64}"#
+            r#"{"kind":"setup","xact":1,"bmRequestType":128,"bRequest":6,"wValue":256,"wIndex":0,"wLength":64}"#
         );
         assert_eq!(
             json(&TransactionEvent::Data {
