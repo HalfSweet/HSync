@@ -2,10 +2,13 @@
 
 //! The nRF24L01+ decoder on synthesized SPI waveforms.
 
+use std::collections::BTreeMap;
+
+use proptest::prelude::*;
 use serde::Serialize;
 use uiharu_core::testing::{self, Harness, assert_block_invariant};
 use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
-use uiharu_protocols::nrf24l01::{Direction, Nrf24Event, Nrf24l01, synth};
+use uiharu_protocols::nrf24l01::{DATA_BATCH, Direction, EndReason, Nrf24Event, Nrf24l01, synth};
 use uiharu_protocols::spi::synth::SpiWaveform;
 use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig};
 
@@ -726,4 +729,139 @@ fn every_cut_and_pause_yields_the_same_events() {
         &block,
         &gaps,
     );
+}
+
+/// One transaction of a random scenario: any command byte, the bytes after it, and whether
+/// they are written (on MOSI) or read (on MISO).
+fn any_transaction() -> impl Strategy<Value = Vec<(u8, u8)>> {
+    let command = prop_oneof![
+        4 => 0u8..0x40,
+        3 => prop::sample::select(vec![0x60u8, 0x61, 0xa0, 0xa8, 0xab, 0xad, 0xb0]),
+        2 => prop::sample::select(vec![0xe1u8, 0xe2, 0xe3, 0xff]),
+        2 => prop::sample::select(vec![0x50u8, 0x40, 0x62, 0xae, 0xaf, 0xe0, 0xfe]),
+        1 => any::<u8>(),
+    ];
+    let data = prop_oneof![3 => 0usize..7, 1 => 0usize..36]
+        .prop_flat_map(|len| prop::collection::vec(any::<u8>(), len));
+    prop_oneof![
+        8 => (command, any::<u8>(), data, any::<bool>())
+            .prop_map(|(command, status, data, write)| {
+                if write {
+                    synth::write(command, status, &data)
+                } else {
+                    synth::read(command, status, &data)
+                }
+            }),
+        1 => any::<u8>().prop_map(synth::activate),
+        1 => Just(Vec::new()),
+    ]
+}
+
+fn scenario_waveform(transactions: &[Vec<(u8, u8)>]) -> LogicBlock {
+    let mut waveform = waveform();
+    for (n, words) in transactions.iter().enumerate() {
+        waveform.transaction(words.iter().copied());
+        waveform.idle(3 + n as u64 % 4 * 5);
+    }
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        // The default is enough for every run; PROPTEST_CASES raises it for a stress run.
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(64),
+        ..ProptestConfig::default()
+    })]
+
+    /// Random traffic cut into blocks of any size, read with random pauses through tiny
+    /// queues and budgets, with or without a gap, yields the events of one uninterrupted run.
+    #[test]
+    fn blocks_pauses_queues_and_budgets_do_not_change_the_events(
+        transactions in prop::collection::vec(any_transaction(), 1..10),
+        sizes in prop::collection::vec(1u64..400, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        gap in prop::option::of((0.05f64..0.95, 1u64..300)),
+    ) {
+        let block = scenario_waveform(&transactions);
+        let gaps: Vec<TickRange> = gap
+            .map(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                TickRange::new(Tick(start), Tick((start + len).min(block.len())))
+            })
+            .into_iter()
+            .filter(|gap| !gap.is_empty())
+            .collect();
+        let reference = {
+            let mut harness = harness();
+            harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+            harness.end();
+            harness.without_progress()
+        };
+        let config = GraphConfig { queue_capacity, budget };
+        let mut harness = build(SpiConfig::default(), config).expect("builds");
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference);
+    }
+
+    /// However the traffic is cut off or broken by a gap, every operation that begins ends
+    /// once; its data comes in order, in batches of at most 32 bytes, and never more than 32
+    /// bytes in all; the events settle in order; and an end that is complete or incomplete
+    /// lies on chip select's release, the one sample a cut or a gap never gives it.
+    #[test]
+    fn every_operation_ends_once_and_its_data_comes_in_order(
+        transactions in prop::collection::vec(any_transaction(), 1..10),
+        cut in prop::option::of(0.05f64..1.0),
+        gap in prop::option::of((0.05f64..0.95, 1u64..300)),
+    ) {
+        let whole = scenario_waveform(&transactions);
+        let block = match cut {
+            Some(cut) => {
+                let end = Tick(((whole.len() as f64) * cut) as u64).max(Tick(1));
+                whole.slice(TickRange::new(Tick::ZERO, end)).expect("a slice")
+            }
+            None => whole,
+        };
+        let gaps: Vec<TickRange> = gap
+            .map(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                TickRange::new(Tick(start), Tick((start + len).min(block.len())))
+            })
+            .into_iter()
+            .filter(|gap| !gap.is_empty())
+            .collect();
+        let mut harness = harness();
+        harness.feed_with_gaps(&block, &gaps, &[97]);
+        harness.end();
+        // For every open operation, the data bytes it carried so far.
+        let mut open: BTreeMap<u64, u32> = BTreeMap::new();
+        let mut settled = Tick::ZERO;
+        for event in harness.events() {
+            prop_assert!(event.settled >= settled, "{event:?} settles before {settled}");
+            settled = event.settled;
+            match event.payload {
+                Nrf24Event::Command { op, .. } => {
+                    prop_assert!(open.insert(op.0, 0).is_none(), "op {op:?} began twice");
+                }
+                Nrf24Event::Data { op, offset, bytes, .. } => {
+                    let count = open.get_mut(&op.0).expect("data of an open operation");
+                    prop_assert_eq!(offset, *count);
+                    prop_assert!(!bytes.is_empty() && bytes.len() <= DATA_BATCH);
+                    *count += bytes.len() as u32;
+                    prop_assert!(*count <= 32);
+                }
+                Nrf24Event::End { op, reason } => {
+                    prop_assert!(open.remove(&op.0).is_some(), "op {op:?} ended unopened");
+                    if reason == EndReason::Complete || reason == EndReason::Incomplete {
+                        prop_assert_eq!(event.span.len(), 1, "{:?}", event);
+                    }
+                }
+                Nrf24Event::Unknown { .. } => {}
+            }
+        }
+        prop_assert!(open.is_empty(), "operations left open: {open:?}");
+    }
 }
