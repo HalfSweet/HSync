@@ -252,19 +252,17 @@ fn every_instruction_is_decoded_with_its_fields() {
 #[test]
 fn an_instruction_spans_its_four_words_and_not_the_reset() {
     let lines = decode_with_ticks(&[programming_session()]);
-    assert!(
-        lines[0].ends_with(&format!(" {}", words(0, 4))),
-        "{lines:?}"
-    );
-    assert!(
-        lines[2].ends_with(&format!(" {}", words(8, 12))),
-        "{lines:?}"
-    );
-    assert!(
-        lines[25].ends_with(&format!(" {}", words(100, 104))),
-        "{lines:?}"
-    );
+    // Every instruction of the session, from its first word's first bit to its fourth word's
+    // last bit: chip select's assertion before the first belongs to none.
+    for (n, line) in lines[..26].iter().enumerate() {
+        let first = 4 * n as u64;
+        assert!(
+            line.ends_with(&format!(" {}", words(first, first + 4))),
+            "instruction {n}: {line}"
+        );
+    }
     // The release after a whole instruction is nothing to report.
+    assert!(lines[26].starts_with("eof "), "{lines:?}");
     assert_eq!(lines.len(), 27, "{lines:?}");
 }
 
