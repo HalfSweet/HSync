@@ -5,7 +5,7 @@
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
-use uiharu_core::testing::{Harness, Tap, assert_block_invariant};
+use uiharu_core::testing::{Harness, Tap, assert_block_invariant, assert_progress_promise};
 use uiharu_core::{GraphConfig, GraphError, InputRef, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::spi::{SPI_EVENTS, Spi, SpiConfig, SpiEvent};
 use uiharu_protocols::usb::synth::{UsbWaveform, crc5, crc16, token_fields};
@@ -712,6 +712,13 @@ fn bus_signalling_at_low_speed() {
             format!("eof {}", block.end()),
         ]
     );
+    // Read after every block, progress never passes the start of a bus state still to be
+    // reported: the J of a suspend, the K of a resume, the SE0 of a reset or a keep-alive.
+    let mut harness = packets(Speed::Low, LOW, GraphConfig::default());
+    harness.feed_cut(&block, &[], &[5], &[usize::MAX]);
+    harness.end();
+    harness.assert_progress_promise();
+    assert_eq!(describe(&harness.without_progress()), lines);
 }
 
 #[test]
@@ -761,6 +768,7 @@ fn a_suspend_is_reported_once_the_samples_reach_it() {
         let mut harness = packets(Speed::Full, FULL, GraphConfig::default());
         harness.feed(&block, sizes);
         harness.collect();
+        harness.assert_progress_promise();
         let lines = describe(&harness.without_progress());
         assert_eq!(lines.get(3), Some(&expected), "blocks of {sizes:?}");
     }
@@ -775,6 +783,51 @@ fn a_suspend_is_reported_once_the_samples_reach_it() {
         describe(&harness.without_progress()).get(3),
         Some(&expected)
     );
+}
+
+#[test]
+fn progress_waits_for_what_may_still_be_reported() {
+    let payload: Vec<u8> = (0..40).collect();
+    let mut waveform = waveform(Speed::Full, FULL);
+    let sync = waveform.position();
+    waveform.data(Pid::Data0, &payload);
+    waveform.idle_bits(20);
+    let block = waveform.finish();
+    let mut harness = packets(Speed::Full, FULL, GraphConfig::default());
+    // Read after every block, so that progress follows the samples closely.
+    harness.feed_cut(&block, &[], &[5], &[usize::MAX]);
+    harness.end();
+    harness.assert_progress_promise();
+    let items = &harness.items;
+    let find = |kind: &str| {
+        items
+            .iter()
+            .position(|item| {
+                item.event()
+                    .is_some_and(|event| what(&event.payload).starts_with(kind))
+            })
+            .expect("such an event")
+    };
+    let progress = |items: &[Item<UsbEvent>]| -> Vec<Tick> {
+        items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Progress(tick) => Some(*tick),
+                _ => None,
+            })
+            .collect()
+    };
+    // Until the EOP begins, a batch, the bytes held back and the end may begin well before
+    // the bit being read: progress waits at the start of the SYNC...
+    let within = progress(&items[find("begin")..find("data-end")]);
+    assert!(!within.is_empty(), "{items:?}");
+    assert!(within.iter().all(|tick| *tick == sync), "{within:?}");
+    // ...and once the packet has ended, at the start of the idle bus, which a suspend would
+    // cover.
+    let after = &items[find("end")..];
+    let idle = after[0].event().expect("the packet's end").settled;
+    assert_eq!(progress(after).last(), Some(&idle));
+    assert!(idle < block.end());
 }
 
 #[test]
@@ -1916,7 +1969,7 @@ proptest! {
 
     /// Blocks of any size, a reader that pauses at random, tiny queues and budgets, samples
     /// cut short or lost in a gap: the packets and the transactions are those of one
-    /// uninterrupted run, and well formed.
+    /// uninterrupted run, well formed, and both streams keep the promise of progress.
     #[test]
     fn random_traffic_decodes_alike_however_it_is_fed(
         segments in prop::collection::vec(segment(), 1..12),
@@ -1948,12 +2001,16 @@ proptest! {
         reference.end();
         assert_well_formed(&reference_packets.items());
         assert_transactions_well_formed(&reference.items);
+        assert_progress_promise(&reference_packets.items());
+        reference.assert_progress_promise();
 
         let config = GraphConfig { queue_capacity, budget };
         let (mut harness, packets) = stack(Speed::Full, FULL, config);
         harness.drain_on_full = 1;
         harness.feed_cut(&block, &gaps, &sizes, &pauses);
         harness.end();
+        assert_progress_promise(&packets.items());
+        harness.assert_progress_promise();
         prop_assert_eq!(harness.without_progress(), reference.without_progress());
         prop_assert_eq!(packets.without_progress(), reference_packets.without_progress());
         let stats = harness.pipeline().stats();

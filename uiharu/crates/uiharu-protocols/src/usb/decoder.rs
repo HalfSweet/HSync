@@ -61,7 +61,13 @@
 //!   bit stuffing lets a packet hold a level, or the J that ends an SE0 — before it looks for
 //!   a SYNC; a reset, suspend or resume whose beginning was not seen is not reported;
 //! - a gap or the end of the samples during a packet ends it `aborted`; the bytes not yet
-//!   known to be payload, which may be its CRC16, are not reported.
+//!   known to be payload, which may be its CRC16, are not reported;
+//! - progress is passed on, held back to the start of what a later event may still cover: the
+//!   packet under way from the first cell of its SYNC, since its batches, the bytes held back
+//!   and its end may begin well before the bit being read, and its SE0 once the EOP begins;
+//!   between packets, the J a suspend would cover — on a bus left idle, progress waits where
+//!   the last activity ended until the suspend is reported —, the K a resume would, the SE0 a
+//!   reset or a keep-alive would, and the cell being read, which may begin any of them.
 
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -694,6 +700,8 @@ impl Decoder {
     /// J: the bus becomes known to be idle, then suspended, or something begins.
     async fn in_j(&mut self, since: Tick, seen: bool) -> Result<Line, Stop> {
         let same = Line::J { since, seen };
+        // A suspend would cover the J from its start, and a glitch leaves it under way.
+        let hold = (seen && !self.suspended).then_some(since);
         let deadline = if !self.idle {
             Some(since.offset(self.timing.start(IDLE_BITS)))
         } else if seen && !self.suspended {
@@ -701,7 +709,7 @@ impl Decoder {
         } else {
             None
         };
-        let edge = match self.wait(deadline).await? {
+        let edge = match self.wait(deadline, hold).await? {
             Waited::Edge(tick, levels) => {
                 self.levels = levels;
                 tick
@@ -722,7 +730,7 @@ impl Decoder {
                 return Ok(same);
             }
         };
-        let cell = self.settle(edge).await?;
+        let cell = self.settle(edge, hold).await?;
         let next = match cell.state {
             // A glitch: the bus is still idle.
             LineState::J => return Ok(same),
@@ -747,8 +755,10 @@ impl Decoder {
 
     /// K outside a packet: a resume under way, or activity the decoder cannot read.
     async fn in_k(&mut self, since: Tick, seen: bool) -> Result<Line, Stop> {
-        let edge = self.edge().await?;
-        let cell = self.settle(edge).await?;
+        // A resume would cover the K from its start, and a glitch leaves it under way.
+        let hold = seen.then_some(since);
+        let edge = self.edge(hold).await?;
+        let cell = self.settle(edge, hold).await?;
         Ok(match cell.state {
             LineState::K => Line::K { since, seen },
             LineState::J => Line::J {
@@ -769,7 +779,13 @@ impl Decoder {
 
     /// SE0: an EOP, a reset, the end of a resume or a keep-alive, told apart when it ends.
     async fn in_se0(&mut self, since: Tick, seen: bool, after: After) -> Result<Line, Stop> {
-        let end = self.edge().await?;
+        // The packet's end, a reset or a keep-alive would cover the SE0 from its start; a
+        // resume would cover the K before it, when that lasted long enough.
+        let hold = match after {
+            After::K(k) if self.timing.lasts(k.until(since), RESUME_PER_SECOND) => Some(k),
+            _ => seen.then_some(since),
+        };
+        let end = self.edge(hold).await?;
         let state = self.config.state(self.levels);
         if state == LineState::Se0 {
             // No edge leaves both lines low; nothing ended.
@@ -843,8 +859,9 @@ impl Decoder {
 
     /// SE1 outside a packet: waits for the bus to leave it.
     async fn in_se1(&mut self) -> Result<Line, Stop> {
-        let edge = self.edge().await?;
-        let cell = self.settle(edge).await?;
+        // Nothing reports the SE1 itself; the cell after it may begin a state of its own.
+        let edge = self.edge(None).await?;
+        let cell = self.settle(edge, None).await?;
         Ok(match cell.state {
             LineState::Se1 => Line::Se1,
             LineState::J => Line::J {
@@ -868,8 +885,10 @@ impl Decoder {
         let mut zeros = 1u32;
         let mut state = LineState::K;
         let mut run = first.start;
+        // A packet's begin would cover the SYNC from its first cell.
+        let hold = Some(first.start);
         loop {
-            let cell = self.cell().await?;
+            let cell = self.cell(hold).await?;
             match cell.state {
                 LineState::Se0 => {
                     return Ok(Line::Se0 {
@@ -913,7 +932,11 @@ impl Decoder {
         self.ones = 1;
         let sync = Provenance::over(TickRange::new(start, last.centre.next()), last.centre);
         self.out.emit(sync, UsbEvent::Begin { pkt }).await;
-        let (byte, at) = match self.field(8).await? {
+        // Until its EOP begins, progress waits at the packet's start: a batch, the bytes held
+        // back and the end may begin well before the bit being read, and a packet that ends
+        // without an EOP leaves the bus as it was since the clock's last edge.
+        let hold = Some(start);
+        let (byte, at) = match self.field(8, hold).await? {
             Ok(field) => field,
             Err(cut) => return Ok(self.cut(cut).await),
         };
@@ -927,7 +950,7 @@ impl Decoder {
         }
         match pid {
             Pid::Out | Pid::In | Pid::Setup | Pid::Ping => {
-                let (value, at) = match self.field(16).await? {
+                let (value, at) = match self.field(16, hold).await? {
                     Ok(field) => field,
                     Err(cut) => return Ok(self.cut(cut).await),
                 };
@@ -943,7 +966,7 @@ impl Decoder {
                 self.out.emit(at, token).await;
             }
             Pid::Sof => {
-                let (value, at) = match self.field(16).await? {
+                let (value, at) = match self.field(16, hold).await? {
                     Ok(field) => field,
                     Err(cut) => return Ok(self.cut(cut).await),
                 };
@@ -958,13 +981,13 @@ impl Decoder {
                 self.out.emit(at, sof).await;
             }
             Pid::Split => {
-                let (raw, at) = match self.field(24).await? {
+                let (raw, at) = match self.field(24, hold).await? {
                     Ok(field) => field,
                     Err(cut) => return Ok(self.cut(cut).await),
                 };
                 self.out.emit(at, UsbEvent::Split { pkt, raw }).await;
             }
-            Pid::Data0 | Pid::Data1 | Pid::Data2 | Pid::Mdata => return self.payload().await,
+            Pid::Data0 | Pid::Data1 | Pid::Data2 | Pid::Mdata => return self.payload(hold).await,
             Pid::Pre => {
                 self.close(EndReason::Preamble, at).await;
                 return Ok(self.line_now());
@@ -973,19 +996,20 @@ impl Decoder {
         }
         // The EOP, past any bits this type of packet does not have.
         loop {
-            if let Bit::Cut(cut) = self.bit().await? {
+            if let Bit::Cut(cut) = self.bit(hold).await? {
                 return Ok(self.cut(cut).await);
             }
         }
     }
 
-    /// The bytes of a data packet, through the start of its EOP.
-    async fn payload(&mut self) -> Result<Line, Stop> {
+    /// The bytes of a data packet, through the start of its EOP; progress meanwhile is held
+    /// back to `hold`.
+    async fn payload(&mut self, hold: Option<Tick>) -> Result<Line, Stop> {
         if let Some(open) = self.open.as_mut() {
             open.payload = Some(Payload::new());
         }
         loop {
-            match self.field(8).await? {
+            match self.field(8, hold).await? {
                 Ok((byte, at)) => self.payload_byte(byte as u8, at).await,
                 Err(cut) => return Ok(self.cut(cut).await),
             }
@@ -1120,13 +1144,18 @@ impl Decoder {
         }
     }
 
-    /// Reads `count` bits of a packet, the least significant first, or what ended them.
-    async fn field(&mut self, count: u32) -> Result<Result<(u32, Provenance), Cut>, Stop> {
+    /// Reads `count` bits of a packet, the least significant first, or what ended them;
+    /// progress meanwhile is held back to `hold`.
+    async fn field(
+        &mut self,
+        count: u32,
+        hold: Option<Tick>,
+    ) -> Result<Result<(u32, Provenance), Cut>, Stop> {
         let mut value = 0u32;
         let mut start = Tick::ZERO;
         let mut last = Tick::ZERO;
         for i in 0..count {
-            match self.bit().await? {
+            match self.bit(hold).await? {
                 Bit::Value(one, cell) => {
                     if i == 0 {
                         start = cell.start;
@@ -1141,10 +1170,11 @@ impl Decoder {
         Ok(Ok((value, at)))
     }
 
-    /// Reads the next bit of a packet: NRZI, with stuffed bits dropped.
-    async fn bit(&mut self) -> Result<Bit, Stop> {
+    /// Reads the next bit of a packet: NRZI, with stuffed bits dropped; progress meanwhile is
+    /// held back to `hold`.
+    async fn bit(&mut self, hold: Option<Tick>) -> Result<Bit, Stop> {
         loop {
-            let cell = self.cell().await?;
+            let cell = self.cell(hold).await?;
             let state = match cell.state {
                 LineState::Se0 => return Ok(Bit::Cut(Cut::Se0(cell))),
                 LineState::Se1 => return Ok(Bit::Cut(Cut::Se1(cell))),
@@ -1164,21 +1194,25 @@ impl Decoder {
         }
     }
 
-    /// Aligns the clock to `edge` and reads the cell it begins.
-    async fn settle(&mut self, edge: Tick) -> Result<Cell, Stop> {
+    /// Aligns the clock to `edge` and reads the cell it begins; progress meanwhile is held
+    /// back to `hold` and to the edge.
+    async fn settle(&mut self, edge: Tick, hold: Option<Tick>) -> Result<Cell, Stop> {
         self.clock = Clock::at(edge);
-        self.cell().await
+        self.cell(hold).await
     }
 
     /// Reads the next bit cell at its centre, aligning the clock to the first edge after the
-    /// last centre.
-    async fn cell(&mut self) -> Result<Cell, Stop> {
+    /// last centre. Progress meanwhile is held back to `hold` and to the start of the cell,
+    /// which may begin something of its own.
+    async fn cell(&mut self, hold: Option<Tick>) -> Result<Cell, Stop> {
         loop {
+            let start = self.clock.anchor.offset(self.timing.start(self.clock.next));
             let centre = self
                 .clock
                 .anchor
                 .offset(self.timing.centre(self.clock.next));
-            match self.wait(Some(centre.next())).await? {
+            let hold = Some(hold.map_or(start, |hold| hold.min(start)));
+            match self.wait(Some(centre.next()), hold).await? {
                 Waited::Edge(tick, levels) => {
                     self.levels = levels;
                     if !self.clock.realigned {
@@ -1186,7 +1220,6 @@ impl Decoder {
                     }
                 }
                 Waited::Deadline => {
-                    let start = self.clock.anchor.offset(self.timing.start(self.clock.next));
                     self.clock.next += 1;
                     self.clock.realigned = false;
                     let state = self.config.state(self.levels);
@@ -1200,23 +1233,24 @@ impl Decoder {
         }
     }
 
-    /// Waits for the next edge, whenever it comes.
-    async fn edge(&mut self) -> Result<Tick, Stop> {
+    /// Waits for the next edge, whenever it comes; progress meanwhile is held back to `hold`.
+    async fn edge(&mut self, hold: Option<Tick>) -> Result<Tick, Stop> {
         loop {
-            if let Waited::Edge(tick, levels) = self.wait(None).await? {
+            if let Waited::Edge(tick, levels) = self.wait(None, hold).await? {
                 self.levels = levels;
                 return Ok(tick);
             }
         }
     }
 
-    /// Waits for an edge on either line before `until`, passing progress on.
+    /// Waits for an edge on either line before `until`, passing progress on held back to
+    /// `hold`, where the oldest part a later event may still cover begins.
     ///
     /// Samples that reach the deadline with no edge are the deadline passing, however the
     /// cursor learns it: by `Quiet`, by the progress of a block used up right at the deadline,
     /// or by a gap or the end of the samples that comes right after such a block — which is
     /// then held back for the next wait, so that what ends at the deadline is still read.
-    async fn wait(&mut self, until: Option<Tick>) -> Result<Waited, Stop> {
+    async fn wait(&mut self, until: Option<Tick>, hold: Option<Tick>) -> Result<Waited, Stop> {
         if let Some(stop) = self.stopped.take() {
             return Err(stop);
         }
@@ -1235,7 +1269,10 @@ impl Decoder {
                     }
                     return Ok(Waited::Deadline);
                 }
-                Change::Progress(tick) => self.out.progress(tick).await,
+                Change::Progress(tick) => {
+                    let tick = hold.map_or(tick, |hold| hold.min(tick));
+                    self.out.progress(tick).await;
+                }
                 Change::Gap(range) if reached(range.start) => {
                     self.stopped = Some(Stop::Gap(range));
                     return Ok(Waited::Deadline);
