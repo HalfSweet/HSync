@@ -16,6 +16,7 @@ use std::task::{Context, Waker};
 
 use crate::graph::{ExposedRef, Exposure, GraphConfig, Owner, PortKey, SourceId, SourceSpec};
 use crate::node::{Io, Node, NodeCx, NodeFuture, NodeSpec, SharedQueue, Wait};
+use crate::schema::Props;
 use crate::signal::{LogicBlock, SignalItem};
 use crate::stream::{Broadcast, Event, Item, QueueControl, QueueHandles, ReaderId};
 use crate::time::{Tick, TimeBase};
@@ -156,6 +157,7 @@ impl fmt::Debug for Pipeline {
 }
 
 impl Pipeline {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn start(
         config: GraphConfig,
         sources: Vec<SourceSpec>,
@@ -163,6 +165,8 @@ impl Pipeline {
         specs: Vec<NodeSpec>,
         inputs: Vec<Vec<Option<PortKey>>>,
         order: Vec<usize>,
+        domains: Vec<Option<usize>>,
+        input_props: Vec<Vec<Props>>,
         exposed: Vec<Exposure>,
     ) -> Result<Self, crate::graph::GraphError> {
         let mut queues = Vec::new();
@@ -246,7 +250,14 @@ impl Pipeline {
                 .iter()
                 .map(|handles| Rc::clone(&handles.any))
                 .collect();
-            let io = Io::new(Rc::clone(&cx), bound_inputs, bound_outputs);
+            let time_base = domains[index].map(|domain| sources[domain].time_base);
+            let io = Io::new(
+                Rc::clone(&cx),
+                bound_inputs,
+                bound_outputs,
+                time_base,
+                input_props[index].clone(),
+            );
             let future = node.start(io);
             running[index] = Some(Running {
                 name: format!("{}#{index}", spec.name),

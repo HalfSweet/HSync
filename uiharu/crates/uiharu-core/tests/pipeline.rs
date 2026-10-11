@@ -53,6 +53,7 @@ impl EdgeCounter {
                     count += 1;
                     out.emit(Provenance::one(tick), Num(count)).await;
                 }
+                Change::Quiet(_) => {}
                 Change::Gap(range) => out.gap(range).await,
                 Change::Progress(tick) => out.progress(tick).await,
                 Change::End(tick) => {
@@ -163,6 +164,60 @@ impl Node for Merger {
         let _out: Outbox<Text> = io.output(0);
         Box::pin(async {})
     }
+}
+
+/// Reports what the executor tells it: the sample rate and the channel count it reads.
+struct Introspect;
+
+impl Node for Introspect {
+    fn spec(&self) -> NodeSpec {
+        NodeSpec {
+            name: "introspect".into(),
+            inputs: vec![InputSpec::new::<Arc<LogicBlock>>("logic", Requires::new())],
+            outputs: vec![OutputSpec::new::<Num>("facts", Props::new())],
+        }
+    }
+
+    fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
+        let rate = io.time_base().map_or(0, |base| base.rate_hz) as u32;
+        let channels = match io.input_props(0).get("channels") {
+            Some(uiharu_core::PropValue::Int(n)) => *n as u32,
+            _ => 0,
+        };
+        let _signal = io.signal(0);
+        let mut out: Outbox<Num> = io.output(0);
+        Box::pin(async move {
+            out.emit(Provenance::at(Tick::ZERO), Num(rate)).await;
+            out.emit(Provenance::at(Tick::ZERO), Num(channels)).await;
+            out.end(Tick::ZERO).await;
+        })
+    }
+}
+
+#[test]
+fn nodes_learn_their_time_base_and_what_they_read() {
+    let mut graph = Graph::new();
+    let source = graph
+        .source(SourceSpec::new("logic", 3, TimeBase::new(25_000_000)))
+        .expect("adds the source");
+    let node = graph.add(Introspect);
+    graph
+        .connect(
+            source.samples,
+            InputRef::<Arc<LogicBlock>>::of_node(node, 0),
+        )
+        .expect("connects");
+    let facts = graph
+        .expose("facts", OutputRef::<Num>::of_node(node, 0))
+        .expect("exposes");
+    let mut pipeline = graph.build().expect("builds");
+    let facts = pipeline.exposed(facts).expect("the exposed reader");
+    pipeline.run();
+    let found: Vec<u32> = events(&drain(&facts))
+        .into_iter()
+        .map(|event| event.3.0)
+        .collect();
+    assert_eq!(found, vec![25_000_000, 3]);
 }
 
 /// Channel 0 toggling every `period` samples for `len` samples, channel 1 always high.

@@ -616,7 +616,20 @@ impl Graph {
             }
         }
         let order = self.order()?;
-        self.domains(&order)?;
+        let domains = self.domains(&order)?;
+        // What each input reads: the properties of the output behind it.
+        let input_props: Vec<Vec<Props>> = self
+            .nodes
+            .iter()
+            .map(|entry| {
+                entry
+                    .inputs
+                    .iter()
+                    .flatten()
+                    .map(|key| self.output_spec(*key).map(|spec| spec.props))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .collect::<Result<_, _>>()?;
         let mut exposed_names = BTreeSet::new();
         for exposure in &self.exposed {
             if !exposed_names.insert(exposure.name.as_str()) {
@@ -641,6 +654,16 @@ impl Graph {
                     acc
                 },
             );
-        Pipeline::start(config, sources, nodes, specs, inputs, order, exposed)
+        Pipeline::start(
+            config,
+            sources,
+            nodes,
+            specs,
+            inputs,
+            order,
+            domains,
+            input_props,
+            exposed,
+        )
     }
 }

@@ -19,10 +19,10 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::task::Poll;
 
-use crate::schema::{InputSpec, OutputSpec};
+use crate::schema::{InputSpec, OutputSpec, Props};
 use crate::signal::{LogicBlock, SignalCursor};
 use crate::stream::{Broadcast, Event, Item, ReaderId};
-use crate::time::{Tick, TickRange};
+use crate::time::{Tick, TickRange, TimeBase};
 
 /// What a node is waiting for when its future returns `Pending`.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -333,11 +333,15 @@ pub trait Node: 'static {
     fn start(self: Box<Self>, io: Io) -> NodeFuture;
 }
 
-/// The queues bound to a node's ports, handed to [`Node::start`].
+/// The queues bound to a node's ports, handed to [`Node::start`], with what the node may need
+/// to know about them: the time base its inputs are on and the properties of the outputs they
+/// read.
 pub struct Io {
     cx: Rc<NodeCx>,
     inputs: Vec<Option<Rc<dyn Any>>>,
     outputs: Vec<Option<Rc<dyn Any>>>,
+    time_base: Option<TimeBase>,
+    input_props: Vec<Props>,
 }
 
 impl fmt::Debug for Io {
@@ -350,12 +354,38 @@ impl fmt::Debug for Io {
 }
 
 impl Io {
-    pub(crate) fn new(cx: Rc<NodeCx>, inputs: Vec<Rc<dyn Any>>, outputs: Vec<Rc<dyn Any>>) -> Self {
+    pub(crate) fn new(
+        cx: Rc<NodeCx>,
+        inputs: Vec<Rc<dyn Any>>,
+        outputs: Vec<Rc<dyn Any>>,
+        time_base: Option<TimeBase>,
+        input_props: Vec<Props>,
+    ) -> Self {
         Self {
             cx,
             inputs: inputs.into_iter().map(Some).collect(),
             outputs: outputs.into_iter().map(Some).collect(),
+            time_base,
+            input_props,
         }
+    }
+
+    /// The clock of the source the node's inputs come from; `None` for a node without inputs.
+    /// Decoders turn bit times and timeouts into ticks with it.
+    pub fn time_base(&self) -> Option<TimeBase> {
+        self.time_base
+    }
+
+    /// The properties the output connected to input port `index` declares: what the bus
+    /// promised, such as its word width.
+    ///
+    /// # Panics
+    ///
+    /// When the node declared no such port.
+    pub fn input_props(&self, index: usize) -> &Props {
+        self.input_props
+            .get(index)
+            .unwrap_or_else(|| panic!("the node declared no input port {index}"))
     }
 
     /// The node context.
