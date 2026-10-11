@@ -236,7 +236,7 @@ fn a_pulse_without_a_start_signal_is_an_error() {
 #[test]
 fn a_response_outside_its_windows_is_an_error() {
     let bytes = with_checksum([1, 2, 3, 4]);
-    // No answer: 52 µs after the release the line is still high.
+    // No answer: 200 µs after the release, and 30 % more, the line is still high.
     let mut waveform = new_waveform(Model::Am2302);
     let start = waveform.position().get();
     waveform.start_signal();
@@ -250,13 +250,38 @@ fn a_response_outside_its_windows_is_an_error() {
     assert_eq!(
         lines[..2],
         [
-            format!("error Response [{start},{})@{}", release + 53, release + 52),
+            format!(
+                "error Response [{start},{})@{}",
+                release + 261,
+                release + 260
+            ),
             format!(
                 "reading 010203040a checksum ok rh 258 t 772 [{next},{})@{end}",
                 end + 1
             ),
         ]
     );
+
+    // An AM2302 may answer up to 200 µs after the release; a DHT11 within 40 µs.
+    for (model, release_us, ok) in [
+        (Model::Am2302, 180, true),
+        (Model::Dht11, 45, true),
+        (Model::Dht11, 60, false),
+    ] {
+        let mut waveform = new_waveform(model);
+        waveform.set_timing(Timing {
+            release: release_us * 1_000,
+            ..Timing::of(model)
+        });
+        waveform.reading(bytes);
+        waveform.idle_us(500);
+        let lines = decode(model, &waveform.finish());
+        assert_eq!(
+            lines[0].starts_with("reading 010203040a "),
+            ok,
+            "{model:?} answering after {release_us} µs: {lines:?}"
+        );
+    }
 
     // A response low of 30 µs ends too early; one of 150 µs too late.
     for (response_low, decided) in [(30_000, 30), (150_000, 104)] {

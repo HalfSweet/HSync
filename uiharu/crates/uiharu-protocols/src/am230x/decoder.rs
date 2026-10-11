@@ -5,11 +5,11 @@
 //!
 //! Implemented from the Aosong AM2302 (DHT22) and DHT11 datasheets, which describe the
 //! single-bus exchange: the open-drain line idles high; the host pulls it low for at least 1 ms
-//! (18 ms for the DHT11) and releases it; 20 to 40 µs later the sensor answers with 80 µs low
-//! and 80 µs high, then sends 40 bits, each a 50 µs low followed by a high of 26 to 28 µs for a
-//! 0 or 70 µs for a 1, and ends with a 50 µs low before releasing the line. The 40 bits are five
-//! bytes, most significant bit first: two of humidity, two of temperature and a checksum, the
-//! sum of the four modulo 256.
+//! (18 ms for the DHT11) and releases it; 20 to 40 µs later (10 to 200 µs on an AM2302) the
+//! sensor answers with 80 µs low and 80 µs high, then sends 40 bits, each a 50 µs low followed
+//! by a high of 26 to 28 µs for a 0 or 70 µs for a 1, and ends with a 50 µs low before releasing
+//! the line. The 40 bits are five bytes, most significant bit first: two of humidity, two of
+//! temperature and a checksum, the sum of the four modulo 256.
 //!
 //! The rules:
 //!
@@ -17,7 +17,9 @@
 //!   lie in its window: the datasheet's time widened by the configured `tolerance`, in percent,
 //!   the shortest bound rounded up to whole ticks and the longest down
 //!   (⌈`t` · (100 − tolerance) · rate / 10⁸⌉ and ⌊`t` · (100 + tolerance) · rate / 10⁸⌋). The
-//!   start signal has a shortest bound only, the model's 1 ms or 18 ms less the tolerance;
+//!   model sets the start signal, which has a shortest bound only — 1 ms or 18 ms less the
+//!   tolerance —, and the host's release, whose range its datasheet gives; the other windows
+//!   are the same for both;
 //! - a low at least as long as a start signal begins a reading, wherever it comes; a shorter
 //!   low on an idle line is a pulse without its start signal, `error { reason: start }` at its
 //!   release;
@@ -70,7 +72,6 @@ pub const MAX_TOLERANCE: u8 = 40;
 const BITS: u32 = 40;
 
 /// The datasheets' times, in microseconds: the shortest and the longest.
-const RELEASE_US: (u32, u32) = (20, 40);
 const RESPONSE_LOW_US: (u32, u32) = (80, 80);
 const RESPONSE_HIGH_US: (u32, u32) = (80, 80);
 const BIT_LOW_US: (u32, u32) = (50, 50);
@@ -105,6 +106,15 @@ impl Model {
         match self {
             Model::Am2302 => 1_000,
             Model::Dht11 => 18_000,
+        }
+    }
+
+    /// How long after the host releases the line the sensor answers, in microseconds: the
+    /// shortest and the longest its datasheet gives.
+    pub const fn release_us(self) -> (u32, u32) {
+        match self {
+            Model::Am2302 => (10, 200),
+            Model::Dht11 => (20, 40),
         }
     }
 }
@@ -276,7 +286,7 @@ impl Windows {
         let start_us = config.model.start_us();
         Self {
             start: window((start_us, start_us)).min,
-            release: window(RELEASE_US),
+            release: window(config.model.release_us()),
             response_low: window(RESPONSE_LOW_US),
             response_high: window(RESPONSE_HIGH_US),
             bit_low: window(BIT_LOW_US),
@@ -645,7 +655,8 @@ mod tests {
     fn windows_widen_by_the_tolerance_and_round_inwards() {
         let windows = Windows::new(&Am230xConfig::default(), 1_000_000);
         assert_eq!(windows.start, 700);
-        assert_eq!(windows.release, Window { min: 14, max: 52 });
+        // The AM2302 answers 10 to 200 µs after the release.
+        assert_eq!(windows.release, Window { min: 7, max: 260 });
         assert_eq!(windows.response_low, Window { min: 56, max: 104 });
         assert_eq!(windows.bit_low, Window { min: 35, max: 65 });
         // 26 µs less 30 % is 18.2 µs, 28 µs more 30 % is 36.4 µs.
@@ -660,6 +671,8 @@ mod tests {
             1_000_000,
         );
         assert_eq!(dht11.start, 18_000);
+        // The DHT11 answers 20 to 40 µs after it.
+        assert_eq!(dht11.release, Window { min: 20, max: 40 });
         assert_eq!(dht11.zero, Window { min: 26, max: 28 });
         // At the widest tolerance a 0 and a 1 are still apart.
         let wide = Windows::new(
