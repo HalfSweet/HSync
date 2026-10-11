@@ -10,12 +10,12 @@ It replaces the sigrok decoders in [HSync](../README.md) and is meant to be embe
 
 The first step of the plan: the runtime and the first layered pipeline, **SPI → SPI NOR**, written by hand in Rust in the shape the TypeScript DSL will take, with the acceptance tests of the design's properties. The DSL, its compiler and the decoder IR come next; the engine is not wired into HSync yet.
 
-| Crate                     | Contents                                                                                                                                                                          |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/uiharu-core`      | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor         |
-| `crates/uiharu-protocols` | The reference protocols: SPI (four modes, 1–8 bit words, either bit order, with or without chip select) and SPI NOR `READ` with a three-byte address, plus a waveform synthesizer |
-| `crates/uiharu-cli`       | The `uiharu` command: `decode` a raw capture to NDJSON, `gen` a synthetic capture, `bench` the pipeline                                                                           |
-| `docs/`                   | The architecture (`design.md`), how to write a decoder (`writing-decoders.md`) and one page per protocol (`protocols/`)                                                           |
+| Crate                     | Contents                                                                                                                                                                                                          |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/uiharu-core`      | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor                                         |
+| `crates/uiharu-protocols` | The reference protocols: SPI (four modes, 1–8 bit words, either bit order, with or without chip select) and SPI NOR `READ` with a three-byte address, plus a waveform synthesizer                                 |
+| `crates/uiharu-cli`       | The `uiharu` command: `decode` a raw capture to NDJSON, `gen` a synthetic capture, `bench` the pipeline                                                                                                           |
+| `docs/`                   | The architecture (`design.md`), how to write a decoder (`writing-decoders.md`), one page per protocol (`protocols/`) and the performance study with the comparison against the sigrok decoders (`performance.md`) |
 
 The crates are members of the repository's Cargo workspace but depend on nothing outside `uiharu/` except `serde`, `serde_json` and `thiserror`.
 
