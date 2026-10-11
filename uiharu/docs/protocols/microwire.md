@@ -113,7 +113,7 @@ The output port `events` declares `addressBits` and `dataBits` (16 or 8).
 | Event                             | Span                                                                                    | Settled                                   |
 | --------------------------------- | --------------------------------------------------------------------------------------- | ----------------------------------------- |
 | `instruction`                     | the transaction from chip select through the last address bit                           | that bit                                  |
-| `instruction` (address cut short) | the transaction from chip select through its release                                    | the release                               |
+| `instruction` (address cut short) | the transaction from chip select through what cut it short                              | the release, the gap's start or the end   |
 | `data` (full batch, or a write)   | the bits of the words                                                                   | the last word's last bit                  |
 | `data` (flushed by an end)        | the bits of the words                                                                   | the end that decided it                   |
 | `status`                          | the bits or the transaction it was read from                                            | the bit's falling edge, or the release    |
