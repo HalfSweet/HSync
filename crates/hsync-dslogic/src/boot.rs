@@ -1,27 +1,12 @@
 //! Bringing a DSLogic up: FX2 firmware upload, FPGA configuration, the security handshake and
 //! the clock synthesiser.
 
-use std::path::PathBuf;
 use std::time::Duration;
 
 use hsync_driver::DriverError;
 use hsync_driver::usb::{UsbError, UsbTransport};
 
 use crate::protocol::{Control, ctr0, dest, reg, status, write};
-
-/// Where firmware images and FPGA bitstreams are read from.
-#[derive(Debug, Clone)]
-pub struct FirmwareDir(pub PathBuf);
-
-impl FirmwareDir {
-    /// Reads a file by its DSView name.
-    pub fn load(&self, name: &str) -> Result<Vec<u8>, DriverError> {
-        std::fs::read(self.0.join(name)).map_err(|error| {
-            log::warn!("reading firmware {name} from {}: {error}", self.0.display());
-            DriverError::FirmwareMissing(name.to_owned())
-        })
-    }
-}
 
 /// EZ-USB "firmware load" vendor request.
 const EZUSB_FIRMWARE_LOAD: u8 = 0xa0;
