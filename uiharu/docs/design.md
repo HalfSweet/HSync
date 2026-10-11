@@ -1,6 +1,19 @@
-# uiharu runtime design
+# uiharu architecture
 
-How the Rust runtime in `crates/uiharu-core` meets the requirements in [prd.md](prd.md), and how the reference protocols in `crates/uiharu-protocols` use it. This is the first step of the plan: everything a DSL decoder will compile to exists here, written by hand. When the rules below change, this document changes with them.
+uiharu is a streaming protocol decode engine: it decodes digital captures while they are being taken, keeps its state and memory bounded, and produces the same events for a live capture and for the same samples replayed from a file. It is written in Rust, licensed under Apache-2.0, and meant to be embedded — in HSync, where it replaces the sigrok decoders, and in other logic analyzer, test and waveform tools.
+
+The design has two chains. Protocol authors will write decoders in a restricted TypeScript DSL that compiles ahead of time, without a JavaScript runtime; users compose decode graphs through typed ports:
+
+```text
+compile chain:  TypeScript DSL → type and subset checks → decoder IR → resumable state machines → native Rust
+run chain:      sample blocks → signal cursor → bus events (e.g. spi.events) → protocol events (e.g. nor.events) → UI / export
+```
+
+The runtime end of both chains exists today, written by hand in the shape the compiler will emit: `crates/uiharu-core` is the runtime (ticks, sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs, the executor), `crates/uiharu-protocols` holds the decoders (each protocol a module with its contract, its decoder node, a waveform synthesizer and tests; see [writing-decoders.md](writing-decoders.md) for how one is written and `protocols/` for one page per protocol), and `crates/uiharu-cli` is the command line (`decode` to NDJSON, `gen`, `bench`). The DSL, its compiler and the IR come next; the app is wired to the engine after that.
+
+Four properties shape everything below. **Streaming**: a decoder consumes blocks of samples as they arrive and emits every result as soon as it is certain; nothing waits for the end of a capture or of a transaction. **Bounded**: queues, decoder state and buffers have explicit limits; a source that cannot wait announces a gap, and the engine never drops samples itself. **Deterministic**: the same samples through the same graph yield the same events, however the samples are cut into blocks and however often the reader pauses. **Honest**: an incomplete transaction is never called complete, a line that is not connected reads `None`, and a result that could not be seen is marked, not guessed.
+
+This document describes how the runtime achieves that and how the reference protocols use it. When the rules below change, this document changes with them.
 
 ## 1. Decoders are resumable futures
 
@@ -12,11 +25,11 @@ A decoder is a Rust `async fn` that reads through an `Inbox<T>` (events) or a `S
 | `Wait::Output` | the output queue is full                    | a reader downstream, or the caller        |
 | `Wait::Budget` | the node completed its budget of operations | the next round of `Pipeline::run`         |
 
-Rust's `async` lowering is the "resumable state machine" of the PRD: the future's locals (the bytes of a 24-bit address read so far, the batch of data bytes, the word being shifted) live in a struct of fixed size with no heap growth and no runtime. A decoder paused on output never reads its input again or sends an event twice, because the suspended operation is the write itself; on resume the write retries, and the input it followed was consumed before. The plan for the compiler is to emit this very shape — `async fn`s over the same handles — and let `rustc` do the lowering, so the IR does not need its own state machine transform for the Rust backend.
+Rust's `async` lowering is the resumable state machine the design calls for: the future's locals (the bytes of a 24-bit address read so far, the batch of data bytes, the word being shifted) live in a struct of fixed size with no heap growth and no runtime. A decoder paused on output never reads its input again or sends an event twice, because the suspended operation is the write itself; on resume the write retries, and the input it followed was consumed before. The plan for the compiler is to emit this very shape — `async fn`s over the same handles — and let `rustc` do the lowering, so the IR does not need its own state machine transform for the Rust backend.
 
 Handwritten decoders follow three rules the compiler will enforce for DSL code: no buffer grows without a declared bound (the NOR data batch holds at most 32 bytes); nothing holds a whole transaction; every `await` is one of the runtime's operations.
 
-Contracts stay generic. The cursor over a contract offers that contract's primitives and nothing more — for `spi.events`, the next word with both lines' values (`Transaction::word`), the next word or the normal end (`word_or_end`), and draining (`drain`). Which line a protocol reads, byte order and field widths are the consuming decoder's own code: the NOR decoder assembles its 24-bit address from three words itself. A contract is the more useful the less it knows about the protocols above it, and a sequence of plain reads already has the property the PRD asks of a multi-byte read: pausing between them keeps what was read, because that is the state of the future.
+Contracts stay generic. The cursor over a contract offers that contract's primitives and nothing more — for `spi.events`, the next word with both lines' values (`Transaction::word`), the next word or the normal end (`word_or_end`), and draining (`drain`). Which line a protocol reads, byte order and field widths are the consuming decoder's own code: the NOR decoder assembles its 24-bit address from three words itself. A contract is the more useful the less it knows about the protocols above it, and a sequence of plain reads already has the property a multi-byte read needs: pausing between them keeps what was read, because that is the state of the future.
 
 ## 2. Streams
 
@@ -86,7 +99,7 @@ The SPI decoder marks what it could not see:
 - a gap or the end of the samples while chip select is asserted ends the transaction with `reason: "aborted"`;
 - leftover bits never make a word; a clock edge at the very tick chip select changes belongs to no transaction.
 
-The SPI NOR decoder reads through a `Transaction` cursor whose reads return an error instead of a word when the transaction ends, and the runtime around the body applies the PRD's policy:
+The SPI NOR decoder reads through a `Transaction` cursor whose reads return an error instead of a word when the transaction ends, and the runtime around the body applies the recovery policy:
 
 | The body ran into               | `ReadError`        | The runtime emits for the open operation | Then                                              |
 | ------------------------------- | ------------------ | ---------------------------------------- | ------------------------------------------------- |
@@ -100,7 +113,7 @@ Only `word_or_end` ever returns the normal end; a body that returns before the e
 
 ## 7. From the DSL to the Rust API
 
-| PRD (TypeScript)                         | Phase 1 (Rust)                                                                                |
+| DSL (planned)                            | Phase 1 (Rust)                                                                                |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `eventSchema<SpiEvent>("spi.events", 1)` | `impl EventSchema for SpiEvent { const SCHEMA = SchemaId::new("spi.events", 1) }`             |
 | `defineDecoder({ input, output, … })`    | `impl Node` with a `NodeSpec` of `InputSpec`/`OutputSpec`                                     |
