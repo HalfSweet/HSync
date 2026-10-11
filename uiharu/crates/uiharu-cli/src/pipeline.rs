@@ -31,6 +31,8 @@ use uiharu_core::{
     DynExposedRef, DynOutput, Graph, GraphConfig, Node, NodeId, Pipeline, SourceId, SourceSpec,
     TimeBase,
 };
+use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
+use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
 use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
@@ -193,6 +195,14 @@ fn build_parallel(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Parallel::new)
 }
 
+fn build_i2c(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, I2c::new)
+}
+
+fn build_eeprom24xx(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Eeprom24xx::new)
+}
+
 fn build_uart(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Uart::new)
 }
@@ -243,6 +253,16 @@ pub const KINDS: &[Kind] = &[
         name: "modbus-rtu",
         build: build_modbus_rtu,
         writer: write_as::<ModbusEvent>,
+    },
+    Kind {
+        name: "i2c",
+        build: build_i2c,
+        writer: write_as::<I2cEvent>,
+    },
+    Kind {
+        name: "eeprom24xx",
+        build: build_eeprom24xx,
+        writer: write_as::<EepromEvent>,
     },
 ];
 
@@ -445,8 +465,8 @@ mod tests {
     fn descriptions_are_checked() {
         let error = |text: &str| build(&parse(text)).expect_err("refused").to_string();
         assert_eq!(
-            error(r#"{"source": {"channels": 4}, "nodes": {"x": {"type": "i2c"}}}"#),
-            "node x: unknown type i2c"
+            error(r#"{"source": {"channels": 4}, "nodes": {"x": {"type": "lin"}}}"#),
+            "node x: unknown type lin"
         );
         assert_eq!(
             error(

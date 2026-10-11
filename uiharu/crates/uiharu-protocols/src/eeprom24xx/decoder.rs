@@ -65,6 +65,7 @@ const DEVICE_GROUP: u8 = 0b101_0000;
 
 /// Which device the decoder follows and how wide its word addresses are.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct Eeprom24xxConfig {
     /// Bytes in a word address: 1 for parts up to 16 Kbit, 2 for 32 Kbit and above.
     pub address_bytes: u8,

@@ -57,6 +57,7 @@ use super::events::{EndReason, I2cEvent, TxId};
 
 /// How the bus is wired.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct I2cConfig {
     /// The clock channel.
     pub scl: u8,
