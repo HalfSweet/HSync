@@ -150,7 +150,11 @@ fn reference(
 }
 
 proptest! {
-    #![proptest_config(ProptestConfig { cases: 64, ..ProptestConfig::default() })]
+    #![proptest_config(ProptestConfig {
+        // The default is enough for every run; PROPTEST_CASES raises it for a stress run.
+        cases: std::env::var("PROPTEST_CASES").ok().and_then(|cases| cases.parse().ok()).unwrap_or(64),
+        ..ProptestConfig::default()
+    })]
 
     /// Blocks of any size, a reader that pauses at random and tiny queues and budgets all
     /// yield the reference events.
