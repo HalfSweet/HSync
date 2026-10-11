@@ -26,6 +26,7 @@ pub mod ir_sirc;
 pub mod jtag;
 pub mod lin;
 pub mod mdio;
+pub mod microwire;
 pub mod midi;
 pub mod modbus_rtu;
 pub mod nrf24l01;
