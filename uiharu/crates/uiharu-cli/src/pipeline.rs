@@ -32,11 +32,13 @@ use uiharu_core::{
     TimeBase,
 };
 use uiharu_protocols::can::{Can, CanEvent};
+use uiharu_protocols::ds18b20::{Ds18b20, Ds18b20Event};
 use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
 use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
 use uiharu_protocols::jtag::{Jtag, JtagEvent};
 use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
+use uiharu_protocols::onewire::{LinkEvent, OneWireEvent, OneWireLink, OneWireNetwork};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
 use uiharu_protocols::pwm::{Pwm, PwmEvent};
 use uiharu_protocols::sdcard_spi::{SdCardSpi, SdEvent};
@@ -203,6 +205,20 @@ fn build_parallel(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Parallel::new)
 }
 
+fn build_onewire_link(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, OneWireLink::new)
+}
+
+fn build_onewire(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(OneWireNetwork::new()))
+}
+
+fn build_ds18b20(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Ds18b20::new()))
+}
+
 fn build_can(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Can::new)
 }
@@ -303,6 +319,21 @@ pub const KINDS: &[Kind] = &[
         name: "can",
         build: build_can,
         writer: write_as::<CanEvent>,
+    },
+    Kind {
+        name: "onewire-link",
+        build: build_onewire_link,
+        writer: write_as::<LinkEvent>,
+    },
+    Kind {
+        name: "onewire",
+        build: build_onewire,
+        writer: write_as::<OneWireEvent>,
+    },
+    Kind {
+        name: "ds18b20",
+        build: build_ds18b20,
+        writer: write_as::<Ds18b20Event>,
     },
 ];
 

@@ -93,6 +93,7 @@ impl Speed {
 
 /// How the bus is wired and how fast it runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct LinkConfig {
     /// The data line's channel.
     pub data: u8,
