@@ -14,5 +14,6 @@ pub mod parallel;
 pub mod pwm;
 pub mod spi;
 pub mod spi_nor;
+pub mod swd;
 pub mod timing;
 pub mod uart;
