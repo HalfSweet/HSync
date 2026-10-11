@@ -311,6 +311,50 @@ impl<T: Clone + 'static> Harness<T> {
     pub fn without_progress(&self) -> Vec<Item<T>> {
         without_progress(&self.items)
     }
+
+    /// Checks what was read so far against the promise of progress; see
+    /// [`assert_progress_promise`].
+    pub fn assert_progress_promise(&self)
+    where
+        T: Debug,
+    {
+        assert_progress_promise(&self.items);
+    }
+}
+
+/// Checks `items` against what progress promises (design.md §2): no event, gap or end that
+/// follows a `Progress(t)` starts before `t`, and events settle in order.
+///
+/// # Panics
+///
+/// When an item breaks the promise, naming it and the progress it passed.
+pub fn assert_progress_promise<T: Debug>(items: &[Item<T>]) {
+    let mut promised = Tick::ZERO;
+    let mut settled = Tick::ZERO;
+    for item in items {
+        match item {
+            Item::Progress(tick) => promised = promised.max(*tick),
+            Item::Event(event) => {
+                assert!(
+                    event.span.start >= promised,
+                    "{event:?} starts before the promised {promised}"
+                );
+                assert!(
+                    event.settled >= settled,
+                    "{event:?} settles before an earlier event's {settled}"
+                );
+                settled = event.settled;
+            }
+            Item::Gap(range) => assert!(
+                range.start >= promised,
+                "gap {range} starts before the promised {promised}"
+            ),
+            Item::End(tick) => assert!(
+                *tick >= promised,
+                "the end at {tick} comes before the promised {promised}"
+            ),
+        }
+    }
 }
 
 /// The block sizes [`assert_block_invariant`] tries.
@@ -345,11 +389,12 @@ pub const CONFIGS: [GraphConfig; 3] = [
 /// Runs `block`, less `gaps`, through fresh harnesses cut into blocks of every size in
 /// [`CUTS`], read with every pattern in [`PAUSES`], through every configuration in
 /// [`CONFIGS`], and checks that each run yields the events of one uninterrupted run, progress
-/// aside. `build` makes a harness for a configuration.
+/// aside, and that every run keeps the promise of progress ([`assert_progress_promise`]).
+/// `build` makes a harness for a configuration.
 ///
 /// # Panics
 ///
-/// When a run differs from the uninterrupted one.
+/// When a run differs from the uninterrupted one or breaks the promise of progress.
 pub fn assert_block_invariant<T>(
     build: impl Fn(GraphConfig) -> Harness<T>,
     block: &LogicBlock,
@@ -361,6 +406,7 @@ pub fn assert_block_invariant<T>(
         let mut harness = build(GraphConfig::default());
         harness.feed_with_gaps(block, gaps, &[u64::MAX]);
         harness.end();
+        harness.assert_progress_promise();
         harness.without_progress()
     };
     for config in CONFIGS {
@@ -370,6 +416,7 @@ pub fn assert_block_invariant<T>(
                 harness.drain_on_full = 1;
                 harness.feed_cut(block, gaps, cut, pauses);
                 harness.end();
+                harness.assert_progress_promise();
                 assert_eq!(
                     harness.without_progress(),
                     reference,
