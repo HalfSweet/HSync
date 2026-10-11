@@ -507,6 +507,13 @@ fn the_spi_stream_must_carry_bytes_on_mosi_msb_first() {
     assert_eq!(refused(four_bits), "wordBits = 8, found 4");
     assert_eq!(
         refused(SpiConfig {
+            mode: 1,
+            ..bus(true)
+        }),
+        "mode one of 0, 3, found 1"
+    );
+    assert_eq!(
+        refused(SpiConfig {
             bit_order: BitOrder::LsbFirst,
             ..bus(true)
         }),

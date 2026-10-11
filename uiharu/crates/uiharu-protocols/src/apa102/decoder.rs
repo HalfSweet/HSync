@@ -14,8 +14,8 @@
 //!
 //! The rules:
 //!
-//! - the bytes are the stream's MOSI words, 8 bits wide, most significant bit first; MISO and
-//!   the SPI mode are not looked at (the parts take data on the rising edge: modes 0 and 3);
+//! - the bytes are the stream's MOSI words, 8 bits wide, most significant bit first; MISO is
+//!   not looked at; the parts take data on the rising edge, so SPI mode 0 or 3 is required;
 //! - a start frame is four zero bytes: the last four zero bytes before a byte that is not zero,
 //!   so that a run of zeros longer than four — an end frame or a reset frame of zeros followed by
 //!   the next start frame — is told apart when it ends. That byte begins the frame, as its first
@@ -104,6 +104,7 @@ impl Apa102 {
             .equals("wordBits", 8)
             .equals("bitOrder", "msb-first")
             .equals("mosi", true)
+            .one_of("mode", [0, 3])
     }
 }
 
