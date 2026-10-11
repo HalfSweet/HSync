@@ -202,6 +202,14 @@ impl<T> Inbox<T> {
         self.cx.spend();
     }
 
+    /// The time of the item at the head, if one is waiting; see [`Item::time`].
+    pub fn head_time(&self) -> Option<Tick> {
+        match self.poll_peek() {
+            Poll::Ready(item) => Some(item.time()),
+            Poll::Pending => None,
+        }
+    }
+
     /// Waits for the next item and takes it; the end of the stream is returned again and
     /// again.
     pub fn recv(&mut self) -> impl Future<Output = Item<T>> + '_
@@ -228,6 +236,37 @@ impl<T> Drop for Inbox<T> {
     fn drop(&mut self) {
         self.queue.borrow_mut().remove_reader(self.reader);
     }
+}
+
+/// An input a node can wait on: an inbox, or a signal cursor.
+pub trait Readable {
+    /// `Ready` when an item (or a block of samples) is there to read without waiting; sets
+    /// the node to wait for input otherwise.
+    fn poll_ready(&self) -> Poll<()>;
+}
+
+impl<T> Readable for Inbox<T> {
+    fn poll_ready(&self) -> Poll<()> {
+        self.poll_peek().map(|_| ())
+    }
+}
+
+/// Waits until every input in `inputs` has something to read. A node with several inputs
+/// waits on all of them, then takes the item whose time ([`Item::time`]) is earliest — the
+/// one with the lowest index on a tie — so that what it does depends on the items alone,
+/// never on which input happened to fill first.
+pub fn ready_all<'a>(inputs: &'a [&'a dyn Readable]) -> impl Future<Output = ()> + 'a {
+    poll_fn(move |_| {
+        let mut ready = true;
+        for input in inputs {
+            ready &= input.poll_ready().is_ready();
+        }
+        if ready {
+            Poll::Ready(())
+        } else {
+            Poll::Pending
+        }
+    })
 }
 
 /// A node's writer on one of its output queues.

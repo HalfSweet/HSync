@@ -599,6 +599,15 @@ enum Found {
     Exhausted,
 }
 
+impl crate::node::Readable for SignalCursor {
+    fn poll_ready(&self) -> Poll<()> {
+        if self.block.is_some() {
+            return Poll::Ready(());
+        }
+        self.inbox.poll_ready()
+    }
+}
+
 impl SignalCursor {
     pub(crate) fn new(inbox: Inbox<Arc<LogicBlock>>) -> Self {
         Self {
@@ -621,6 +630,39 @@ impl SignalCursor {
     pub fn seek(&mut self, tick: Tick) {
         if tick > self.pos {
             self.pos = tick;
+        }
+        // Blocks that end at or before the position will never be read: letting them go
+        // frees the source's queue, which matters to a node that reads the samples beside
+        // another stream and moves through them as that stream tells it to.
+        if let Some(block) = self.block.take() {
+            if block.end() <= self.pos {
+                self.release(&block);
+            } else {
+                self.block = Some(block);
+            }
+        }
+        // Progress and gaps the position is past are no news either; the end stays.
+        while self.block.is_none() {
+            let passed = match self.inbox.poll_peek() {
+                Poll::Ready(item) => match &*item {
+                    Item::Event(event) if event.payload.end() <= self.pos => {
+                        Some(Some(Arc::clone(&event.payload)))
+                    }
+                    Item::Progress(tick) if *tick <= self.pos => Some(None),
+                    Item::Gap(range) if range.end <= self.pos => Some(None),
+                    _ => None,
+                },
+                Poll::Pending => None,
+            };
+            let Some(block) = passed else {
+                break;
+            };
+            self.inbox.advance();
+            if let Some(block) = block {
+                self.release(&block);
+            } else {
+                self.prev_tick = None;
+            }
         }
     }
 

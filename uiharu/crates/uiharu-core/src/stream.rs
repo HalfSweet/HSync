@@ -67,6 +67,17 @@ impl<T> Item<T> {
     pub fn is_end(&self) -> bool {
         matches!(self, Item::End(_))
     }
+
+    /// The tick at which the item takes effect: where an event's span starts, where a gap
+    /// begins, the tick progress or the end announces. A node reading several inputs takes
+    /// the item whose time is earliest, so that what it does depends on the items alone.
+    pub fn time(&self) -> Tick {
+        match self {
+            Item::Event(event) => event.span.start,
+            Item::Gap(range) => range.start,
+            Item::Progress(tick) | Item::End(tick) => *tick,
+        }
+    }
 }
 
 /// A reader's identity on a [`Broadcast`].

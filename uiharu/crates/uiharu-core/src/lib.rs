@@ -23,7 +23,8 @@ pub use graph::{
     NodeId, OutputRef, SourceHandle, SourceId, SourceSpec,
 };
 pub use node::{
-    Inbox, Io, Node, NodeCx, NodeFuture, NodeSpec, Outbox, ProgressSink, Provenance, Wait,
+    Inbox, Io, Node, NodeCx, NodeFuture, NodeSpec, Outbox, ProgressSink, Provenance, Readable,
+    Wait, ready_all,
 };
 pub use schema::{
     EventSchema, InputSpec, OutputSpec, PropValue, Props, Requirement, Requires, SchemaId,
