@@ -14,7 +14,11 @@ pub const ONEWIRE_EVENTS: SchemaId = SchemaId::new("onewire.events", 1);
 
 /// What travels on a 1-Wire link-layer stream: one event per low pulse the master started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum LinkEvent {
     /// A reset pulse, and whether a slave answered it.
     Reset {
@@ -61,7 +65,11 @@ pub enum EndReason {
 
 /// What travels on a 1-Wire network-layer stream.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum OneWireEvent {
     /// A reset began a transaction.
     Begin {
@@ -166,7 +174,7 @@ mod tests {
         );
         assert_eq!(
             json(&LinkEvent::BadSlot { low_ticks: 1500 }),
-            r#"{"kind":"bad-slot","low_ticks":1500}"#
+            r#"{"kind":"bad-slot","lowTicks":1500}"#
         );
     }
 
@@ -191,7 +199,7 @@ mod tests {
                 family: 0x28,
                 crc_ok: false
             }),
-            r#"{"kind":"rom","tx":2,"id":40,"family":40,"crc_ok":false}"#
+            r#"{"kind":"rom","tx":2,"id":40,"family":40,"crcOk":false}"#
         );
         assert_eq!(
             json(&OneWireEvent::Search {
@@ -201,7 +209,7 @@ mod tests {
                 conflicts: 2,
                 unanswered: 0
             }),
-            r#"{"kind":"search","tx":2,"id":1,"crc_ok":true,"conflicts":2,"unanswered":0}"#
+            r#"{"kind":"search","tx":2,"id":1,"crcOk":true,"conflicts":2,"unanswered":0}"#
         );
         assert_eq!(
             json(&OneWireEvent::Byte { tx, value: 0xbe }),

@@ -59,7 +59,11 @@ pub enum Ds18b20End {
 
 /// What travels on a DS18B20 event stream.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
 pub enum Ds18b20Event {
     /// A function command the decoder knows; an `end` follows.
     Command {
@@ -171,7 +175,7 @@ mod tests {
             }),
             concat!(
                 r#"{"kind":"scratchpad","tx":7,"bytes":[80,5,75,70,127,255,12,16,28],"#,
-                r#""crc_ok":true,"temperature_raw":1360,"th":75,"tl":70,"config":127,"#,
+                r#""crcOk":true,"temperatureRaw":1360,"th":75,"tl":70,"config":127,"#,
                 r#""resolution":12}"#
             )
         );
@@ -181,7 +185,7 @@ mod tests {
                 bytes: vec![0x91, 0x01],
                 temperature_raw: Some(0x0191)
             }),
-            r#"{"kind":"partial-scratchpad","tx":7,"bytes":[145,1],"temperature_raw":401}"#
+            r#"{"kind":"partial-scratchpad","tx":7,"bytes":[145,1],"temperatureRaw":401}"#
         );
         assert_eq!(
             json(&Ds18b20Event::WriteScratchpad {
