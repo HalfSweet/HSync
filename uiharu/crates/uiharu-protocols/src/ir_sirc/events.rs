@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `ir_sirc.events` contract: what a SIRC decoder emits for one infrared receiver.
+//! The `sirc.events` contract: what a SIRC decoder emits for one infrared receiver.
 //!
 //! The stream is unframed: a frame, or a frame that went wrong, is one event, decided once the
 //! silence after its last bit, or what went wrong, is certain. There is no `begin` or `end`,
@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use uiharu_core::{EventSchema, SchemaId};
 
 /// The schema of SIRC event streams.
-pub const IR_SIRC_EVENTS: SchemaId = SchemaId::new("ir_sirc.events", 1);
+pub const IR_SIRC_EVENTS: SchemaId = SchemaId::new("sirc.events", 1);
 
 /// Where a frame that began with a start mark went wrong.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

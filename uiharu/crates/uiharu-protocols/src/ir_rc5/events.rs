@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `ir_rc5.events` contract: what an RC-5 decoder emits for one infrared receiver.
+//! The `rc5.events` contract: what an RC-5 decoder emits for one infrared receiver.
 //!
 //! The stream is unframed: a frame, or a frame that went wrong, is one event, decided when its
 //! last half bit is certain. There is no `begin` or `end`, and nothing to abort: a frame cut off
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use uiharu_core::{EventSchema, SchemaId};
 
 /// The schema of RC-5 event streams.
-pub const IR_RC5_EVENTS: SchemaId = SchemaId::new("ir_rc5.events", 1);
+pub const IR_RC5_EVENTS: SchemaId = SchemaId::new("rc5.events", 1);
 
 /// The field of a frame in which it went wrong.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

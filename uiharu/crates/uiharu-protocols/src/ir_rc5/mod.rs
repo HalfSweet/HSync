@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Philips RC-5 infrared remote control, and its extension RC-5X: the decoder from the
-//! demodulated output of an infrared receiver to `ir_rc5.events`, and a waveform synthesizer.
+//! demodulated output of an infrared receiver to `rc5.events`, and a waveform synthesizer.
 //!
 //! An RC-5 remote control sends a frame of 14 bi-phase coded bits — two start bits, a toggle
 //! bit, a 5-bit address and a 6-bit command — when a key is pressed, and again every 113.8 ms

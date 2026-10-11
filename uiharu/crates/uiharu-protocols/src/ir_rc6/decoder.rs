@@ -191,7 +191,7 @@ pub enum Rc6ConfigError {
     Tolerance(u8),
 }
 
-/// The RC-6 decoder node: logic samples in, `ir_rc6.events` out.
+/// The RC-6 decoder node: logic samples in, `rc6.events` out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Rc6 {
     config: Rc6Config,

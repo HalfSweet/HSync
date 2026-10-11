@@ -1,6 +1,6 @@
 # RC-6 infrared
 
-The `ir-rc6` decoder reads the mode 0 frames of a Philips RC-6 infrared remote control from the output of an infrared receiver module and emits them as `ir_rc6.events`. It follows the RC-6 format as Philips published it and as the SB-Projects description of RC-6 sets it out: a 36 kHz carrier and bi-phase coding, with a unit `t` of 16 carrier periods, 444.4 µs. Mode 0 is the mode of consumer electronics.
+The `ir-rc6` decoder reads the mode 0 frames of a Philips RC-6 infrared remote control from the output of an infrared receiver module and emits them as `rc6.events`. It follows the RC-6 format as Philips published it and as the SB-Projects description of RC-6 sets it out: a 36 kHz carrier and bi-phase coding, with a unit `t` of 16 carrier periods, 444.4 µs. Mode 0 is the mode of consumer electronics.
 
 The receiver demodulates the carrier: its output is at **mark** while it receives the carrier and at **space** otherwise. One decoder reads one receiver.
 
@@ -18,7 +18,7 @@ The input port `logic` requires of the source `channels >= channel + 1` and a ra
 
 The output port `events` declares `protocol = "rc6"`.
 
-## The stream: `ir_rc6.events` v1
+## The stream: `rc6.events` v1
 
 The stream is unframed: a frame, or a frame that went wrong, is one event, decided when its last half bit is certain. There is no `begin` or `end`, and nothing is ever aborted: a frame cut off by a gap or by the end of the samples is not reported.
 

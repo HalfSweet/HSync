@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Sony SIRC infrared remote control: the decoder from the demodulated output of an infrared
-//! receiver to `ir_sirc.events`, and a waveform synthesizer.
+//! receiver to `sirc.events`, and a waveform synthesizer.
 //!
 //! A SIRC remote control sends a frame — a start mark, then 12, 15 or 20 pulse-width coded bits
 //! carrying a command, an address and in 20-bit frames an extended field — every 45 ms while a

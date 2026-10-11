@@ -1,6 +1,6 @@
 # RC-5 infrared
 
-The `ir-rc5` decoder reads the frames of a Philips RC-5 infrared remote control, and of its extension RC-5X, from the output of an infrared receiver module and emits them as `ir_rc5.events`. It follows Philips Semiconductors' data sheet of the SAA3010 RC-5 transmitter and the SB-Projects description of RC-5 and its extension: a 36 kHz carrier and bi-phase coding, each bit 64 carrier periods (1.778 ms) long, in two halves of 888.9 µs at opposite levels.
+The `ir-rc5` decoder reads the frames of a Philips RC-5 infrared remote control, and of its extension RC-5X, from the output of an infrared receiver module and emits them as `rc5.events`. It follows Philips Semiconductors' data sheet of the SAA3010 RC-5 transmitter and the SB-Projects description of RC-5 and its extension: a 36 kHz carrier and bi-phase coding, each bit 64 carrier periods (1.778 ms) long, in two halves of 888.9 µs at opposite levels.
 
 The receiver demodulates the carrier: its output is at **mark** while it receives the carrier and at **space** otherwise. One decoder reads one receiver.
 
@@ -18,7 +18,7 @@ The input port `logic` requires of the source `channels >= channel + 1` and a ra
 
 The output port `events` declares `protocol = "rc5"`.
 
-## The stream: `ir_rc5.events` v1
+## The stream: `rc5.events` v1
 
 The stream is unframed: a frame, or a frame that went wrong, is one event, decided when its last half bit is certain. There is no `begin` or `end`, and nothing is ever aborted: a frame cut off by a gap or by the end of the samples is not reported.
 

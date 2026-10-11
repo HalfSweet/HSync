@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `ir_nec.events` contract: what an NEC decoder emits for one infrared receiver.
+//! The `nec.events` contract: what an NEC decoder emits for one infrared receiver.
 //!
 //! The stream is unframed: a frame, a repeat code or a frame that could not be read is one
 //! event, decided when its last mark or space is certain. There is no `begin` or `end`, and
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use uiharu_core::{EventSchema, SchemaId};
 
 /// The schema of NEC event streams.
-pub const IR_NEC_EVENTS: SchemaId = SchemaId::new("ir_nec.events", 1);
+pub const IR_NEC_EVENTS: SchemaId = SchemaId::new("nec.events", 1);
 
 /// Where a frame that began with a leader went wrong.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]

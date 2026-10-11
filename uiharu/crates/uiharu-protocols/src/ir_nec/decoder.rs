@@ -188,7 +188,7 @@ pub enum NecConfigError {
     Tolerance(u8),
 }
 
-/// The NEC decoder node: logic samples in, `ir_nec.events` out.
+/// The NEC decoder node: logic samples in, `nec.events` out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Nec {
     config: NecConfig,

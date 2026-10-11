@@ -1,6 +1,6 @@
 # SIRC infrared
 
-The `ir-sirc` decoder reads the frames of a Sony SIRC infrared remote control from the output of an infrared receiver module and emits them as `ir_sirc.events`. It follows the SIRC format as public descriptions give it, the SB-Projects description of the Sony SIRC protocol among them: a 40 kHz carrier and pulse width coding, with a unit `T` of 600 µs, 24 carrier periods.
+The `ir-sirc` decoder reads the frames of a Sony SIRC infrared remote control from the output of an infrared receiver module and emits them as `sirc.events`. It follows the SIRC format as public descriptions give it, the SB-Projects description of the Sony SIRC protocol among them: a 40 kHz carrier and pulse width coding, with a unit `T` of 600 µs, 24 carrier periods.
 
 The receiver demodulates the carrier: its output is at **mark** while it receives the carrier and at **space** otherwise. One decoder reads one receiver.
 
@@ -18,7 +18,7 @@ The input port `logic` requires of the source `channels >= channel + 1` and a ra
 
 The output port `events` declares `protocol = "sirc"`.
 
-## The stream: `ir_sirc.events` v1
+## The stream: `sirc.events` v1
 
 The stream is unframed: a frame, or a frame that went wrong, is one event, decided once the silence after its last bit, or what went wrong, is certain. There is no `begin` or `end`, and nothing is ever aborted: a frame cut off by a gap or by the end of the samples before its silence was seen is not reported.
 

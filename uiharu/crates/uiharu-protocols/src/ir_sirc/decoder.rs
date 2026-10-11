@@ -171,7 +171,7 @@ pub enum SircConfigError {
     Tolerance(u8),
 }
 
-/// The SIRC decoder node: logic samples in, `ir_sirc.events` out.
+/// The SIRC decoder node: logic samples in, `sirc.events` out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Sirc {
     config: SircConfig,

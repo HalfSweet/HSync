@@ -1,6 +1,6 @@
 # NEC infrared
 
-The `ir-nec` decoder reads the frames and repeat codes of an NEC infrared remote control from the output of an infrared receiver module and emits them as `ir_nec.events`. It follows the NEC transmission format as its users publish it — Vishay's application note _Data Formats for IR Remote Control_ (document 80071), Altium's _NEC Infrared Transmission Protocol_ and the SB-Projects description of the NEC protocol: a 38 kHz carrier, pulse distance coding, every duration a multiple of 562.5 µs.
+The `ir-nec` decoder reads the frames and repeat codes of an NEC infrared remote control from the output of an infrared receiver module and emits them as `nec.events`. It follows the NEC transmission format as its users publish it — Vishay's application note _Data Formats for IR Remote Control_ (document 80071), Altium's _NEC Infrared Transmission Protocol_ and the SB-Projects description of the NEC protocol: a 38 kHz carrier, pulse distance coding, every duration a multiple of 562.5 µs.
 
 The receiver demodulates the carrier: its output is at **mark** while it receives the carrier and at **space** otherwise. One decoder reads one receiver.
 
@@ -18,7 +18,7 @@ The input port `logic` requires of the source `channels >= channel + 1` and a ra
 
 The output port `events` declares `protocol = "nec"`.
 
-## The stream: `ir_nec.events` v1
+## The stream: `nec.events` v1
 
 The stream is unframed: a frame, a repeat code or a frame that went wrong is one event, decided when its last mark or space is certain. There is no `begin` or `end`, and nothing is ever aborted: a frame cut off by a gap or by the end of the samples is not reported.
 

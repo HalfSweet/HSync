@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! Philips RC-6 infrared remote control, mode 0: the decoder from the demodulated output of an
-//! infrared receiver to `ir_rc6.events`, and a waveform synthesizer.
+//! infrared receiver to `rc6.events`, and a waveform synthesizer.
 //!
 //! An RC-6 remote control sends a frame — a leader, a start bit, three mode bits, a trailer bit
 //! of double length that carries the toggle, then in mode 0 an 8-bit address and an 8-bit

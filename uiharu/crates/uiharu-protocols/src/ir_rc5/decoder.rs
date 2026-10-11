@@ -178,7 +178,7 @@ pub enum Rc5ConfigError {
     Tolerance(u8),
 }
 
-/// The RC-5 decoder node: logic samples in, `ir_rc5.events` out.
+/// The RC-5 decoder node: logic samples in, `rc5.events` out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Rc5 {
     config: Rc5Config,
