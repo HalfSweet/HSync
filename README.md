@@ -11,7 +11,7 @@ Capture, trigger, decode and measure, with one app for logic analyzers from seve
 [![Release](https://img.shields.io/github/v/release/HalfSweet/HSync?style=flat-square&label=release&color=45658D)](https://github.com/HalfSweet/HSync/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/HalfSweet/HSync/total?style=flat-square&color=277165)](https://github.com/HalfSweet/HSync/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-665A8A?style=flat-square)](#download)
-[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-845169?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20GPL--3.0-845169?style=flat-square)](#license)
 
 **English** · [简体中文](README.zh-CN.md)
 
@@ -197,4 +197,4 @@ pnpm bundle       # build the installers for this machine
 
 ## License
 
-HSync is free software, released under the [GNU General Public License v3.0 or later](LICENSE).
+HSync is free software. Its own code is dual-licensed: use it under the [Apache License 2.0](LICENSE-APACHE) or the [GNU General Public License v3.0 or later](LICENSE-GPL), at your option. The protocol decoders that come with DSView (`src-tauri/resources/decoders/`) keep their GPL license as they are, so the installers, which bundle them, are distributed under the GPL-3.0-or-later. The [uiharu](uiharu/) decode engine is licensed under the [Apache License 2.0](uiharu/LICENSE) alone.

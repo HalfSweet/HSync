@@ -11,7 +11,7 @@
 [![Release](https://img.shields.io/github/v/release/HalfSweet/HSync?style=flat-square&label=release&color=45658D)](https://github.com/HalfSweet/HSync/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/HalfSweet/HSync/total?style=flat-square&color=277165)](https://github.com/HalfSweet/HSync/releases)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-665A8A?style=flat-square)](#下载)
-[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-845169?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/license-Apache--2.0%20OR%20GPL--3.0-845169?style=flat-square)](#许可)
 
 [English](README.md) · **简体中文**
 
@@ -197,4 +197,4 @@ pnpm bundle       # 构建本机的安装包
 
 ## 许可
 
-HSync 是自由软件，以 [GNU 通用公共许可证 3.0 或更高版本](LICENSE)发布。
+HSync 是自由软件。它自身的代码采用双重许可：你可以选择 [Apache 许可证 2.0](LICENSE-APACHE) 或 [GNU 通用公共许可证 3.0 或更高版本](LICENSE-GPL)。随 DSView 提供的协议解码器（`src-tauri/resources/decoders/`）保持其原有的 GPL 许可，因此捆绑了它们的安装包以 GPL-3.0-or-later 分发。解码引擎 [uiharu](uiharu/) 仅以 [Apache 许可证 2.0](uiharu/LICENSE) 授权。
