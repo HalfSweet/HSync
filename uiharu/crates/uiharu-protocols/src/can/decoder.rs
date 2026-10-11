@@ -82,6 +82,12 @@
 //!   which tells it from an extended one. A data batch flushed by an abnormal end, and an end
 //!   decided after its offending bit, settle where they were decided; `aborted` is placed,
 //!   with no span, where the samples stopped.
+//! - **Progress.** Progress is passed on, held back to the start of what a later event may
+//!   still cover: the frame under way, from the start of its SOF, as a field, a data batch or
+//!   an error flag not yet reported may begin well before the bit being read; the bit being
+//!   read, which may begin a frame or an overload frame; and, while the decoder integrates at
+//!   the first sample or after a gap and has not yet found the bus busy, that sample, where a
+//!   partial frame would begin.
 //!
 //! Limits: one receive line; one sample point for both phases; the resynchronisation has no
 //! jump width limit and no phase segments; non-ISO FD frames (without the stuff count) and
@@ -370,6 +376,8 @@ impl From<Stop> for Halt {
 #[derive(Debug)]
 struct FrameState {
     id: FrameId,
+    /// Where the frame began, the start of its SOF: none of its events begins earlier.
+    start: Tick,
     /// The value of the last bit and how many equal bits end there, for dynamic stuffing.
     last: bool,
     same: u8,
@@ -395,6 +403,7 @@ impl FrameState {
         }
         Self {
             id,
+            start: sof.start,
             last: sof.value(),
             same: 1,
             prev: sof.value(),
@@ -533,9 +542,18 @@ impl Decoder {
         bit.end = self.clock.tick(100);
     }
 
+    /// Passes progress to `tick` on, held back to `hold` and to the start of the bit being
+    /// read: no event that follows may begin earlier.
+    async fn progress(&mut self, tick: Tick, hold: Option<Tick>) {
+        let bit = self.clock.tick(self.bit.saturating_mul(100));
+        let hold = hold.map_or(bit, |hold| hold.min(bit));
+        self.out.progress(tick.min(hold)).await;
+    }
+
     /// Reads the next bit: waits for edges up to its sample point, synchronising on them, and
-    /// reads the level there.
-    async fn raw_bit(&mut self) -> Result<Bit, Stop> {
+    /// reads the level there. Progress met meanwhile is passed on held back to `hold`, where
+    /// the oldest part a later event may still cover begins, and to the start of the bit.
+    async fn raw_bit(&mut self, hold: Option<Tick>) -> Result<Bit, Stop> {
         let sample = loop {
             let target = self
                 .clock
@@ -554,7 +572,7 @@ impl Decoder {
                     }
                 }
                 Change::Quiet(tick) => break tick,
-                Change::Progress(tick) => self.out.progress(tick).await,
+                Change::Progress(tick) => self.progress(tick, hold).await,
                 Change::Gap(range) => return Err(Stop::Gap(range)),
                 Change::End(tick) => return Err(Stop::End(tick)),
             }
@@ -562,7 +580,7 @@ impl Decoder {
         let levels = loop {
             match self.signal.sample().await {
                 Sample::At { levels, .. } => break levels,
-                Sample::Progress(tick) => self.out.progress(tick).await,
+                Sample::Progress(tick) => self.progress(tick, hold).await,
                 Sample::Gap(range) => return Err(Stop::Gap(range)),
                 Sample::End(tick) => return Err(Stop::End(tick)),
             }
@@ -584,7 +602,9 @@ impl Decoder {
 
     /// Passes over a dominant stretch, which a bit just sampled dominant began: waits for the
     /// line to turn recessive and goes on with the first bit sampled after that, as if every
-    /// bit in between had been sampled dominant.
+    /// bit in between had been sampled dominant. Progress passes as it comes: stretches are
+    /// skipped only in a delimiter and while integrating, where nothing is reported afterwards
+    /// but the end of a partial frame, placed at a later sample point or where the samples stop.
     async fn skip_dominant(&mut self) -> Result<(), Stop> {
         loop {
             match self.signal.next_change(self.mask).await {
@@ -643,7 +663,9 @@ impl Decoder {
                     return Err(stop);
                 }
             }
-            let bit = match self.raw_bit().await {
+            // Until the bus is seen busy, a partial frame may still begin at the first sample.
+            let hold = (report && partial.is_none()).then_some(first);
+            let bit = match self.raw_bit(hold).await {
                 Ok(bit) => bit,
                 Err(stop) => {
                     self.abort_partial(partial, stop).await;
@@ -687,7 +709,8 @@ impl Decoder {
                     self.restart(tick);
                     self.last_dominant = false;
                     self.synced = true;
-                    let bit = self.raw_bit().await?;
+                    // The bit may be a SOF: progress stops at its start, the edge.
+                    let bit = self.raw_bit(None).await?;
                     if bit.dominant {
                         return Ok(bit);
                     }
@@ -704,7 +727,8 @@ impl Decoder {
     /// third a SOF; after three recessive bits the bus is idle.
     async fn intermission(&mut self) -> Result<State, Stop> {
         for position in 1..=3 {
-            let bit = self.raw_bit().await?;
+            // Each bit may begin a frame or an overload frame: progress stops at its start.
+            let bit = self.raw_bit(None).await?;
             if bit.dominant {
                 if position == 3 {
                     return Ok(State::Frame(bit));
@@ -721,7 +745,7 @@ impl Decoder {
     async fn delimiter(&mut self) -> Result<State, Stop> {
         let mut recessive = 0;
         while recessive < 8 {
-            let bit = self.raw_bit().await?;
+            let bit = self.raw_bit(None).await?;
             if bit.dominant {
                 recessive = 0;
                 self.skip_dominant().await?;
@@ -910,9 +934,10 @@ impl Decoder {
         Ok(Eof { first, last })
     }
 
-    /// Reads a bit of the frame and watches for six consecutive dominant bits.
+    /// Reads a bit of the frame and watches for six consecutive dominant bits. Progress stops
+    /// at the frame's start until it ends.
     async fn frame_bit(&mut self, frame: &mut FrameState) -> Result<Bit, Halt> {
-        let bit = self.raw_bit().await?;
+        let bit = self.raw_bit(Some(frame.start)).await?;
         frame.prev = bit.value();
         if bit.dominant {
             if frame.run == 0 {

@@ -1297,6 +1297,45 @@ fn data_shows_up_before_the_frame_ends() {
 }
 
 #[test]
+fn progress_waits_at_the_start_of_the_frame_under_way() {
+    let config = config();
+    let mut waveform = bus_waveform(&config);
+    let sent = waveform.frame(&CanFrame::base(0x123, &payload(8, 1)));
+    waveform.idle(20);
+    let block = waveform.finish();
+    let sof = sent[first(&sent, BitKind::Sof)].start;
+    let mut harness = harness(config);
+    // Read after every block, so that progress follows the samples closely.
+    harness.feed_cut(&block, &[], &[5], &[usize::MAX]);
+    harness.end();
+    harness.assert_progress_promise();
+    let progress = |items: &[Item<CanEvent>]| -> Vec<Tick> {
+        items
+            .iter()
+            .filter_map(|item| match item {
+                Item::Progress(tick) => Some(*tick),
+                _ => None,
+            })
+            .collect()
+    };
+    let items = &harness.items;
+    let begin = items
+        .iter()
+        .position(|item| item.event().is_some())
+        .expect("the frame begins");
+    let end = items
+        .iter()
+        .rposition(|item| item.event().is_some())
+        .expect("the frame ends");
+    // While the frame is under way, its data batch and its end may reach back to its SOF...
+    let within = progress(&items[begin..end]);
+    assert!(!within.is_empty(), "{items:?}");
+    assert!(within.iter().all(|tick| *tick == sof), "{within:?}");
+    // ...and once it has ended, progress follows the samples to their end.
+    assert_eq!(progress(&items[end..]).last(), Some(&block.end()));
+}
+
+#[test]
 fn the_source_must_be_fast_and_wide_enough() {
     let build = |channels: u8, rate: u64, config: CanConfig| {
         Harness::build(
@@ -1771,7 +1810,8 @@ proptest! {
     #![proptest_config(ProptestConfig { cases: 48, ..ProptestConfig::default() })]
 
     /// Blocks of any size, a reader that pauses at random and tiny queues and budgets all
-    /// yield the events of one uninterrupted run, settled in order, within the queues' bounds.
+    /// yield the events of one uninterrupted run, settled in order, within the queues' bounds,
+    /// and keep the promise of progress.
     #[test]
     fn blocks_pauses_queues_and_budgets_do_not_change_the_events(
         traffic in arb_traffic(),
@@ -1803,6 +1843,7 @@ proptest! {
         let mut reference = harness_on(config.clone(), FAST_RATE, GraphConfig::default());
         reference.feed_with_gaps(&block, &gaps, &[u64::MAX]);
         reference.end();
+        reference.assert_progress_promise();
         let reference = reference.without_progress();
         assert_settled_in_order(&reference);
 
@@ -1810,6 +1851,7 @@ proptest! {
         harness.drain_on_full = 1;
         harness.feed_cut(&block, &gaps, &sizes, &pauses);
         harness.end();
+        harness.assert_progress_promise();
         prop_assert_eq!(harness.without_progress(), reference);
         let stats = harness.pipeline().stats();
         prop_assert!(stats.within_capacity(), "{stats:?}");
