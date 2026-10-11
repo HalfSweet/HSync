@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 (2026-10-11)
+
+### Bug Fixes
+
+- **pxlogic:** Stop captures failing at once on Windows (#22) ([4a2cd05](https://github.com/HalfSweet/HSync/commit/4a2cd058dcc6bbe72f6110b7bec11eddc0590dfb))
+
 ## 0.1.3 (2026-10-11)
 
 ### Features
