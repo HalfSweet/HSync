@@ -28,3 +28,4 @@ pub mod swd;
 pub mod timing;
 pub mod uart;
 pub mod usb;
+pub mod ws281x;
