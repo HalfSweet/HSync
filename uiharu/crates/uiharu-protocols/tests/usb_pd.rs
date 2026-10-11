@@ -1,22 +1,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The USB Power Delivery decoder on synthesized BMC waveforms.
+//! The USB Power Delivery decoder on synthesized BMC waveforms, and a decoder built on it
+//! reading packets through the bus cursor.
 
 use std::collections::BTreeSet;
 
 use proptest::prelude::*;
 use serde::Serialize;
-use uiharu_core::testing::{Harness, assert_block_invariant};
+use uiharu_core::testing::{self, Harness, assert_block_invariant};
 use uiharu_core::{
-    GraphConfig, GraphError, Item, LogicBlock, SignalItem, Tick, TickRange, TimeBase,
+    EventSchema, GraphConfig, GraphError, InputRef, InputSpec, Io, Item, LogicBlock, Node,
+    NodeFuture, NodeId, NodeSpec, Outbox, OutputRef, OutputSpec, Props, Requires, SchemaId,
+    SignalItem, Tick, TickRange, TimeBase,
 };
 use uiharu_protocols::usb_pd::synth::{
     Faults, Header, UsbPdWaveform, battery_pdo, crc32, extended_header, fixed_pdo, object_bytes,
     pps_apdo, request, variable_pdo,
 };
 use uiharu_protocols::usb_pd::{
-    DATA_BATCH, EndReason, ExtendedMessageHeader, KCode, MessageHeader, OrderedSet, PowerObject,
-    RequestObject, UsbPd, UsbPdConfig, UsbPdEvent,
+    DATA_BATCH, EndReason, ErrorReason, ExtendedMessageHeader, Field, KCode, MessageHeader, Next,
+    OrderedSet, PacketId, PowerObject, Read, ReadError, RequestObject, UsbPd, UsbPdBus,
+    UsbPdConfig, UsbPdEvent,
 };
 
 const CHANNELS: u8 = 2;
@@ -1929,5 +1933,265 @@ proptest! {
         assert_well_formed(&harness.items);
         let stats = harness.pipeline().stats();
         prop_assert!(stats.within_capacity(), "{:?}", stats);
+    }
+}
+
+/// A decoder built on USB PD for the test: what it read of each packet through the bus cursor.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Summary {
+    pkt: PacketId,
+    fields: Vec<String>,
+    ending: Result<(), ReadError>,
+}
+
+impl EventSchema for Summary {
+    const SCHEMA: SchemaId = SchemaId::new("test.usb-pd-summary", 1);
+}
+
+/// Reads up to `fields` fields of each packet and drains the rest.
+struct Summarize {
+    fields: usize,
+}
+
+impl Summarize {
+    fn input(node: NodeId) -> InputRef<UsbPdEvent> {
+        InputRef::of_node(node, 0)
+    }
+
+    fn output(node: NodeId) -> OutputRef<Summary> {
+        OutputRef::of_node(node, 0)
+    }
+}
+
+impl Node for Summarize {
+    fn spec(&self) -> NodeSpec {
+        NodeSpec {
+            name: "summarize".into(),
+            inputs: vec![InputSpec::new::<UsbPdEvent>("packets", Requires::new())],
+            outputs: vec![OutputSpec::new::<Summary>("summaries", Props::new())],
+        }
+    }
+
+    fn start(self: Box<Self>, mut io: Io) -> NodeFuture {
+        let bus = UsbPdBus::new(io.input(0));
+        Box::pin(summarize(bus, io.output(0), self.fields))
+    }
+}
+
+/// A field in a few words.
+fn field_line(field: &Field) -> String {
+    match field {
+        Field::Sop { set, corrupt: c } => format!("sop {}{}", name(set), corrupt(c)),
+        Field::HardReset { corrupt: c } => format!("hard-reset{}", corrupt(c)),
+        Field::CableReset { corrupt: c } => format!("cable-reset{}", corrupt(c)),
+        Field::Header(header) => format!("header {}", header.message_type),
+        Field::ExtendedHeader(header) => format!("extended-header {}", header.data_size),
+        Field::Object { index, raw } => format!("object #{index} {raw:08x}"),
+        Field::Pdo { index, .. } => format!("pdo #{index}"),
+        Field::Rdo(request) => format!("rdo {}", request.position),
+        Field::Data { offset, bytes } => format!("data +{offset} {}", hex(bytes)),
+        Field::Crc { ok, .. } => format!("crc{}", if *ok { "" } else { " bad" }),
+    }
+}
+
+async fn summarize(mut bus: UsbPdBus, mut out: Outbox<Summary>, wanted: usize) {
+    loop {
+        match bus.next().await {
+            Next::Packet(mut packet) => {
+                let pkt = packet.id();
+                let mut fields = Vec::new();
+                let ending = loop {
+                    if fields.len() == wanted {
+                        break packet.drain().await;
+                    }
+                    match packet.field_or_end().await {
+                        Ok(Read::Field(field)) => fields.push(field_line(&field)),
+                        Ok(Read::End) => break Ok(()),
+                        Err(error) => break Err(error),
+                    }
+                };
+                let at = packet.consumed();
+                let summary = Summary {
+                    pkt,
+                    fields,
+                    ending,
+                };
+                out.emit(at, summary).await;
+            }
+            Next::Gap(range) => out.gap(range).await,
+            Next::Progress(tick) => out.progress(tick).await,
+            Next::End(tick) => {
+                out.end(tick).await;
+                return;
+            }
+        }
+        // Whatever a packet left unread was drained.
+        let _ = bus.finish().await;
+    }
+}
+
+/// Source → USB PD → summaries of `wanted` fields, fed in blocks of 57 with `gaps` left out,
+/// through tiny queues.
+fn summaries(block: &LogicBlock, gaps: &[TickRange], wanted: usize) -> Vec<Item<Summary>> {
+    let mut harness = Harness::build(
+        CHANNELS,
+        TimeBase::new(RATE),
+        GraphConfig {
+            queue_capacity: 2,
+            budget: 3,
+        },
+        |graph, source| {
+            let pd = graph.add(UsbPd::new(config()).expect("a valid configuration"));
+            graph.connect(source.samples, UsbPd::input(pd))?;
+            let summarize = graph.add(Summarize { fields: wanted });
+            graph.connect(UsbPd::events(pd), Summarize::input(summarize))?;
+            Ok(Summarize::output(summarize))
+        },
+    )
+    .expect("builds");
+    harness.drain_on_full = 1;
+    harness.feed_with_gaps(block, gaps, &[57]);
+    harness.end();
+    testing::without_progress(&harness.items)
+}
+
+#[test]
+fn decoders_built_on_usb_pd_read_packets_through_the_bus_cursor() {
+    let pdos = [fixed_pdo(5000, 3000, 0), fixed_pdo(9000, 2000, 0)];
+    let data: Vec<u8> = (1..=26).collect();
+    let rdo = request(1, 3000, 3000, 0);
+    let mut waveform = waveform(RATE);
+    waveform.message(
+        OrderedSet::Sop,
+        source_capabilities(0, 2),
+        &object_bytes(&pdos),
+    );
+    waveform.idle_bits(12);
+    waveform.message(OrderedSet::Sop, control(1, 0), &[]);
+    waveform.idle_bits(12);
+    waveform.message(OrderedSet::Sop, extended(1, 1, 7), &chunk_of(0, &data));
+    waveform.idle_bits(12);
+    waveform.message(OrderedSet::Sop, request_header(0), &object_bytes(&[rdo]));
+    waveform.idle_bits(12);
+    waveform.message_with(OrderedSet::Sop, control(3, 1), &[], &symbol(5, 0));
+    waveform.idle_bits(12);
+    waveform.hard_reset();
+    waveform.idle_bits(12);
+    let cut_off = waveform.position();
+    waveform.message(OrderedSet::Sop, control(3, 2), &[]);
+    waveform.idle_bits(12);
+    waveform.message(OrderedSet::Sop, control(1, 2), &[]);
+    waveform.idle_bits(12);
+    let last = waveform.position();
+    waveform.message(OrderedSet::Sop, control(6, 3), &[]);
+    let whole = waveform.finish();
+    // The seventh packet loses samples in its header, the last one is cut off in its CRC.
+    let gap_start = cut_off.offset(BIT * 90);
+    let gap = TickRange::new(gap_start, gap_start.offset(60));
+    let end = last.offset(BIT * 120);
+    let block = whole
+        .slice(TickRange::new(Tick::ZERO, end))
+        .expect("a slice");
+    let crc = |ok: bool| if ok { "crc" } else { "crc bad" };
+    let expected: Vec<(Vec<String>, Result<(), ReadError>)> = vec![
+        (
+            vec![
+                "sop sop".to_owned(),
+                "header 1".to_owned(),
+                format!("object #1 {:08x}", pdos[0]),
+                "pdo #1".to_owned(),
+                format!("object #2 {:08x}", pdos[1]),
+                "pdo #2".to_owned(),
+                crc(true).to_owned(),
+            ],
+            Ok(()),
+        ),
+        (
+            vec![
+                "sop sop".to_owned(),
+                "header 1".to_owned(),
+                "crc".to_owned(),
+            ],
+            Ok(()),
+        ),
+        (
+            vec![
+                "sop sop".to_owned(),
+                "header 1".to_owned(),
+                "extended-header 30".to_owned(),
+                format!("data +0 {}", hex(&data)),
+                "crc".to_owned(),
+            ],
+            Ok(()),
+        ),
+        (
+            vec![
+                "sop sop".to_owned(),
+                "header 2".to_owned(),
+                format!("object #1 {rdo:08x}"),
+                "rdo 1".to_owned(),
+                "crc".to_owned(),
+            ],
+            Ok(()),
+        ),
+        (
+            vec!["sop sop".to_owned()],
+            Err(ReadError::Damaged(Some(ErrorReason::Symbol))),
+        ),
+        (vec!["hard-reset".to_owned()], Ok(())),
+        (vec!["sop sop".to_owned()], Err(ReadError::Truncated)),
+        (
+            vec![
+                "sop sop".to_owned(),
+                "header 1".to_owned(),
+                "crc".to_owned(),
+            ],
+            Ok(()),
+        ),
+        (
+            vec!["sop sop".to_owned(), "header 6".to_owned()],
+            Err(ReadError::Truncated),
+        ),
+    ];
+
+    // Every field read, then the same packets read two fields at most and drained.
+    for wanted in [usize::MAX, 2] {
+        let items = summaries(&block, &[gap], wanted);
+        let read: Vec<&Summary> = items
+            .iter()
+            .filter_map(Item::event)
+            .map(|event| &event.payload)
+            .collect();
+        assert_eq!(read.len(), expected.len(), "{wanted} fields");
+        for (n, (summary, (fields, ending))) in read.iter().zip(&expected).enumerate() {
+            assert_eq!(summary.pkt, PacketId(n as u64 + 1));
+            let fields: Vec<String> = fields.iter().take(wanted).cloned().collect();
+            assert_eq!(summary.fields, fields, "packet {} of {wanted}", n + 1);
+            assert_eq!(summary.ending, *ending, "packet {} of {wanted}", n + 1);
+        }
+        // The gap and the end follow the packets they cut off.
+        assert!(matches!(items[7], Item::Gap(range) if range == gap));
+        assert_eq!(items.last(), Some(&Item::End(end)));
+
+        // Each summary covers its packet from its begin to its end, and settles with the end.
+        let mut decoder = harness(&config(), RATE, GraphConfig::default());
+        decoder.feed_with_gaps(&block, &[gap], &[u64::MAX]);
+        decoder.end();
+        for summary in items.iter().filter_map(Item::event) {
+            let pkt = summary.payload.pkt;
+            let of_packet: Vec<_> = decoder
+                .events()
+                .into_iter()
+                .filter(|event| event.payload.pkt() == pkt)
+                .collect();
+            let begin = of_packet.first().expect("a begin");
+            let end = of_packet.last().expect("an end");
+            assert_eq!(
+                summary.span,
+                begin.span.join(end.span),
+                "packet {pkt:?} of {wanted}"
+            );
+            assert_eq!(summary.settled, end.settled, "packet {pkt:?} of {wanted}");
+        }
     }
 }
