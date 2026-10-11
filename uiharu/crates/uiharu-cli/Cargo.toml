@@ -1,0 +1,22 @@
+[package]
+name = "uiharu-cli"
+description = "Command line of the uiharu decode engine: replays captures through a decode pipeline and exports the events as NDJSON"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "uiharu"
+path = "src/main.rs"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
+uiharu-protocols = { path = "../uiharu-protocols", version = "0.1.0" }
+
+[lints]
+workspace = true

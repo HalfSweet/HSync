@@ -5010,6 +5010,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "uiharu-cli"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "uiharu-core",
+ "uiharu-protocols",
+]
+
+[[package]]
+name = "uiharu-core"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "uiharu-protocols"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "uiharu-core",
+]
+
+[[package]]
 name = "unarray"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

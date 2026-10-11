@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "src-tauri"]
+# The uiharu decode engine (uiharu/) is Apache-2.0 and must not depend on the hsync crates.
+members = ["crates/*", "src-tauri", "uiharu/crates/*"]
 
 [workspace.package]
 version = "0.1.4"
