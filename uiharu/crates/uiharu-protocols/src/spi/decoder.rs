@@ -48,8 +48,10 @@ impl BitOrder {
     }
 }
 
-/// How the bus is wired and clocked.
+/// How the bus is wired and clocked. A description may leave fields out: they take the
+/// defaults.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct SpiConfig {
     /// The clock channel.
     pub clk: u8,
@@ -474,6 +476,23 @@ mod tests {
             }),
             SpiConfigError::Channel(64)
         );
+    }
+
+    #[test]
+    fn descriptions_may_leave_fields_out() {
+        let config: SpiConfig =
+            serde_json::from_str(r#"{"mode": 3, "miso": null}"#).expect("parses");
+        assert_eq!(
+            config,
+            SpiConfig {
+                mode: 3,
+                miso: None,
+                ..SpiConfig::default()
+            }
+        );
+        let whole: SpiConfig = serde_json::from_str("{}").expect("parses");
+        assert_eq!(whole, SpiConfig::default());
+        assert!(serde_json::from_str::<SpiConfig>(r#"{"clock": 0}"#).is_err());
     }
 
     #[test]
