@@ -633,6 +633,45 @@ fn a_line_reset_cut_short_counts_when_it_is_long_enough() {
     );
 }
 
+#[test]
+fn progress_is_held_back_to_what_is_not_reported_yet() {
+    let mut waveform = waveform();
+    waveform.connect();
+    let position = waveform.position().get();
+    waveform.packet(&SwdPacket::read(false, 0x0, 0x2ba0_1477));
+    waveform.idle_cycles(2);
+    let block = waveform.finish();
+    let rise = |index: u64| position + index * PERIOD + HALF;
+    let mut harness = harness(GraphConfig::default());
+    let mut from = Tick::ZERO;
+    for (last, held) in [
+        // Inside the first line reset, a run of high bits from 6.
+        (86, 6),
+        // Inside the select sequence, which begins with the low bit at 230.
+        (246, 230),
+        // Inside the request, from its Start bit.
+        (rise(3), rise(0)),
+        // On the Park bit, high: should the packet break, it would lead into a line reset.
+        (rise(7), rise(7)),
+        // Inside the data.
+        (rise(30), rise(12)),
+        // Nothing once the packet is complete.
+        (rise(45), rise(45) + 1),
+    ] {
+        let cut = Tick(last + 1);
+        let piece = block.slice(TickRange::new(from, cut)).expect("a slice");
+        harness.feed(&piece, &[u64::MAX]);
+        harness.collect();
+        assert_eq!(
+            harness.items.last(),
+            Some(&Item::Progress(Tick(held))),
+            "up to {cut}"
+        );
+        from = cut;
+    }
+    harness.assert_progress_promise();
+}
+
 /// Everything at once: connection, all kinds of packets back to back and apart, errors and
 /// the line resets after them, a switch to JTAG and back.
 fn rich_waveform() -> LogicBlock {
@@ -904,6 +943,7 @@ proptest! {
         cut.drain_on_full = 1;
         cut.feed_cut(&block, &[], &sizes, &[1, 0, 2]);
         cut.end();
+        cut.assert_progress_promise();
         prop_assert_eq!(cut.without_progress(), decoded);
     }
 }

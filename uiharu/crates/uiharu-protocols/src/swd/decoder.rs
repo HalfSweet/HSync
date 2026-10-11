@@ -39,6 +39,9 @@
 //!   broken packet count toward the line reset that brings the decoder back;
 //! - a gap or the end of the samples ends the packet under way `aborted`, and a run of high
 //!   bits long enough is a line reset there;
+//! - progress is passed on, held back to the first bit read and not reported yet: of a run of
+//!   high bits, which may still be a line reset or a request; of the bits after a line reset
+//!   that may be a select sequence; of the request, acknowledge or data being read;
 //! - a bit decides at most a field of the packet and then its end, in that order.
 //!
 //! Limits: the turnaround lasts one clock, the reset value of DLCR.TURNROUND; with overrun
@@ -314,6 +317,26 @@ impl Packet {
     fn rnw(&self) -> bool {
         self.request >> 2 & 1 != 0
     }
+
+    /// The indices of the first data bit and of the parity bit after OK: a read's data follows
+    /// the acknowledge, a write's comes after a turnaround.
+    fn data_bits(&self) -> (u8, u8) {
+        if self.rnw() { (12, 44) } else { (13, 45) }
+    }
+
+    /// The first bit of the field being read — the request, the acknowledge or the data — which
+    /// its event will span from; `None` between fields.
+    fn field_start(&self) -> Option<Tick> {
+        match self.taken {
+            1..=7 => Some(self.start),
+            10..=11 => Some(self.ack_first),
+            taken if Ack::from_bits(self.ack) == Ack::Ok => {
+                let (first, parity) = self.data_bits();
+                (first < taken && taken <= parity).then_some(self.data_first)
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Settles `at` no earlier than `now`: a bit decoded again is decided by a later one.
@@ -346,6 +369,24 @@ impl Decoder {
             next_tx: 1,
             now: Tick::ZERO,
         }
+    }
+
+    /// The first bit read and not reported yet, which an event may still span from: of a run
+    /// of high bits, which may turn into a line reset or be decoded again as a request; of the
+    /// bits after a line reset that may be a select sequence; of the packet's field being
+    /// read. Bits waiting in the replay need nothing: the wire is read only once they are
+    /// decoded.
+    fn in_flight(&self) -> Option<Tick> {
+        let run = (self.run.count > 0).then_some(self.run.first[0]);
+        let select = self.select.as_ref().map(|select| select.bits[0].tick);
+        let field = self.packet.as_ref().and_then(Packet::field_start);
+        [run, select, field].into_iter().flatten().min()
+    }
+
+    /// Progress to `tick`, held back to what is in flight, which promises that nothing
+    /// starting earlier follows.
+    fn hold(&self, tick: Tick) -> Tick {
+        self.in_flight().map_or(tick, |start| start.min(tick))
     }
 
     async fn bit(&mut self, bit: Bit, out: &mut Outbox<SwdEvent>) {
@@ -508,7 +549,7 @@ impl Decoder {
             return;
         };
         let rnw = packet.rnw();
-        let (first, parity) = if rnw { (12, 44) } else { (13, 45) };
+        let (first, parity) = packet.data_bits();
         if index < first {
             return;
         }
@@ -611,7 +652,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<SwdEvent>, config: SwdCon
             }
             // Without a deadline the wait is never quiet.
             Change::Quiet(_) => {}
-            Change::Progress(tick) => out.progress(tick).await,
+            Change::Progress(tick) => out.progress(decoder.hold(tick)).await,
             Change::End(tick) => {
                 decoder.cut(tick, &mut out).await;
                 out.end(tick).await;
