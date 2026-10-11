@@ -111,8 +111,19 @@ impl Props {
 pub enum Requirement {
     /// The property must be declared with exactly this value.
     Equals(PropValue),
+    /// The property must be declared with one of these values.
+    OneOf(Vec<PropValue>),
     /// The property must be an integer of at least this value.
     AtLeast(i64),
+    /// The property must be an integer of at most this value.
+    AtMost(i64),
+    /// The property must be an integer between these values, both included.
+    Within {
+        /// The smallest value accepted.
+        min: i64,
+        /// The largest value accepted.
+        max: i64,
+    },
 }
 
 impl Requirement {
@@ -120,7 +131,12 @@ impl Requirement {
     pub fn accepts(&self, value: Option<&PropValue>) -> bool {
         match (self, value) {
             (Requirement::Equals(wanted), Some(found)) => wanted == found,
+            (Requirement::OneOf(wanted), Some(found)) => wanted.contains(found),
             (Requirement::AtLeast(least), Some(PropValue::Int(found))) => found >= least,
+            (Requirement::AtMost(most), Some(PropValue::Int(found))) => found <= most,
+            (Requirement::Within { min, max }, Some(PropValue::Int(found))) => {
+                (min..=max).contains(&found)
+            }
             _ => false,
         }
     }
@@ -130,7 +146,19 @@ impl fmt::Display for Requirement {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Requirement::Equals(value) => write!(f, "= {value}"),
+            Requirement::OneOf(values) => {
+                f.write_str("one of ")?;
+                for (index, value) in values.iter().enumerate() {
+                    if index > 0 {
+                        f.write_str(", ")?;
+                    }
+                    write!(f, "{value}")?;
+                }
+                Ok(())
+            }
             Requirement::AtLeast(least) => write!(f, ">= {least}"),
+            Requirement::AtMost(most) => write!(f, "<= {most}"),
+            Requirement::Within { min, max } => write!(f, "in {min}..={max}"),
         }
     }
 }
@@ -154,6 +182,31 @@ impl Requires {
     /// Requires `key` to be an integer of at least `least`.
     pub fn at_least(mut self, key: &'static str, least: i64) -> Self {
         self.0.insert(key, Requirement::AtLeast(least));
+        self
+    }
+
+    /// Requires `key` to be an integer of at most `most`.
+    pub fn at_most(mut self, key: &'static str, most: i64) -> Self {
+        self.0.insert(key, Requirement::AtMost(most));
+        self
+    }
+
+    /// Requires `key` to be an integer from `min` to `max`, both included.
+    pub fn within(mut self, key: &'static str, min: i64, max: i64) -> Self {
+        self.0.insert(key, Requirement::Within { min, max });
+        self
+    }
+
+    /// Requires `key` to equal one of `values`.
+    pub fn one_of<V: Into<PropValue>>(
+        mut self,
+        key: &'static str,
+        values: impl IntoIterator<Item = V>,
+    ) -> Self {
+        self.0.insert(
+            key,
+            Requirement::OneOf(values.into_iter().map(Into::into).collect()),
+        );
         self
     }
 
@@ -247,5 +300,64 @@ mod tests {
         assert!(!Requirement::AtLeast(1).accepts(Some(&PropValue::Bool(true))));
         assert!(!Requirement::AtLeast(1).accepts(None));
         assert!(Requirement::AtLeast(1).accepts(Some(&PropValue::Int(1))));
+    }
+
+    #[test]
+    fn bounds_include_their_ends() {
+        let int = |value: i64| PropValue::Int(value);
+        assert!(Requirement::AtMost(20_000).accepts(Some(&int(20_000))));
+        assert!(!Requirement::AtMost(20_000).accepts(Some(&int(20_001))));
+        assert!(!Requirement::AtMost(20_000).accepts(Some(&PropValue::Text("fast".into()))));
+        let within = Requirement::Within {
+            min: 30_938,
+            max: 31_562,
+        };
+        assert!(within.accepts(Some(&int(30_938))));
+        assert!(within.accepts(Some(&int(31_562))));
+        assert!(!within.accepts(Some(&int(30_937))));
+        assert!(!within.accepts(Some(&int(31_563))));
+        assert!(!within.accepts(None));
+    }
+
+    #[test]
+    fn one_of_takes_any_listed_value() {
+        let requires = Requires::new()
+            .one_of("mode", [0, 3])
+            .one_of("parity", ["none", "even"]);
+        let props =
+            |mode: i64, parity: &str| Props::new().with("mode", mode).with("parity", parity);
+        assert!(requires.unmet(&props(0, "none")).is_none());
+        assert!(requires.unmet(&props(3, "even")).is_none());
+        assert_eq!(
+            requires.unmet(&props(1, "none")).map(|(key, _)| key),
+            Some("mode")
+        );
+        assert_eq!(
+            requires.unmet(&props(3, "odd")).map(|(key, _)| key),
+            Some("parity")
+        );
+    }
+
+    #[test]
+    fn requirements_name_themselves() {
+        assert_eq!(Requirement::Equals(8.into()).to_string(), "= 8");
+        assert_eq!(
+            Requirement::Equals("msb-first".into()).to_string(),
+            r#"= "msb-first""#
+        );
+        assert_eq!(
+            Requirement::OneOf(vec![0.into(), 3.into()]).to_string(),
+            "one of 0, 3"
+        );
+        assert_eq!(Requirement::AtLeast(1).to_string(), ">= 1");
+        assert_eq!(Requirement::AtMost(20_000).to_string(), "<= 20000");
+        assert_eq!(
+            Requirement::Within {
+                min: 1000,
+                max: 20_000
+            }
+            .to_string(),
+            "in 1000..=20000"
+        );
     }
 }

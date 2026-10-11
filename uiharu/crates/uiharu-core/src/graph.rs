@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::exec::Pipeline;
 use crate::node::{Node, NodeSpec};
-use crate::schema::{EventSchema, InputSpec, OutputSpec, Props, Requirement, SchemaId};
+use crate::schema::{EventSchema, InputSpec, OutputSpec, Props, SchemaId};
 use crate::signal::{LogicBlock, MAX_CHANNELS};
 use crate::time::TimeBase;
 
@@ -616,10 +616,7 @@ impl Graph {
                 .props
                 .get(key)
                 .map_or_else(|| "nothing".to_owned(), |v| v.to_string());
-            let requirement = match requirement {
-                Requirement::Equals(value) => format!("= {value}"),
-                Requirement::AtLeast(least) => format!(">= {least}"),
-            };
+            let requirement = requirement.to_string();
             return Err(GraphError::Requirement {
                 from: from_name,
                 to: to_name,
