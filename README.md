@@ -4,9 +4,9 @@
 
 # HSync
 
-**A modern logic analyzer app for DreamSourceLab DSLogic and ALIENTEK ATK-Logic**
+**A modern, general-purpose logic analyzer app**
 
-Capture, trigger, decode and measure, and keep working with your DSView files.
+Capture, trigger, decode and measure, with one app for logic analyzers from several makers.
 
 [![Release](https://img.shields.io/github/v/release/HalfSweet/HSync?style=flat-square&label=release&color=45658D)](https://github.com/HalfSweet/HSync/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/HalfSweet/HSync/total?style=flat-square&color=277165)](https://github.com/HalfSweet/HSync/releases)
@@ -26,7 +26,7 @@ Capture, trigger, decode and measure, and keep working with your DSView files.
   <img src="assets/screenshots/en-US/hero-light.webp" alt="HSync showing a capture of I²C, UART, SPI and CAN-FD buses, with decoded transfers above their waveforms and the I²C data stream below">
 </picture>
 
-HSync is a desktop app for DreamSourceLab's DSLogic and ALIENTEK's ATK-Logic logic analyzers. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, and the 150 protocol decoders that come with DSView are a search away. HSync opens and saves DSView's `.dsl` files, so your captures come along, and everything it needs is in the package: the device firmware, the decoders and the Python runtime they use.
+HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic and ALIENTEK's ATK-Logic analyzers ([full list](#supported-devices)) and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, and 150 more protocol decoders are a search away. HSync opens and saves DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware, the decoders and the Python runtime they use.
 
 No hardware at hand? HSync opens its built-in **Demo device**, which plays back a recording of four buses, so you can try everything straight away.
 
@@ -34,8 +34,7 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 
 ### Capture
 
-- **Every DSLogic model**, from the original DSLogic to the U3Pro32 ([full list](#supported-devices)). Firmware and FPGA bitstreams are built in and load by themselves.
-- **ALIENTEK ATK-Logic DL16 and DL16 Plus**, up to 1 GHz in Buffer mode, with the threshold anywhere from −5 to 5 V.
+- **Logic analyzers from several makers**: every DreamSourceLab DSLogic, plus ALIENTEK's ATK-Logic DL16 and DL16 Plus ([full list](#supported-devices)). HSync drives each one the way its maker's own app does, and loads the firmware and FPGA bitstreams they need by itself.
 - **Buffer and Stream modes**, with RLE compression for captures longer than the device's memory, and a warning when a capture would need more than half of your computer's memory.
 - **Single, Repeat, Loop and Instant capture.** Repeat keeps the last complete capture on screen while the next one records in the background; Loop keeps capturing and holds on to the most recent stretch.
 - **Device options** for the threshold voltage, glitch filter, external clock and more, remembered for next time.
@@ -92,18 +91,20 @@ Get the latest version from the [Releases page](https://github.com/HalfSweet/HSy
 | Windows  | `-setup.exe` (x64)                  | Windows 10 or 11                 |
 | Linux    | `.AppImage`, `.deb` or `.rpm` (x64) | Ubuntu 22.04, Debian 12 or newer |
 
-The firmware, the protocol decoders and the Python they run on are all included; you don't need DSView or Python. On another platform, you can [build HSync from source](#building-from-source).
+The firmware, the protocol decoders and the Python they run on are all included; you don't need any maker's app or Python. On another platform, you can [build HSync from source](#building-from-source).
 
 ### First launch
 
 - **macOS**: HSync isn't notarized by Apple yet, so the first time you open it, macOS says it can't verify the app. Close the message, open **System Settings → Privacy & Security** and click **Open Anyway** next to the note about HSync. You only need to do this once.
-- **Windows**: the installer isn't code-signed yet, so SmartScreen may stop it: click **More info → Run anyway**. HSync reaches DSLogic and ATK-Logic devices through the WinUSB driver; if it says no usable USB driver is available, install WinUSB for the device with [Zadig](https://zadig.akeo.ie/) (**Options → List All Devices**, select the device, choose **WinUSB** and click **Install Driver** or **Replace Driver**).
-- **Linux**: to use a DSLogic or an ATK-Logic without root, add udev rules for them, then plug the device in again. DSView installs the DreamSourceLab rule, so you can skip that one if you have it.
+- **Windows**: the installer isn't code-signed yet, so SmartScreen may stop it: click **More info → Run anyway**. HSync reaches logic analyzers through the WinUSB driver; if it says no usable USB driver is available, install WinUSB for the device with [Zadig](https://zadig.akeo.ie/) (**Options → List All Devices**, select the device, choose **WinUSB** and click **Install Driver** or **Replace Driver**).
+- **Linux**: to use a logic analyzer without root, add the udev rule for its maker, then plug the device in again. DSView installs the DreamSourceLab rule, so you can skip that one if you have it.
 
   ```sh
+  # DreamSourceLab DSLogic
   sudo tee /etc/udev/rules.d/60-dreamsourcelab.rules > /dev/null <<'EOF'
   SUBSYSTEM=="usb", ATTRS{idVendor}=="2a0e", MODE="0666"
   EOF
+  # ALIENTEK ATK-Logic
   sudo tee /etc/udev/rules.d/60-atk-logic.rules > /dev/null <<'EOF'
   SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="ffcc", MODE="0666"
   EOF
@@ -117,8 +118,8 @@ HSync looks for a new version each time it starts (turn this off under **Setting
 
 ## Getting started
 
-1. **Open a device.** Connect your logic analyzer and choose it from the device menu at the top left. The first time you open a DSLogic, HSync loads its firmware, which takes a few seconds. Without hardware, you're on the **Demo device**.
-2. **Set up the capture.** The button next to the device menu shows the sample rate, duration and channel count; click it to change them and the device's options: the operation mode (Buffer or Stream), the threshold and, on a DSLogic, the filter and the clock.
+1. **Open a device.** Connect your logic analyzer and choose it from the device menu at the top left. Some devices take a few seconds to open the first time, while HSync loads their firmware. Without hardware, you're on the **Demo device**.
+2. **Set up the capture.** The button next to the device menu shows the sample rate, duration and channel count; click it to change them and the device's options: the operation mode (Buffer or Stream), the threshold and whatever else the device offers, such as a glitch filter or an external clock.
 3. **Set a trigger** (optional). Click the trigger slot to the right of a channel's name and pick an edge or a level. **Trigger** in the top bar has the trigger position, stage triggers and serial triggers.
 4. **Capture.** Press **Capture**. The arrow beside it switches between **Single**, **Repeat** and **Loop**, or starts an **Instant** capture that ignores the trigger.
 5. **Decode.** Click **Add decoder**, search for a protocol and choose its channels. Open the **Data stream** from the status bar to list everything it decoded.
@@ -129,26 +130,26 @@ The [user guide](docs/user-guide.md) covers every feature and keyboard shortcut.
 
 ## Supported devices
 
-| Device              | Channels | USB      |
-| ------------------- | -------- | -------- |
-| DSLogic             | 16       | 2.0      |
-| DSLogic Pro         | 16       | 2.0      |
-| DSLogic Plus        | 16       | 2.0      |
-| DSLogic Basic       | 16       | 2.0      |
-| DSLogic U2Basic     | 16       | 2.0      |
-| DSLogic U2Pro16     | 16       | 2.0      |
-| DSLogic U3Pro16     | 16       | 3.0      |
-| DSLogic U3Pro32     | 32       | 3.0      |
-| ATK-Logic DL16      | 16       | 2.0      |
-| ATK-Logic DL16 Plus | 16       | 2.0      |
-| Demo device         | 16       | built in |
+| Maker          | Device              | Channels | USB      |
+| -------------- | ------------------- | -------- | -------- |
+| DreamSourceLab | DSLogic             | 16       | 2.0      |
+| DreamSourceLab | DSLogic Pro         | 16       | 2.0      |
+| DreamSourceLab | DSLogic Plus        | 16       | 2.0      |
+| DreamSourceLab | DSLogic Basic       | 16       | 2.0      |
+| DreamSourceLab | DSLogic U2Basic     | 16       | 2.0      |
+| DreamSourceLab | DSLogic U2Pro16     | 16       | 2.0      |
+| DreamSourceLab | DSLogic U3Pro16     | 16       | 3.0      |
+| DreamSourceLab | DSLogic U3Pro32     | 32       | 3.0      |
+| ALIENTEK       | ATK-Logic DL16      | 16       | 2.0      |
+| ALIENTEK       | ATK-Logic DL16 Plus | 16       | 2.0      |
+| —              | Demo device         | 16       | built in |
 
-HSync talks to DSLogic devices the way DSView does, and to ATK-Logic devices the way ALIENTEK's ATK-Logic app does, byte for byte. It has been tested on a DSLogic U2Pro16; if you use another model, please [let us know how it went](https://github.com/HalfSweet/HSync/issues/new). DSCope oscilloscopes, DSView's oscilloscope and data acquisition modes, and the PWM outputs of ATK-Logic devices aren't supported yet. To update the firmware of an ATK-Logic device, use ALIENTEK's ATK-Logic app.
+HSync talks to each device the way its maker's app does, byte for byte: to DSLogic devices like DSView and to ATK-Logic devices like ALIENTEK's ATK-Logic app. It has been tested on a DSLogic U2Pro16; if you use another model, please [let us know how it went](https://github.com/HalfSweet/HSync/issues/new). DSCope oscilloscopes, DSView's oscilloscope and data acquisition modes, and the PWM outputs of ATK-Logic devices aren't supported yet. To update the firmware of an ATK-Logic device, use ALIENTEK's ATK-Logic app.
 
 ## Questions
 
-**Do I need DSView?**
-No. HSync brings its own firmware, decoders and Python runtime. You can keep DSView installed alongside it, and HSync opens DSView's captures and sessions.
+**Do I need my logic analyzer's own app?**
+No. HSync brings its own firmware, decoders and Python runtime. You can keep DSView or another maker's app installed alongside it, and HSync opens DSView's captures and sessions.
 
 **Can I take a capture to other tools?**
 Yes: export it as a sigrok session for PulseView, as VCD or FST for GTKWave, Surfer and other waveform viewers, or as CSV for spreadsheets and scripts. The other way round, **Open file…** imports the VCD, FST and GHW waveforms those tools and FPGA logic analyzers write.
@@ -177,7 +178,7 @@ pnpm bundle       # build the installers for this machine
 
 ## Acknowledgements
 
-- [DSView](https://github.com/DreamSourceLab/DSView) by DreamSourceLab: the device support and protocol decoders are ported from its libsigrok4DSL and libsigrokdecode4DSL, which grew out of the [sigrok](https://sigrok.org/) project.
+- [DSView](https://github.com/DreamSourceLab/DSView) by DreamSourceLab: the DSLogic support and protocol decoders are ported from its libsigrok4DSL and libsigrokdecode4DSL, which grew out of the [sigrok](https://sigrok.org/) project.
 - The DSLogic firmware and FPGA bitstreams come from DreamSourceLab under the MIT license.
 - [ATK-Logic](https://github.com/alientek-openedv/atk-logic) by ALIENTEK: the support for ATK-Logic devices is ported from it.
 - [IBM Plex](https://github.com/IBM/plex) fonts, under the SIL Open Font License 1.1.
