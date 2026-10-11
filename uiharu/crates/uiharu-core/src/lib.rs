@@ -5,3 +5,13 @@
 //! and are wired into a checked decode graph.
 
 #![forbid(unsafe_code)]
+
+pub mod schema;
+pub mod stream;
+pub mod time;
+
+pub use schema::{
+    EventSchema, InputSpec, OutputSpec, PropValue, Props, Requirement, Requires, SchemaId,
+};
+pub use stream::{Broadcast, Event, Item, ReaderId};
+pub use time::{Tick, TickRange, TimeBase};
