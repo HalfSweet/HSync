@@ -29,6 +29,8 @@ Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/proto
 | SPI NOR flash        | `spi-nor`              | `spi.events`     | [spi-nor.md](docs/protocols/spi-nor.md)       |
 | SD card, SPI mode    | `sdcard-spi`           | `spi.events`     | [sdcard-spi.md](docs/protocols/sdcard-spi.md) |
 | APA102 / SK9822 LEDs | `apa102`               | `spi.events`     | [apa102.md](docs/protocols/apa102.md)         |
+| AVR ISP              | `avr-isp`              | `spi.events`     | [avr-isp.md](docs/protocols/avr-isp.md)       |
+| nRF24L01+            | `nrf24l01`             | `spi.events`     | [nrf24l01.md](docs/protocols/nrf24l01.md)     |
 | I²C                  | `i2c`                  | logic samples    | [i2c.md](docs/protocols/i2c.md)               |
 | 24xx EEPROM          | `eeprom24xx`           | `i2c.events`     | [eeprom24xx.md](docs/protocols/eeprom24xx.md) |
 | UART                 | `uart`                 | logic samples    | [uart.md](docs/protocols/uart.md)             |
@@ -49,6 +51,7 @@ Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/proto
 | USB transactions     | `usb-transactions`     | `usb.packets`    | [usb.md](docs/protocols/usb.md)               |
 | JTAG                 | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
 | SWD                  | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
+| MDIO                 | `mdio`                 | logic samples    | [mdio.md](docs/protocols/mdio.md)             |
 
 ## Quick start
 

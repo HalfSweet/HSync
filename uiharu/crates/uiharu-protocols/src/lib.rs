@@ -2,10 +2,11 @@
 
 //! The protocol decoders of uiharu, each a module with its contract (the events it emits),
 //! its decoder node, a waveform synthesizer and tests: buses decoded from logic samples (SPI,
-//! I²C, UART, CAN, 1-Wire, USB, I²S, PWM, timing, parallel, WS281x, JTAG, SWD) and protocols
-//! decoded from a bus's events (SPI NOR flash, SD cards and APA102 LEDs over SPI, 24xx EEPROMs
-//! over I²C, Modbus RTU, LIN, MIDI and DMX512 over UART, the 1-Wire network layer and the
-//! DS18B20 over 1-Wire, transactions over USB packets).
+//! I²C, UART, CAN, 1-Wire, USB, I²S, PWM, timing, parallel, WS281x, JTAG, SWD, MDIO) and
+//! protocols decoded from a bus's events (SPI NOR flash, SD cards, APA102 LEDs, AVR serial
+//! programming and the nRF24L01+ over SPI, 24xx EEPROMs over I²C, Modbus RTU, LIN, MIDI and
+//! DMX512 over UART, the 1-Wire network layer and the DS18B20 over 1-Wire, transactions over
+//! USB packets).
 
 #![forbid(unsafe_code)]
 
