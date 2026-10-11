@@ -53,6 +53,10 @@ Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/proto
 | JTAG                 | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
 | SWD                  | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
 | MDIO                 | `mdio`                 | logic samples    | [mdio.md](docs/protocols/mdio.md)             |
+| NEC infrared         | `ir-nec`               | logic samples    | [ir-nec.md](docs/protocols/ir-nec.md)         |
+| RC-5 infrared        | `ir-rc5`               | logic samples    | [ir-rc5.md](docs/protocols/ir-rc5.md)         |
+| RC-6 infrared        | `ir-rc6`               | logic samples    | [ir-rc6.md](docs/protocols/ir-rc6.md)         |
+| Sony SIRC infrared   | `ir-sirc`              | logic samples    | [ir-sirc.md](docs/protocols/ir-sirc.md)       |
 
 ## Quick start
 
