@@ -21,7 +21,7 @@ use std::task::Poll;
 
 use crate::schema::{InputSpec, OutputSpec, Props};
 use crate::signal::{LogicBlock, SignalCursor};
-use crate::stream::{Broadcast, Event, Item, ReaderId};
+use crate::stream::{Broadcast, Event, Item, QueueControl, ReaderId};
 use crate::time::{Tick, TickRange, TimeBase};
 
 /// What a node is waiting for when its future returns `Pending`.
@@ -234,6 +234,7 @@ impl<T> Drop for Inbox<T> {
 pub struct Outbox<T> {
     queue: SharedQueue<T>,
     cx: Rc<NodeCx>,
+    sink: Rc<SinkInner>,
 }
 
 impl<T> fmt::Debug for Outbox<T> {
@@ -242,11 +243,19 @@ impl<T> fmt::Debug for Outbox<T> {
     }
 }
 
-impl<T> Outbox<T> {
+impl<T: 'static> Outbox<T> {
     pub(crate) fn new(queue: SharedQueue<T>, cx: Rc<NodeCx>) -> Self {
-        Self { queue, cx }
+        let sink = Rc::new(SinkInner {
+            control: Rc::clone(&queue) as Rc<dyn QueueControl>,
+            cx: Rc::clone(&cx),
+            forwarded: Cell::new(None),
+            held: Cell::new(None),
+        });
+        Self { queue, cx, sink }
     }
+}
 
+impl<T> Outbox<T> {
     /// The node context the outbox charges.
     pub fn cx(&self) -> &Rc<NodeCx> {
         &self.cx
@@ -308,9 +317,87 @@ impl<T> Outbox<T> {
     pub fn end(&mut self, tick: Tick) -> impl Future<Output = ()> + '_ {
         self.push(Item::End(tick))
     }
+
+    /// Where a cursor over a contract passes progress on while the decoder reads a frame
+    /// through it, and where the decoder says what it still holds: this output, without its
+    /// event type. Every call returns a handle to the same state.
+    pub fn progress_sink(&self) -> ProgressSink {
+        ProgressSink(Rc::clone(&self.sink))
+    }
 }
 
-/// The ports a node declares, in the order it binds them in [`Node::start`].
+struct SinkInner {
+    control: Rc<dyn QueueControl>,
+    cx: Rc<NodeCx>,
+    /// The latest tick passed on through the sink.
+    forwarded: Cell<Option<Tick>>,
+    /// From where the decoder holds items it has read and not reported yet.
+    held: Cell<Option<Tick>>,
+}
+
+/// An output seen only as a place to pass progress on, for cursors over a contract. A cursor
+/// passes the progress it meets inside a frame on through it, held back to what the decoder
+/// has read through the cursor and not reported yet: what it consumed since it last took the
+/// provenance (`consumed()`), and what it says it still holds ([`ProgressSink::hold`]) when
+/// it took provenance early for an event still to come. Made by [`Outbox::progress_sink`];
+/// clones share their state.
+#[derive(Clone)]
+pub struct ProgressSink(Rc<SinkInner>);
+
+impl fmt::Debug for ProgressSink {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ProgressSink")
+            .field("forwarded", &self.0.forwarded.get())
+            .field("held", &self.0.held.get())
+            .finish()
+    }
+}
+
+impl ProgressSink {
+    /// Passes `Progress(tick)` on, waiting for budget and for room like [`Outbox::progress`];
+    /// a tick at or before one already passed on is not sent again.
+    pub fn progress(&self, tick: Tick) -> impl Future<Output = ()> + '_ {
+        let inner = &*self.0;
+        let mut pending = !inner.forwarded.get().is_some_and(|last| last >= tick);
+        poll_fn(move |_| {
+            if !pending {
+                return Poll::Ready(());
+            }
+            if !inner.cx.has_budget() {
+                inner.cx.wait(Wait::Budget);
+                return Poll::Pending;
+            }
+            if inner.control.try_progress(tick) {
+                inner.cx.spend();
+                inner.forwarded.set(Some(tick));
+                pending = false;
+                Poll::Ready(())
+            } else {
+                inner.cx.wait(Wait::Output);
+                Poll::Pending
+            }
+        })
+    }
+
+    /// The latest tick passed on through this sink.
+    pub fn forwarded(&self) -> Option<Tick> {
+        self.0.forwarded.get()
+    }
+
+    /// Tells from which tick on the decoder still holds items it read through a cursor and
+    /// has not reported — provenance it took early for an event still to come, such as a batch
+    /// being filled — so that progress met inside a frame is held back to there; `None` once
+    /// nothing is held. A decoder that takes provenance only when it emits never needs this.
+    pub fn hold(&self, from: Option<Tick>) {
+        self.0.held.set(from);
+    }
+
+    /// From where the decoder says it still holds items; see [`ProgressSink::hold`].
+    pub fn held(&self) -> Option<Tick> {
+        self.0.held.get()
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct NodeSpec {
     /// The node's name, for diagnostics and statistics.

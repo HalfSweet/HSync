@@ -22,7 +22,9 @@ pub use graph::{
     DynExposedRef, DynInput, DynOutput, ExposedRef, Graph, GraphConfig, GraphError, InputRef,
     NodeId, OutputRef, SourceHandle, SourceId, SourceSpec,
 };
-pub use node::{Inbox, Io, Node, NodeCx, NodeFuture, NodeSpec, Outbox, Provenance, Wait};
+pub use node::{
+    Inbox, Io, Node, NodeCx, NodeFuture, NodeSpec, Outbox, ProgressSink, Provenance, Wait,
+};
 pub use schema::{
     EventSchema, InputSpec, OutputSpec, PropValue, Props, Requirement, Requires, SchemaId,
 };

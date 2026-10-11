@@ -253,6 +253,11 @@ pub trait QueueControl {
     fn is_ended(&self) -> bool;
     /// Adds a reader that starts at the oldest item still held.
     fn add_reader(&self) -> ReaderId;
+    /// Pushes `Progress(tick)` without knowing the event type: `false` when the queue is full
+    /// and the item could not fold into a progress item already at the back.
+    fn try_progress(&self, tick: Tick) -> bool;
+    /// The items `reader` has not passed yet.
+    fn pending(&self, reader: ReaderId) -> usize;
 }
 
 impl<T: 'static> QueueControl for RefCell<Broadcast<T>> {
@@ -274,6 +279,14 @@ impl<T: 'static> QueueControl for RefCell<Broadcast<T>> {
 
     fn is_ended(&self) -> bool {
         self.borrow().is_ended()
+    }
+
+    fn try_progress(&self, tick: Tick) -> bool {
+        self.borrow_mut().try_push(Item::Progress(tick)).is_ok()
+    }
+
+    fn pending(&self, reader: ReaderId) -> usize {
+        self.borrow().pending(reader)
     }
 }
 
