@@ -35,6 +35,8 @@
 //!   the first sampling edge compares with;
 //! - a gap or the end of the samples drops the word under way: leftover bits never make a
 //!   word;
+//! - progress is passed on, held back to the first bit of the word under way —
+//!   right-justified, the first of the last `bits` bits read — since the word spans from there;
 //! - a word covers the ticks of its first bit to its last and is settled where it is decided:
 //!   at the bit that makes it whole, or else at the sampling edge that found WS changed — for
 //!   an incomplete word, a word whose width WS decides and every right-justified word; in the
@@ -296,6 +298,17 @@ impl Word {
         self.count += 1;
     }
 
+    /// Where the word of at most `width` bits will start: the first of the bits it would have
+    /// if the half-period ended now, as later bits only move a right-justified word's start
+    /// forward; `None` before its first bit and once it went out.
+    fn start(&self, width: u8) -> Option<Tick> {
+        if self.reported || self.count == 0 {
+            return None;
+        }
+        let bits = self.count.min(u64::from(width));
+        Some(self.ticks[ring(self.count - bits)])
+    }
+
     /// The word made of the last `bits` bits read, 1 to `count` and at most 32, settled at
     /// `settled`.
     fn event(&self, bits: u8, complete: bool, settled: Tick) -> (Provenance, I2sEvent) {
@@ -347,6 +360,13 @@ impl Decoder {
     fn resync(&mut self) {
         self.word = None;
         self.fresh = true;
+    }
+
+    /// Progress to `tick`, held back to where the word under way will start, which promises
+    /// that nothing starting earlier follows.
+    fn hold(&self, tick: Tick) -> Tick {
+        let start = self.word.as_ref().and_then(|word| word.start(self.width));
+        start.map_or(tick, |start| start.min(tick))
     }
 
     /// Begins the half-period of `channel`.
@@ -401,7 +421,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<I2sEvent>, config: I2sCon
             match signal.sample().await {
                 Sample::At { levels, .. } => break levels.high(config.ws),
                 Sample::Gap(range) => out.gap(range).await,
-                Sample::Progress(tick) => out.progress(tick).await,
+                Sample::Progress(tick) => out.progress(decoder.hold(tick)).await,
                 Sample::End(tick) => {
                     out.end(tick).await;
                     return;
@@ -445,7 +465,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<I2sEvent>, config: I2sCon
                 }
                 // Without a deadline the wait is never quiet.
                 Change::Quiet(_) => {}
-                Change::Progress(tick) => out.progress(tick).await,
+                Change::Progress(tick) => out.progress(decoder.hold(tick)).await,
                 Change::End(tick) => {
                     out.end(tick).await;
                     return;
@@ -569,5 +589,23 @@ mod tests {
         let (at, sample) = word.event(32, false, Tick(501));
         assert_eq!(at.span, TickRange::new(Tick(116), Tick(179)));
         assert!(matches!(sample, I2sEvent::Sample { bits: 32, .. }));
+    }
+
+    #[test]
+    fn a_word_under_way_starts_where_its_event_would() {
+        let mut word = Word::new(1, Channel::Left);
+        assert_eq!(word.start(8), None);
+        for n in 0..5u64 {
+            word.push(Tick(100 + 2 * n), true);
+        }
+        assert_eq!(word.start(8), Some(Tick(100)));
+        for n in 5..40u64 {
+            word.push(Tick(100 + 2 * n), true);
+        }
+        // The first of the last eight bits, and of the last 32, as the events above.
+        assert_eq!(word.start(8), Some(Tick(164)));
+        assert_eq!(word.start(32), Some(Tick(116)));
+        word.reported = true;
+        assert_eq!(word.start(8), None);
     }
 }

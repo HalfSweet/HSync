@@ -597,6 +597,45 @@ fn a_word_shows_up_as_soon_as_it_is_decided() {
     }
 }
 
+#[test]
+fn progress_is_held_back_to_the_word_under_way() {
+    let halves = frames(1, 16, 32);
+    // The samples arrive up to just after clocks 5 and 24 of the left half-period and clock
+    // 40, in the right one, which begins on clock 32.
+    let cuts = [5, 24, 40].map(|n| edge(n, HALF).next());
+    for (format, held) in [
+        // The left word is whole on clock 15; the right one starts on clock 32.
+        (
+            Format::LeftJustified,
+            [edge(0, HALF), cuts[1], edge(32, HALF)],
+        ),
+        // Each word a clock later.
+        (Format::I2s, [edge(1, HALF), cuts[1], edge(33, HALF)]),
+        // The last sixteen bits read, until the WS change decides the word.
+        (
+            Format::RightJustified,
+            [edge(0, HALF), edge(9, HALF), edge(32, HALF)],
+        ),
+    ] {
+        let config = bus(format, Some(16));
+        let block = waveform(&config, &halves, HALF);
+        let mut harness = harness(&config, GraphConfig::default());
+        let mut from = Tick::ZERO;
+        for (cut, held) in cuts.into_iter().zip(held) {
+            let piece = block.slice(TickRange::new(from, cut)).expect("a slice");
+            harness.feed(&piece, &[u64::MAX]);
+            harness.collect();
+            assert_eq!(
+                harness.items.last(),
+                Some(&Item::Progress(held)),
+                "{format:?} up to {cut}"
+            );
+            from = cut;
+        }
+        harness.assert_progress_promise();
+    }
+}
+
 /// Half-periods of every width, some cut short, with pauses of the clock between some.
 fn rich(config: &I2sConfig) -> LogicBlock {
     let mut waveform = I2sWaveform::new(config.clone(), CHANNELS, 1, Tick::ZERO);
@@ -699,6 +738,7 @@ proptest! {
         harness.drain_on_full = 1;
         harness.feed_cut(&block, &[], &sizes, &pauses);
         harness.end();
+        harness.assert_progress_promise();
         prop_assert_eq!(lines(&harness.items), expected);
         let stats = harness.pipeline().stats();
         prop_assert!(stats.within_capacity(), "{stats:?}");
