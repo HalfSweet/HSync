@@ -81,6 +81,7 @@ const REPLAY_BITS: usize = SELECT_BITS;
 
 /// How the port is wired.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct SwdConfig {
     /// The clock channel.
     pub swclk: u8,

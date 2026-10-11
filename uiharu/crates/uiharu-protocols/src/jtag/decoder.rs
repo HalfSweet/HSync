@@ -80,6 +80,7 @@ impl InitialState {
 
 /// How the test access port is wired.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct JtagConfig {
     /// The test clock channel.
     pub tck: u8,

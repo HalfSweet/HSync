@@ -34,11 +34,13 @@ use uiharu_core::{
 use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
 use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
+use uiharu_protocols::jtag::{Jtag, JtagEvent};
 use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
 use uiharu_protocols::pwm::{Pwm, PwmEvent};
 use uiharu_protocols::spi::{Spi, SpiEvent};
 use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
+use uiharu_protocols::swd::{Swd, SwdEvent};
 use uiharu_protocols::timing::{Timing, TimingEvent};
 use uiharu_protocols::uart::{Uart, UartEvent};
 
@@ -203,6 +205,14 @@ fn build_eeprom24xx(value: &serde_json::Value) -> Result<Box<dyn Node>, String> 
     build_node(value, Eeprom24xx::new)
 }
 
+fn build_jtag(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Jtag::new)
+}
+
+fn build_swd(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Swd::new)
+}
+
 fn build_uart(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Uart::new)
 }
@@ -263,6 +273,16 @@ pub const KINDS: &[Kind] = &[
         name: "eeprom24xx",
         build: build_eeprom24xx,
         writer: write_as::<EepromEvent>,
+    },
+    Kind {
+        name: "jtag",
+        build: build_jtag,
+        writer: write_as::<JtagEvent>,
+    },
+    Kind {
+        name: "swd",
+        build: build_swd,
+        writer: write_as::<SwdEvent>,
     },
 ];
 
