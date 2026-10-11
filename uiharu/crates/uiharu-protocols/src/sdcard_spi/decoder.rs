@@ -46,6 +46,7 @@ const fn is_data_response(byte: u8) -> bool {
 
 /// How the decoder reads a card's traffic.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct SdCardSpiConfig {
     /// The block length of reads and writes until a CMD16 changes it: 512 bytes for every
     /// card after power-up.

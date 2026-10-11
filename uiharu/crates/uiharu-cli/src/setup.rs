@@ -149,7 +149,7 @@ impl Setup {
                 from: "spi.events".into(),
                 to: "flash.bus".into(),
             });
-            expose.insert("nor".to_owned(), "flash.operations".to_owned());
+            expose.insert("nor".to_owned(), "flash.events".to_owned());
         }
         Description {
             source: SourceDescription {

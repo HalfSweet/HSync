@@ -21,7 +21,7 @@ uiharu gen [options] <output>
 
   Writes a synthetic capture of SPI NOR traffic in the raw binary layout `decode` reads (`-`
   for standard output): READ commands of random addresses and data, with a JEDEC ID read
-  (opcode 0x9f, which the decoder does not know) every fifth transaction.
+  (opcode 0x9f) every fifth transaction.
 
       --reads <N>               transactions to write (default 16)
       --bytes <N>               data bytes per read (default 64)

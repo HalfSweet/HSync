@@ -42,6 +42,7 @@ impl AddressBytes {
 
 /// How the decoder reads the flash's commands.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct SpiNorConfig {
     /// The address width of the commands that follow the flash's address mode.
     pub address_bytes: AddressBytes,

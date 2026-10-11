@@ -14,7 +14,7 @@
 //!     { "from": "source", "to": "spi.logic" },
 //!     { "from": "spi.events", "to": "flash.bus" }
 //!   ],
-//!   "expose": { "spi": "spi.events", "nor": "flash.operations" }
+//!   "expose": { "spi": "spi.events", "nor": "flash.events" }
 //! }
 //! ```
 //!
@@ -38,8 +38,9 @@ use uiharu_protocols::jtag::{Jtag, JtagEvent};
 use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
 use uiharu_protocols::pwm::{Pwm, PwmEvent};
+use uiharu_protocols::sdcard_spi::{SdCardSpi, SdEvent};
 use uiharu_protocols::spi::{Spi, SpiEvent};
-use uiharu_protocols::spi_nor::{NorEvent, SpiNorRead24};
+use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
 use uiharu_protocols::swd::{Swd, SwdEvent};
 use uiharu_protocols::timing::{Timing, TimingEvent};
 use uiharu_protocols::uart::{Uart, UartEvent};
@@ -177,8 +178,12 @@ fn no_config(value: &serde_json::Value) -> Result<(), String> {
 }
 
 fn build_spi_nor(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
-    no_config(value)?;
-    Ok(Box::new(SpiNorRead24::new()))
+    let config: SpiNorConfig = config(value)?;
+    Ok(Box::new(SpiNor::new(config)))
+}
+
+fn build_sdcard_spi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, SdCardSpi::new)
 }
 
 fn build_i2s(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
@@ -283,6 +288,11 @@ pub const KINDS: &[Kind] = &[
         name: "swd",
         build: build_swd,
         writer: write_as::<SwdEvent>,
+    },
+    Kind {
+        name: "sdcard-spi",
+        build: build_sdcard_spi,
+        writer: write_as::<SdEvent>,
     },
 ];
 
@@ -421,7 +431,7 @@ mod tests {
             { "from": "source", "to": "spi.logic" },
             { "from": "spi.events", "to": "flash.bus" }
         ],
-        "expose": { "nor": "flash.operations", "spi": "spi.events" }
+        "expose": { "nor": "flash.events", "spi": "spi.events" }
     }"#;
 
     fn parse(text: &str) -> Description {
@@ -462,13 +472,11 @@ mod tests {
         assert!(
             lines
                 .iter()
-                .any(|line| line.contains(r#""kind":"address","op":1,"address":291"#))
+                .any(|line| line.contains(r#""kind":"address","op":1,"address":291,"bytes":3"#))
         );
-        assert!(
-            lines
-                .iter()
-                .any(|line| line.contains(r#""kind":"data","op":1,"offset":0,"bytes":[170,187]"#))
-        );
+        assert!(lines.iter().any(|line| {
+            line.contains(r#""kind":"data","op":1,"direction":"out","offset":0,"bytes":[170,187]"#)
+        }));
         assert!(lines.contains(&format!(r#"{{"stream":"nor","end":{end}}}"#).as_str()));
         assert_eq!(
             lines
