@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! USB Power Delivery on the CC line: the decoder from logic samples of the line's BMC signal
-//! to `usb_pd.events`, the reader decoders built on USB PD messages use, and a waveform
+//! to `usbpd.events`, the reader decoders built on USB PD messages use, and a waveform
 //! synthesizer.
 
 mod bus;

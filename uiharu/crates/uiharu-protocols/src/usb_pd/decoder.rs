@@ -195,7 +195,7 @@ pub enum UsbPdConfigError {
     Tolerance(u8),
 }
 
-/// The USB PD decoder node: logic samples in, `usb_pd.events` out.
+/// The USB PD decoder node: logic samples in, `usbpd.events` out.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UsbPd {
     config: UsbPdConfig,

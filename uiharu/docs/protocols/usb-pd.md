@@ -1,6 +1,6 @@
 # USB Power Delivery
 
-`uiharu_protocols::usb_pd::UsbPd` decodes the USB Power Delivery packets on the CC line from logic samples and emits them as `usb_pd.events`, version 1. It follows the _Universal Serial Bus Power Delivery Specification_, revision 3.1 (usb.org): chapter 5 for the physical layer — BMC signalling, the preamble, the 4b5b symbols and their K-codes, the ordered sets, the CRC and the end of packet — and chapter 6 for the protocol layer — the message header and the extended message header, the control, data and extended message types, and the power and request data objects.
+`uiharu_protocols::usb_pd::UsbPd` decodes the USB Power Delivery packets on the CC line from logic samples and emits them as `usbpd.events`, version 1. It follows the _Universal Serial Bus Power Delivery Specification_, revision 3.1 (usb.org): chapter 5 for the physical layer — BMC signalling, the preamble, the 4b5b symbols and their K-codes, the ordered sets, the CRC and the end of packet — and chapter 6 for the protocol layer — the message header and the extended message header, the control, data and extended message types, and the power and request data objects.
 
 The CC line carries BMC at 300 kbit/s with a swing of about 1.1 V; a comparator, or a logic analyzer input whose threshold sits inside the swing, turns it into the logic level the decoder reads. BMC carries everything in its transitions, so either level may be the idle one.
 
@@ -27,7 +27,7 @@ The output `events` declares:
 | `bitRate`   | The nominal bit rate, bit/s |
 | `tolerance` | The tolerance, percent      |
 
-## The stream: `usb_pd.events` v1
+## The stream: `usbpd.events` v1
 
 The stream is framed. Every packet has a `begin` and an `end` with the same `pkt`, numbered from 1 in the order packets begin; between them come the packet's fields in the order they are on the line. Hard Reset and Cable Reset signalling are packets too.
 

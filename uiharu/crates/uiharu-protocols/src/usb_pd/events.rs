@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The `usb_pd.events` contract: what the USB Power Delivery decoder emits and what decoders
+//! The `usbpd.events` contract: what the USB Power Delivery decoder emits and what decoders
 //! built on USB PD messages read.
 //!
 //! The names follow the Universal Serial Bus Power Delivery Specification, revision 3.1
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use uiharu_core::{EventSchema, SchemaId};
 
 /// The schema of USB PD event streams.
-pub const USB_PD_EVENTS: SchemaId = SchemaId::new("usb_pd.events", 1);
+pub const USB_PD_EVENTS: SchemaId = SchemaId::new("usbpd.events", 1);
 
 /// The most bytes one `data` event carries.
 pub const DATA_BATCH: usize = 32;
