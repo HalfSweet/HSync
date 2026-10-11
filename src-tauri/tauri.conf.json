@@ -29,8 +29,8 @@
     "active": true,
     "targets": ["app", "dmg", "nsis", "appimage", "deb", "rpm"],
     "category": "DeveloperTool",
-    "shortDescription": "Logic analyzer app for DSLogic and ATK-Logic devices",
-    "longDescription": "HSync is a modern logic analyzer app for DreamSourceLab DSLogic and ALIENTEK ATK-Logic devices: capture, trigger, decode and measure, and open and save DSView capture files.",
+    "shortDescription": "General-purpose logic analyzer app",
+    "longDescription": "HSync is a modern, general-purpose logic analyzer app for DreamSourceLab DSLogic, ALIENTEK ATK-Logic and PXLogic PX-Logic devices: capture, trigger, decode and measure, and open and save DSView capture files.",
     "license": "GPL-3.0-or-later",
     "icon": [
       "icons/32x32.png",
