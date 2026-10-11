@@ -148,6 +148,7 @@ impl LineState {
 
 /// How the bus is wired and how fast it signals.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 pub struct UsbConfig {
     /// The D+ channel.
     pub dp: u8,

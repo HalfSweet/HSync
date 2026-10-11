@@ -47,6 +47,7 @@ use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
 use uiharu_protocols::swd::{Swd, SwdEvent};
 use uiharu_protocols::timing::{Timing, TimingEvent};
 use uiharu_protocols::uart::{Uart, UartEvent};
+use uiharu_protocols::usb::{TransactionEvent, UsbEvent, UsbPackets, UsbTransactions};
 
 use crate::Failure;
 use crate::ndjson::{StreamWriter, Writer};
@@ -219,6 +220,15 @@ fn build_ds18b20(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     Ok(Box::new(Ds18b20::new()))
 }
 
+fn build_usb(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, UsbPackets::new)
+}
+
+fn build_usb_transactions(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(UsbTransactions::new()))
+}
+
 fn build_can(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
     build_node(value, Can::new)
 }
@@ -334,6 +344,16 @@ pub const KINDS: &[Kind] = &[
         name: "ds18b20",
         build: build_ds18b20,
         writer: write_as::<Ds18b20Event>,
+    },
+    Kind {
+        name: "usb",
+        build: build_usb,
+        writer: write_as::<UsbEvent>,
+    },
+    Kind {
+        name: "usb-transactions",
+        build: build_usb_transactions,
+        writer: write_as::<TransactionEvent>,
     },
 ];
 
