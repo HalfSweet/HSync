@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 (2026-10-11)
+
+### Features
+
+- **pxlogic:** Support PXLogic PX-Logic 32, 16 Pro, 16 Plus and 16 Base (#20) ([5a71d11](https://github.com/HalfSweet/HSync/commit/5a71d117ad1abe7eb9b424086016d8ffd3eb6736))
+
 ## 0.1.2 (2026-10-10)
 
 ### Features
