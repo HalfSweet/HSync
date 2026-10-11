@@ -23,29 +23,32 @@ The crates are members of the repository's Cargo workspace but depend on nothing
 
 Each decoder is a module of `crates/uiharu-protocols` with a page in `docs/protocols/` that spells out its contract (the event kinds and their fields), its configuration and its rules. Every decoder was written from the protocol's public specification.
 
-| Decoder            | Type in pipeline files | Reads            | Page                                          |
-| ------------------ | ---------------------- | ---------------- | --------------------------------------------- |
-| SPI                | `spi`                  | logic samples    | [spi.md](docs/protocols/spi.md)               |
-| SPI NOR flash      | `spi-nor`              | `spi.events`     | [spi-nor.md](docs/protocols/spi-nor.md)       |
-| SD card, SPI mode  | `sdcard-spi`           | `spi.events`     | [sdcard-spi.md](docs/protocols/sdcard-spi.md) |
-| I²C                | `i2c`                  | logic samples    | [i2c.md](docs/protocols/i2c.md)               |
-| 24xx EEPROM        | `eeprom24xx`           | `i2c.events`     | [eeprom24xx.md](docs/protocols/eeprom24xx.md) |
-| UART               | `uart`                 | logic samples    | [uart.md](docs/protocols/uart.md)             |
-| Modbus RTU         | `modbus-rtu`           | `uart.events`    | [modbus-rtu.md](docs/protocols/modbus-rtu.md) |
-| LIN                | `lin`                  | `uart.events`    | [lin.md](docs/protocols/lin.md)               |
-| MIDI               | `midi`                 | `uart.events`    | [midi.md](docs/protocols/midi.md)             |
-| CAN 2.0 and CAN FD | `can`                  | logic samples    | [can.md](docs/protocols/can.md)               |
-| 1-Wire link layer  | `onewire-link`         | logic samples    | [onewire.md](docs/protocols/onewire.md)       |
-| 1-Wire network     | `onewire`              | `onewire.link`   | [onewire.md](docs/protocols/onewire.md)       |
-| DS18B20            | `ds18b20`              | `onewire.events` | [ds18b20.md](docs/protocols/ds18b20.md)       |
-| I²S                | `i2s`                  | logic samples    | [i2s.md](docs/protocols/i2s.md)               |
-| PWM                | `pwm`                  | logic samples    | [pwm.md](docs/protocols/pwm.md)               |
-| Edge timing        | `timing`               | logic samples    | [timing.md](docs/protocols/timing.md)         |
-| Parallel bus       | `parallel`             | logic samples    | [parallel.md](docs/protocols/parallel.md)     |
-| USB low/full speed | `usb`                  | logic samples    | [usb.md](docs/protocols/usb.md)               |
-| USB transactions   | `usb-transactions`     | `usb.packets`    | [usb.md](docs/protocols/usb.md)               |
-| JTAG               | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
-| SWD                | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
+| Decoder              | Type in pipeline files | Reads            | Page                                          |
+| -------------------- | ---------------------- | ---------------- | --------------------------------------------- |
+| SPI                  | `spi`                  | logic samples    | [spi.md](docs/protocols/spi.md)               |
+| SPI NOR flash        | `spi-nor`              | `spi.events`     | [spi-nor.md](docs/protocols/spi-nor.md)       |
+| SD card, SPI mode    | `sdcard-spi`           | `spi.events`     | [sdcard-spi.md](docs/protocols/sdcard-spi.md) |
+| APA102 / SK9822 LEDs | `apa102`               | `spi.events`     | [apa102.md](docs/protocols/apa102.md)         |
+| I²C                  | `i2c`                  | logic samples    | [i2c.md](docs/protocols/i2c.md)               |
+| 24xx EEPROM          | `eeprom24xx`           | `i2c.events`     | [eeprom24xx.md](docs/protocols/eeprom24xx.md) |
+| UART                 | `uart`                 | logic samples    | [uart.md](docs/protocols/uart.md)             |
+| Modbus RTU           | `modbus-rtu`           | `uart.events`    | [modbus-rtu.md](docs/protocols/modbus-rtu.md) |
+| LIN                  | `lin`                  | `uart.events`    | [lin.md](docs/protocols/lin.md)               |
+| MIDI                 | `midi`                 | `uart.events`    | [midi.md](docs/protocols/midi.md)             |
+| DMX512               | `dmx512`               | `uart.events`    | [dmx512.md](docs/protocols/dmx512.md)         |
+| CAN 2.0 and CAN FD   | `can`                  | logic samples    | [can.md](docs/protocols/can.md)               |
+| 1-Wire link layer    | `onewire-link`         | logic samples    | [onewire.md](docs/protocols/onewire.md)       |
+| 1-Wire network       | `onewire`              | `onewire.link`   | [onewire.md](docs/protocols/onewire.md)       |
+| DS18B20              | `ds18b20`              | `onewire.events` | [ds18b20.md](docs/protocols/ds18b20.md)       |
+| I²S                  | `i2s`                  | logic samples    | [i2s.md](docs/protocols/i2s.md)               |
+| PWM                  | `pwm`                  | logic samples    | [pwm.md](docs/protocols/pwm.md)               |
+| Edge timing          | `timing`               | logic samples    | [timing.md](docs/protocols/timing.md)         |
+| Parallel bus         | `parallel`             | logic samples    | [parallel.md](docs/protocols/parallel.md)     |
+| WS281x LEDs          | `ws281x`               | logic samples    | [ws281x.md](docs/protocols/ws281x.md)         |
+| USB low/full speed   | `usb`                  | logic samples    | [usb.md](docs/protocols/usb.md)               |
+| USB transactions     | `usb-transactions`     | `usb.packets`    | [usb.md](docs/protocols/usb.md)               |
+| JTAG                 | `jtag`                 | logic samples    | [jtag.md](docs/protocols/jtag.md)             |
+| SWD                  | `swd`                  | logic samples    | [swd.md](docs/protocols/swd.md)               |
 
 ## Quick start
 
