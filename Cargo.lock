@@ -1576,6 +1576,7 @@ dependencies = [
  "hsync-demo",
  "hsync-driver",
  "hsync-dslogic",
+ "hsync-pxlogic",
  "hsync-session",
  "hsync-srd",
  "log",
