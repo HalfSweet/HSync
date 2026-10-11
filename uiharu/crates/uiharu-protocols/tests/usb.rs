@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The USB packet decoder on synthesized waveforms.
+//! The USB packet and transaction decoders on synthesized waveforms.
 
 use std::collections::BTreeSet;
 
-use uiharu_core::testing::{Harness, assert_block_invariant};
-use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
+use proptest::prelude::*;
+use uiharu_core::testing::{Harness, Tap, assert_block_invariant};
+use uiharu_core::{GraphConfig, GraphError, InputRef, Item, LogicBlock, Tick, TickRange, TimeBase};
+use uiharu_protocols::spi::{SPI_EVENTS, Spi, SpiConfig, SpiEvent};
 use uiharu_protocols::usb::synth::{UsbWaveform, crc5, crc16, token_fields};
-use uiharu_protocols::usb::{DATA_BATCH, Pid, Speed, UsbConfig, UsbEvent, UsbPackets};
+use uiharu_protocols::usb::{
+    DATA_BATCH, Pid, Speed, TransactionEvent, USB_PACKETS, UsbConfig, UsbEvent, UsbPackets,
+    UsbTransactions, XactId,
+};
 
 const CHANNELS: u8 = 2;
 /// Full speed sampled at 48 MHz: four ticks per bit.
@@ -1277,4 +1282,681 @@ fn rich_traffic_is_well_formed() {
         "{lines:?}"
     );
     assert!(lines.contains(&"reset 40".to_owned()), "{lines:?}");
+}
+
+/// Source → USB packets → USB transactions, the packets read along as a tap.
+fn stack(
+    speed: Speed,
+    rate: u64,
+    graph: GraphConfig,
+) -> (Harness<TransactionEvent>, Tap<UsbEvent>) {
+    let mut exposed = None;
+    let mut harness = Harness::build(CHANNELS, TimeBase::new(rate), graph, |graph, source| {
+        let usb = graph.add(UsbPackets::new(config(speed)).expect("a valid configuration"));
+        graph.connect(source.samples, UsbPackets::input(usb))?;
+        let xact = graph.add(UsbTransactions::new());
+        graph.connect(UsbPackets::packets(usb), UsbTransactions::input(xact))?;
+        exposed = Some(graph.expose("packets", UsbPackets::packets(usb))?);
+        Ok(UsbTransactions::transactions(xact))
+    })
+    .expect("builds");
+    let tap = harness.tap(exposed.expect("exposed"));
+    (harness, tap)
+}
+
+fn transactions_only(speed: Speed, rate: u64, graph: GraphConfig) -> Harness<TransactionEvent> {
+    Harness::build(CHANNELS, TimeBase::new(rate), graph, |graph, source| {
+        let usb = graph.add(UsbPackets::new(config(speed)).expect("a valid configuration"));
+        graph.connect(source.samples, UsbPackets::input(usb))?;
+        let xact = graph.add(UsbTransactions::new());
+        graph.connect(UsbPackets::packets(usb), UsbTransactions::input(xact))?;
+        Ok(UsbTransactions::transactions(xact))
+    })
+    .expect("builds")
+}
+
+fn transact(speed: Speed, rate: u64, block: &LogicBlock) -> Vec<String> {
+    let (mut harness, _) = stack(speed, rate, GraphConfig::default());
+    harness.run_all(block);
+    describe_xact(&harness.without_progress())
+}
+
+fn what_xact(event: &TransactionEvent) -> String {
+    match event {
+        TransactionEvent::Begin {
+            xact,
+            token,
+            address,
+            endpoint,
+            frame,
+        } => {
+            let target = match (address, endpoint, frame) {
+                (Some(address), Some(endpoint), _) => format!(" {address}.{endpoint}"),
+                (_, _, Some(frame)) => format!(" frame {frame}"),
+                _ => String::new(),
+            };
+            format!("begin x{} {token:?}{target}", xact.0)
+        }
+        TransactionEvent::Setup {
+            xact,
+            bm_request_type,
+            b_request,
+            w_value,
+            w_index,
+            w_length,
+        } => format!(
+            "setup x{} {bm_request_type:02x} {b_request:02x} {w_value:04x} {w_index:04x} {w_length}",
+            xact.0
+        ),
+        TransactionEvent::Data {
+            xact,
+            pid,
+            offset,
+            bytes,
+        } => format!("data x{} {pid:?} +{offset} {}", xact.0, hex(bytes)),
+        TransactionEvent::Handshake { xact, pid } => format!("handshake x{} {pid:?}", xact.0),
+        TransactionEvent::End { xact, reason } => format!("end x{} {reason:?}", xact.0),
+    }
+}
+
+/// One line per transaction stream item, with where it comes from.
+fn describe_xact(items: &[Item<TransactionEvent>]) -> Vec<String> {
+    lines(items, what_xact)
+}
+
+/// Checks the envelope of a transaction stream: events settle in order, one transaction is
+/// open at a time, and every event belongs to the open one.
+fn assert_transactions_well_formed(items: &[Item<TransactionEvent>]) {
+    let mut settled = Tick::ZERO;
+    let mut open: Option<XactId> = None;
+    for item in items {
+        let Item::Event(event) = item else { continue };
+        assert!(event.settled >= settled, "settled out of order: {event:?}");
+        settled = event.settled;
+        match &event.payload {
+            TransactionEvent::Begin { xact, .. } => {
+                assert!(open.is_none(), "{xact:?} began while {open:?} was open");
+                open = Some(*xact);
+            }
+            TransactionEvent::End { xact, .. } => {
+                assert_eq!(open, Some(*xact), "{event:?}");
+                open = None;
+            }
+            TransactionEvent::Setup { xact, .. }
+            | TransactionEvent::Data { xact, .. }
+            | TransactionEvent::Handshake { xact, .. } => {
+                assert_eq!(open, Some(*xact), "{event:?}");
+            }
+        }
+    }
+    assert!(open.is_none(), "{open:?} left open");
+}
+
+#[test]
+fn transactions_end_as_their_handshakes_say() {
+    let set_configuration = [0x00, 0x09, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00];
+    let mut waveform = waveform(Speed::Full, FULL);
+    let w = &mut waveform;
+    exchange(
+        w,
+        Pid::Setup,
+        2,
+        0,
+        Some((Pid::Data0, &set_configuration)),
+        Some(Pid::Ack),
+    );
+    exchange(
+        w,
+        Pid::In,
+        2,
+        1,
+        Some((Pid::Data1, &[0x01, 0x02])),
+        Some(Pid::Ack),
+    );
+    exchange(w, Pid::In, 2, 1, None, Some(Pid::Nak));
+    exchange(w, Pid::In, 2, 1, None, Some(Pid::Stall));
+    exchange(
+        w,
+        Pid::Out,
+        2,
+        2,
+        Some((Pid::Data0, &[0x03])),
+        Some(Pid::Ack),
+    );
+    exchange(
+        w,
+        Pid::Out,
+        2,
+        2,
+        Some((Pid::Data1, &[0x04])),
+        Some(Pid::Nak),
+    );
+    exchange(w, Pid::Out, 2, 2, Some((Pid::Data0, &[])), Some(Pid::Stall));
+    exchange(w, Pid::Ping, 2, 2, None, Some(Pid::Ack));
+    exchange(w, Pid::Ping, 2, 2, None, Some(Pid::Nak));
+    exchange(
+        w,
+        Pid::Out,
+        2,
+        2,
+        Some((Pid::Data1, &[0x05])),
+        Some(Pid::Nyet),
+    );
+    let block = waveform.finish();
+    assert_eq!(
+        bare(&transact(Speed::Full, FULL, &block)),
+        vec![
+            "begin x1 Setup 2.0".to_owned(),
+            "data x1 Data0 +0 0009010000000000".to_owned(),
+            "setup x1 00 09 0001 0000 0".to_owned(),
+            "handshake x1 Ack".to_owned(),
+            "end x1 Complete".to_owned(),
+            "begin x2 In 2.1".to_owned(),
+            "data x2 Data1 +0 0102".to_owned(),
+            "handshake x2 Ack".to_owned(),
+            "end x2 Complete".to_owned(),
+            "begin x3 In 2.1".to_owned(),
+            "handshake x3 Nak".to_owned(),
+            "end x3 Nak".to_owned(),
+            "begin x4 In 2.1".to_owned(),
+            "handshake x4 Stall".to_owned(),
+            "end x4 Stall".to_owned(),
+            "begin x5 Out 2.2".to_owned(),
+            "data x5 Data0 +0 03".to_owned(),
+            "handshake x5 Ack".to_owned(),
+            "end x5 Complete".to_owned(),
+            "begin x6 Out 2.2".to_owned(),
+            "data x6 Data1 +0 04".to_owned(),
+            "handshake x6 Nak".to_owned(),
+            "end x6 Nak".to_owned(),
+            "begin x7 Out 2.2".to_owned(),
+            "data x7 Data0 +0 -".to_owned(),
+            "handshake x7 Stall".to_owned(),
+            "end x7 Stall".to_owned(),
+            "begin x8 Ping 2.2".to_owned(),
+            "handshake x8 Ack".to_owned(),
+            "end x8 Complete".to_owned(),
+            "begin x9 Ping 2.2".to_owned(),
+            "handshake x9 Nak".to_owned(),
+            "end x9 Nak".to_owned(),
+            "begin x10 Out 2.2".to_owned(),
+            "data x10 Data1 +0 05".to_owned(),
+            "handshake x10 Nyet".to_owned(),
+            "end x10 Complete".to_owned(),
+            format!("eof {}", block.end()),
+        ]
+    );
+}
+
+#[test]
+fn a_control_transfer_is_three_transactions() {
+    // GET_DESCRIPTOR for the 18-byte device descriptor: the setup, data and status stages.
+    let request = [0x80, 0x06, 0x00, 0x01, 0x00, 0x00, 0x12, 0x00];
+    let descriptor = [
+        0x12, 0x01, 0x00, 0x02, 0x00, 0x00, 0x00, 0x40, 0x09, 0x12, 0x34, 0x56, 0x00, 0x01, 0x01,
+        0x02, 0x03, 0x01,
+    ];
+    let mut waveform = waveform(Speed::Low, LOW);
+    let w = &mut waveform;
+    exchange(
+        w,
+        Pid::Setup,
+        0,
+        0,
+        Some((Pid::Data0, &request)),
+        Some(Pid::Ack),
+    );
+    exchange(
+        w,
+        Pid::In,
+        0,
+        0,
+        Some((Pid::Data1, &descriptor[..8])),
+        Some(Pid::Ack),
+    );
+    exchange(
+        w,
+        Pid::In,
+        0,
+        0,
+        Some((Pid::Data0, &descriptor[8..16])),
+        Some(Pid::Ack),
+    );
+    exchange(
+        w,
+        Pid::In,
+        0,
+        0,
+        Some((Pid::Data1, &descriptor[16..])),
+        Some(Pid::Ack),
+    );
+    exchange(w, Pid::Out, 0, 0, Some((Pid::Data1, &[])), Some(Pid::Ack));
+    let block = waveform.finish();
+    assert_eq!(
+        bare(&transact(Speed::Low, LOW, &block)),
+        vec![
+            "begin x1 Setup 0.0".to_owned(),
+            "data x1 Data0 +0 8006000100001200".to_owned(),
+            "setup x1 80 06 0100 0000 18".to_owned(),
+            "handshake x1 Ack".to_owned(),
+            "end x1 Complete".to_owned(),
+            "begin x2 In 0.0".to_owned(),
+            format!("data x2 Data1 +0 {}", hex(&descriptor[..8])),
+            "handshake x2 Ack".to_owned(),
+            "end x2 Complete".to_owned(),
+            "begin x3 In 0.0".to_owned(),
+            format!("data x3 Data0 +0 {}", hex(&descriptor[8..16])),
+            "handshake x3 Ack".to_owned(),
+            "end x3 Complete".to_owned(),
+            "begin x4 In 0.0".to_owned(),
+            format!("data x4 Data1 +0 {}", hex(&descriptor[16..])),
+            "handshake x4 Ack".to_owned(),
+            "end x4 Complete".to_owned(),
+            "begin x5 Out 0.0".to_owned(),
+            "data x5 Data1 +0 -".to_owned(),
+            "handshake x5 Ack".to_owned(),
+            "end x5 Complete".to_owned(),
+            format!("eof {}", block.end()),
+        ]
+    );
+}
+
+#[test]
+fn transactions_take_their_ticks_from_their_packets() {
+    let mut waveform = waveform(Speed::Full, FULL);
+    // IN to address 0, endpoint 0 (69 00 10), then NAK, with no stuffed bits.
+    waveform.token(Pid::In, 0, 0);
+    waveform.idle_bits(2);
+    waveform.handshake(Pid::Nak);
+    waveform.idle_bits(8);
+    let block = waveform.finish();
+    // The token's packet: SYNC from 64, PID from 96, fields from 128, EOP at 192 to 204;
+    // the NAK's SYNC from 212, its PID from 244, its EOP at 276.
+    assert_eq!(
+        transact(Speed::Full, FULL, &block),
+        vec![
+            "begin x1 In 0.0 [64,191)@190",
+            "handshake x1 Nak [212,275)@274",
+            "end x1 Nak [276,285)@284",
+            "eof 320",
+        ]
+    );
+}
+
+#[test]
+fn a_transaction_left_without_an_answer_ends_when_the_bus_moves_on() {
+    let mut waveform = waveform(Speed::Full, FULL);
+    let w = &mut waveform;
+    // OUT and its data, but no handshake: the next SOF closes it.
+    exchange(w, Pid::Out, 4, 1, Some((Pid::Data0, &[0xaa])), None);
+    w.idle_bits(20);
+    let sof = w.position();
+    w.sof(7);
+    w.idle_bits(8);
+    // IN and nothing: the next IN closes it.
+    exchange(w, Pid::In, 4, 2, None, None);
+    exchange(w, Pid::In, 4, 2, None, Some(Pid::Nak));
+    // An isochronous IN, data without handshake: a reset ends it.
+    exchange(w, Pid::In, 4, 3, Some((Pid::Data0, &[1, 2])), None);
+    w.reset(480);
+    w.idle_bits(8);
+    // An IN still waiting when the samples end.
+    exchange(w, Pid::In, 4, 2, None, None);
+    let block = waveform.finish();
+    let lines = transact(Speed::Full, FULL, &block);
+    assert_eq!(
+        bare(&lines),
+        vec![
+            "begin x1 Out 4.1".to_owned(),
+            "data x1 Data0 +0 aa".to_owned(),
+            "end x1 NoResponse".to_owned(),
+            "begin x2 Sof frame 7".to_owned(),
+            "end x2 Complete".to_owned(),
+            "begin x3 In 4.2".to_owned(),
+            "end x3 NoResponse".to_owned(),
+            "begin x4 In 4.2".to_owned(),
+            "handshake x4 Nak".to_owned(),
+            "end x4 Nak".to_owned(),
+            "begin x5 In 4.3".to_owned(),
+            "data x5 Data0 +0 0102".to_owned(),
+            "end x5 NoResponse".to_owned(),
+            "begin x6 In 4.2".to_owned(),
+            "end x6 Aborted".to_owned(),
+            format!("eof {}", block.end()),
+        ]
+    );
+    // No answer is known once the SOF's PID has shown it to be no answer.
+    assert_eq!(
+        lines[2],
+        format!("end x1 NoResponse @{}", sof.offset(4 * 15 + 2))
+    );
+    assert_eq!(lines[14], format!("end x6 Aborted @{}", block.end()));
+}
+
+#[test]
+fn damaged_and_unexpected_packets_end_a_transaction_in_error() {
+    let mut waveform = waveform(Speed::Full, FULL);
+    let w = &mut waveform;
+    // OUT whose data fails its CRC16.
+    w.token(Pid::Out, 5, 1);
+    w.idle_bits(2);
+    w.data_with_crc(Pid::Data0, &[1, 2, 3], crc16(&[1, 2, 3]) ^ 0x8000);
+    w.idle_bits(8);
+    // IN answered by ACK, which only the host sends, after data.
+    exchange(w, Pid::In, 5, 1, None, Some(Pid::Ack));
+    // OUT whose data packet breaks the stuffing rule.
+    w.token(Pid::Out, 5, 1);
+    w.idle_bits(2);
+    w.sync();
+    w.pid(Pid::Data1);
+    w.unstuffed_ones(8);
+    w.eop();
+    w.idle_bits(8);
+    // A token whose CRC5 fails, which the device ignores: its data and ACK belong to nothing.
+    w.token_with_crc(Pid::Out, 5, 1, crc5(token_fields(5, 1), 11) ^ 1);
+    w.idle_bits(2);
+    w.data(Pid::Data0, &[9]);
+    w.idle_bits(2);
+    w.handshake(Pid::Ack);
+    w.idle_bits(8);
+    // OUT with a second data packet where the handshake belongs.
+    exchange(w, Pid::Out, 5, 1, Some((Pid::Data0, &[1])), None);
+    w.data(Pid::Data1, &[2]);
+    w.idle_bits(8);
+    // A failed PID check where the handshake belongs.
+    exchange(w, Pid::Out, 5, 1, Some((Pid::Data1, &[3])), None);
+    w.sync();
+    w.byte(Pid::Ack.byte() ^ 0x10);
+    w.eop();
+    w.idle_bits(8);
+    let block = waveform.finish();
+    assert_eq!(
+        bare(&transact(Speed::Full, FULL, &block)),
+        vec![
+            "begin x1 Out 5.1".to_owned(),
+            "data x1 Data0 +0 010203".to_owned(),
+            "end x1 Error".to_owned(),
+            "begin x2 In 5.1".to_owned(),
+            "handshake x2 Ack".to_owned(),
+            "end x2 Error".to_owned(),
+            "begin x3 Out 5.1".to_owned(),
+            "end x3 Error".to_owned(),
+            "begin x4 Out 5.1".to_owned(),
+            "end x4 Error".to_owned(),
+            "begin x5 Out 5.1".to_owned(),
+            "data x5 Data0 +0 01".to_owned(),
+            "end x5 Error".to_owned(),
+            "begin x6 Out 5.1".to_owned(),
+            "data x6 Data1 +0 03".to_owned(),
+            "end x6 Error".to_owned(),
+            format!("eof {}", block.end()),
+        ]
+    );
+}
+
+#[test]
+fn a_gap_aborts_the_open_transaction() {
+    let payload: Vec<u8> = (0..20).collect();
+    let mut waveform = waveform(Speed::Full, FULL);
+    let w = &mut waveform;
+    w.token(Pid::In, 1, 1);
+    w.idle_bits(2);
+    let sync = w.position();
+    w.data(Pid::Data1, &payload);
+    w.idle_bits(2);
+    w.handshake(Pid::Ack);
+    w.idle_bits(8);
+    exchange(w, Pid::In, 1, 1, None, Some(Pid::Nak));
+    let block = waveform.finish();
+    let gap = TickRange::new(sync.offset(4 * 80), sync.offset(4 * 90));
+    let (mut harness, _) = stack(Speed::Full, FULL, GraphConfig::default());
+    harness.feed_with_gaps(&block, &[gap], &[100]);
+    harness.end();
+    let lines = describe_xact(&harness.without_progress());
+    assert_eq!(
+        bare(&lines),
+        vec![
+            "begin x1 In 1.1".to_owned(),
+            format!("data x1 Data1 +0 {}", hex(&payload[..6])),
+            "end x1 Aborted".to_owned(),
+            format!("gap {gap}"),
+            "begin x2 In 1.1".to_owned(),
+            "handshake x2 Nak".to_owned(),
+            "end x2 Nak".to_owned(),
+            format!("eof {}", block.end()),
+        ]
+    );
+    assert_eq!(lines[2], format!("end x1 Aborted @{}", gap.start));
+}
+
+#[test]
+fn the_transactions_node_reads_usb_packets_only() {
+    // A graph built at run time types its ports by their schemas alone, as this one does.
+    let error = Harness::build(
+        4,
+        TimeBase::new(FULL),
+        GraphConfig::default(),
+        |graph, source| {
+            let spi = graph.add(Spi::new(SpiConfig::default()).expect("a valid configuration"));
+            graph.connect(source.samples, Spi::input(spi))?;
+            let xact = graph.add(UsbTransactions::new());
+            graph.connect(Spi::events(spi), InputRef::<SpiEvent>::of_node(xact, 0))?;
+            Ok(UsbTransactions::transactions(xact))
+        },
+    )
+    .expect_err("refused");
+    assert_eq!(
+        error,
+        GraphError::SchemaMismatch {
+            from: "spi#0.events".into(),
+            to: "usb-transactions#1.packets".into(),
+            output: SPI_EVENTS,
+            input: USB_PACKETS,
+        }
+    );
+    assert!(
+        UsbTransactions::requires()
+            .unmet(&config(Speed::Low).props())
+            .is_none()
+    );
+}
+
+#[test]
+fn every_cut_and_pause_yields_the_same_transactions() {
+    let block = rich_full();
+    let gaps = gaps_in(&block);
+    assert_block_invariant(
+        |graph| transactions_only(Speed::Full, FULL, graph),
+        &block,
+        &gaps,
+    );
+}
+
+#[test]
+fn queues_stay_bounded_on_a_long_burst() {
+    let payload: Vec<u8> = (0..1023u32).map(|i| (i % 251) as u8).collect();
+    let mut waveform = waveform(Speed::Full, FULL);
+    for _ in 0..4 {
+        exchange(
+            &mut waveform,
+            Pid::Out,
+            1,
+            1,
+            Some((Pid::Data0, &payload)),
+            Some(Pid::Ack),
+        );
+    }
+    let block = waveform.finish();
+    let config = GraphConfig {
+        queue_capacity: 4,
+        budget: 16,
+    };
+    let (mut harness, packets) = stack(Speed::Full, FULL, config);
+    harness.drain_on_full = 1;
+    harness.feed_cut(&block, &[], &[997], &[2]);
+    harness.end();
+    let stats = harness.pipeline().stats();
+    assert!(stats.within_capacity(), "{stats:?}");
+    assert!(stats.high_water() <= 4, "{stats:?}");
+    let bytes: Vec<u8> = harness
+        .events()
+        .into_iter()
+        .filter_map(|event| match event.payload {
+            TransactionEvent::Data { bytes, .. } => Some(bytes),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    assert_eq!(bytes.len(), 4 * payload.len());
+    assert!(bytes.chunks(payload.len()).all(|chunk| chunk == payload));
+    assert_well_formed(&packets.items());
+}
+
+/// A stretch of random traffic.
+#[derive(Clone, Debug)]
+enum Segment {
+    Token {
+        pid: Pid,
+        address: u8,
+        endpoint: u8,
+        damaged: bool,
+    },
+    Sof {
+        frame: u16,
+    },
+    Data {
+        pid: Pid,
+        len: usize,
+        damaged: bool,
+    },
+    Handshake {
+        pid: Pid,
+    },
+    BadPid {
+        code: u8,
+        flip: u8,
+    },
+    StuffError,
+    Reset {
+        ticks: u64,
+    },
+    Preamble,
+    Split {
+        raw: u32,
+    },
+}
+
+fn segment() -> impl Strategy<Value = Segment> {
+    let token = prop::sample::select(vec![Pid::Out, Pid::In, Pid::Setup, Pid::Ping]);
+    let data = prop::sample::select(vec![Pid::Data0, Pid::Data1, Pid::Data2, Pid::Mdata]);
+    let handshake = prop::sample::select(vec![Pid::Ack, Pid::Nak, Pid::Stall, Pid::Nyet]);
+    prop_oneof![
+        6 => (token, 0u8..128, 0u8..16, prop::bool::weighted(0.1)).prop_map(
+            |(pid, address, endpoint, damaged)| Segment::Token { pid, address, endpoint, damaged }
+        ),
+        2 => (0u16..2048).prop_map(|frame| Segment::Sof { frame }),
+        5 => (data, 0usize..80, prop::bool::weighted(0.1))
+            .prop_map(|(pid, len, damaged)| Segment::Data { pid, len, damaged }),
+        5 => handshake.prop_map(|pid| Segment::Handshake { pid }),
+        1 => (0u8..16, 0u8..4).prop_map(|(code, flip)| Segment::BadPid { code, flip }),
+        1 => Just(Segment::StuffError),
+        1 => (100u64..400).prop_map(|ticks| Segment::Reset { ticks }),
+        1 => Just(Segment::Preamble),
+        1 => (0u32..0x100_0000).prop_map(|raw| Segment::Split { raw }),
+    ]
+}
+
+fn traffic(segments: &[Segment]) -> LogicBlock {
+    let mut waveform = waveform(Speed::Full, FULL);
+    let w = &mut waveform;
+    for (n, segment) in segments.iter().enumerate() {
+        match segment {
+            Segment::Token {
+                pid,
+                address,
+                endpoint,
+                damaged,
+            } => {
+                let crc = crc5(token_fields(*address, *endpoint), 11) ^ u8::from(*damaged);
+                w.token_with_crc(*pid, *address, *endpoint, crc);
+            }
+            Segment::Sof { frame } => w.sof(*frame),
+            Segment::Data { pid, len, damaged } => {
+                let payload: Vec<u8> = (0..*len).map(|i| (i * 29 + n * 7) as u8).collect();
+                let crc = crc16(&payload) ^ if *damaged { 0x0100 } else { 0 };
+                w.data_with_crc(*pid, &payload, crc);
+            }
+            Segment::Handshake { pid } => w.handshake(*pid),
+            Segment::BadPid { code, flip } => {
+                w.sync();
+                w.byte(Pid::from_code(*code).byte() ^ (0x10 << flip));
+                w.eop();
+            }
+            Segment::StuffError => {
+                w.sync();
+                w.pid(Pid::Data0);
+                w.unstuffed_ones(8);
+                w.eop();
+            }
+            Segment::Reset { ticks } => w.reset(*ticks),
+            Segment::Preamble => {
+                w.preamble();
+                w.idle_bits(9);
+            }
+            Segment::Split { raw } => w.split(*raw),
+        }
+        w.idle_bits(2 + (n as u64 % 4) * 3);
+    }
+    w.idle_bits(8);
+    waveform.finish()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig { cases: 48, ..ProptestConfig::default() })]
+
+    /// Blocks of any size, a reader that pauses at random, tiny queues and budgets, samples
+    /// cut short or lost in a gap: the packets and the transactions are those of one
+    /// uninterrupted run, and well formed.
+    #[test]
+    fn random_traffic_decodes_alike_however_it_is_fed(
+        segments in prop::collection::vec(segment(), 1..12),
+        sizes in prop::collection::vec(1u64..300, 1..6),
+        pauses in prop::collection::vec(0usize..12, 1..8),
+        queue_capacity in 1usize..6,
+        budget in 1u32..40,
+        cut in prop::option::of(0.05f64..1.0),
+        gap in prop::option::of((0.05f64..0.95, 1u64..300)),
+    ) {
+        let whole = traffic(&segments);
+        let block = match cut {
+            Some(cut) => {
+                let end = Tick(((whole.len() as f64) * cut) as u64).max(Tick(1));
+                whole.slice(TickRange::new(Tick::ZERO, end)).expect("a slice")
+            }
+            None => whole,
+        };
+        let gaps: Vec<TickRange> = gap
+            .and_then(|(at, len)| {
+                let start = ((block.len() as f64) * at) as u64;
+                let end = (start + len).min(block.len());
+                (start < end).then(|| TickRange::new(Tick(start), Tick(end)))
+            })
+            .into_iter()
+            .collect();
+        let (mut reference, reference_packets) = stack(Speed::Full, FULL, GraphConfig::default());
+        reference.feed_with_gaps(&block, &gaps, &[u64::MAX]);
+        reference.end();
+        assert_well_formed(&reference_packets.items());
+        assert_transactions_well_formed(&reference.items);
+
+        let config = GraphConfig { queue_capacity, budget };
+        let (mut harness, packets) = stack(Speed::Full, FULL, config);
+        harness.drain_on_full = 1;
+        harness.feed_cut(&block, &gaps, &sizes, &pauses);
+        harness.end();
+        prop_assert_eq!(harness.without_progress(), reference.without_progress());
+        prop_assert_eq!(packets.without_progress(), reference_packets.without_progress());
+        let stats = harness.pipeline().stats();
+        prop_assert!(stats.within_capacity(), "{stats:?}");
+    }
 }
