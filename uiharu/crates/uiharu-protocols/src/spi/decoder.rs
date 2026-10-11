@@ -394,7 +394,16 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<SpiEvent>, config: SpiCon
                 }
                 // Without a deadline the wait is never quiet.
                 Change::Quiet(_) => {}
-                Change::Progress(tick) => out.progress(tick).await,
+                // Progress promises that nothing starting earlier follows: while a word is
+                // under way, progress stops at its first bit.
+                Change::Progress(tick) => {
+                    let held = decoder
+                        .transfer
+                        .as_ref()
+                        .filter(|transfer| transfer.bits > 0)
+                        .map_or(tick, |transfer| transfer.first_bit.min(tick));
+                    out.progress(held).await;
+                }
                 Change::End(tick) => {
                     if framed && let Some(transfer) = decoder.transfer.take() {
                         let end = SpiEvent::End {
