@@ -30,6 +30,7 @@ pub mod modbus_rtu;
 pub mod nrf24l01;
 pub mod onewire;
 pub mod parallel;
+pub mod ps2;
 pub mod pwm;
 pub mod sdcard_spi;
 pub mod spi;
