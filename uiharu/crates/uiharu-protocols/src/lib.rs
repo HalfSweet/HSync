@@ -15,6 +15,7 @@ pub mod eeprom24xx;
 pub mod i2c;
 pub mod i2s;
 pub mod jtag;
+pub mod lin;
 pub mod modbus_rtu;
 pub mod onewire;
 pub mod parallel;
