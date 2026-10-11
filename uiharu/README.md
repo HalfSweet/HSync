@@ -44,7 +44,7 @@ Any pipeline can be described in a JSON file instead — the source, the nodes w
     { "from": "source", "to": "spi.logic" },
     { "from": "spi.events", "to": "flash.bus" }
   ],
-  "expose": { "spi": "spi.events", "nor": "flash.operations" }
+  "expose": { "spi": "spi.events", "nor": "flash.events" }
 }
 ```
 
@@ -70,15 +70,15 @@ The lines of one stream are the same whatever the block size, queue size or budg
 use std::sync::Arc;
 use uiharu_core::{Graph, SignalItem, SourceSpec, TimeBase};
 use uiharu_protocols::spi::{Spi, SpiConfig};
-use uiharu_protocols::spi_nor::SpiNorRead24;
+use uiharu_protocols::spi_nor::{SpiNor, SpiNorConfig};
 
 let mut graph = Graph::new();
 let logic = graph.source(SourceSpec::new("logic", 4, TimeBase::new(25_000_000)))?;
 let spi = graph.add(Spi::new(SpiConfig::default())?);
-let flash = graph.add(SpiNorRead24::new());
+let flash = graph.add(SpiNor::new(SpiNorConfig::default()));
 graph.connect(logic.samples, Spi::input(spi))?;            // checks the channel count
-graph.connect(Spi::events(spi), SpiNorRead24::input(flash))?; // checks word width, bit order, lines
-let operations = graph.expose("flash-operations", SpiNorRead24::operations(flash))?;
+graph.connect(Spi::events(spi), SpiNor::input(flash))?;    // checks word width, bit order, lines
+let operations = graph.expose("flash", SpiNor::events(flash))?;
 let mut pipeline = graph.build()?;                          // checks for cycles and unconnected inputs
 let operations = pipeline.exposed(operations).expect("exposed once");
 

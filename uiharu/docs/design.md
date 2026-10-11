@@ -46,7 +46,8 @@ Provenance is explicit in handwritten Rust. A node reading events takes `Provena
 | SPI `end` (cs-release)          | the tick chip select released                                  | that tick                                          |
 | SPI `end` (aborted)             | empty, at the gap's start or the end of the samples            | that tick                                          |
 | NOR `begin`                     | SPI `begin` through the opcode word                            | the opcode's last bit                              |
-| NOR `address`                   | the three address words                                        | the last one's last bit                            |
+| NOR `address`                   | the address words, three or four                               | the last one's last bit                            |
+| NOR `dummy`, `status`, `id`     | the words they are read from                                   | the last one's last bit                            |
 | NOR `data` (full batch)         | the words of the batch                                         | the last byte's last bit                           |
 | NOR `data` (flushed by an end)  | the words of the batch                                         | the end that decided it                            |
 | NOR `end` (complete)            | the SPI `end`                                                  | the release tick                                   |
@@ -81,7 +82,7 @@ The cursor keeps the levels just before its position across blocks and seeks, so
 - `expose` names an output for the caller; names are unique.
 - `build` checks that every input is connected, that there is no cycle (topological order), and that no node reads two time domains (sources are domains; nodes inherit the domain they read).
 
-Diagnostics name ports as `node#index.port` and say what was required and what was found, e.g. `spi-nor-read24#1.bus requires wordBits = 8 of spi#0.events, which declares 4`.
+Diagnostics name ports as `node#index.port` and say what was required and what was found, e.g. `spi-nor#1.bus requires wordBits = 8 of spi#0.events, which declares 4`.
 
 The command line builds graphs from a JSON description (`uiharu decode --graph`; the format is in the README): a source, named nodes with a type and a configuration deserialized by the node's config type, connections between `node.port` names, and the outputs to expose. It is the hand-written form of the graph description the DSL compiler will emit, and the registry of node types in `crates/uiharu-cli/src/pipeline.rs` — how to build each node from its configuration and how to write its output — is the one place a decoder is made available to the command line.
 
@@ -135,7 +136,7 @@ Only `word_or_end` ever returns the normal end; a body that returns before the e
 | `recovery: { truncated, gap }`           | `recover()` around the body, as in §6                                                         |
 | `g.source("logic")`                      | `graph.source(SourceSpec::new(…))`                                                            |
 | `g.node(SpiDecoder, { clk, … })`         | `graph.add(Spi::new(SpiConfig { … })?)`                                                       |
-| `g.connect(a.outputs.x, b.inputs.y)`     | `graph.connect(Spi::events(spi), SpiNorRead24::input(nor))?`                                  |
+| `g.connect(a.outputs.x, b.inputs.y)`     | `graph.connect(Spi::events(spi), SpiNor::input(nor))?`                                        |
 | `g.expose(name, port)`                   | `graph.expose(name, port)?` then `pipeline.exposed(ref)`                                      |
 
 ## 8. NDJSON
