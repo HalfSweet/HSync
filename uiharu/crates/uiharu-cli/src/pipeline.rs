@@ -37,6 +37,8 @@ use uiharu_protocols::eeprom24xx::{Eeprom24xx, EepromEvent};
 use uiharu_protocols::i2c::{I2c, I2cEvent};
 use uiharu_protocols::i2s::{I2s, I2sEvent};
 use uiharu_protocols::jtag::{Jtag, JtagEvent};
+use uiharu_protocols::lin::{Lin, LinEvent};
+use uiharu_protocols::midi::{Midi, MidiEvent};
 use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
 use uiharu_protocols::onewire::{LinkEvent, OneWireEvent, OneWireLink, OneWireNetwork};
 use uiharu_protocols::parallel::{Parallel, ParallelEvent};
@@ -258,6 +260,15 @@ fn build_modbus_rtu(value: &serde_json::Value) -> Result<Box<dyn Node>, String> 
     Ok(Box::new(ModbusRtu::new()))
 }
 
+fn build_lin(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Lin::new)
+}
+
+fn build_midi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Midi::new()))
+}
+
 /// The node types a description may use, each with the configuration type it reads.
 pub const KINDS: &[Kind] = &[
     Kind {
@@ -354,6 +365,16 @@ pub const KINDS: &[Kind] = &[
         name: "usb-transactions",
         build: build_usb_transactions,
         writer: write_as::<TransactionEvent>,
+    },
+    Kind {
+        name: "lin",
+        build: build_lin,
+        writer: write_as::<LinEvent>,
+    },
+    Kind {
+        name: "midi",
+        build: build_midi,
+        writer: write_as::<MidiEvent>,
     },
 ];
 
@@ -554,8 +575,8 @@ mod tests {
     fn descriptions_are_checked() {
         let error = |text: &str| build(&parse(text)).expect_err("refused").to_string();
         assert_eq!(
-            error(r#"{"source": {"channels": 4}, "nodes": {"x": {"type": "lin"}}}"#),
-            "node x: unknown type lin"
+            error(r#"{"source": {"channels": 4}, "nodes": {"x": {"type": "no-such-protocol"}}}"#),
+            "node x: unknown type no-such-protocol"
         );
         assert_eq!(
             error(
