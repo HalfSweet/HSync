@@ -624,11 +624,12 @@ impl SignalCursor {
         }
     }
 
-    /// Notes the last levels of `block` and lets it go.
+    /// Notes the last levels of `block`, stands at its end and lets it go.
     fn release(&mut self, block: &LogicBlock) {
         let last = Tick(block.end().0 - 1);
         self.prev = block.levels(last).unwrap_or_default();
         self.prev_tick = Some(last);
+        self.pos = self.pos.max(block.end());
         self.exhausted = Some(block.end());
         self.block = None;
     }
@@ -730,7 +731,8 @@ impl SignalCursor {
                         cx.spend();
                         return Poll::Ready(Change::Quiet(tick));
                     }
-                    Found::Exhausted => {}
+                    // A deadline at the block's end is reached without the next block.
+                    Found::Exhausted => continue,
                 }
             } else if let Some(until) = until
                 && until <= self.pos
@@ -1114,6 +1116,25 @@ mod tests {
         let quiet =
             poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(80))).as_mut());
         assert_eq!(quiet, Poll::Ready(Change::Quiet(Tick(80))));
+    }
+
+    #[test]
+    fn a_deadline_at_the_end_of_a_block_needs_no_next_block() {
+        let (mut cursor, queue) = cursor();
+        push(&queue, block(0, &[0u64; 50], 1));
+        let quiet =
+            poll(Box::pin(cursor.next_change_before(ChannelMask::one(0), Tick(50))).as_mut());
+        assert_eq!(quiet, Poll::Ready(Change::Quiet(Tick(50))));
+        assert_eq!(cursor.position(), Tick(50));
+        // The used-up block is still announced before the cursor waits.
+        assert_eq!(
+            poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut()),
+            Poll::Ready(Change::Progress(Tick(50)))
+        );
+        assert_eq!(
+            poll(Box::pin(cursor.next_change(ChannelMask::one(0))).as_mut()),
+            Poll::Pending
+        );
     }
 
     #[test]
