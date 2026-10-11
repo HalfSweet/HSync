@@ -500,6 +500,24 @@ fn gaps_and_progress_pass_through() {
 }
 
 #[test]
+fn the_first_item_decides_where_a_source_starts() {
+    let (mut pipeline, source, exposed) = chain(GraphConfig::default());
+    let doubled = pipeline.exposed(exposed).expect("the exposed reader");
+    assert_eq!(pipeline.next_tick(source), None);
+    pipeline
+        .push(source, SignalItem::Data(toggling(1_000, 50, 10)))
+        .expect("pushes");
+    assert_eq!(pipeline.next_tick(source), Some(Tick(1_050)));
+    pipeline
+        .push(source, SignalItem::End(Tick(1_050)))
+        .expect("pushes");
+    pipeline.run();
+    let found = events(&drain(&doubled));
+    assert_eq!(found.first().map(|event| event.2), Some(Tick(1_010)));
+    assert_eq!(found.len(), 4);
+}
+
+#[test]
 fn pushes_must_be_contiguous() {
     let (mut pipeline, source, _) = chain(GraphConfig::default());
     pipeline

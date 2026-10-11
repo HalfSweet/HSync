@@ -57,8 +57,8 @@ struct SourceState {
     time_base: TimeBase,
     queue: SharedQueue<Arc<LogicBlock>>,
     handles: QueueHandles,
-    /// The tick the next item starts at.
-    next: Tick,
+    /// The tick the next item starts at; the first item decides where the stream starts.
+    next: Option<Tick>,
     ended: bool,
 }
 
@@ -184,7 +184,7 @@ impl Pipeline {
                     time_base: spec.time_base,
                     queue,
                     handles,
-                    next: Tick::ZERO,
+                    next: None,
                     ended: false,
                 }
             })
@@ -275,8 +275,9 @@ impl Pipeline {
             .map(|(index, source)| (SourceId(index), source.name.as_str(), source.time_base))
     }
 
-    /// Feeds `item` to `source`. Blocks must follow each other or a gap without a hole; the
-    /// item is handed back when the source is full.
+    /// Feeds `item` to `source`. The first item decides where the stream starts; after it,
+    /// blocks must follow each other or a gap without a hole. The item is handed back when
+    /// the source is full.
     pub fn push(&mut self, source: SourceId, item: SignalItem) -> Result<(), PushError> {
         let state = self
             .sources
@@ -285,7 +286,11 @@ impl Pipeline {
         if state.ended {
             return Err(PushError::Ended);
         }
-        let expected = state.next;
+        let expected = state.next.unwrap_or(match &item {
+            SignalItem::Data(block) => block.start(),
+            SignalItem::Gap(range) => range.start,
+            SignalItem::Progress(tick) | SignalItem::End(tick) => *tick,
+        });
         let found = match &item {
             SignalItem::Data(block) => {
                 if block.channels() != state.channels {
@@ -336,14 +341,15 @@ impl Pipeline {
             };
             return Err(PushError::Full(item));
         }
-        state.next = next;
+        state.next = Some(next);
         state.ended = ended;
         Ok(())
     }
 
-    /// The tick `source` expects next.
+    /// The tick `source` expects next; `None` before its first item, which may start
+    /// anywhere.
     pub fn next_tick(&self, source: SourceId) -> Option<Tick> {
-        self.sources.get(source.0).map(|state| state.next)
+        self.sources.get(source.0).and_then(|state| state.next)
     }
 
     /// Whether `source` has room for another item.
