@@ -641,7 +641,8 @@ impl SignalCursor {
                 self.block = Some(block);
             }
         }
-        // Progress and gaps the position is past are no news either; the end stays.
+        // Progress the position is past is no news either. A gap stays, whatever the position:
+        // a decoder that seeks across missing samples must learn of them, and pass them on.
         while self.block.is_none() {
             let passed = match self.inbox.poll_peek() {
                 Poll::Ready(item) => match &*item {
@@ -649,7 +650,6 @@ impl SignalCursor {
                         Some(Some(Arc::clone(&event.payload)))
                     }
                     Item::Progress(tick) if *tick <= self.pos => Some(None),
-                    Item::Gap(range) if range.end <= self.pos => Some(None),
                     _ => None,
                 },
                 Poll::Pending => None,
@@ -660,8 +660,6 @@ impl SignalCursor {
             self.inbox.advance();
             if let Some(block) = block {
                 self.release(&block);
-            } else {
-                self.prev_tick = None;
             }
         }
     }
