@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc eebc6e2d1ebf69020ba71cd0d149ff9b88e67cb535f610a8f7ce304947025266 # shrinks to scenarios = [Scenario { address: 0, function: 0, data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 120, 158, 130, 94, 241, 207], pause: None, corrupt: false, idle: 397 }, Scenario { address: 141, function: 209, data: [36, 30, 106, 29, 42, 205, 14, 230, 153, 217, 17, 156, 172, 146, 49, 218, 163, 123, 75, 238, 95, 147], pause: None, corrupt: false, idle: 647 }, Scenario { address: 68, function: 154, data: [195, 221, 184, 132, 195, 207, 73, 114, 234, 117], pause: Some((2, 752)), corrupt: false, idle: 919 }], sizes = [424], pauses = [0, 5, 4, 4, 0], queue_capacity = 4, budget = 2, cut = None, gap = Some((0.2879342427223978, 4))

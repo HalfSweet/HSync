@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc de24e4ea1ed0083344cbcbd6bf2be374406c7bc6abdbea3d509ebba3698649de # shrinks to scenarios = [Scenario { break_bits: 13, sync: 85, id: 0, flip_parity: false, data: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0], checksum: Some(false), corrupt: false, framing_at: None, idle: 288 }, Scenario { break_bits: 10, sync: 85, id: 0, flip_parity: false, data: [0, 0, 0, 0, 0, 0, 7], checksum: Some(true), corrupt: false, framing_at: None, idle: 287 }, Scenario { break_bits: 13, sync: 85, id: 36, flip_parity: false, data: [241, 37], checksum: Some(true), corrupt: false, framing_at: None, idle: 85 }, Scenario { break_bits: 13, sync: 85, id: 54, flip_parity: false, data: [189, 45, 84, 197, 56, 203, 218, 155, 72, 6], checksum: None, corrupt: false, framing_at: None, idle: 350 }], length_by_id = true, sizes = [492, 115, 315, 371, 409], pauses = [11, 4, 3, 4, 2, 11, 8], queue_capacity = 1, budget = 11, cut = None, gap = Some((0.5151811947663899, 6))
