@@ -204,3 +204,86 @@ impl Scan<'_> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn needle(query: &str) -> Needle {
+        Needle::parse(query).expect("the query has words")
+    }
+
+    #[test]
+    fn parses_numbers_runs_and_names() {
+        assert_eq!(Needle::parse("   "), None);
+        let parsed = needle("frame 0x41 65 -2 1.5 Ok");
+        assert_eq!(
+            parsed.sequences,
+            vec![vec![
+                Number::Integer(0x41),
+                Number::Integer(65),
+                Number::Integer(-2),
+                Number::Float(1.5)
+            ]]
+        );
+        assert_eq!(parsed.names, vec!["frame", "ok"]);
+        assert_eq!(parsed.render(), "65 65 -2 1.5 frame ok");
+        assert_eq!(
+            needle("1 a 2").sequences,
+            vec![vec![Number::Integer(1)], vec![Number::Integer(2)]]
+        );
+    }
+
+    const FRAME: &[u8] = br#"{"kind":"frame","value":65,"parity":null,"framingOk":true}"#;
+    const DATA: &[u8] =
+        br#"{"kind":"data","tx":3,"bytes":[1,2,3,4],"nested":[[9,8],[7,6]],"ok":"err-crc"}"#;
+
+    #[test]
+    fn a_number_finds_a_numeric_field() {
+        assert!(needle("65").matches(FRAME));
+        assert!(needle("0x41").matches(FRAME));
+        assert!(needle("65.0").matches(FRAME));
+        assert!(!needle("66").matches(FRAME));
+        assert!(needle("3").matches(DATA));
+        assert!(needle("8").matches(DATA));
+    }
+
+    #[test]
+    fn a_name_finds_a_kind_or_an_enumerated_value_but_not_a_field_name() {
+        assert!(needle("frame").matches(FRAME));
+        assert!(needle("Frame").matches(FRAME));
+        assert!(needle("err-crc").matches(DATA));
+        assert!(!needle("kind").matches(FRAME));
+        assert!(!needle("value").matches(FRAME));
+        assert!(!needle("framingOk").matches(FRAME));
+        assert!(!needle("true").matches(FRAME));
+    }
+
+    #[test]
+    fn numbers_in_a_row_find_them_one_after_the_other_in_an_array() {
+        assert!(needle("2 3").matches(DATA));
+        assert!(needle("1 2 3 4").matches(DATA));
+        assert!(needle("0x9 8").matches(DATA));
+        assert!(!needle("3 2").matches(DATA));
+        assert!(!needle("1 3").matches(DATA));
+        assert!(!needle("8 7").matches(DATA));
+        assert!(!needle("1 2").matches(FRAME));
+    }
+
+    #[test]
+    fn every_word_must_match() {
+        assert!(needle("frame 65").matches(FRAME));
+        assert!(!needle("frame 66").matches(FRAME));
+        assert!(!needle("data 65").matches(FRAME));
+        assert!(needle("data 2 3").matches(DATA));
+        assert!(!needle("data 3 2").matches(DATA));
+    }
+
+    #[test]
+    fn escaped_strings_are_read_whole() {
+        let json = br#"{"kind":"text","text":"say \"hi\" : 65","value":7}"#;
+        assert!(needle("7").matches(json));
+        assert!(!needle("65").matches(json));
+        assert!(!needle("hi").matches(json));
+    }
+}
