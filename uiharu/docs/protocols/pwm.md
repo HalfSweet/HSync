@@ -20,7 +20,7 @@ The `pwm` decoder measures the cycles of a pulse-width modulated line and writes
 | `periodTicks` | Ticks from the leading edge to the next one                                      |
 | `activeTicks` | Ticks the line was active: from the leading edge to the trailing edge in between |
 
-Duty cycle (`active_ticks / period_ticks`) and frequency (the source's `rateHz / period_ticks`) are the reader's to compute. A cycle covers its ticks, from its leading edge up to the next one, and is settled at that next leading edge, where it became certain.
+Duty cycle (`activeTicks / periodTicks`) and frequency (the source's `rateHz / periodTicks`) are the reader's to compute. A cycle covers its ticks, from its leading edge up to the next one, and is settled at that next leading edge, where it became certain.
 
 ## Props
 

@@ -15,7 +15,7 @@ let events = UsbPd::events(pd);
 | Field       | Default | Meaning                                                                                                                                 |
 | ----------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `cc`        | 0       | The channel of the CC line.                                                                                                             |
-| `bit_rate`  | 300 000 | The nominal bit rate in bit/s.                                                                                                          |
+| `bit_rate`  | 300 000 | The nominal bit rate in bit/s, at least 1.                                                                                              |
 | `tolerance` | 10      | How far, in percent, the bit rate a preamble shows and each bit may be off, 0 to 25. USB PD transmitters keep 270 to 330 kbit/s, ±10 %. |
 
 The input `logic` requires `channels` ≥ `cc` + 1 and `rateHz` ≥ 6 × `bit_rate`, 1.8 MHz at 300 kbit/s: with fewer samples per bit, a bit's middle and its end can no longer be told apart within the tolerance. The graph refuses a source that does not meet them, naming the property, for example `usb-pd#0.logic requires rateHz >= 1800000 of logic#0.samples, which declares 1000000`.

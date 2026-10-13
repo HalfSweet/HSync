@@ -8,7 +8,7 @@
 | -------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rx`           | 0       | The channel carrying the receive line, as the transceiver puts it out.                                                                                  |
 | `dominant_low` | `true`  | Whether the dominant level is low, as on a transceiver's RX pin.                                                                                        |
-| `bitrate`      | 500 000 | The nominal bit rate in bit/s: the arbitration phase of every frame, and all of classic frames and of FD frames without bit rate switching.             |
+| `bitrate`      | 500 000 | The nominal bit rate in bit/s, at least 1: the arbitration phase of every frame, and all of classic frames and of FD frames without bit rate switching. |
 | `fd_bitrate`   | none    | The data bit rate of FD frames with BRS recessive; at least `bitrate`. Without it such frames end `unsupported` at BRS.                                 |
 | `sample_point` | 87      | Where a bit is sampled, in percent of the bit time from its start, 1 to 99; the same in both phases.                                                    |
 | `fd`           | `true`  | Whether FD frames are recognised by their FDF bit. When off, every frame is classic and the bit is the reserved bit `r0` (`r1` in the extended format). |
