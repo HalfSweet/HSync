@@ -19,8 +19,6 @@ log = "0.4.34"
 nusb = "0.2.7"
 parking_lot = "0.12.5"
 proptest = "1.11.0"
-# Embeds CPython for the sigrok decoders; 0.29.3 is still too new to take.
-pyo3 = "=0.29.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
 # Maps that keep insertion order, for pipeline descriptions whose node order matters.
@@ -42,7 +40,6 @@ hsync-dslogic = { path = "crates/hsync-dslogic" }
 hsync-fileio = { path = "crates/hsync-fileio" }
 hsync-pxlogic = { path = "crates/hsync-pxlogic" }
 hsync-session = { path = "crates/hsync-session" }
-hsync-srd = { path = "crates/hsync-srd" }
 hsync-uiharu = { path = "crates/hsync-uiharu" }
 uiharu-registry = { path = "uiharu/crates/uiharu-registry" }
 
