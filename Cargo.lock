@@ -1757,6 +1757,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-uiharu"
+version = "0.1.4"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-fileio",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uiharu-core",
+ "uiharu-protocols",
+ "uiharu-registry",
+]
+
+[[package]]
 name = "html5ever"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
