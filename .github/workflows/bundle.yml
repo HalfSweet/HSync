@@ -1,6 +1,6 @@
 # Builds the installers for macOS (universal: Apple silicon and Intel), Windows (x64) and Linux
-# (x64) with the bundled Python. The release workflow calls it to fill a draft release; run by hand,
-# it keeps the installers with the run as artifacts.
+# (x64). The release workflow calls it to fill a draft release; run by hand, it keeps the
+# installers with the run as artifacts.
 name: Bundle
 
 on:
@@ -68,21 +68,6 @@ jobs:
         with:
           targets: ${{ matrix.rust-targets }}
       - uses: Swatinem/rust-cache@v2
-      - name: Lay out the bundled Python
-        run: node scripts/python-runtime.mjs ${{ matrix.target && format('--target {0}', matrix.target) || '' }} --github-env
-      # Every decoder must load from the trimmed standard library on every platform.
-      - name: Test the decoder host against it
-        shell: bash
-        env:
-          PYTHONHOME: ${{ env.HSYNC_PYTHON_HOME }}
-          HSYNC_TEST_PYTHON_HOME: ${{ env.HSYNC_PYTHON_HOME }}
-        run: |
-          case "$RUNNER_OS" in
-            Linux) export LD_LIBRARY_PATH="$HSYNC_PYTHON_LIB" ;;
-            macOS) export DYLD_LIBRARY_PATH="$HSYNC_PYTHON_LIB" ;;
-            Windows) export PATH="$(cygpath -u "$HSYNC_PYTHON_LIB"):$PATH" ;;
-          esac
-          cargo test -p hsync-srd --locked
       - name: Check the updater key is set
         if: inputs.release-id != ''
         shell: bash
@@ -98,14 +83,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Lets linuxdeploy find libpython while it assembles the AppImage.
-          LD_LIBRARY_PATH: ${{ runner.os == 'Linux' && env.HSYNC_PYTHON_LIB || '' }}
         with:
           releaseId: ${{ inputs.release-id }}
           releaseBody: ${{ inputs.release-notes }}
           uploadWorkflowArtifacts: ${{ inputs.release-id == '' }}
           # Updater artifacts need the signing key; builds by hand without it skip them.
           args: >-
-            --config ${{ env.HSYNC_PYTHON_TAURI_CONFIG }}
             ${{ matrix.target && format('--target {0}', matrix.target) || '' }}
             ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' && '--config src-tauri/tauri.updater.conf.json' || '' }}

@@ -81,17 +81,9 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 24
-      # Builds and tests use the Python release builds ship, trimmed standard library and all.
-      - name: Lay out the bundled Python
-        run: node scripts/python-runtime.mjs --github-env
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - name: cargo test
-        env:
-          PYTHONHOME: ${{ env.HSYNC_PYTHON_HOME }}
-          HSYNC_TEST_PYTHON_HOME: ${{ env.HSYNC_PYTHON_HOME }}
-          LD_LIBRARY_PATH: ${{ env.HSYNC_PYTHON_LIB }}
-        run: cargo test --workspace --locked
+      - run: cargo test --workspace --locked
       # The tests regenerate the TypeScript bindings of IPC types (`pnpm bindings`).
       - name: Check the bindings are up to date
         run: |
