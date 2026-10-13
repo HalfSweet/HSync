@@ -296,16 +296,19 @@ fn saves_and_reopens_a_capture_with_its_decoders() {
         .set_decoders(opened.id, only_spi.clone())
         .expect("decoders");
     decoded(&events, opened.id, 1);
-    let path = std::env::temp_dir().join(format!("hsync-save-{}.dsl", std::process::id()));
-    let saved = first.save(opened.id, &path).expect("save");
+    let path = std::env::temp_dir().join(format!("hsync-save-{}.hsync", std::process::id()));
+    let session = json!({ "format": "hsync-session", "version": 1, "colours": { "12": 4 } });
+    let saved = first.save(opened.id, &path, session.clone()).expect("save");
     assert!(matches!(
         saved.source,
         hsync_session::CaptureSource::File { .. }
     ));
+    assert_eq!(saved.session, Some(session.clone()));
 
     let (mut other, other_events) = workspace();
     let reopened = other.open_file(&path).expect("reopen");
     assert_eq!(reopened.decoders, Some(only_spi));
+    assert_eq!(reopened.session, Some(session));
     decoded(&other_events, reopened.id, 1);
     assert_eq!(reopened.info.sample_count, opened.info.sample_count);
     assert_eq!(reopened.channels, opened.channels);

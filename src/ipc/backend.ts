@@ -67,11 +67,16 @@ export interface UpdateProgress {
 /** Everything the UI asks of the Rust side. Components reach it only through stores. */
 export interface Backend {
   captureSummary(): Promise<CaptureSummary | null>
+  /** Opens a capture file: HSync's own `.hsync`, or DSView's `.dsl`. */
   openFile(path: string): Promise<CaptureSummary>
-  /** Saves a capture as a `.dsl` file; it then counts as that file. */
+  /**
+   * Saves a capture as an `.hsync` file with `session`, the interface's session document; it
+   * then counts as that file.
+   */
   saveFile(
     captureId: number,
     path: string,
+    session: unknown,
     onProgress: (done: number) => void,
   ): Promise<CaptureSummary>
   /** Writes a capture, or part of it, in another format. */
@@ -225,10 +230,11 @@ class TauriBackend implements Backend {
     return invoke<CaptureSummary>('capture_open_file', { path })
   }
 
-  saveFile(captureId: number, path: string, onProgress: (done: number) => void) {
+  saveFile(captureId: number, path: string, session: unknown, onProgress: (done: number) => void) {
     return invoke<CaptureSummary>('capture_save', {
       captureId,
       path,
+      session,
       onProgress: progress(onProgress),
     })
   }

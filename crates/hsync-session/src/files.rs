@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use hsync_capture::LogicCapture;
 use hsync_core::{ChannelIndex, SampleIndex};
-use hsync_fileio::{DslWriteRequest, ExportFormat, Progress};
+use hsync_fileio::{DslWriteRequest, ExportFormat, HsyncSource, HsyncWriteRequest, Progress};
 use parking_lot::RwLock;
 use serde::Deserialize;
 use ts_rs::TS;
@@ -21,6 +21,8 @@ use crate::entry::DecoderEntry;
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum ExportKind {
+    /// HSync's own capture file.
+    Hsync,
     /// DSView's capture file.
     Dsl,
     Csv,
@@ -54,6 +56,7 @@ pub struct ExportSource {
     pub(crate) channel_names: BTreeMap<ChannelIndex, String>,
     pub(crate) decoders: Option<serde_json::Value>,
     pub(crate) driver: String,
+    pub(crate) model: String,
     pub(crate) session: Option<serde_json::Value>,
 }
 
@@ -73,16 +76,52 @@ impl ExportSource {
             .unwrap_or_else(|| index.to_string())
     }
 
-    /// Writes the whole capture to `path` as a `.dsl` file; returns the `session` document
-    /// written, for the workspace to keep.
+    /// Writes the whole capture to `path` as an `.hsync` file with the interface's `session`.
     pub fn save(
         &self,
         path: &Path,
+        session: &serde_json::Value,
         progress: Progress<'_>,
-    ) -> Result<serde_json::Value, SessionError> {
+    ) -> Result<(), SessionError> {
         let capture = self.capture.read();
         let channels = capture.info().channels;
-        self.write_dsl(path, &capture, &channels, self.decoders.as_ref(), progress)
+        self.write_hsync(
+            path,
+            &capture,
+            &channels,
+            self.decoders.as_ref(),
+            Some(session),
+            progress,
+        )
+    }
+
+    /// Writes an `.hsync` file: the samples of `channels`, their names, the `decoders` and the
+    /// interface's `session`, naming the device the capture came from.
+    fn write_hsync(
+        &self,
+        path: &Path,
+        capture: &LogicCapture,
+        channels: &[ChannelIndex],
+        decoders: Option<&serde_json::Value>,
+        session: Option<&serde_json::Value>,
+        progress: Progress<'_>,
+    ) -> Result<(), SessionError> {
+        let names: BTreeMap<ChannelIndex, String> = channels
+            .iter()
+            .map(|&index| (index, self.name_of(index)))
+            .collect();
+        let request = HsyncWriteRequest {
+            channel_names: &names,
+            source: (!self.driver.is_empty()).then(|| HsyncSource {
+                driver: self.driver.clone(),
+                model: self.model.clone(),
+            }),
+            app_version: env!("CARGO_PKG_VERSION"),
+            decoders,
+            session,
+        };
+        hsync_fileio::write_hsync_file(path, capture, &request, progress)?;
+        Ok(())
     }
 
     /// Writes a `.dsl` file with HSync's `decoders` entries; DSView's own list stays empty,
@@ -147,7 +186,7 @@ impl ExportSource {
             sliced = capture.slice(from, to, &channels);
             &sliced
         };
-        if request.kind == ExportKind::Dsl {
+        if matches!(request.kind, ExportKind::Hsync | ExportKind::Dsl) {
             // Decoders go along when every channel they read is written.
             let decoders: Vec<serde_json::Value> = self
                 .decoders
@@ -166,7 +205,11 @@ impl ExportSource {
                 .cloned()
                 .collect();
             let decoders = (!decoders.is_empty()).then_some(serde_json::Value::Array(decoders));
-            self.write_dsl(path, part, &channels, decoders.as_ref(), progress)?;
+            if request.kind == ExportKind::Hsync {
+                self.write_hsync(path, part, &channels, decoders.as_ref(), None, progress)?;
+            } else {
+                self.write_dsl(path, part, &channels, decoders.as_ref(), progress)?;
+            }
             return Ok(());
         }
         let format = match request.kind {

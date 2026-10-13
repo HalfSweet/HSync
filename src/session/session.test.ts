@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { optionRank, parseSession } from './session'
+import { optionRank, parseSession, readSession } from './session'
 
 describe('sessions', () => {
   it('read HSync sessions back', () => {
@@ -27,6 +27,24 @@ describe('sessions', () => {
     expect(session?.triggers).toEqual({ 1: 'fall' })
     expect(session?.channelNames).toEqual({ 0: 'SDA' })
     expect(session?.decoders).toEqual([{ id: '1:i2c' }])
+    expect(session?.view).toBeNull()
+  })
+
+  it('read the view stored with an .hsync capture', () => {
+    const document = {
+      format: 'hsync-session',
+      version: 1,
+      view: { start: 1_200, end: 4_800, segment: { from: 2_000, to: 2_500 } },
+    }
+    expect(readSession(document)?.view).toEqual({
+      start: 1_200,
+      end: 4_800,
+      segment: { from: 2_000, to: 2_500 },
+    })
+    const unmarked = { ...document, view: { start: 0, end: 100, segment: { from: 'a' } } }
+    expect(readSession(unmarked)?.view).toEqual({ start: 0, end: 100, segment: null })
+    expect(readSession({ ...document, view: { start: 'x', end: 1 } })?.view).toBeNull()
+    expect(readSession('not a document')).toBeNull()
   })
 
   it('keep the external trigger of PXLogic devices', () => {

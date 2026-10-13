@@ -33,7 +33,7 @@ fn demo_path() -> PathBuf {
 }
 
 #[test]
-fn opens_an_imported_waveform_as_a_file_and_saves_it_as_dsl() {
+fn opens_an_imported_waveform_as_a_file_and_saves_it() {
     let vcd = temp("ila.vcd");
     std::fs::write(&vcd, ILA).expect("fixture written");
     let mut waveform = hsync_session::read_waveform_file(&vcd, &mut |_| {}).expect("reads");
@@ -72,8 +72,10 @@ fn opens_an_imported_waveform_as_a_file_and_saves_it_as_dsl() {
     assert_eq!(names, ["clk", "data[0]", "data[1]"]);
     assert!(summary.decoders.is_none());
 
-    let dsl = temp("ila.dsl");
-    let saved = workspace.save(summary.id, &dsl).expect("saves");
+    let dsl = temp("ila.hsync");
+    let saved = workspace
+        .save(summary.id, &dsl, serde_json::json!({}))
+        .expect("saves");
     assert_eq!(
         saved.source,
         CaptureSource::File {

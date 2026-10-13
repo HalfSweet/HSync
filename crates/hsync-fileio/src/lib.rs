@@ -7,6 +7,7 @@ mod dsl;
 mod error;
 mod export;
 pub mod header;
+mod hsync;
 mod progress;
 mod waveform;
 
@@ -17,6 +18,11 @@ pub use dsl::{
 pub use error::FileError;
 pub use export::{ExportFormat, ExportRequest, export, samplerate_text};
 pub use header::DslHeader;
+pub use hsync::{
+    HSYNC_EXTENSION, HSYNC_FORMAT, HSYNC_VERSION, HsyncChannel, HsyncDocument, HsyncManifest,
+    HsyncSource, HsyncTrigger, HsyncWriteRequest, is_hsync_path, read_hsync, read_hsync_file,
+    write_hsync, write_hsync_file, write_hsync_with,
+};
 pub use progress::Progress;
 pub use waveform::{
     ImportRequest, ImportedCapture, MAX_SAMPLES, ReadProgress, Waveform, WaveformFormat,

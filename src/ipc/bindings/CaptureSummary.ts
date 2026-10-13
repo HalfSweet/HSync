@@ -26,4 +26,9 @@ channels: Array<ChannelSummary>,
 /**
  * The decoders stored with the capture: HSync's entries (see [`DecoderEntry`]).
  */
-decoders: unknown, };
+decoders: unknown, 
+/**
+ * The interface's session document stored in an `.hsync` file, for the interface to
+ * apply; `None` for captures from elsewhere.
+ */
+session: unknown, };

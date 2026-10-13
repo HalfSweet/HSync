@@ -25,12 +25,14 @@ pub(super) fn reporter<'a>(
     }
 }
 
-/// Saves the open capture as a DSView `.dsl` file; it then counts as that file.
+/// Saves the open capture as an `.hsync` file with the interface's `session` document; it
+/// then counts as that file.
 #[tauri::command]
 pub async fn capture_save(
     app: AppHandle,
     capture_id: u64,
     path: PathBuf,
+    session: serde_json::Value,
     on_progress: Channel<f64>,
 ) -> CommandResult<CaptureSummary> {
     blocking(app, move |state| {
@@ -40,7 +42,7 @@ pub async fn capture_save(
         state.file_cancel.store(false, Ordering::Relaxed);
         let source = state.workspace.lock().export_source(capture_id)?;
         log::info!("saving capture {capture_id} to {}", path.display());
-        let session = source.save(&path, &mut reporter(state, &on_progress))?;
+        source.save(&path, &session, &mut reporter(state, &on_progress))?;
         state
             .workspace
             .lock()

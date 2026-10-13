@@ -3,13 +3,13 @@ import { describe, expect, it } from 'vitest'
 import {
   defaultCaptureName,
   isWaveformPath,
-  suggestedDslPath,
+  suggestedCapturePath,
   withExtension,
 } from './useFileActions'
 
 describe('file names', () => {
   it('stamps the date and time', () => {
-    expect(defaultCaptureName(new Date(2026, 9, 10, 14, 5, 9))).toBe('HSync-20261010-140509.dsl')
+    expect(defaultCaptureName(new Date(2026, 9, 10, 14, 5, 9))).toBe('HSync-20261010-140509.hsync')
     expect(defaultCaptureName(new Date(2026, 9, 10, 14, 5, 9), 'vcd')).toBe(
       'HSync-20261010-140509.vcd',
     )
@@ -24,13 +24,15 @@ describe('file names', () => {
     expect(isWaveformPath('/tmp/sim.vcd')).toBe(true)
     expect(isWaveformPath('C:\\dumps\\ila.FST')).toBe(true)
     expect(isWaveformPath('/tmp/tb.ghw')).toBe(true)
+    expect(isWaveformPath('/tmp/capture.hsync')).toBe(false)
     expect(isWaveformPath('/tmp/capture.dsl')).toBe(false)
     expect(isWaveformPath('/tmp/vcd')).toBe(false)
   })
 
-  it('suggests a .dsl name for an imported waveform', () => {
-    expect(suggestedDslPath('/tmp/sim.vcd')).toBe('/tmp/sim.dsl')
-    expect(suggestedDslPath('/tmp/ila.fst')).toBe('/tmp/ila.dsl')
-    expect(suggestedDslPath('/tmp/capture.dsl')).toBe('/tmp/capture.dsl')
+  it('suggests an .hsync name for the file a capture came from', () => {
+    expect(suggestedCapturePath('/tmp/sim.vcd')).toBe('/tmp/sim.hsync')
+    expect(suggestedCapturePath('/tmp/ila.fst')).toBe('/tmp/ila.hsync')
+    expect(suggestedCapturePath('/tmp/capture.dsl')).toBe('/tmp/capture.hsync')
+    expect(suggestedCapturePath('/tmp/capture.hsync')).toBe('/tmp/capture.hsync')
   })
 })
