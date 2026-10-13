@@ -9,7 +9,7 @@ use uiharu_core::{
 use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig, SpiConfigError, SpiEvent};
 use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
 
-use std::collections::BTreeMap;
+use indexmap::IndexMap;
 
 use crate::args::{Args, UsageError};
 use uiharu_registry::{Connection, Description, NodeDescription, SourceDescription};
@@ -123,7 +123,7 @@ impl Setup {
 
     /// The same pipeline as a description, for `decode`.
     pub fn description(&self) -> Description {
-        let mut nodes = BTreeMap::new();
+        let mut nodes = IndexMap::new();
         nodes.insert(
             "spi".to_owned(),
             NodeDescription {
@@ -135,7 +135,7 @@ impl Setup {
             from: "source".into(),
             to: "spi.logic".into(),
         }];
-        let mut expose = BTreeMap::new();
+        let mut expose = IndexMap::new();
         expose.insert("spi".to_owned(), "spi.events".to_owned());
         if self.kind == Kind::SpiNor {
             nodes.insert(

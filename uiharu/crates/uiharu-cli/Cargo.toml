@@ -13,6 +13,7 @@ name = "uiharu"
 path = "src/main.rs"
 
 [dependencies]
+indexmap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
