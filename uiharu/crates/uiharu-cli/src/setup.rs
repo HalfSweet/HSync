@@ -12,7 +12,7 @@ use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
 use std::collections::BTreeMap;
 
 use crate::args::{Args, UsageError};
-use crate::pipeline::{Connection, Description, NodeDescription, SourceDescription};
+use uiharu_registry::{Connection, Description, NodeDescription, SourceDescription};
 
 /// Which decoders the pipeline runs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

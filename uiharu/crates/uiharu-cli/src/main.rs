@@ -10,7 +10,6 @@ mod bench;
 mod decode;
 mod generate;
 mod ndjson;
-mod pipeline;
 mod setup;
 
 use std::fmt;
@@ -64,6 +63,15 @@ impl From<UsageError> for Failure {
 impl From<GraphError> for Failure {
     fn from(error: GraphError) -> Self {
         Failure::Graph(error)
+    }
+}
+
+impl From<uiharu_registry::BuildError> for Failure {
+    fn from(error: uiharu_registry::BuildError) -> Self {
+        match error {
+            uiharu_registry::BuildError::Description(message) => Failure::Usage(message),
+            uiharu_registry::BuildError::Graph(error) => Failure::Graph(error),
+        }
     }
 }
 

@@ -11,8 +11,8 @@ use uiharu_core::{LogicBlock, PushError, SignalItem, Tick};
 use crate::Failure;
 use crate::args::{Args, UsageError};
 use crate::ndjson::Writer;
-use crate::pipeline::{self, Description};
 use crate::setup::{self, Setup};
+use uiharu_registry::Description;
 
 /// The options of the command, beyond the shared ones.
 pub const OPTIONS: &[&str] = &["graph", "chunk", "stream", "progress", "stats"];
@@ -54,7 +54,7 @@ fn read_full(reader: &mut impl Read, buffer: &mut [u8]) -> io::Result<usize> {
 struct Output {
     out: Box<dyn Write>,
     progress: bool,
-    writers: Vec<(Box<dyn Writer>, bool)>,
+    writers: Vec<(Writer, bool)>,
 }
 
 impl Output {
@@ -111,7 +111,7 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     }
     let wanted = |name: &str| streams.is_empty() || streams.contains(&name);
 
-    let built = pipeline::build(&description)?;
+    let built = uiharu_registry::build(&description)?;
     let mut pipeline = built.pipeline;
     let source = built.source;
     let channels = built.channels;
@@ -119,11 +119,11 @@ pub fn run(args: &Args) -> Result<(), Failure> {
         out: Box::new(BufWriter::new(io::stdout().lock())),
         progress: args.flag("progress"),
         writers: built
-            .writers
+            .streams
             .into_iter()
-            .map(|writer| {
-                let written = wanted(writer.name());
-                (writer, written)
+            .map(|stream| {
+                let written = wanted(&stream.name);
+                (Writer::new(stream.reader), written)
             })
             .collect(),
     };

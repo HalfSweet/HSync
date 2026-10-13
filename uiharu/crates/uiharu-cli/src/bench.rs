@@ -17,7 +17,6 @@ use uiharu_protocols::spi::synth::SpiWaveform;
 use crate::Failure;
 use crate::args::Args;
 use crate::generate::{Rng, traffic};
-use crate::ndjson::StreamWriter;
 use crate::setup::{self, Setup};
 
 /// The options of the command, beyond the shared ones.
@@ -90,6 +89,40 @@ fn percentile(sorted: &[Duration], fraction: f64) -> Duration {
     sorted[index.min(sorted.len() - 1)]
 }
 
+/// Reads an exposed output and counts its events, serializing nothing: only the decoding
+/// is timed.
+struct Counter<T> {
+    exposed: uiharu_core::Exposed<T>,
+    ended: bool,
+    events: u64,
+}
+
+impl<T> Counter<T> {
+    fn new(exposed: uiharu_core::Exposed<T>) -> Self {
+        Self {
+            exposed,
+            ended: false,
+            events: 0,
+        }
+    }
+
+    fn discard(&mut self) {
+        while !self.ended {
+            let Some((end, is_event)) = self
+                .exposed
+                .with_next(|item| (item.is_end(), item.event().is_some()))
+            else {
+                break;
+            };
+            if is_event {
+                self.events += 1;
+            }
+            self.exposed.advance();
+            self.ended = end;
+        }
+    }
+}
+
 pub fn run(args: &Args) -> Result<(), Failure> {
     let mut known: Vec<&str> = setup::OPTIONS.to_vec();
     known.extend(OPTIONS);
@@ -112,8 +145,8 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     let built = setup.build()?;
     let mut pipeline = built.pipeline;
     let source = built.source;
-    let mut spi = StreamWriter::new("spi", built.spi);
-    let mut nor = built.nor.map(|nor| StreamWriter::new("nor", nor));
+    let mut spi = Counter::new(built.spi);
+    let mut nor = built.nor.map(Counter::new);
     let mut latencies = Vec::new();
     let started = Instant::now();
     let mut start = Tick::ZERO;
