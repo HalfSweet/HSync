@@ -1667,7 +1667,7 @@
       "downloadingUnsized": "正在下载…",
       "restarting": "正在重启…"
     },
-    "license": "HSync 是自由软件：自身代码以 Apache-2.0 或 GPL-3.0-or-later 许可提供；本版本捆绑了 DSView 的解码器，以 GPL-3.0-or-later 分发。",
-    "credits": "设备驱动与协议解码移植自 DreamSourceLab 的 DSView（libsigrok4DSL、libsigrokdecode4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL），PXLogic 驱动移植自 PXView（GPL），其固件与 FPGA 位流也取自 PXView；DSLogic 固件与 FPGA 位流以 MIT 许可随附；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
+    "license": "HSync 是自由软件：以 Apache-2.0 或 GPL-3.0-or-later 许可提供，任选其一。",
+    "credits": "DSLogic 驱动移植自 DreamSourceLab 的 DSView（libsigrok4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL），PXLogic 驱动移植自 PXView（GPL），其固件与 FPGA 位流也取自 PXView；DSLogic 固件与 FPGA 位流以 MIT 许可随附；解码引擎 uiharu 以 Apache-2.0 许可；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
   }
 }
