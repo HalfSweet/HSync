@@ -16,13 +16,32 @@
   "config": [
     {
       "name": "address_bits",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 2,
+      "max": 16
     },
     {
       "name": "organisation",
       "kind": "enum",
-      "values": ["x16"]
+      "values": ["x16", "x8"]
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "instruction",
+      "fields": ["op", "tx", "command", "address"]
+    },
+    {
+      "kind": "data",
+      "fields": ["op", "direction", "offset", "values"]
+    },
+    {
+      "kind": "status",
+      "fields": ["op", "tx", "ready"]
+    },
+    {
+      "kind": "end",
+      "fields": ["op", "reason"]
+    }
+  ]
 }

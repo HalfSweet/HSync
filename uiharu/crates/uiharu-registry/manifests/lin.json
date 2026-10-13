@@ -20,8 +20,31 @@
     },
     {
       "name": "min_break_bits",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 9,
+      "max": 13
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "header",
+      "fields": ["frame", "pid", "id", "pidOk"]
+    },
+    {
+      "kind": "data",
+      "fields": ["frame", "offset", "bytes"]
+    },
+    {
+      "kind": "checksum",
+      "fields": ["frame", "value", "classicOk", "enhancedOk"]
+    },
+    {
+      "kind": "error",
+      "fields": ["frame", "reason"]
+    },
+    {
+      "kind": "end",
+      "fields": ["frame", "reason"]
+    }
+  ]
 }

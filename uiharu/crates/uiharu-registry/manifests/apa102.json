@@ -14,5 +14,22 @@
     }
   ],
   "config": [],
-  "events": []
+  "events": [
+    {
+      "kind": "frame-begin",
+      "fields": ["frame"]
+    },
+    {
+      "kind": "led",
+      "fields": ["frame", "index", "brightness", "blue", "green", "red"]
+    },
+    {
+      "kind": "frame-end",
+      "fields": ["frame", "leds", "endBits", "reason"]
+    },
+    {
+      "kind": "error",
+      "fields": ["frame", "reason"]
+    }
+  ]
 }

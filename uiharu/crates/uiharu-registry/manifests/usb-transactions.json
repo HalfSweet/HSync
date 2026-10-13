@@ -14,5 +14,26 @@
     }
   ],
   "config": [],
-  "events": []
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["xact", "token", "address", "endpoint", "frame"]
+    },
+    {
+      "kind": "setup",
+      "fields": ["xact", "bmRequestType", "bRequest", "wValue", "wIndex", "wLength"]
+    },
+    {
+      "kind": "data",
+      "fields": ["xact", "pid", "offset", "bytes"]
+    },
+    {
+      "kind": "handshake",
+      "fields": ["xact", "pid"]
+    },
+    {
+      "kind": "end",
+      "fields": ["xact", "reason"]
+    }
+  ]
 }

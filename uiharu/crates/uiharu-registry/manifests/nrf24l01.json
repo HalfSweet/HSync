@@ -14,5 +14,22 @@
     }
   ],
   "config": [],
-  "events": []
+  "events": [
+    {
+      "kind": "command",
+      "fields": ["op", "tx", "command", "register", "registerName", "pipe", "status"]
+    },
+    {
+      "kind": "data",
+      "fields": ["op", "direction", "offset", "bytes"]
+    },
+    {
+      "kind": "end",
+      "fields": ["op", "reason"]
+    },
+    {
+      "kind": "unknown",
+      "fields": ["tx", "command", "status"]
+    }
+  ]
 }

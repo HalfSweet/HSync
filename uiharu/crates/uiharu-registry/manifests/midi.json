@@ -14,5 +14,30 @@
     }
   ],
   "config": [],
-  "events": []
+  "events": [
+    {
+      "kind": "channel-message",
+      "fields": ["message", "channel", "status", "data1", "data2", "running"]
+    },
+    {
+      "kind": "system-common",
+      "fields": ["message", "status", "data1", "data2"]
+    },
+    {
+      "kind": "realtime",
+      "fields": ["status", "byte"]
+    },
+    {
+      "kind": "sysex",
+      "fields": ["message", "offset", "bytes"]
+    },
+    {
+      "kind": "sysex-end",
+      "fields": ["message", "bytes", "reason"]
+    },
+    {
+      "kind": "error",
+      "fields": ["reason", "byte"]
+    }
+  ]
 }

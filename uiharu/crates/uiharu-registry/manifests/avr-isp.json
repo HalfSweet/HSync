@@ -14,5 +14,18 @@
     }
   ],
   "config": [],
-  "events": []
+  "events": [
+    {
+      "kind": "instruction",
+      "fields": ["op", "tx", "command", "address", "dataIn", "dataOut", "inSync", "bytes"]
+    },
+    {
+      "kind": "unknown",
+      "fields": ["tx", "bytes"]
+    },
+    {
+      "kind": "error",
+      "fields": ["tx", "reason", "bytes"]
+    }
+  ]
 }

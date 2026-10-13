@@ -14,5 +14,26 @@
     }
   ],
   "config": [],
-  "events": []
+  "events": [
+    {
+      "kind": "packet-begin",
+      "fields": ["packet", "breakTicks"]
+    },
+    {
+      "kind": "start-code",
+      "fields": ["packet", "code"]
+    },
+    {
+      "kind": "slots",
+      "fields": ["packet", "offset", "values"]
+    },
+    {
+      "kind": "packet-end",
+      "fields": ["packet", "slots", "reason"]
+    },
+    {
+      "kind": "error",
+      "fields": ["packet", "slot"]
+    }
+  ]
 }
