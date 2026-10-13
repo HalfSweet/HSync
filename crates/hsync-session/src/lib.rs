@@ -8,6 +8,8 @@
 
 mod bins;
 mod decoding;
+mod dsview;
+mod entry;
 mod error;
 mod files;
 mod instrument;
@@ -26,8 +28,11 @@ use ts_rs::TS;
 
 pub use bins::{BINS_FORMAT_VERSION, BinsRequest, encode_bins};
 pub use decoding::{
-    DecodeSet, DecodeState, DecoderLanes, DecoderStatus, RANGE_KEY, SEARCH_LIMIT, SearchHit,
-    SearchResult, StreamPage,
+    DecodeSet, DecodeState, DecoderLanes, DecoderStatus, LANE_LIMIT, SEARCH_LIMIT, SearchHit,
+    SearchResult, StreamLanes, StreamPage, StreamStatus,
+};
+pub use entry::{
+    CatalogEntry, CatalogEvent, CatalogField, CatalogFieldKind, CatalogPort, DecoderEntry, catalog,
 };
 pub use error::SessionError;
 pub use files::{ExportKind, ExportRequest, ExportSource, read_text, write_text};
@@ -36,6 +41,7 @@ pub use hsync_fileio::{
     ImportRequest, Waveform, WaveformFormat, WaveformItem, WaveformItemKind, WaveformSummary,
     read_waveform_file,
 };
+pub use hsync_uiharu::{EventRow, LaneBlock, Position, StreamProgress, StreamView};
 pub use instrument::{
     CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,
     SessionEvent,
@@ -85,7 +91,7 @@ pub struct CaptureSummary {
     pub info: CaptureInfo,
     /// Names of the channels, ascending by index.
     pub channels: Vec<ChannelSummary>,
-    /// Decoder stacks stored with the capture, in DSView's `decoders` format.
+    /// The decoders stored with the capture: HSync's entries (see [`DecoderEntry`]).
     #[ts(type = "unknown")]
     pub decoders: Option<serde_json::Value>,
 }
@@ -177,8 +183,6 @@ pub struct Workspace {
     held: Option<OpenCapture>,
     last_id: u64,
     events: Option<EventSink>,
-    /// Runs the decoders without a native implementation, and those stacked on native ones.
-    decoders: Option<Arc<hsync_srd::DecoderHost>>,
 }
 
 impl std::fmt::Debug for Workspace {
@@ -196,8 +200,8 @@ pub struct LiveCapture {
     pub summary: CaptureSummary,
     /// The samples to append to.
     pub samples: Arc<RwLock<LogicCapture>>,
-    /// Decodes the capture once it is complete.
-    pub decode: Box<dyn FnOnce() + Send>,
+    /// Tells the decoders where the capture has got, after every append and at the end.
+    pub advance: Box<dyn Fn(Position) + Send + Sync>,
     /// For a capture taken behind the shown one: to be told whether it replaces it.
     pub verdict: Option<Verdict>,
 }
@@ -208,15 +212,6 @@ impl std::fmt::Debug for LiveCapture {
             .field("summary", &self.summary)
             .finish_non_exhaustive()
     }
-}
-
-/// Tells `events` that decoder `index` of capture `capture_id` finished.
-fn decoded_events(events: Option<EventSink>, capture_id: u64) -> Arc<dyn Fn(u32) + Send + Sync> {
-    Arc::new(move |index| {
-        if let Some(events) = &events {
-            events(SessionEvent::Decoded { capture_id, index });
-        }
-    })
 }
 
 impl Workspace {
@@ -231,11 +226,6 @@ impl Workspace {
             events: Some(events),
             ..Self::default()
         }
-    }
-
-    /// Lets the Python decoders of `host` decode what no native decoder does.
-    pub fn set_decoder_host(&mut self, host: Arc<hsync_srd::DecoderHost>) {
-        self.decoders = Some(host);
     }
 
     /// Opens a `.dsl` file.
@@ -258,7 +248,8 @@ impl Workspace {
             source,
             capture: document.capture,
             channel_names,
-            decoders: document.decoders,
+            // HSync's own entries, written beside DSView's list, which is translated otherwise.
+            decoders: document.hsync_decoders.or(document.decoders),
             driver: document.header.driver,
             session: document.session,
         })
@@ -294,14 +285,25 @@ impl Workspace {
         {
             open.decoding.cancel();
         }
-        let decoding = DecodeSet::new(loaded.decoders.as_ref(), self.decoders.clone());
-        decoding.run(&capture, decoded_events(self.events.clone(), self.last_id));
+        let decoders = normalize_decoders(loaded.decoders);
+        let position = Position {
+            len: capture.read().len(),
+            dropped: 0,
+            finishing: true,
+        };
+        let decoding = DecodeSet::start(
+            decoders.as_ref(),
+            &capture,
+            position,
+            self.last_id,
+            self.events.clone(),
+        );
         self.current = Some(OpenCapture {
             id: self.last_id,
             source: loaded.source,
             capture,
             channel_names: loaded.channel_names,
-            decoders: loaded.decoders,
+            decoders,
             decoding,
             driver: loaded.driver,
             session: loaded.session,
@@ -379,12 +381,7 @@ impl Workspace {
         let (channel_names, decoders) = match &shown {
             Some(open) => (open.channel_names.clone(), open.decoders.clone()),
             None => preset
-                .map(|preset| {
-                    let decoders = preset
-                        .decoders
-                        .filter(|decoders| !decoders.as_array().is_some_and(Vec::is_empty));
-                    (preset.channel_names, decoders)
-                })
+                .map(|preset| (preset.channel_names, normalize_decoders(preset.decoders)))
                 .unwrap_or_default(),
         };
         let verdict = (hold && shown.is_some()).then(Verdict::default);
@@ -393,7 +390,13 @@ impl Workspace {
             Some(open) => open.decoding.cancel(),
             None => {}
         }
-        let decoding = DecodeSet::new(decoders.as_ref(), self.decoders.clone());
+        let decoding = DecodeSet::start(
+            decoders.as_ref(),
+            &samples,
+            Position::default(),
+            self.last_id,
+            self.events.clone(),
+        );
         let driver = match &source {
             CaptureSource::Device { driver, .. } => driver.clone(),
             _ => String::new(),
@@ -411,38 +414,37 @@ impl Workspace {
         };
         let summary = summarize(&open);
         self.current = Some(open);
-        let finished = Arc::clone(&samples);
-        let done = decoded_events(self.events.clone(), self.last_id);
         LiveCapture {
             summary,
             samples,
-            decode: Box::new(move || decoding.run(&finished, done)),
+            advance: Box::new(move |position| decoding.advance(position)),
             verdict,
         }
     }
 
-    /// Replaces the decoders of capture `id` with `decoders` (DSView's `decoders` list) and
-    /// decodes again. A capture still being taken decodes once complete instead.
+    /// Replaces the decoders of capture `id` with `decoders` (HSync's entries; DSView's are
+    /// translated) and decodes again, from where the capture stands — while it is still being
+    /// taken too.
     pub fn set_decoders(
         &mut self,
         id: u64,
         decoders: serde_json::Value,
-        capturing: bool,
     ) -> Result<CaptureSummary, SessionError> {
         let events = self.events.clone();
-        let host = self.decoders.clone();
         let open = self.find_mut(id)?;
-        if capturing {
-            return Err(SessionError::Busy);
-        }
-        let decoders = (!decoders.as_array().is_some_and(Vec::is_empty)).then_some(decoders);
-        // Only how results are shown changed (rows hidden, labels): keep the results.
+        let decoders = normalize_decoders(Some(decoders));
+        // Only how results are shown changed (labels, display settings): keep the results.
         if decoding_part(decoders.as_ref()) == decoding_part(open.decoders.as_ref()) {
             open.decoders = decoders;
             return Ok(summarize(open));
         }
-        let decoding = DecodeSet::new(decoders.as_ref(), host);
-        decoding.run(&open.capture, decoded_events(events, id));
+        let decoding = DecodeSet::start(
+            decoders.as_ref(),
+            &open.capture,
+            open.decoding.position(),
+            id,
+            events,
+        );
         open.decoding.cancel();
         open.decoders = decoders;
         open.decoding = decoding;
@@ -520,10 +522,30 @@ impl Workspace {
     }
 }
 
+/// HSync's decoder entries out of a list that may hold DSView's (from a `.dsl` file, a `.dsc`
+/// session or an older HSync session), those uiharu cannot decode left out; `None` when
+/// nothing is left.
+fn normalize_decoders(decoders: Option<serde_json::Value>) -> Option<serde_json::Value> {
+    let entries: Vec<serde_json::Value> = decoders
+        .as_ref()
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| {
+            if DecoderEntry::is_entry(entry) {
+                Some(entry.clone())
+            } else {
+                dsview::convert(entry)
+            }
+        })
+        .collect();
+    (!entries.is_empty()).then_some(serde_json::Value::Array(entries))
+}
+
 /// What of a decoder list decides the results: each entry without the keys that only say how
-/// they are shown (DSView's `show`, `label`, `view_index`, HSync's number format).
+/// they are shown.
 fn decoding_part(decoders: Option<&serde_json::Value>) -> Vec<serde_json::Value> {
-    const DISPLAY: [&str; 4] = ["show", "label", "view_index", "number format"];
+    const DISPLAY: [&str; 2] = ["show", "label"];
     decoders
         .and_then(serde_json::Value::as_array)
         .into_iter()

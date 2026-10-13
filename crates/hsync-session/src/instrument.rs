@@ -12,6 +12,7 @@ use hsync_driver::{
     DeviceInfo, DeviceManager, DeviceSummary, DriverError, EndReason, OptionKey, OptionState,
     OptionValue, Packet, TriggerCaps,
 };
+use hsync_uiharu::Position;
 use parking_lot::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -124,7 +125,9 @@ pub struct LiveStatus {
 pub enum SessionEvent {
     /// A capture from a device progressed or ended.
     Live(LiveStatus),
-    /// Decoder `index` of capture `capture_id` finished.
+    /// Decoder `index` of capture `capture_id` has more to show.
+    DecodeProgress { capture_id: u64, index: u32 },
+    /// Decoder `index` of capture `capture_id` finished, or failed.
     Decoded { capture_id: u64, index: u32 },
 }
 
@@ -413,7 +416,7 @@ impl Instrument {
             looping,
             verdict: live.verdict,
             keep_stopped: request.keep_stopped,
-            decode: Some(live.decode),
+            advance: live.advance,
             packets,
             acquisition: Arc::clone(&acquisition),
             ended: Arc::clone(&ended),
@@ -452,8 +455,8 @@ struct Ingest {
     verdict: Option<Verdict>,
     /// Replace the held capture even when stopped early.
     keep_stopped: bool,
-    /// Decodes the capture once it is complete.
-    decode: Option<Box<dyn FnOnce() + Send>>,
+    /// Tells the decoders where the capture has got.
+    advance: Box<dyn Fn(Position) + Send + Sync>,
     packets: Receiver<Packet>,
     acquisition: Arc<Mutex<Option<Box<dyn Acquisition>>>>,
     ended: Arc<std::sync::atomic::AtomicBool>,
@@ -491,6 +494,11 @@ impl Ingest {
                     }
                     self.status.samples = capture.len();
                     drop(capture);
+                    (self.advance)(Position {
+                        len: self.status.samples,
+                        dropped: self.status.dropped,
+                        finishing: false,
+                    });
                     let first = self.status.phase == LivePhase::Waiting;
                     self.status.phase = LivePhase::Capturing;
                     if first || last_emit.elapsed() >= STATUS_INTERVAL {
@@ -545,6 +553,11 @@ impl Ingest {
             None => log::info!("capture {id} ended ({end:?}) with {samples} samples"),
         }
         self.status.samples = self.capture.read().len();
+        (self.advance)(Position {
+            len: self.status.samples,
+            dropped: self.status.dropped,
+            finishing: true,
+        });
         self.status.phase = LivePhase::Ended;
         self.status.end = Some(end);
         self.status.error = error;
@@ -555,10 +568,5 @@ impl Ingest {
         }
         self.ended.store(true, std::sync::atomic::Ordering::Release);
         self.emit();
-        if (self.verdict.is_none() || shown)
-            && let Some(decode) = self.decode.take()
-        {
-            decode();
-        }
     }
 }

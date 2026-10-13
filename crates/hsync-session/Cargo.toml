@@ -12,16 +12,17 @@ publish.workspace = true
 crossbeam-channel.workspace = true
 hsync-capture.workspace = true
 hsync-core.workspace = true
-hsync-decode.workspace = true
 hsync-driver.workspace = true
 hsync-fileio.workspace = true
-hsync-srd.workspace = true
+hsync-uiharu.workspace = true
+indexmap.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 ts-rs.workspace = true
+uiharu-registry.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -43,6 +43,8 @@ hsync-fileio = { path = "crates/hsync-fileio" }
 hsync-pxlogic = { path = "crates/hsync-pxlogic" }
 hsync-session = { path = "crates/hsync-session" }
 hsync-srd = { path = "crates/hsync-srd" }
+hsync-uiharu = { path = "crates/hsync-uiharu" }
+uiharu-registry = { path = "uiharu/crates/uiharu-registry" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
