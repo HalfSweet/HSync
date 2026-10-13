@@ -26,7 +26,7 @@ Capture, trigger, decode and measure, with one app for logic analyzers from seve
   <img src="assets/screenshots/en-US/hero-light.webp" alt="HSync showing a capture of I²C, UART, SPI and CAN-FD buses, with decoded transfers above their waveforms and the I²C data stream below">
 </picture>
 
-HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic and PXLogic's PX-Logic analyzers ([full list](#supported-devices)) and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, while the capture is still running, and 30 more protocol decoders are a search away. HSync opens and saves DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware, the decoders and the Python runtime they use.
+HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic and PXLogic's PX-Logic analyzers ([full list](#supported-devices)) and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, while the capture is still running, and 30 more protocol decoders are a search away. HSync opens and saves DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware and the decoders.
 
 No hardware at hand? HSync opens its built-in **Demo device**, which plays back a recording of four buses, so you can try everything straight away.
 
@@ -92,7 +92,7 @@ Get the latest version from the [Releases page](https://github.com/HalfSweet/HSy
 | Windows  | `-setup.exe` (x64)                  | Windows 10 or 11                 |
 | Linux    | `.AppImage`, `.deb` or `.rpm` (x64) | Ubuntu 22.04, Debian 12 or newer |
 
-The firmware, the protocol decoders and the Python they run on are all included; you don't need any maker's app or Python. On another platform, you can [build HSync from source](#building-from-source).
+The firmware and the protocol decoders are included; you don't need any maker's app. On another platform, you can [build HSync from source](#building-from-source).
 
 ### First launch
 
@@ -159,7 +159,7 @@ HSync talks to each device the way its maker's app does, byte for byte: to DSLog
 ## Questions
 
 **Do I need my logic analyzer's own app?**
-No. HSync brings its own firmware, decoders and Python runtime. You can keep DSView or another maker's app installed alongside it, and HSync opens DSView's captures and sessions.
+No. HSync brings its own firmware and decoders. You can keep DSView or another maker's app installed alongside it, and HSync opens DSView's captures and sessions.
 
 **Can I take a capture to other tools?**
 Yes: export it as a sigrok session for PulseView, as VCD or FST for GTKWave, Surfer and other waveform viewers, or as CSV for spreadsheets and scripts. The other way round, **Open file…** imports the VCD, FST and GHW waveforms those tools and FPGA logic analyzers write.
@@ -174,28 +174,3 @@ You need:
 - [Node.js](https://nodejs.org/) 22.12 or later and [pnpm](https://pnpm.io/) 12
 - [Rust](https://rustup.rs/) (stable)
 - [Tauri's system dependencies](https://tauri.app/start/prerequisites/) for your platform
-- Python 3 with its shared library, for `pnpm tauri dev` (the protocol decoders run on it): install `python3-dev` on Debian and Ubuntu; the python.org installers and Homebrew's Python already include it
-
-```sh
-git clone https://github.com/HalfSweet/HSync.git
-cd HSync
-pnpm install
-pnpm tauri dev    # run HSync from source
-pnpm bundle       # build the installers for this machine
-```
-
-`pnpm bundle` builds the way releases are built: it downloads the Python runtime that ships with HSync and puts the installers in `target/release/bundle/`. On macOS it makes one build for Apple silicon and Intel, in `target/universal-apple-darwin/release/bundle/`; first run `rustup target add aarch64-apple-darwin x86_64-apple-darwin`. To contribute, start with [AGENTS.md](AGENTS.md), which covers the project's requirements, commands and commit conventions.
-
-## Acknowledgements
-
-- [DSView](https://github.com/DreamSourceLab/DSView) by DreamSourceLab: the DSLogic support and protocol decoders are ported from its libsigrok4DSL and libsigrokdecode4DSL, which grew out of the [sigrok](https://sigrok.org/) project.
-- The DSLogic firmware and FPGA bitstreams come from DreamSourceLab under the MIT license.
-- [ATK-Logic](https://github.com/alientek-openedv/atk-logic) by ALIENTEK: the support for ATK-Logic devices is ported from it.
-- [PXView](https://github.com/PXLogic/PXView) by PXLogic: the support for PX-Logic devices is ported from its `pxlogic` driver, and their firmware and FPGA bitstreams come from it.
-- [IBM Plex](https://github.com/IBM/plex) fonts, under the SIL Open Font License 1.1.
-- [Lucide](https://lucide.dev/) icons, under the ISC license.
-- Built with [Tauri](https://tauri.app/), [Vue](https://vuejs.org/) and [Rust](https://www.rust-lang.org/).
-
-## License
-
-HSync is free software. Its own code is dual-licensed: use it under the [Apache License 2.0](LICENSE-APACHE) or the [GNU General Public License v3.0 or later](LICENSE-GPL), at your option. The protocol decoders that come with DSView (`src-tauri/resources/decoders/`) keep their GPL license as they are, so the installers, which bundle them, are distributed under the GPL-3.0-or-later. The [uiharu](uiharu/) decode engine is licensed under the [Apache License 2.0](uiharu/LICENSE) alone.

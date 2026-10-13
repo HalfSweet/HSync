@@ -1,6 +1,6 @@
 # Maintainer guide
 
-How HSync is checked, released and packaged: continuous integration, the release process, the installers, the Python runtime they bundle, in-app updates and signing. Rules for everyday work (commits, code style, tests) are in [AGENTS.md](../AGENTS.md); the interface is specified in [DESIGN.md](../DESIGN.md).
+How HSync is checked, released and packaged: continuous integration, the release process, the installers, in-app updates and signing. Rules for everyday work (commits, code style, tests) are in [AGENTS.md](../AGENTS.md); the interface is specified in [DESIGN.md](../DESIGN.md).
 
 ## Where things are
 
@@ -9,7 +9,6 @@ How HSync is checked, released and packaged: continuous integration, the release
 | Checks on every change | `.github/workflows/ci.yml`                                                                                    |
 | Releases               | `.github/workflows/release.yml`, `scripts/release.mjs`, `scripts/version.mjs`, `cliff.toml`                   |
 | Installers             | `.github/workflows/bundle.yml`, `scripts/bundle.mjs`                                                          |
-| Bundled Python         | `scripts/python-runtime.mjs`, `crates/hsync-srd/src/python.rs`, `src-tauri/build.rs`                          |
 | In-app updates         | `plugins.updater` in `src-tauri/tauri.conf.json`, `src-tauri/tauri.updater.conf.json`, `src/stores/update.ts` |
 
 ## Continuous integration
@@ -22,7 +21,7 @@ How HSync is checked, released and packaged: continuous integration, the release
 | Frontend        | `pnpm format:check`, `lint`, `typecheck`, `test`, `build`                                                                                                                      |
 | Rust            | `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -D warnings`, `cargo test --workspace --locked`, and that the tests left `src/ipc/bindings` as committed |
 
-The Rust job builds and tests against the Python the installers ship (see [Bundled Python](#bundled-python)), so a decoder that needs a module the trimmed standard library lacks fails here. When the bindings check fails, run `pnpm bindings` and commit the result.
+When the bindings check fails, run `pnpm bindings` and commit the result.
 
 With a warm cache the Rust job takes about 4 minutes; after `Cargo.lock` changes, or on a cold cache, it can take 15–30. Jobs stop after 10–60 minutes.
 
@@ -103,13 +102,11 @@ Subjects appear as written, so write them for users.
 
 The bundle types are listed in `bundle.targets` of `tauri.conf.json`: the `.app` and `.dmg` on macOS, the NSIS installer on Windows (no `.msi`), and the AppImage, `.deb` and `.rpm` on Linux.
 
-The macOS build is universal: Tauri builds `aarch64-apple-darwin` and `x86_64-apple-darwin` and joins them with `lipo`. `python-runtime.mjs --target universal-apple-darwin` prepares the runtime for it from both distributions: libpython becomes a universal binary that both builds link against, and the Apple silicon standard library serves both (the two differ only in the build's sysconfig data, which no decoder reads). In-app updates offer the universal build to both architectures.
+The macOS build is universal: Tauri builds `aarch64-apple-darwin` and `x86_64-apple-darwin` and joins them with `lipo`.
 
 On each runner it:
 
-1. Lays out the bundled Python.
-2. Runs the `hsync-srd` tests against it.
-3. Builds with tauri-action, passing `--config` with the runtime's Tauri config. When the `TAURI_SIGNING_PRIVATE_KEY` secret exists, it also passes `--config src-tauri/tauri.updater.conf.json`, which produces the signed update artifacts.
+1. Builds with tauri-action. When the `TAURI_SIGNING_PRIVATE_KEY` secret exists, it also passes `--config src-tauri/tauri.updater.conf.json`, which produces the signed update artifacts.
 
 The Release workflow calls it with a draft release to fill. You can also run it by hand (**Actions → Bundle → Run workflow**) to check packaging without releasing. The installers then stay with the run as artifacts. Artifact zips drop hidden files and file modes: to try a macOS build, use the `.dmg` artifact rather than the zipped `.app`.
 
@@ -121,53 +118,6 @@ pnpm bundle --bundles app    # arguments go on to `tauri build`
 ```
 
 On macOS this is the universal build, which needs both Rust targets: `rustup target add aarch64-apple-darwin x86_64-apple-darwin`.
-
-## Bundled Python
-
-The sigrok-compatible decoders run in CPython, embedded through pyo3 (`crates/hsync-srd`). Installers must not depend on a Python on the user's machine, so they bundle a trimmed [python-build-standalone](https://github.com/astral-sh/python-build-standalone) CPython.
-
-**Development builds** don't bundle anything. pyo3 links and starts whatever Python 3 the build finds; it needs a shared library, which system and Homebrew Pythons have.
-
-**`scripts/python-runtime.mjs`** pins the python-build-standalone release (`RELEASE`), the CPython version (`VERSION`) and the SHA-256 of each target's `install_only_stripped` archive (`DIGESTS`). It downloads into `target/python/downloads/`, checks the digest, and writes `target/python/<target>/`:
-
-- `dist/`: the distribution as published. Builds link against its libpython.
-- `home/`: the trimmed standard library, shipped as the app's `python` resource. Left out are pip and `site-packages`, `ensurepip`, `idlelib`, Tk, `turtle`, tests, `venv`, `_pyrepl`, `pydoc_data`, `config-*`, the SQLite/OpenSSL/Tk native modules, stale bytecode and hidden files. Everything else stays, so any import a decoder makes keeps working.
-- `pyo3.cfg`: a `PYO3_CONFIG_FILE` for linking. The distribution's own sysconfig still points at the machine it was built on (`/install`), so pyo3 cannot ask the interpreter.
-- `tauri.conf.json`: the additions to the bundle, passed with `tauri build --config`.
-
-**Where libpython goes:**
-
-| Platform | Location                                                     | How the app finds it                                                                           |
-| -------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| macOS    | `Contents/Frameworks/libpython3.14.dylib`                    | its install name is `@rpath/…`; tauri-build adds `@executable_path/../Frameworks`              |
-| Windows  | `python314.dll` beside `hsync.exe`, with `vcruntime140*.dll` | Windows looks beside the executable                                                            |
-| Linux    | `/usr/lib/HSync/python/lib/libpython3.14.so.1.0`             | RUNPATH `$ORIGIN/../lib/HSync/python/lib`, set by `src-tauri/build.rs` (follows `productName`) |
-
-**At startup**, if the app's resources contain `python/`, `DecoderHost::with_python_home` starts Python through `PyConfig` before anything else uses it:
-
-- isolated from `PYTHONHOME`, `PYTHONPATH` and the user's site-packages;
-- with that directory as its home;
-- with bytecode writing off, because the install is read-only and signed.
-
-If that start fails, only the Python decoders become unavailable; it never falls back to pyo3's default start, which would abort the process.
-
-**Upgrading CPython:**
-
-1. Pick a python-build-standalone release whose CPython version pyo3 supports.
-2. Update `RELEASE`, `VERSION` and `DIGESTS` from that release's `SHA256SUMS`. If the minor version changes, the library names change with it (`python3.15`, `python315`).
-3. Push, let CI pass, then run the Bundle workflow by hand to check all three platforms.
-
-**Testing locally against the bundled runtime** (macOS shown; use `LD_LIBRARY_PATH` on Linux, `PATH` on Windows):
-
-```sh
-node scripts/python-runtime.mjs
-R=$PWD/target/python/aarch64-apple-darwin
-PYO3_CONFIG_FILE=$R/pyo3.cfg CARGO_TARGET_DIR=target/bundled \
-  DYLD_LIBRARY_PATH=$R/dist/python/lib PYTHONHOME=$R/home HSYNC_TEST_PYTHON_HOME=$R/home \
-  cargo test -p hsync-srd
-```
-
-`HSYNC_TEST_PYTHON_HOME` enables `crates/hsync-srd/tests/python_home.rs`, which starts Python the way the app does. Use a separate target directory: switching `PYO3_CONFIG_FILE` rebuilds pyo3 and everything above it.
 
 ## In-app updates
 
@@ -191,11 +141,11 @@ PYO3_CONFIG_FILE=$R/pyo3.cfg CARGO_TARGET_DIR=target/bundled \
 **macOS:** bundles are signed ad hoc (`signingIdentity: "-"`), which seals the bundle.
 
 - Users open a downloaded copy once through **System Settings → Privacy & Security → Open Anyway**.
-- The hardened runtime is off. Under an ad hoc signature, its library validation refuses the bundled libpython ("different Team IDs").
+- The hardened runtime is off; it can go back on once the bundle is signed with a Developer ID.
 - To notarize:
   1. Get a Developer ID certificate.
   2. Pass it to the build through the `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD` and `APPLE_SIGNING_IDENTITY` environment variables in `bundle.yml`, plus `APPLE_ID`, `APPLE_PASSWORD` and `APPLE_TEAM_ID` (or an App Store Connect API key) for notarization.
-  3. Turn `hardenedRuntime` back on. libpython is then signed with the same Team ID and loads.
+  3. Turn `hardenedRuntime` back on.
 
 **Windows:** installers are unsigned, so SmartScreen warns on first run. Code signing would be configured in `bundle.yml`.
 

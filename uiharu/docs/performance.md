@@ -91,6 +91,8 @@ So the decoders — SPI, SPI NOR, their queues and emits — cost about 1 ns per
 
 `hsync-bench` (`crates/hsync-bench`) runs every decoder on the same captures in child processes: uiharu's SPI and SPI → SPI NOR pipelines; `hsync-decode`'s native SPI decoder (a Rust port of DSView's `1:spi`); DSView's own Python `1:spi` decoder in the embedded interpreter through `hsync-srd`, which is libsigrokdecode's actual behaviour; and `sigrok-cli`, when installed. The Python decoder walks the samples one edge at a time in the interpreter and gets 1/16 of the samples (`--python-divisor 16`); the rates are comparable, the memory is not. "Events" are what each decoder puts out: uiharu's begin/word/end events, the native decoder's words and transfers, the Python decoder's annotations — about 29 per word, as it annotates every bit and every transfer as well.
 
+The Python decoder host (`hsync-srd`) and DSView's decoders left the repository after this study; the `sigrok-spi` rows stay as they were measured and cannot be reproduced from the current tree.
+
 Before the optimizations (`bdceca1`):
 
 | Decoder             | Workload |    Samples | Msamples/s | kwords/s | ns / edge |     Time | Peak RSS | RSS growth while decoding |
