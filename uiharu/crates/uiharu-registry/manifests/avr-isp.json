@@ -1,0 +1,31 @@
+{
+  "name": "avr-isp",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "avrisp.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "instruction",
+      "fields": ["op", "tx", "command", "address", "dataIn", "dataOut", "inSync", "bytes"]
+    },
+    {
+      "kind": "unknown",
+      "fields": ["tx", "bytes"]
+    },
+    {
+      "kind": "error",
+      "fields": ["tx", "reason", "bytes"]
+    }
+  ]
+}

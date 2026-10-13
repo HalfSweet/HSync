@@ -1757,6 +1757,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-uiharu"
+version = "0.1.4"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-fileio",
+ "parking_lot",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uiharu-core",
+ "uiharu-protocols",
+ "uiharu-registry",
+]
+
+[[package]]
 name = "html5ever"
 version = "0.39.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3801,6 +3818,7 @@ version = "1.0.151"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
 dependencies = [
+ "indexmap 2.14.2",
  "itoa",
  "memchr",
  "serde",
@@ -5033,6 +5051,7 @@ dependencies = [
  "serde_json",
  "uiharu-core",
  "uiharu-protocols",
+ "uiharu-registry",
 ]
 
 [[package]]
@@ -5054,6 +5073,17 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "uiharu-core",
+]
+
+[[package]]
+name = "uiharu-registry"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uiharu-core",
+ "uiharu-protocols",
 ]
 
 [[package]]

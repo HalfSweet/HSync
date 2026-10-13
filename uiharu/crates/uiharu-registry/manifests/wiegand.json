@@ -1,0 +1,51 @@
+{
+  "name": "wiegand",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "wiegand.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "d0",
+      "kind": "channel"
+    },
+    {
+      "name": "d1",
+      "kind": "channel"
+    },
+    {
+      "name": "frame_gap_us",
+      "kind": "integer",
+      "min": 1
+    },
+    {
+      "name": "pulse_min_us",
+      "kind": "integer",
+      "min": 1
+    },
+    {
+      "name": "pulse_max_us",
+      "kind": "integer",
+      "min": 1
+    }
+  ],
+  "events": [
+    {
+      "kind": "frame",
+      "fields": ["frame", "bits", "data", "parityOk"]
+    },
+    {
+      "kind": "error",
+      "fields": ["reason"]
+    }
+  ]
+}

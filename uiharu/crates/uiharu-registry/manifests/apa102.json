@@ -1,0 +1,35 @@
+{
+  "name": "apa102",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "apa102.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "frame-begin",
+      "fields": ["frame"]
+    },
+    {
+      "kind": "led",
+      "fields": ["frame", "index", "brightness", "blue", "green", "red"]
+    },
+    {
+      "kind": "frame-end",
+      "fields": ["frame", "leds", "endBits", "reason"]
+    },
+    {
+      "kind": "error",
+      "fields": ["frame", "reason"]
+    }
+  ]
+}

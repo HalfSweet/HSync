@@ -1,0 +1,56 @@
+{
+  "name": "ws281x",
+  "category": "line",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ws281x.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "bits_per_led",
+      "kind": "integer",
+      "min": 24,
+      "max": 32
+    },
+    {
+      "name": "threshold_ns",
+      "kind": "integer",
+      "min": 1
+    },
+    {
+      "name": "reset_us",
+      "kind": "integer",
+      "min": 1
+    }
+  ],
+  "events": [
+    {
+      "kind": "frame-begin",
+      "fields": ["frame"]
+    },
+    {
+      "kind": "led",
+      "fields": ["frame", "index", "bytes"]
+    },
+    {
+      "kind": "frame-end",
+      "fields": ["frame", "leds", "reason"]
+    },
+    {
+      "kind": "error",
+      "fields": ["frame", "reason", "bits"]
+    }
+  ]
+}

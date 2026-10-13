@@ -1,0 +1,50 @@
+{
+  "name": "lin",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "uart",
+      "schema": "uart.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "lin.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "length_by_id",
+      "kind": "bool"
+    },
+    {
+      "name": "min_break_bits",
+      "kind": "integer",
+      "min": 9,
+      "max": 13
+    }
+  ],
+  "events": [
+    {
+      "kind": "header",
+      "fields": ["frame", "pid", "id", "pidOk"]
+    },
+    {
+      "kind": "data",
+      "fields": ["frame", "offset", "bytes"]
+    },
+    {
+      "kind": "checksum",
+      "fields": ["frame", "value", "classicOk", "enhancedOk"]
+    },
+    {
+      "kind": "error",
+      "fields": ["frame", "reason"]
+    },
+    {
+      "kind": "end",
+      "fields": ["frame", "reason"]
+    }
+  ]
+}

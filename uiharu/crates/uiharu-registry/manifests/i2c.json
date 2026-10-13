@@ -1,0 +1,48 @@
+{
+  "name": "i2c",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "i2c.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "scl",
+      "kind": "channel"
+    },
+    {
+      "name": "sda",
+      "kind": "channel"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "address",
+      "fields": ["tx", "address", "tenBit", "read", "ack"]
+    },
+    {
+      "kind": "data",
+      "fields": ["tx", "byte", "ack"]
+    },
+    {
+      "kind": "restart",
+      "fields": ["tx", "droppedBits"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason", "droppedBits"]
+    }
+  ]
+}

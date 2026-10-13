@@ -1,0 +1,56 @@
+{
+  "name": "swd",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "swd.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "swclk",
+      "kind": "channel"
+    },
+    {
+      "name": "swdio",
+      "kind": "channel"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "request",
+      "fields": ["tx", "apndp", "rnw", "addr", "parityOk"]
+    },
+    {
+      "kind": "ack",
+      "fields": ["tx", "value"]
+    },
+    {
+      "kind": "data",
+      "fields": ["tx", "value", "parityOk", "fromTarget"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason"]
+    },
+    {
+      "kind": "line-reset",
+      "fields": []
+    },
+    {
+      "kind": "switch",
+      "fields": ["to"]
+    }
+  ]
+}

@@ -1,0 +1,47 @@
+{
+  "name": "onewire",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "link",
+      "schema": "onewire.link"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "onewire.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx", "presence"]
+    },
+    {
+      "kind": "rom-command",
+      "fields": ["tx", "code"]
+    },
+    {
+      "kind": "rom",
+      "fields": ["tx", "id", "family", "crcOk"]
+    },
+    {
+      "kind": "search",
+      "fields": ["tx", "id", "crcOk", "conflicts", "unanswered"]
+    },
+    {
+      "kind": "byte",
+      "fields": ["tx", "value"]
+    },
+    {
+      "kind": "bits",
+      "fields": ["tx", "value", "count"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason"]
+    }
+  ]
+}

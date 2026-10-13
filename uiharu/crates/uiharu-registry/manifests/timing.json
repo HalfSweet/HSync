@@ -1,0 +1,33 @@
+{
+  "name": "timing",
+  "category": "line",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "timing.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "channel",
+      "kind": "channel"
+    },
+    {
+      "name": "edges",
+      "kind": "enum",
+      "values": ["any", "rising", "falling"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "edge",
+      "fields": ["slope", "sincePrevious"]
+    }
+  ]
+}

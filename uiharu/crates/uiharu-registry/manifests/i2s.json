@@ -1,0 +1,57 @@
+{
+  "name": "i2s",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "i2s.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "sck",
+      "kind": "channel"
+    },
+    {
+      "name": "ws",
+      "kind": "channel"
+    },
+    {
+      "name": "sd",
+      "kind": "channel"
+    },
+    {
+      "name": "format",
+      "kind": "enum",
+      "values": ["i2s", "left-justified", "right-justified"]
+    },
+    {
+      "name": "bits",
+      "kind": "integer",
+      "min": 1,
+      "max": 32,
+      "optional": true
+    },
+    {
+      "name": "sample_edge",
+      "kind": "enum",
+      "values": ["rising", "falling"]
+    },
+    {
+      "name": "ws_inverted",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "sample",
+      "fields": ["frame", "channel", "value", "bits", "complete"]
+    }
+  ]
+}

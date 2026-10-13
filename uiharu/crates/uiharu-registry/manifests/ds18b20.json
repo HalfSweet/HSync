@@ -1,0 +1,47 @@
+{
+  "name": "ds18b20",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "onewire.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ds18b20.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "command",
+      "fields": ["tx", "code"]
+    },
+    {
+      "kind": "scratchpad",
+      "fields": ["tx", "bytes", "crcOk", "temperatureRaw", "th", "tl", "config", "resolution"]
+    },
+    {
+      "kind": "partial-scratchpad",
+      "fields": ["tx", "bytes", "temperatureRaw"]
+    },
+    {
+      "kind": "write-scratchpad",
+      "fields": ["tx", "th", "tl", "config"]
+    },
+    {
+      "kind": "power-supply",
+      "fields": ["tx", "parasite"]
+    },
+    {
+      "kind": "unknown-command",
+      "fields": ["tx", "code"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason"]
+    }
+  ]
+}

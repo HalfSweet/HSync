@@ -1,0 +1,54 @@
+{
+  "name": "microwire",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "microwire.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "cs",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "sk",
+      "kind": "channel"
+    },
+    {
+      "name": "di",
+      "kind": "channel"
+    },
+    {
+      "name": "do",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "cs_active_low",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "bit",
+      "fields": ["tx", "di", "do"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "bits", "reason", "do"]
+    }
+  ]
+}

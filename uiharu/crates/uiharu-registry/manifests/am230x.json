@@ -1,0 +1,43 @@
+{
+  "name": "am230x",
+  "category": "line",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "am230x.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "model",
+      "kind": "enum",
+      "values": ["am2302", "dht11"]
+    },
+    {
+      "name": "tolerance",
+      "kind": "integer",
+      "min": 0,
+      "max": 40
+    }
+  ],
+  "events": [
+    {
+      "kind": "reading",
+      "fields": ["bytes", "checksumOk", "humidityRaw", "temperatureRaw"]
+    },
+    {
+      "kind": "error",
+      "fields": ["reason"]
+    }
+  ]
+}

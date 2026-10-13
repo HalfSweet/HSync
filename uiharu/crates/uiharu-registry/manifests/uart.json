@@ -1,0 +1,68 @@
+{
+  "name": "uart",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "uart.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "line",
+      "kind": "channel"
+    },
+    {
+      "name": "baud",
+      "kind": "integer",
+      "min": 1
+    },
+    {
+      "name": "data_bits",
+      "kind": "integer",
+      "min": 5,
+      "max": 9
+    },
+    {
+      "name": "parity",
+      "kind": "enum",
+      "values": ["none", "even", "odd", "mark", "space"]
+    },
+    {
+      "name": "stop_bits",
+      "kind": "enum",
+      "values": ["one", "one-and-a-half", "two"]
+    },
+    {
+      "name": "bit_order",
+      "kind": "enum",
+      "values": ["lsb-first", "msb-first"]
+    },
+    {
+      "name": "inverted",
+      "kind": "bool"
+    },
+    {
+      "name": "sample_point",
+      "kind": "integer",
+      "min": 1,
+      "max": 99
+    }
+  ],
+  "events": [
+    {
+      "kind": "frame",
+      "fields": ["value", "parity", "framingOk"]
+    },
+    {
+      "kind": "break",
+      "fields": ["ticks"]
+    }
+  ]
+}

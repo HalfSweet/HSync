@@ -1,0 +1,57 @@
+{
+  "name": "spi-nor",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "nor.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address_bytes",
+      "kind": "enum",
+      "values": ["three", "four", "auto"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["op", "tx", "command"]
+    },
+    {
+      "kind": "address",
+      "fields": ["op", "address", "bytes"]
+    },
+    {
+      "kind": "dummy",
+      "fields": ["op", "bytes"]
+    },
+    {
+      "kind": "data",
+      "fields": ["op", "direction", "offset", "bytes"]
+    },
+    {
+      "kind": "status",
+      "fields": ["op", "register", "value", "written"]
+    },
+    {
+      "kind": "id",
+      "fields": ["op", "scheme", "bytes"]
+    },
+    {
+      "kind": "end",
+      "fields": ["op", "reason"]
+    },
+    {
+      "kind": "unknown-command",
+      "fields": ["tx", "opcode"]
+    }
+  ]
+}

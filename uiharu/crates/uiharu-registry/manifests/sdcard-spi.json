@@ -1,0 +1,54 @@
+{
+  "name": "sdcard-spi",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "sdcard.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "block_length",
+      "kind": "integer",
+      "min": 1,
+      "max": 2048
+    }
+  ],
+  "events": [
+    {
+      "kind": "command",
+      "fields": ["op", "tx", "index", "acmd", "argument", "crc7", "crcOk"]
+    },
+    {
+      "kind": "response",
+      "fields": ["op", "format", "bytes", "busyBytes"]
+    },
+    {
+      "kind": "token",
+      "fields": ["op", "token", "value"]
+    },
+    {
+      "kind": "data",
+      "fields": ["op", "offset", "bytes"]
+    },
+    {
+      "kind": "block-end",
+      "fields": ["op", "crc16", "crcOk", "length"]
+    },
+    {
+      "kind": "end",
+      "fields": ["op", "reason"]
+    },
+    {
+      "kind": "unknown-command",
+      "fields": ["tx", "byte"]
+    }
+  ]
+}

@@ -14,6 +14,7 @@ The first step of the plan: the runtime and the first layered pipeline, **SPI â†
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `crates/uiharu-core`      | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor                                         |
 | `crates/uiharu-protocols` | The protocol decoders, each with its contract, synthesizer and tests: see [Protocols](#protocols)                                                                                                                 |
+| `crates/uiharu-registry`  | The node types by name: build a decoder from its JSON configuration, its manifest for a user interface, the pipeline description and its builder, outputs read as JSON items                                      |
 | `crates/uiharu-cli`       | The `uiharu` command: `decode` a raw capture to NDJSON, `gen` a synthetic capture, `bench` the pipeline                                                                                                           |
 | `docs/`                   | The architecture (`design.md`), how to write a decoder (`writing-decoders.md`), one page per protocol (`protocols/`) and the performance study with the comparison against the sigrok decoders (`performance.md`) |
 
@@ -92,7 +93,7 @@ Any pipeline can be described in a JSON file instead â€” the source, the nodes w
 }
 ```
 
-A configuration may leave fields out (they take the node's defaults); a connection the decoders cannot accept is refused with the graph's diagnostic, such as `flash#1.bus requires wordBits = 8 of spi#0.events, which declares 4`. The node types the command line knows are listed in `crates/uiharu-cli/src/pipeline.rs`; each protocol page in `docs/protocols/` names its type, ports and configuration.
+A configuration may leave fields out (they take the node's defaults); a connection the decoders cannot accept is refused with the graph's diagnostic, such as `flash#1.bus requires wordBits = 8 of spi#0.events, which declares 4`. The node types are listed in `crates/uiharu-registry`, with a manifest each (`manifests/<type>.json`: ports, configuration fields, event kinds); each protocol page in `docs/protocols/` names its type, ports and configuration.
 
 Every event is one line of JSON: the stream it belongs to, its number in that stream, the ticks it covers, the tick at which it became certain, and the event itself as the stream's contract spells it. Gaps and the end of each stream are lines too.
 

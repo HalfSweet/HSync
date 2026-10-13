@@ -1,0 +1,47 @@
+{
+  "name": "eeprom93xx",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "microwire",
+      "schema": "microwire.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "eeprom93xx.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address_bits",
+      "kind": "integer",
+      "min": 2,
+      "max": 16
+    },
+    {
+      "name": "organisation",
+      "kind": "enum",
+      "values": ["x16", "x8"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "instruction",
+      "fields": ["op", "tx", "command", "address"]
+    },
+    {
+      "kind": "data",
+      "fields": ["op", "direction", "offset", "values"]
+    },
+    {
+      "kind": "status",
+      "fields": ["op", "tx", "ready"]
+    },
+    {
+      "kind": "end",
+      "fields": ["op", "reason"]
+    }
+  ]
+}

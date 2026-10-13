@@ -1,28 +1,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Events as NDJSON, one item per line:
-//!
-//! ```json
-//! {"stream":"spi","seq":0,"span":[20,21],"settled":20,"event":{"kind":"begin","tx":1,"partial":false}}
-//! {"stream":"nor","gap":[100,200]}
-//! {"stream":"nor","end":5008}
-//! ```
-//!
-//! Progress lines (`{"stream":"spi","progress":123}`) are written only when asked, as they
-//! depend on how the samples were cut into blocks.
+//! The NDJSON the command line writes: one line per item of an exposed output, read through
+//! the registry's type-erased reader.
 
 use std::io::{self, Write};
 
 use serde::Serialize;
-use uiharu_core::{Exposed, Item, Tick, TickRange};
+use uiharu_core::{Tick, TickRange};
+use uiharu_registry::{DynItem, DynReader};
 
 #[derive(Serialize)]
-struct EventLine<'a, T> {
+struct EventLine<'a> {
     stream: &'a str,
     seq: u64,
     span: TickRange,
     settled: Tick,
-    event: &'a T,
+    event: &'a serde_json::Value,
 }
 
 #[derive(Serialize)]
@@ -43,32 +36,37 @@ struct EndLine<'a> {
     end: Tick,
 }
 
-/// Writes one item.
-pub fn write_item<T: Serialize>(
+/// Writes `item` of stream `stream` as one line; progress only when `progress` asks for it.
+pub fn write_item(
     out: &mut dyn Write,
     stream: &str,
-    item: &Item<T>,
+    item: &DynItem,
     progress: bool,
 ) -> io::Result<()> {
     match item {
-        Item::Event(event) => serde_json::to_writer(
+        DynItem::Event {
+            seq,
+            span,
+            settled,
+            payload,
+        } => serde_json::to_writer(
             &mut *out,
             &EventLine {
                 stream,
-                seq: event.seq,
-                span: event.span,
-                settled: event.settled,
-                event: &event.payload,
+                seq: *seq,
+                span: *span,
+                settled: *settled,
+                event: payload,
             },
         )?,
-        Item::Gap(range) => serde_json::to_writer(
+        DynItem::Gap(range) => serde_json::to_writer(
             &mut *out,
             &GapLine {
                 stream,
                 gap: *range,
             },
         )?,
-        Item::Progress(tick) => {
+        DynItem::Progress(tick) => {
             if !progress {
                 return Ok(());
             }
@@ -80,104 +78,88 @@ pub fn write_item<T: Serialize>(
                 },
             )?;
         }
-        Item::End(tick) => serde_json::to_writer(&mut *out, &EndLine { stream, end: *tick })?,
+        DynItem::End(tick) => serde_json::to_writer(&mut *out, &EndLine { stream, end: *tick })?,
     }
     out.write_all(b"\n")
 }
 
-/// A writer for one exposed stream that remembers whether its end was written.
-#[derive(Debug)]
-pub struct StreamWriter<T> {
-    name: String,
-    exposed: Exposed<T>,
-    ended: bool,
-    /// Events written.
-    pub events: u64,
+/// A stream being written, or discarded.
+pub struct Writer {
+    reader: Box<dyn DynReader>,
 }
 
-impl<T: Serialize> StreamWriter<T> {
-    /// A writer for `exposed`, named `name` in the output.
-    pub fn new(name: impl Into<String>, exposed: Exposed<T>) -> Self {
-        Self {
-            name: name.into(),
-            exposed,
-            ended: false,
-            events: 0,
-        }
+impl Writer {
+    /// A writer over `reader`.
+    pub fn new(reader: Box<dyn DynReader>) -> Self {
+        Self { reader }
     }
 
-    /// Writes every item waiting, up to and including the end of the stream.
+    /// The stream's name.
+    pub fn name(&self) -> &str {
+        self.reader.name()
+    }
+
+    /// Whether the end of the stream was read.
+    pub fn is_ended(&self) -> bool {
+        self.reader.is_ended()
+    }
+
+    /// Events read so far.
+    pub fn event_count(&self) -> u64 {
+        self.reader.events()
+    }
+
+    /// Writes everything the stream holds.
     pub fn drain(&mut self, out: &mut dyn Write, progress: bool) -> io::Result<()> {
-        while !self.ended {
-            let Some((end, written)) = self.exposed.with_next(|item| {
-                let is_event = matches!(item, Item::Event(_));
-                (
-                    item.is_end(),
-                    write_item(out, &self.name, item, progress).map(|()| is_event),
-                )
-            }) else {
-                break;
-            };
-            if written? {
-                self.events += 1;
-            }
-            self.exposed.advance();
-            self.ended = end;
+        while let Some(item) = self.reader.next() {
+            write_item(out, self.reader.name(), &item, progress)?;
         }
         Ok(())
     }
 
-    /// Reads every item waiting without writing it, counting the events.
+    /// Reads everything the stream holds without writing it.
     pub fn discard(&mut self) {
-        while !self.ended {
-            let Some((end, is_event)) = self
-                .exposed
-                .with_next(|item| (item.is_end(), item.event().is_some()))
-            else {
-                break;
-            };
-            if is_event {
-                self.events += 1;
-            }
-            self.exposed.advance();
-            self.ended = end;
-        }
+        while self.reader.next().is_some() {}
     }
 }
 
-/// A writer of one exposed stream, whatever its event type: what a pipeline built from a
-/// description hands out.
-pub trait Writer {
-    /// The name the stream is written under.
-    fn name(&self) -> &str;
-    /// Whether the stream's end was written or read.
-    fn is_ended(&self) -> bool;
-    /// Writes every item waiting.
-    fn drain(&mut self, out: &mut dyn Write, progress: bool) -> io::Result<()>;
-    /// Reads every item waiting without writing it.
-    fn discard(&mut self);
-    /// Events written or discarded so far.
-    fn event_count(&self) -> u64;
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl<T: Serialize> Writer for StreamWriter<T> {
-    fn name(&self) -> &str {
-        &self.name
-    }
-
-    fn is_ended(&self) -> bool {
-        self.ended
-    }
-
-    fn drain(&mut self, out: &mut dyn Write, progress: bool) -> io::Result<()> {
-        StreamWriter::drain(self, out, progress)
-    }
-
-    fn discard(&mut self) {
-        StreamWriter::discard(self);
-    }
-
-    fn event_count(&self) -> u64 {
-        self.events
+    #[test]
+    fn items_are_written_as_one_line_each() {
+        let mut out = Vec::new();
+        let event = DynItem::Event {
+            seq: 3,
+            span: TickRange::new(Tick(10), Tick(20)),
+            settled: Tick(20),
+            payload: serde_json::json!({"kind": "word", "tx": 1, "mosi": 3, "miso": null}),
+        };
+        write_item(&mut out, "spi", &event, false).expect("writes");
+        write_item(
+            &mut out,
+            "spi",
+            &DynItem::Gap(TickRange::new(Tick(20), Tick(30))),
+            false,
+        )
+        .expect("writes");
+        write_item(&mut out, "spi", &DynItem::Progress(Tick(40)), false).expect("writes");
+        write_item(&mut out, "spi", &DynItem::Progress(Tick(40)), true).expect("writes");
+        write_item(&mut out, "spi", &DynItem::End(Tick(50)), false).expect("writes");
+        let text = String::from_utf8(out).expect("utf-8");
+        assert_eq!(
+            text,
+            concat!(
+                r#"{"stream":"spi","seq":3,"span":[10,20],"settled":20,"event":{"kind":"word","tx":1,"mosi":3,"miso":null}}"#,
+                "\n",
+                r#"{"stream":"spi","gap":[20,30]}"#,
+                "\n",
+                r#"{"stream":"spi","progress":40}"#,
+                "\n",
+                r#"{"stream":"spi","end":50}"#,
+                "\n",
+            )
+        );
     }
 }

@@ -1,0 +1,57 @@
+{
+  "name": "eeprom24xx",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "i2c.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "operations",
+      "schema": "eeprom24xx.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address_bytes",
+      "kind": "integer",
+      "min": 1,
+      "max": 2
+    },
+    {
+      "name": "device_address",
+      "kind": "integer",
+      "min": 0,
+      "max": 127,
+      "optional": true
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["op", "tx", "device", "command"]
+    },
+    {
+      "kind": "address",
+      "fields": ["op", "wordAddress"]
+    },
+    {
+      "kind": "data",
+      "fields": ["op", "offset", "bytes"]
+    },
+    {
+      "kind": "end",
+      "fields": ["op", "reason", "length"]
+    },
+    {
+      "kind": "ack-poll",
+      "fields": ["tx", "device", "acked"]
+    },
+    {
+      "kind": "unknown",
+      "fields": ["tx", "device"]
+    }
+  ]
+}

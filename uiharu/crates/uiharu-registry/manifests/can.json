@@ -1,0 +1,77 @@
+{
+  "name": "can",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "can.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "rx",
+      "kind": "channel"
+    },
+    {
+      "name": "dominant_low",
+      "kind": "bool"
+    },
+    {
+      "name": "bitrate",
+      "kind": "integer",
+      "min": 1
+    },
+    {
+      "name": "fd_bitrate",
+      "kind": "integer",
+      "min": 1,
+      "optional": true
+    },
+    {
+      "name": "sample_point",
+      "kind": "integer",
+      "min": 1,
+      "max": 99
+    },
+    {
+      "name": "fd",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["frame", "partial"]
+    },
+    {
+      "kind": "id",
+      "fields": ["frame", "id", "extended"]
+    },
+    {
+      "kind": "control",
+      "fields": ["frame", "remote", "fd", "brs", "esi", "dlc", "length"]
+    },
+    {
+      "kind": "data",
+      "fields": ["frame", "offset", "bytes"]
+    },
+    {
+      "kind": "crc",
+      "fields": ["frame", "value", "ok", "stuffCount"]
+    },
+    {
+      "kind": "ack",
+      "fields": ["frame", "acked"]
+    },
+    {
+      "kind": "end",
+      "fields": ["frame", "reason"]
+    }
+  ]
+}

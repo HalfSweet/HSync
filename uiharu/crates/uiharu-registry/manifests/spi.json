@@ -1,0 +1,72 @@
+{
+  "name": "spi",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "spi.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "cs",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "mosi",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "miso",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "mode",
+      "kind": "integer",
+      "min": 0,
+      "max": 3
+    },
+    {
+      "name": "word_bits",
+      "kind": "integer",
+      "min": 1,
+      "max": 8
+    },
+    {
+      "name": "bit_order",
+      "kind": "enum",
+      "values": ["msb-first", "lsb-first"]
+    },
+    {
+      "name": "cs_active_low",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "word",
+      "fields": ["tx", "mosi", "miso"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason"]
+    }
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "modbus-rtu",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "uart",
+      "schema": "uart.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "modbus.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["frame", "address", "function", "exception", "partial"]
+    },
+    {
+      "kind": "data",
+      "fields": ["frame", "offset", "bytes"]
+    },
+    {
+      "kind": "crc",
+      "fields": ["frame", "value", "ok"]
+    },
+    {
+      "kind": "end",
+      "fields": ["frame", "reason"]
+    }
+  ]
+}

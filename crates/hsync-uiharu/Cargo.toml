@@ -1,0 +1,27 @@
+[package]
+name = "hsync-uiharu"
+description = "Runs the uiharu decode engine on HSync captures: feeds the samples of a capture into decode pipelines as they arrive, stores the events and answers the interface's queries"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+crossbeam-channel.workspace = true
+hsync-capture.workspace = true
+hsync-core.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uiharu-core = { path = "../../uiharu/crates/uiharu-core" }
+uiharu-registry = { path = "../../uiharu/crates/uiharu-registry" }
+
+[dev-dependencies]
+hsync-fileio.workspace = true
+uiharu-protocols = { path = "../../uiharu/crates/uiharu-protocols" }
+
+[lints]
+workspace = true

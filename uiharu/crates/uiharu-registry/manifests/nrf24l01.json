@@ -1,0 +1,35 @@
+{
+  "name": "nrf24l01",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "nrf24l01.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "command",
+      "fields": ["op", "tx", "command", "register", "registerName", "pipe", "status"]
+    },
+    {
+      "kind": "data",
+      "fields": ["op", "direction", "offset", "bytes"]
+    },
+    {
+      "kind": "end",
+      "fields": ["op", "reason"]
+    },
+    {
+      "kind": "unknown",
+      "fields": ["tx", "command", "status"]
+    }
+  ]
+}

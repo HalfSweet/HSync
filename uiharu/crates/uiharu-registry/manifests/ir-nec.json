@@ -1,0 +1,47 @@
+{
+  "name": "ir-nec",
+  "category": "line",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "nec.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "channel",
+      "kind": "channel"
+    },
+    {
+      "name": "polarity",
+      "kind": "enum",
+      "values": ["active-low", "active-high"]
+    },
+    {
+      "name": "tolerance",
+      "kind": "integer",
+      "min": 1,
+      "max": 50
+    }
+  ],
+  "events": [
+    {
+      "kind": "frame",
+      "fields": ["address", "command", "extended", "inverseOk", "raw"]
+    },
+    {
+      "kind": "repeat",
+      "fields": []
+    },
+    {
+      "kind": "error",
+      "fields": ["reason", "bits", "raw"]
+    }
+  ]
+}

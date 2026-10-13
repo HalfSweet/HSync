@@ -1,0 +1,19 @@
+[package]
+name = "uiharu-registry"
+description = "The node types of the uiharu decode engine as a registry: build a decoder from its name and configuration, describe it for a user interface, wire a pipeline from a description and read its outputs without knowing their event types"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+authors.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
+uiharu-protocols = { path = "../uiharu-protocols", version = "0.1.0" }
+
+[lints]
+workspace = true

@@ -1,0 +1,39 @@
+{
+  "name": "parallel",
+  "category": "line",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "parallel.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channels",
+      "max": 64
+    },
+    {
+      "name": "clock",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "clock_edge",
+      "kind": "enum",
+      "values": ["rising", "falling", "either"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "word",
+      "fields": ["value", "bits", "initial"]
+    }
+  ]
+}

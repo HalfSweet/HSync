@@ -1,0 +1,39 @@
+{
+  "name": "usb-transactions",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "packets",
+      "schema": "usb.packets"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "transactions",
+      "schema": "usb.transactions"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["xact", "token", "address", "endpoint", "frame"]
+    },
+    {
+      "kind": "setup",
+      "fields": ["xact", "bmRequestType", "bRequest", "wValue", "wIndex", "wLength"]
+    },
+    {
+      "kind": "data",
+      "fields": ["xact", "pid", "offset", "bytes"]
+    },
+    {
+      "kind": "handshake",
+      "fields": ["xact", "pid"]
+    },
+    {
+      "kind": "end",
+      "fields": ["xact", "reason"]
+    }
+  ]
+}
