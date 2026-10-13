@@ -56,7 +56,7 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 - **数值可用十六进制、十进制、八进制、二进制或 ASCII 显示**，每个解码器各自选择。
 - **数据流**列出一个解码器的全部结果：点一行跳到波形上的对应位置，也可以复制列表或导出为 CSV、文本。
 
-![搜索 HOST：对应的字节 48 4F 53 54 在 SPI 的 MISO 解码与数据流中都被高亮](assets/screenshots/zh-CN/search.webp)
+![搜索 0x4F：含有它的 I²C 数据字节在时间线与数据流中都被高亮](assets/screenshots/zh-CN/search.webp)
 
 ### 测量与搜索
 
