@@ -67,23 +67,23 @@ Click the sample rate │ duration │ channels button in the top bar:
 
 ## Protocol decoding
 
-- Click **Add decoder** at the top left of the timeline and search for a protocol: the native I²C, UART, SPI, CAN and CAN-FD decoders, or one of the 150 Python decoders that come with DSView. Protocols that need a lower-level decoder are stacked on it automatically; EEPROM24xx, for example, stacks on I²C. Choose a channel for each role and set each layer's options.
-- **Decode range**: choose **Whole capture** or **Segment**. With **Segment**, only the samples between A and B are decoded; this corresponds to DSView's decode start/end cursors.
-- Click the settings button on a group header (**Decoder settings**) to change or remove its decoder. Under **Display** you can choose the number base (**Numbers**: **Hex**, **Dec**, **Oct**, **Bin** or **ASCII**) and which **Annotation rows** to show.
-- **Data stream**: click **Data stream** at the left end of the status bar, or the data stream button on a group header (**Show all decoded results in the data stream**). It lists one decoder at a time; you can switch between **All** and **Segment**, and for UART between **Text** and **Hex**. Click a row to jump to that place on the waveform. You can **Copy** the list or **Export** it as CSV or text.
+- Click **Add decoder** at the top left of the timeline and search for a protocol. HSync decodes with its own engine, uiharu: buses (I²C, UART, SPI, CAN, USB, I²S, JTAG, SWD, MDIO, Microwire, 1-Wire, PS/2, Wiegand…) and signal lines (PWM, timing, parallel, WS281x, AM230x, infrared…). Protocols that read another one's output — the 24xx EEPROM on I²C, SPI NOR flash and SD cards on SPI, Modbus RTU and LIN on UART — are chosen under **Stack on it**. Choose a channel for each line the protocol reads, set the options and, if you like, give the decoder a name.
+- Decoding follows the capture: a running capture already shows what has been decoded, and decoders can be added or changed while it runs.
+- Every event a decoder finds becomes a block on the timeline, named after its kind (address, data, frame…) with its main value; hovering shows every field. Click the settings button on a group header (**Decoder settings**) to change or remove a decoder; under **Display** you can choose the number base (**Hex**, **Dec**, **Oct**, **Bin** or **ASCII**).
+- **Data stream**: click **Data stream** at the left end of the status bar, or the data stream button on a group header (**Show all decoded results in the data stream**). It lists one stream at a time, one row per event with its kind and fields; you can switch between **All** and **Segment**. Click a row to jump to that place on the waveform. You can **Copy** the list or **Export** it as CSV or text.
 
 ## Search
 
 Press `/` to focus the search box in the top bar:
 
-- **Decoded data**: type hex (`4F`, `0x4F`, `4F 32`) or text (`HOST`) to search all decoders. Press Enter for the next match, Shift + Enter for the previous one, and `Esc` to clear the box.
+- **Decoded data**: type a number (`79` or `0x4F`) to find the events with a field of that value, several numbers (`0x4F 0x32`) to find the events whose bytes hold them in a row, or a word (`address`, `frame`, `stop`) to find events of that kind or with that enumerated value; every word must match. Press Enter for the next match, Shift + Enter for the previous one, and `Esc` to clear the box.
 - **Level pattern**: type conditions such as `D3=R D5=1` (0 low, 1 high, R rising, F falling, C either edge, X any), then press Enter to find the next place where they all hold.
 
 ## Files
 
 - **Open**: **Open file…** in the device menu, or ⌘O / Ctrl+O, reads DSView `.dsl` files (all versions). Choosing a VCD, FST or GHW waveform instead, as simulators and FPGA logic analyzers (Vivado's ILA, Quartus' Signal Tap, …) export them, opens the **Import waveform** dialog.
 - **Import**: the dialog lists the file's scopes and signals as a tree; tick the signals to import (search them by name), and click **Import**. Every bit becomes a channel, so a vector `data[7:0]` gives `data[0]` to `data[7]`; signals without a logic level (reals, strings) cannot be imported, and unknown (`x`) or high-impedance (`z`) values read as low. The **Sample rate** starts as the file's timestamps give it: the coarsest grid every timestamp falls on, which gives a logic analyzer export its sampling clock back when enough signals change; type the clock the file was sampled at if you know it, such as `25 MHz`. A line under the tree shows the sample rate, the number of samples and channels, and the memory the import needs. An imported capture has no decoders; add them as usual. **Save capture…** writes it as a `.dsl` file.
-- **Save**: **Save capture…** in the export menu (the download icon in the top bar), or ⌘S / Ctrl+S, saves a `.dsl` file that DSView can open, including channel names and decoders.
+- **Save**: **Save capture…** in the export menu (the download icon in the top bar), or ⌘S / Ctrl+S, saves a `.dsl` file that DSView can open, including channel names; HSync's decoders are kept in it for HSync, and the decoders a DSView file lists are taken over when both know the protocol (I²C with a 24xx EEPROM, UART, SPI, CAN).
 - **Export**: **Export…** in the export menu writes `.dsl`, CSV, VCD, FST, sigrok `.sr` or raw binary. You can export just the segment, or only some of the channels. You can cancel a save or an export while it runs.
 - **Sessions**: **Save session…** in the export menu stores the device settings, channels, triggers, decoders and capture mode as `.hsync-session.json`; **Load session…** in the device menu also reads DSView `.dsc` sessions. A session loaded before anything was captured keeps its channel names and decoders for the first capture.
 

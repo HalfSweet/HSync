@@ -26,7 +26,7 @@ Capture, trigger, decode and measure, with one app for logic analyzers from seve
   <img src="assets/screenshots/en-US/hero-light.webp" alt="HSync showing a capture of I²C, UART, SPI and CAN-FD buses, with decoded transfers above their waveforms and the I²C data stream below">
 </picture>
 
-HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic and PXLogic's PX-Logic analyzers ([full list](#supported-devices)) and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, and 150 more protocol decoders are a search away. HSync opens and saves DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware, the decoders and the Python runtime they use.
+HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic and PXLogic's PX-Logic analyzers ([full list](#supported-devices)) and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, while the capture is still running, and 30 more protocol decoders are a search away. HSync opens and saves DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware, the decoders and the Python runtime they use.
 
 No hardware at hand? HSync opens its built-in **Demo device**, which plays back a recording of four buses, so you can try everything straight away.
 
@@ -50,9 +50,10 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 
 ### Decode
 
-- **Native I²C, UART, SPI, CAN and CAN-FD decoders**, drawn in line with the waveforms. They show what the bus carried, byte by byte, without guessing what it meant.
-- **150 more protocols** from DSView's decoder library, from 1-Wire and JTAG to USB Power Delivery and WS281x LEDs. Decoders that build on others stack automatically.
-- **Decode the whole capture or just a segment**, and show values in hex, decimal, octal, binary or ASCII.
+- **I²C, UART, SPI and CAN decoders**, drawn in line with the waveforms. They show what the bus carried, event by event, without guessing what it meant.
+- **30 more protocols** from HSync's own decode engine, [uiharu](uiharu/): from 1-Wire, JTAG and USB to USB Power Delivery and WS281x LEDs. Decoders that read another protocol's output — the 24xx EEPROM, SPI NOR flash, Modbus RTU, LIN — stack on it.
+- **Decoding keeps up with the capture**: results appear while the device is still filling it, and decoders can be added or changed meanwhile.
+- **Values in hex, decimal, octal, binary or ASCII**, chosen per decoder.
 - **The data stream** lists everything a decoder found. Click a row to jump to it on the waveform; copy the list or export it as CSV or text.
 
 ![A search for HOST: its bytes, 48 4F 53 54, highlighted on the SPI MISO lane and in the data stream](assets/screenshots/en-US/search.webp)
@@ -63,13 +64,13 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 - **Hover a pulse** to read its width, plus the period, frequency and duty cycle it makes with the next pulse.
 - **Click two edges** to measure the time between them, on one channel or across channels; the pointer snaps to edges.
 - **Mark a segment** on the ruler to see its duration and every channel's rising and falling edges inside it.
-- **Search** decoded data for values or text (`4F 32`, `HOST`), or find a level pattern such as `D3=R D5=1`.
+- **Search** decoded data for values, byte sequences or event kinds (`0x4F 0x32`, `address`), or find a level pattern such as `D3=R D5=1`.
 
 ![An edge measurement of one SCL period, 10.04 µs, and the edge counts of every channel in a marked segment, in the Dark theme](assets/screenshots/en-US/measure.webp)
 
 ### Files
 
-- **Opens DSView `.dsl` captures** of every version, and saves `.dsl` files that DSView opens, with channel names and decoders.
+- **Opens DSView `.dsl` captures** of every version, taking over the decoders both know, and saves `.dsl` files that DSView opens, with channel names.
 - **Imports VCD, FST and GHW waveforms** from simulators and FPGA logic analyzers (Vivado ILA, Signal Tap, …): pick the signals, and each bit becomes a channel on the clock the file was sampled with.
 - **Exports CSV, VCD, FST, sigrok `.sr` and raw binary**: the whole capture or a segment, all channels or a few.
 - **Sessions** keep your device settings, channels, triggers and decoders; DSView `.dsc` sessions load too.
