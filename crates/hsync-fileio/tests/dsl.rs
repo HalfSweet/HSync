@@ -56,6 +56,7 @@ fn round_trip(capture: &LogicCapture) -> LogicCapture {
         channel_names: &names,
         session: &serde_json::json!({ "Version": 3 }),
         decoders: &serde_json::json!([]),
+        hsync_decoders: None,
     };
     let bytes = write_dsl(Cursor::new(Vec::new()), capture, &request)
         .expect("writes")
@@ -120,4 +121,30 @@ fn round_trips_multi_block_captures_with_constant_blocks() {
     assert_same_samples(&capture, &copy);
     assert_eq!(copy.trigger_sample(), Some(12_345));
     assert_eq!(copy.info().trigger_time_ms, Some(1_760_000_000_000));
+}
+
+#[test]
+fn keeps_hsync_decoders_in_an_entry_of_their_own() {
+    let capture = read_dsl_file(&demo_path()).expect("demo").capture;
+    let names: BTreeMap<u16, String> = capture
+        .channels()
+        .map(|(index, _)| (index, format!("D{index}")))
+        .collect();
+    let entries = serde_json::json!([{ "nodes": { "uart": { "type": "uart" } } }]);
+    let request = DslWriteRequest {
+        driver: "HSync",
+        channel_names: &names,
+        session: &serde_json::json!({ "Version": 3 }),
+        decoders: &serde_json::json!([]),
+        hsync_decoders: Some(&entries),
+    };
+    let bytes = write_dsl(Cursor::new(Vec::new()), &capture, &request)
+        .expect("writes")
+        .into_inner();
+    let document = read_dsl(Cursor::new(bytes)).expect("reads back");
+    assert_eq!(document.decoders, Some(serde_json::json!([])));
+    assert_eq!(document.hsync_decoders, Some(entries));
+    // DSView's own files have no such entry.
+    let demo = read_dsl_file(&demo_path()).expect("demo");
+    assert_eq!(demo.hsync_decoders, None);
 }
