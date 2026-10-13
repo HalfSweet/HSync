@@ -46,6 +46,34 @@ fn decoders_done(events: &Receiver<SessionEvent>, id: u64, count: usize) {
 }
 
 #[test]
+fn exports_a_segment_as_an_hsync_capture_with_the_decoders_it_can_keep() {
+    let (mut workspace, _) = fresh();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    let source = workspace.export_source(opened.id).expect("source");
+    let path = temp("segment.hsync");
+    source
+        .export(
+            &path,
+            &request(ExportKind::Hsync, Some((40_000, 70_000)), &[1, 0]),
+            &mut |_| true,
+        )
+        .expect("export");
+
+    let (mut other, events) = fresh();
+    let reopened = other.open_file(&path).expect("reopen");
+    assert_eq!(reopened.info.sample_count, 30_001);
+    assert_eq!(reopened.info.channels, vec![0, 1]);
+    assert_eq!(reopened.channels[0].name, "SDA");
+    assert_eq!(reopened.session, None);
+    // Only I2C uses nothing but D0 and D1.
+    decoders_done(&events, reopened.id, 1);
+    let statuses = other.decoding(reopened.id).expect("decoders").statuses();
+    assert_eq!(statuses.len(), 1);
+    assert_eq!(statuses[0].kinds, ["i2c", "eeprom24xx"]);
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
 fn exports_a_segment_as_a_capture_with_the_decoders_it_can_keep() {
     let (mut workspace, _) = fresh();
     let opened = workspace.open_demo(&demo_path()).expect("demo");
