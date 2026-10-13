@@ -61,6 +61,12 @@ pub enum FileError {
         /// Parser error.
         source: serde_json::Error,
     },
+    /// The archive is not an HSync capture file.
+    #[error("not an hsync capture file")]
+    NotHsync,
+    /// A block of samples could not be decompressed.
+    #[error("block {entry} does not decompress: {detail}")]
+    Block { entry: String, detail: String },
 }
 
 impl From<&FileError> for UiError {
@@ -99,6 +105,10 @@ impl From<&FileError> for UiError {
                 .with("limit", u16::MAX),
             FileError::Fst(error) => {
                 UiError::new("error.file.io").with("detail", error.to_string())
+            }
+            FileError::NotHsync => UiError::new("error.file.notCapture"),
+            FileError::Block { entry, .. } => {
+                UiError::new("error.file.corrupt").with("detail", entry.as_str())
             }
         }
     }
