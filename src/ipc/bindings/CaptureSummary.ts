@@ -24,6 +24,6 @@ info: CaptureInfo,
  */
 channels: Array<ChannelSummary>, 
 /**
- * Decoder stacks stored with the capture, in DSView's `decoders` format.
+ * The decoders stored with the capture: HSync's entries (see [`DecoderEntry`]).
  */
 decoders: unknown, };

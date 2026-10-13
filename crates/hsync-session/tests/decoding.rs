@@ -1,15 +1,17 @@
-//! Decoding in the workspace: decoders stored with a capture run when it opens, and carry over
-//! to captures taken afterwards, which decode once complete.
+//! Decoding in the workspace: decoders stored with a capture run when it opens, carry over to
+//! captures taken afterwards, and decode those as they are taken.
 
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crossbeam_channel::Receiver;
-use hsync_decode::{Bus, LaneItem, StreamMode, StreamRow};
 use hsync_demo::DemoDriver;
 use hsync_driver::{CapturePreset, DeviceManager};
-use hsync_session::{CaptureRequest, DecodeState, EventSink, Instrument, SessionEvent, Workspace};
+use hsync_session::{
+    CaptureRequest, DecodeState, EventSink, Instrument, LaneBlock, SessionEvent, Workspace,
+};
+use serde_json::{Value, json};
 
 fn demo_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/resources/demo/protocol.dsl")
@@ -23,116 +25,29 @@ fn workspace() -> (Workspace, Receiver<SessionEvent>) {
     (Workspace::with_events(sink), receiver)
 }
 
-/// Waits for `count` decoders of capture `id` to finish.
-fn decoded(events: &Receiver<SessionEvent>, id: u64, count: usize) {
+/// Waits for `count` decoders of capture `id` to finish; how many progress events came first.
+fn decoded(events: &Receiver<SessionEvent>, id: u64, count: usize) -> usize {
     let mut done = 0;
+    let mut progress = 0;
     while done < count {
         match events
-            .recv_timeout(Duration::from_secs(10))
+            .recv_timeout(Duration::from_secs(20))
             .expect("decoder event")
         {
             SessionEvent::Decoded { capture_id, .. } if capture_id == id => done += 1,
+            SessionEvent::DecodeProgress { capture_id, .. } if capture_id == id => progress += 1,
             _ => {}
         }
     }
+    progress
 }
 
-#[test]
-fn decodes_the_decoders_stored_with_a_capture() {
-    let (mut workspace, events) = workspace();
-    let summary = workspace.open_demo(&demo_path()).expect("demo");
-    decoded(&events, summary.id, 4);
-    let decoding = workspace.decoding(summary.id).expect("decoders");
-    let statuses = decoding.statuses();
-    let buses: Vec<Option<Bus>> = statuses.iter().map(|s| s.bus).collect();
-    assert_eq!(
-        buses,
-        vec![
-            Some(Bus::I2c),
-            Some(Bus::Uart),
-            Some(Bus::Spi),
-            Some(Bus::Can)
-        ]
-    );
-    assert!(statuses.iter().all(|s| s.state == DecodeState::Done));
-    assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(6));
-
-    // The lanes of the design's viewport.
-    let lanes = decoding.view(46_500, 65_000, 15.0);
-    assert_eq!(lanes.len(), 4);
-    assert!(
-        lanes[1].view.lanes[0]
-            .items
-            .iter()
-            .any(|item| matches!(item, LaneItem::UartFrame { value: 0x53, .. }))
-    );
-
-    // A page of the I²C stream, and the transfers in a segment.
-    let page = decoding
-        .stream(0, StreamMode::Text, None, false, 0, 100)
-        .expect("stream");
-    assert_eq!(page.total, 6);
-    assert!(matches!(page.rows[0], StreamRow::I2c { .. }));
-    let first = page.rows[0].start();
-    let inside = decoding
-        .stream(
-            0,
-            StreamMode::Text,
-            Some((first, first + 10_000)),
-            true,
-            0,
-            100,
-        )
-        .expect("segment");
-    assert_eq!(inside.total, 1);
-    assert_eq!(inside.inside, Some(4));
-}
-
-#[test]
-fn captures_keep_the_decoders_and_decode_when_complete() {
-    let (mut workspace, events) = workspace();
-    let opened = workspace.open_demo(&demo_path()).expect("demo");
-    decoded(&events, opened.id, 4);
-
-    let mut instrument = Instrument::new(DeviceManager::new(vec![Arc::new(DemoDriver::new(
-        Some(demo_path()),
-    ))]));
-    instrument.scan();
-    instrument.open("virtual-demo").expect("demo device");
-    let sink = Arc::new(|_event: SessionEvent| {});
-    let summary = instrument
-        .start(&mut workspace, CaptureRequest::default(), sink)
-        .expect("start");
-    assert!(summary.decoders.is_some(), "the decoders carry over");
-    decoded(&events, summary.id, 4);
-    let decoding = workspace.decoding(summary.id).expect("decoders");
-    let statuses = decoding.statuses();
-    assert!(statuses.iter().all(|s| s.state == DecodeState::Done));
-    // The demo device replays the same capture, so the same transfers decode.
-    assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(6));
-}
-
-#[test]
-fn a_first_demo_capture_brings_the_decoders_of_the_protocol_capture() {
-    let (mut workspace, events) = workspace();
-    let mut instrument = Instrument::new(DeviceManager::new(vec![Arc::new(DemoDriver::new(
-        Some(demo_path()),
-    ))]));
-    instrument.scan();
-    instrument.open("virtual-demo").expect("demo device");
-    let sink = Arc::new(|_event: SessionEvent| {});
-    let summary = instrument
-        .start(&mut workspace, CaptureRequest::default(), sink)
-        .expect("start");
-    assert_eq!(summary.channels[1].name, "SCL");
-    assert!(
-        summary.decoders.is_some(),
-        "the protocol decoders come along"
-    );
-    decoded(&events, summary.id, 4);
-    let statuses = workspace.decoding(summary.id).expect("decoders").statuses();
-    assert!(statuses.iter().all(|s| s.state == DecodeState::Done));
-    assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(6));
+fn uart_entry() -> Value {
+    json!({
+        "nodes": { "uart": { "type": "uart", "config": { "line": 5, "baud": 115_200 } } },
+        "connections": [{ "from": "source", "to": "uart.logic" }],
+        "expose": { "uart": "uart.events" }
+    })
 }
 
 fn demo_instrument() -> Instrument {
@@ -145,10 +60,134 @@ fn demo_instrument() -> Instrument {
 }
 
 #[test]
+fn decodes_the_decoders_stored_with_a_capture() {
+    let (mut workspace, events) = workspace();
+    let summary = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, summary.id, 4);
+    let decoding = workspace.decoding(summary.id).expect("decoders");
+    let statuses = decoding.statuses();
+    let kinds: Vec<&[String]> = statuses.iter().map(|s| s.kinds.as_slice()).collect();
+    assert_eq!(
+        kinds,
+        [
+            &["i2c".to_owned(), "eeprom24xx".to_owned()][..],
+            &["uart".to_owned()][..],
+            &["spi".to_owned()][..],
+            &["can".to_owned()][..],
+        ]
+    );
+    assert!(
+        statuses.iter().all(|s| s.state == DecodeState::Done),
+        "{statuses:?}"
+    );
+    assert_eq!(statuses[0].label, "I²C");
+    assert_eq!(statuses[0].streams.len(), 2);
+    assert_eq!(
+        (
+            statuses[0].streams[1].kind.as_str(),
+            statuses[0].streams[1].schema.as_str()
+        ),
+        ("eeprom24xx", "eeprom24xx.events")
+    );
+    assert!(statuses[0].streams.iter().all(|s| s.progress.ended));
+    assert_eq!(statuses[1].streams[0].progress.events, 47);
+
+    // The lanes of the design's viewport: the UART's "S" of "USB-based".
+    let lanes = decoding.view(46_500..65_000, 15.0);
+    assert_eq!(lanes.len(), 4);
+    let uart = &lanes[1].streams[0].view;
+    assert!(
+        uart.blocks
+            .iter()
+            .any(|block| matches!(block, LaneBlock::Event(row) if row.payload["value"] == 0x53))
+    );
+
+    // A page of the UART listing, and the frames in a segment.
+    let page = decoding.stream(1, 0, None, false, 0, 10).expect("page");
+    assert_eq!((page.total, page.events, page.rows.len()), (47, 47, 10));
+    assert_eq!(page.rows[0].kind, "frame");
+    let first = page.rows[0].start;
+    let inside = decoding
+        .stream(1, 0, Some((first + 10_000, first)), true, 0, 100)
+        .expect("segment");
+    assert!(inside.total >= 1 && inside.total < 47);
+    assert_eq!(inside.inside.map(|n| n >= 1), Some(true));
+    assert_eq!(decoding.row_at(1, 0, first + 1), Some(0));
+    assert_eq!(decoding.row_at(1, 0, 0), Some(0));
+    assert_eq!(decoding.stream(9, 0, None, false, 0, 10), None);
+    assert_eq!(decoding.stream(1, 3, None, false, 0, 10), None);
+
+    // Every decoder has data somewhere in the capture.
+    for index in 0..4 {
+        let coverage = decoding
+            .coverage(index, 0..summary.info.sample_count, 1000)
+            .expect("coverage");
+        assert!(!coverage.is_empty(), "decoder {index}");
+    }
+}
+
+#[test]
+fn captures_decode_as_they_are_taken() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let whole = workspace
+        .decoding(opened.id)
+        .expect("decoders")
+        .stream(1, 0, None, false, 0, 100)
+        .expect("page")
+        .rows;
+
+    // The capture replaces the opened one; its decoders start with it and follow the samples.
+
+    let mut instrument = demo_instrument();
+    let sink: EventSink = Arc::new(|_event: SessionEvent| {});
+    let summary = instrument
+        .start(&mut workspace, CaptureRequest::default(), sink)
+        .expect("start");
+    assert!(summary.decoders.is_some(), "the decoders carry over");
+    decoded(&events, summary.id, 4);
+    let decoding = workspace.decoding(summary.id).expect("decoders");
+    let statuses = decoding.statuses();
+    assert!(
+        statuses.iter().all(|s| s.state == DecodeState::Done),
+        "{statuses:?}"
+    );
+    // The demo device replays the same capture, so the same frames decode.
+    assert_eq!(statuses[1].streams[0].progress.events, 47);
+    assert_eq!(
+        decoding
+            .stream(1, 0, None, false, 0, 100)
+            .expect("page")
+            .rows,
+        whole
+    );
+}
+
+#[test]
+fn a_first_demo_capture_brings_the_decoders_of_the_protocol_capture() {
+    let (mut workspace, events) = workspace();
+    let mut instrument = demo_instrument();
+    let sink: EventSink = Arc::new(|_event: SessionEvent| {});
+    let summary = instrument
+        .start(&mut workspace, CaptureRequest::default(), sink)
+        .expect("start");
+    assert_eq!(summary.channels[1].name, "SCL");
+    let decoders = summary.decoders.as_ref().expect("the decoders come along");
+    assert_eq!(decoders.as_array().map(Vec::len), Some(4));
+    assert!(decoders[0].get("nodes").is_some(), "HSync's entries");
+    decoded(&events, summary.id, 4);
+    let statuses = workspace.decoding(summary.id).expect("decoders").statuses();
+    assert!(statuses.iter().all(|s| s.state == DecodeState::Done));
+    assert_eq!(statuses[1].streams[0].progress.events, 47);
+}
+
+#[test]
 fn a_requested_preset_replaces_the_devices_for_a_first_capture_only() {
+    // DSView's form of the entry, as an older session may still hold it.
     let only_uart = CapturePreset {
         channel_names: [(5, "RX".to_owned())].into(),
-        decoders: Some(serde_json::json!([{
+        decoders: Some(json!([{
             "id": "1:uart",
             "channel": [{"rxtx": 5}],
             "options": {"baudrate": 115200},
@@ -170,13 +209,14 @@ fn a_requested_preset_replaces_the_devices_for_a_first_capture_only() {
     decoded(&events, summary.id, 1);
     let statuses = bare.decoding(summary.id).expect("decoders").statuses();
     assert_eq!(statuses.len(), 1);
-    assert_eq!(statuses[0].bus, Some(Bus::Uart));
+    assert_eq!(statuses[0].kinds, ["uart"]);
+    assert_eq!(statuses[0].streams[0].progress.events, 47);
 
     // An empty decoder list leaves the capture without decoders.
     let (mut empty, _events) = workspace();
     let request = CaptureRequest {
         preset: Some(CapturePreset {
-            decoders: Some(serde_json::json!([])),
+            decoders: Some(json!([])),
             ..CapturePreset::default()
         }),
         ..CaptureRequest::default()
@@ -213,13 +253,8 @@ fn replaces_the_decoders_and_decodes_again() {
     let (mut workspace, events) = workspace();
     let opened = workspace.open_demo(&demo_path()).expect("demo");
     decoded(&events, opened.id, 4);
-    let only_uart = serde_json::json!([{
-        "id": "1:uart",
-        "channel": [{"rxtx": 5}],
-        "options": {"baudrate": 115200},
-    }]);
     let summary = workspace
-        .set_decoders(opened.id, only_uart, false)
+        .set_decoders(opened.id, json!([uart_entry()]))
         .expect("set decoders");
     assert_eq!(
         summary
@@ -232,17 +267,17 @@ fn replaces_the_decoders_and_decodes_again() {
     decoded(&events, opened.id, 1);
     let statuses = workspace.decoding(opened.id).expect("decoders").statuses();
     assert_eq!(statuses.len(), 1);
-    assert_eq!(statuses[0].bus, Some(Bus::Uart));
-    assert_eq!(statuses[0].counts.map(|c| c.frames), Some(47));
+    assert_eq!(statuses[0].kinds, ["uart"]);
+    assert_eq!(statuses[0].streams[0].progress.events, 47);
     // An empty list removes every decoder.
-    let summary = workspace
-        .set_decoders(opened.id, serde_json::json!([]), false)
-        .expect("clear");
+    let summary = workspace.set_decoders(opened.id, json!([])).expect("clear");
     assert!(summary.decoders.is_none());
     assert!(
         workspace
-            .set_decoders(opened.id, serde_json::json!([]), true)
-            .is_err()
+            .decoding(opened.id)
+            .expect("decoders")
+            .statuses()
+            .is_empty()
     );
 }
 
@@ -251,14 +286,16 @@ fn saves_and_reopens_a_capture_with_its_decoders() {
     let (mut first, events) = workspace();
     let opened = first.open_demo(&demo_path()).expect("demo");
     decoded(&events, opened.id, 4);
-    let only_spi = serde_json::json!([{
-        "id": "1:spi",
-        "channel": [{"clk": 12}, {"miso": 15}, {"mosi": 14}, {"cs": 13}],
-        "options": {"cpol": 0, "cpha": 0},
+    let only_spi = json!([{
+        "nodes": { "spi": { "type": "spi", "config": { "clk": 12, "cs": 13, "mosi": 14, "miso": 15 } } },
+        "connections": [{ "from": "source", "to": "spi.logic" }],
+        "expose": { "spi": "spi.events" },
+        "label": "Flash bus"
     }]);
     first
-        .set_decoders(opened.id, only_spi, false)
+        .set_decoders(opened.id, only_spi.clone())
         .expect("decoders");
+    decoded(&events, opened.id, 1);
     let path = std::env::temp_dir().join(format!("hsync-save-{}.dsl", std::process::id()));
     let saved = first.save(opened.id, &path).expect("save");
     assert!(matches!(
@@ -268,12 +305,19 @@ fn saves_and_reopens_a_capture_with_its_decoders() {
 
     let (mut other, other_events) = workspace();
     let reopened = other.open_file(&path).expect("reopen");
+    assert_eq!(reopened.decoders, Some(only_spi));
     decoded(&other_events, reopened.id, 1);
     assert_eq!(reopened.info.sample_count, opened.info.sample_count);
     assert_eq!(reopened.channels, opened.channels);
     let statuses = other.decoding(reopened.id).expect("decoders").statuses();
     assert_eq!(statuses.len(), 1);
-    assert_eq!(statuses[0].counts.map(|c| c.transfers), Some(4));
+    assert_eq!(statuses[0].label, "Flash bus");
+    assert_eq!(
+        statuses[0].streams[0].progress.events,
+        first.decoding(opened.id).expect("decoders").statuses()[0].streams[0]
+            .progress
+            .events
+    );
     let _ = std::fs::remove_file(path);
 }
 
@@ -283,9 +327,7 @@ fn searches_every_decoder_in_time_order() {
     let opened = workspace.open_demo(&demo_path()).expect("demo");
     decoded(&events, opened.id, 4);
     let decoding = workspace.decoding(opened.id).expect("decoders");
-    let result = decoding
-        .search("s", hsync_decode::StreamMode::Text)
-        .expect("a query");
+    let result = decoding.search("data").expect("a query");
     assert!(!result.truncated);
     assert!(
         result
@@ -296,11 +338,86 @@ fn searches_every_decoder_in_time_order() {
     let decoders: std::collections::BTreeSet<u32> =
         result.hits.iter().map(|hit| hit.decoder).collect();
     assert!(decoders.len() >= 2, "{decoders:?}");
-    assert!(
-        decoding
-            .search("  ", hsync_decode::StreamMode::Text)
-            .is_none()
+    let frames = decoding.search("frame 0x53").expect("a query");
+    assert!(frames.hits.iter().all(|hit| hit.decoder == 1));
+    assert!(!frames.hits.is_empty());
+    let row = decoding
+        .stream(1, 0, None, false, frames.hits[0].row, 1)
+        .expect("page")
+        .rows
+        .remove(0);
+    assert_eq!(row.payload["value"], 0x53);
+    assert!(decoding.search("  ").is_none());
+}
+
+#[test]
+fn display_changes_keep_the_results() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let before = workspace.decoding(opened.id).expect("decoders");
+    let mut decoders = opened.decoders.clone().expect("decoders");
+    decoders[0]["show"] = json!({ "numbers": "dec" });
+    decoders[0]["label"] = json!("EEPROM bus");
+    let summary = workspace
+        .set_decoders(opened.id, decoders.clone())
+        .expect("decoders");
+    assert_eq!(summary.decoders, Some(decoders));
+    let after = workspace.decoding(opened.id).expect("decoders");
+    assert!(Arc::ptr_eq(&before, &after), "decoded again");
+}
+
+#[test]
+fn entries_that_cannot_run_are_reported() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    let mut missing = uart_entry();
+    missing["nodes"]["uart"]["config"]["line"] = json!(20);
+    let unknown = json!({ "nodes": { "x": { "type": "no-such-decoder" } } });
+    let malformed = json!({ "nodes": {}, "channel": [] });
+    let summary = workspace
+        .set_decoders(
+            opened.id,
+            json!([missing, unknown, malformed, { "id": "counter", "channel": [{ "data": 1 }] }]),
+        )
+        .expect("set");
+    // DSView's counter has no uiharu decoder and is left out.
+    assert_eq!(
+        summary
+            .decoders
+            .as_ref()
+            .and_then(Value::as_array)
+            .map(Vec::len),
+        Some(3)
     );
+    let statuses = workspace.decoding(opened.id).expect("decoders").statuses();
+    let states: Vec<DecodeState> = statuses.iter().map(|s| s.state).collect();
+    assert_eq!(
+        states,
+        [
+            DecodeState::MissingChannels,
+            DecodeState::Invalid,
+            DecodeState::Invalid
+        ]
+    );
+    let codes: Vec<&str> = statuses
+        .iter()
+        .map(|s| s.error.as_ref().expect("an error").code.as_str())
+        .collect();
+    assert_eq!(
+        codes,
+        [
+            "error.decode.missingChannels",
+            "error.decode.invalid",
+            "error.decode.invalid"
+        ]
+    );
+    assert_eq!(
+        statuses[0].error.as_ref().expect("error").params["channels"],
+        json!("20")
+    );
+    assert!(statuses.iter().all(|s| s.streams.is_empty()));
 }
 
 #[test]
@@ -332,123 +449,4 @@ fn counts_edges_in_a_segment_as_dsview() {
         );
     }
     assert!(hsync_session::edges(&capture, 0, 10, &[99]).is_err());
-}
-
-fn host() -> Arc<hsync_srd::DecoderHost> {
-    Arc::new(hsync_srd::DecoderHost::new(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/resources/decoders"),
-    ))
-}
-
-#[test]
-fn python_decoders_stack_on_native_ones_and_run_alone() {
-    let (mut workspace, events) = workspace();
-    workspace.set_decoder_host(host());
-    let opened = workspace.open_demo(&demo_path()).expect("demo");
-    decoded(&events, opened.id, 4);
-    let decoding = workspace.decoding(opened.id).expect("decoders");
-    let statuses = decoding.statuses();
-    // 1:i2c carries eeprom24xx: the native lanes plus the EEPROM's.
-    let i2c = &statuses[0];
-    assert_eq!(i2c.state, DecodeState::Done, "{:?}", i2c.error);
-    assert_eq!(i2c.bus, Some(Bus::I2c));
-    assert!(
-        i2c.lanes
-            .iter()
-            .all(|lane| lane.lane.starts_with("eeprom24xx/"))
-    );
-    assert!(!i2c.lanes.is_empty());
-    let view = decoding.view(0, opened.info.sample_count, 50.0);
-    let lanes: Vec<&str> = view[0]
-        .view
-        .lanes
-        .iter()
-        .map(|lane| lane.lane.as_str())
-        .collect();
-    assert!(lanes.contains(&"header") && lanes.iter().any(|lane| lane.starts_with("eeprom24xx/")));
-
-    // A decoder only Python has: count SCL's edges.
-    let counter = serde_json::json!([{
-        "id": "counter",
-        "channel": [{"data": 1}],
-        "options": {"data_edge": "rising"},
-    }]);
-    workspace
-        .set_decoders(opened.id, counter, false)
-        .expect("decoders");
-    decoded(&events, opened.id, 1);
-    let decoding = workspace.decoding(opened.id).expect("decoders");
-    let status = &decoding.statuses()[0];
-    assert_eq!(status.state, DecodeState::Done, "{:?}", status.error);
-    assert_eq!(status.bus, Some(Bus::Other));
-    assert_eq!(status.lanes[0].lane, "counter/edge_counts");
-    assert!(status.counts.is_some_and(|counts| counts.frames > 100));
-    let page = decoding
-        .stream(0, StreamMode::Text, None, false, 0, 3)
-        .expect("rows");
-    assert!(matches!(&page.rows[0], StreamRow::Annotation { text, .. } if !text.is_empty()));
-}
-
-#[test]
-fn display_changes_keep_the_results() {
-    let (mut workspace, events) = workspace();
-    let opened = workspace.open_demo(&demo_path()).expect("demo");
-    decoded(&events, opened.id, 4);
-    let before = workspace.decoding(opened.id).expect("decoders");
-    let mut decoders = opened.decoders.clone().expect("decoders");
-    decoders[0]["show"] = serde_json::json!({ "1:i2c: Bits": false });
-    decoders[0]["number format"] = serde_json::json!("dec");
-    let summary = workspace
-        .set_decoders(opened.id, decoders.clone(), false)
-        .expect("decoders");
-    assert_eq!(summary.decoders, Some(decoders));
-    let after = workspace.decoding(opened.id).expect("decoders");
-    assert!(Arc::ptr_eq(&before, &after), "decoded again");
-}
-
-#[test]
-fn decodes_only_the_range_of_an_entry() {
-    let (mut workspace, events) = workspace();
-    let opened = workspace.open_demo(&demo_path()).expect("demo");
-    decoded(&events, opened.id, 4);
-    let i2c = |range: Option<(u64, u64)>| {
-        let mut entry = serde_json::json!({
-            "id": "1:i2c",
-            "channel": [{"scl": 1}, {"sda": 0}],
-            "options": {},
-        });
-        if let Some((first, last)) = range {
-            entry[hsync_session::RANGE_KEY] = serde_json::json!([first, last]);
-        }
-        serde_json::json!([entry])
-    };
-    workspace
-        .set_decoders(opened.id, i2c(None), false)
-        .expect("whole");
-    decoded(&events, opened.id, 1);
-    let decoding = workspace.decoding(opened.id).expect("decoders");
-    let whole = decoding
-        .stream(0, StreamMode::Text, None, false, 0, 100)
-        .expect("rows")
-        .rows;
-    assert_eq!(whole.len(), 6);
-
-    // From just before the second transfer to the end, given last-first like DSView's cursors.
-    let first = whole[1].start() - 1;
-    workspace
-        .set_decoders(
-            opened.id,
-            i2c(Some((opened.info.sample_count - 1, first))),
-            false,
-        )
-        .expect("part");
-    decoded(&events, opened.id, 1);
-    let part = workspace
-        .decoding(opened.id)
-        .expect("decoders")
-        .stream(0, StreamMode::Text, None, false, 0, 100)
-        .expect("rows")
-        .rows;
-    assert_eq!(part.len(), 5);
-    assert_eq!(part[0].start(), whole[1].start());
 }

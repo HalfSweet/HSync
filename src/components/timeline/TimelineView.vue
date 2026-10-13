@@ -25,7 +25,6 @@ import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDecodeStore } from '@/stores/decode'
 import { entryFormat } from '@/decode/numberFormat'
-import { laneShown } from '@/decode/rows'
 import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -62,7 +61,8 @@ const MIN_ROWS_WIDTH = 860
 /** Height of the trigger menu, for keeping it inside the timeline. */
 const MENU_HEIGHT = 236
 
-const { t, locale } = useI18n()
+const i18n = useI18n()
+const { t, locale } = i18n
 const capture = useCaptureStore()
 const channels = useChannelsStore()
 const decode = useDecodeStore()
@@ -77,40 +77,43 @@ const scroller = useTemplateRef<HTMLElement>('scroller')
 const rowsElement = useTemplateRef<HTMLElement>('rows')
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas')
 
-/** Annotation lanes of a group's decoder that show, once it has decoded. */
-const annotationLanes = (group: { decoder: number | null }) => {
-  const entry = group.decoder === null ? undefined : decode.entries[group.decoder]
-  return (decode.statusOf(group.decoder)?.lanes ?? []).filter((lane) => laneShown(entry, lane))
-}
-
 const layout = computed(() =>
   layoutRows(
     capture.groups,
     metrics.value,
     (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
-    annotationLanes,
+    (group) => decode.statusOf(group.decoder)?.streams.length ?? 1,
   ),
 )
 
 const isTrace = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow'
 
-/** The decode lane a row shows: the group title row carries a bus's main lane. */
-function decodeLaneOf(row: Row): string | null {
+/** The decoder's stream a row shows: the first on the group's title row, each further one (a
+ * decoder stacked on the bus) on a lane of its own. */
+function decodeStreamOf(row: Row): number | null {
   if (row.group.decoder === null) return null
-  if (row.kind === 'header') {
-    return row.group.kind === 'other' ? (annotationLanes(row.group)[0]?.lane ?? null) : 'header'
-  }
-  return row.kind === 'lane' ? (row.lane ?? null) : null
+  if (row.kind === 'header') return 0
+  return row.kind === 'lane' ? (row.stream ?? null) : null
 }
 
-/** Clicking a decoded block marks it as the segment; clicking it again lets go. */
-function pickBlock(block: { id: string; start: number; end: number }, decoder: number): void {
+/** The node type whose events stream `stream` of the row's decoder carries, e.g. `i2c`. */
+function streamKind(row: Row, stream: number): string {
+  return decode.statusOf(row.group.decoder)?.streams[stream]?.kind ?? row.group.type ?? ''
+}
+
+/** Clicking a decoded block marks it as the segment and lists its stream in the data stream;
+ * clicking it again lets go. */
+function pickBlock(
+  block: { id: string; start: number; end: number },
+  decoder: number,
+  streamIndex: number,
+): void {
   if (view.segment?.blockId === block.id) {
     view.setSegment(null)
     return
   }
   view.setSegment({ from: block.start, to: block.end, blockId: block.id })
-  stream.select(decoder)
+  stream.select(decoder, streamIndex)
 }
 
 /** `start..end` in track pixels, clipped to the view and at least 2 px wide. */
@@ -137,10 +140,14 @@ const findBand = computed(() => {
     : { ...band, line: false }
 })
 
-/** Annotation rows are named after the decoder's row. */
+/** A stacked decoder's lane is named after its node type. */
 function laneLabel(row: Row): string | null {
-  if (row.kind !== 'lane' || !row.lane?.includes('/')) return null
-  return annotationLanes(row.group).find((lane) => lane.lane === row.lane)?.desc ?? null
+  if (row.kind !== 'lane' || row.stream === undefined) return null
+  const kind = decode.statusOf(row.group.decoder)?.streams[row.stream]?.kind
+  if (kind === undefined) return null
+  // Node types come from the backend, so their names are checked at run time rather than typed.
+  const key = `decoder.${kind}.name`
+  return i18n.te(key) ? t(key as never) : kind
 }
 
 // Size and scroll position of the visible area.
@@ -777,18 +784,22 @@ function onWheel(event: WheelEvent): void {
             @pointercancel="onTrackPointerUp"
             @pointerleave="onTrackPointerLeave"
           >
+            <!-- The title row shows the decoder's first stream, a lane row the one it is for. -->
             <DecodeLane
-              v-if="decodeLaneOf(row) !== null && row.group.decoder !== null"
+              v-if="row.group.decoder !== null && decodeStreamOf(row) !== null"
               :bus="row.group.kind"
-              :lane="decodeLaneOf(row) ?? ''"
-              :view="decode.lanesOf(row.group.decoder)"
+              :kind="streamKind(row, row.stream ?? 0)"
+              :view="decode.streamView(row.group.decoder, row.stream ?? 0)"
               :viewport="view.viewport"
               :decoder="row.group.decoder"
+              :stream="row.stream ?? 0"
               :selected="view.segment?.blockId ?? null"
               :time-of="capture.timeOf"
               :format="entryFormat(decode.entries[row.group.decoder])"
-              @pick="(block) => row.group.decoder !== null && pickBlock(block, row.group.decoder)"
-              @go="view.centerOn"
+              @pick="
+                (block) =>
+                  row.group.decoder !== null && pickBlock(block, row.group.decoder, row.stream ?? 0)
+              "
             />
             <i
               v-if="readout && readout.rowKey === row.key"

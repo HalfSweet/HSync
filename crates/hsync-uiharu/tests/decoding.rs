@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use hsync_capture::LogicCapture;
-use hsync_uiharu::{DecodeError, Decoder, Needle, Position, Row, Update};
+use hsync_uiharu::{DecodeError, Decoder, EventRow, Needle, Position, Update};
 use parking_lot::RwLock;
 use serde_json::json;
 use uiharu_core::{Tick, TickRange};
@@ -77,7 +77,7 @@ fn wait_finished(updates: &crossbeam_channel::Receiver<Update>) {
     }
 }
 
-fn rows(decoder: &Decoder) -> Vec<Row> {
+fn rows(decoder: &Decoder) -> Vec<EventRow> {
     decoder.streams()[0].store().page(None, 0, usize::MAX).rows
 }
 
@@ -171,7 +171,7 @@ fn the_streams_answer_the_interfaces_questions() {
     assert!(
         !store
             .view(whole, len as f64 / 1440.0, 4096)
-            .items
+            .blocks
             .is_empty()
     );
     assert!(!store.coverage(whole, len / 1000).is_empty());

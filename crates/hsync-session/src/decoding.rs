@@ -1,103 +1,131 @@
-//! Decoding the open capture: the session's decoders run in the background and their
-//! presentations answer the UI's lane and data stream queries.
+//! Decoding the open capture: every decoder entry runs as a uiharu pipeline on a thread of
+//! its own, fed as the capture grows, and the stores of its streams answer the UI's lane,
+//! row and search queries.
 
 use std::ops::Range;
 use std::sync::Arc;
 
 use hsync_capture::LogicCapture;
-use std::sync::atomic::{AtomicBool, Ordering};
-
-use hsync_decode::{
-    Annotation, Bus, DataLine, DecoderView, Needle, Presentation, Spec, StreamCounts, StreamMode,
-    StreamRow,
+use hsync_core::{SampleIndex, UiError};
+use hsync_uiharu::{
+    DecodeError, Decoder, EventRow, Needle, Position, StreamProgress, StreamView, Update,
 };
-use hsync_srd::{DecoderHost, LayerResult, Stack, StackOutcome};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
 use serde_json::Value;
 use ts_rs::TS;
+
+use crate::entry::DecoderEntry;
+use crate::instrument::{EventSink, SessionEvent};
+
+/// Hits a search returns at most.
+pub const SEARCH_LIMIT: usize = 10_000;
+
+/// Blocks a lane returns at most for one viewport.
+pub const LANE_LIMIT: usize = 4096;
 
 /// Where a decoder is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub enum DecodeState {
-    /// The capture is still being taken, or decoding has not finished.
+    /// Decoding, or waiting for the capture to go on.
     Running,
+    /// Every stream has ended.
     Done,
-    /// A channel the decoder needs is not in the capture.
-    MissingChannels,
-    /// Neither a native nor a Python decoder can run it.
-    Unsupported,
-    /// A Python decoder raised an error; what it put out before stays.
+    /// Decoding stopped; what was decoded before stays.
     Failed,
+    /// A channel the pipeline reads is not in the capture.
+    MissingChannels,
+    /// The entry does not describe a pipeline that builds.
+    Invalid,
 }
 
-/// A lane of annotations from a decoder without a native presentation.
+/// One exposed output of a decoder: a lane, and a listing in the data stream.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub struct AnnotationLane {
-    /// The lane's name in views: `decoder id/row id`.
-    pub lane: String,
-    /// The row's description, in English as the decoder has it.
-    pub desc: String,
+pub struct StreamStatus {
+    /// Position among the decoder's streams.
+    pub index: u32,
+    /// The name the entry exposed it under.
+    pub name: String,
+    /// The node type whose output it is, e.g. `i2c`.
+    pub kind: String,
+    /// The schema of its events, e.g. `i2c.events`.
+    pub schema: String,
+    pub progress: StreamProgress,
 }
 
 /// A decoder of the open capture.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct DecoderStatus {
     /// Position in the capture's decoder list.
     pub index: u32,
-    /// DSView's decoder id, e.g. `1:i2c`.
-    pub id: String,
-    pub bus: Option<Bus>,
+    /// The user's label, else the first node's type.
+    pub label: String,
+    /// The node types of the pipeline, the bus first.
+    pub kinds: Vec<String>,
     pub state: DecodeState,
-    pub counts: Option<StreamCounts>,
-    /// Lanes of annotations, below any native lanes.
-    pub lanes: Vec<AnnotationLane>,
-    /// Why a Python decoder failed.
-    pub error: Option<String>,
+    /// Why it failed or could not start.
+    pub error: Option<UiError>,
+    pub streams: Vec<StreamStatus>,
+}
+
+/// A stream's lane in a viewport.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct StreamLanes {
+    pub stream: u32,
+    pub view: StreamView,
 }
 
 /// A decoder's lanes in a viewport.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct DecoderLanes {
     pub index: u32,
-    pub view: DecoderView,
+    pub streams: Vec<StreamLanes>,
 }
 
-/// Part of a decoder's data stream.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+/// Part of a stream's listing.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct StreamPage {
     /// Rows in the requested scope.
     pub total: u32,
     /// Position of the first row returned within the scope.
     pub offset: u32,
-    pub rows: Vec<StreamRow>,
-    pub counts: StreamCounts,
-    /// With a segment: bytes (or frames) entirely inside it.
+    pub rows: Vec<EventRow>,
+    /// Events of the whole stream.
+    pub events: u64,
+    /// With a segment: events lying wholly inside it.
     pub inside: Option<u32>,
 }
 
-/// Something the search box found in a decoder's results.
+/// An event the search box found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct SearchHit {
     /// Position of the decoder in the capture's decoder list.
     pub decoder: u32,
-    pub start: u64,
-    pub end: u64,
-    /// The SPI line it was found on.
-    pub line: Option<DataLine>,
-    /// The row of the decoder's data stream that lists it.
-    pub row: Option<u32>,
+    /// Position of the stream among the decoder's.
+    pub stream: u32,
+    /// The event's row in the stream's listing.
+    pub row: u32,
+    pub start: SampleIndex,
+    pub end: SampleIndex,
 }
 
 /// What a search found, in time order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct SearchResult {
     pub hits: Vec<SearchHit>,
@@ -105,236 +133,162 @@ pub struct SearchResult {
     pub truncated: bool,
 }
 
-/// Hits a search returns at most.
-pub const SEARCH_LIMIT: usize = 10_000;
-
-/// How an entry is decoded.
-#[derive(Debug)]
-enum Job {
-    Native(Spec),
-    /// A native decoder with Python decoders stacked on it: the native one draws the bus, the
-    /// whole stack runs in Python for the decoders above.
-    NativeStacked(Spec, Stack),
-    Python(Stack),
-}
-
-#[derive(Debug)]
-enum State {
-    Pending(Job),
-    Running,
-    Done(Arc<Presentation>, Vec<AnnotationLane>),
-    Failed(Arc<Presentation>, Vec<AnnotationLane>, String),
-    MissingChannels,
-    Unsupported,
-}
-
-#[derive(Debug)]
+/// One entry: its decoder, or why it has none.
 struct Entry {
-    id: String,
-    bus: Option<Bus>,
-    state: State,
-    /// The samples to decode, all of them without a range.
-    range: Option<Range<u64>>,
-}
-
-/// HSync's key for the decode range in a DSView decoder entry: the first and the last sample
-/// decoded, as DSView's start and end cursors (`DecoderOptionsDlg::update_decode_range`).
-pub const RANGE_KEY: &str = "decode range";
-
-/// The decode range of a decoder entry, as samples `first..last + 1`.
-fn entry_range(entry: &Value) -> Option<Range<u64>> {
-    let [first, last] = entry.get(RANGE_KEY)?.as_array()?.as_slice() else {
-        return None;
-    };
-    let (first, last) = (first.as_u64()?, last.as_u64()?);
-    Some(first.min(last)..first.max(last).saturating_add(1))
+    label: String,
+    kinds: Vec<String>,
+    decoder: Option<Decoder>,
+    failure: Option<(DecodeState, UiError)>,
 }
 
 /// The decoders of one capture and their results.
-#[derive(Debug, Default)]
 pub struct DecodeSet {
+    capture_id: u64,
+    capture: Arc<RwLock<LogicCapture>>,
     entries: RwLock<Vec<Entry>>,
-    host: Option<Arc<DecoderHost>>,
-    /// Stops the Python decoders of a set that was replaced.
-    cancel: Arc<AtomicBool>,
+    /// Where the capture has got, as last told.
+    position: Mutex<Position>,
+    events: Option<EventSink>,
 }
 
-/// Lanes for the annotations of `layers`, named `decoder id/row id`, and the annotations with
-/// their rows counted across all of them.
-fn annotation_lanes(layers: &[LayerResult]) -> (Vec<AnnotationLane>, Vec<Annotation>) {
-    let mut lanes = Vec::new();
-    let mut annotations = Vec::new();
-    for layer in layers {
-        let offset = lanes.len() as u32;
-        lanes.extend(layer.rows.iter().map(|(row, desc)| AnnotationLane {
-            lane: format!("{}/{row}", layer.id),
-            desc: desc.clone(),
-        }));
-        annotations.extend(layer.annotations.iter().cloned().map(|mut annotation| {
-            annotation.row += offset;
-            annotation
-        }));
+impl std::fmt::Debug for DecodeSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DecodeSet")
+            .field("capture_id", &self.capture_id)
+            .field("entries", &self.entries.read().len())
+            .field("position", &*self.position.lock())
+            .finish_non_exhaustive()
     }
-    (lanes, annotations)
 }
 
-/// Why a stack fell short: the error that stopped it, or that of a decoder stacked on top.
-fn failure(outcome: &StackOutcome) -> Option<String> {
-    outcome
-        .error
-        .as_ref()
-        .map(ToString::to_string)
-        .or_else(|| outcome.layers.iter().find_map(|layer| layer.error.clone()))
+/// Why an entry could not start, as the interface is told.
+fn failure(error: DecodeError) -> (DecodeState, UiError) {
+    match error {
+        DecodeError::MissingChannels(channels) => (
+            DecodeState::MissingChannels,
+            UiError::new("error.decode.missingChannels").with(
+                "channels",
+                channels
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+        ),
+        DecodeError::Build(error) => (
+            DecodeState::Invalid,
+            UiError::new("error.decode.invalid").with("detail", error.to_string()),
+        ),
+        DecodeError::Feed(error) => (
+            DecodeState::Failed,
+            UiError::new("error.decode.failed").with("detail", error.to_string()),
+        ),
+        DecodeError::Pipeline(detail) => (
+            DecodeState::Failed,
+            UiError::new("error.decode.failed").with("detail", detail),
+        ),
+    }
 }
 
 impl DecodeSet {
-    /// Entries for DSView's `decoders` list, not run yet. Without `host` only the native
-    /// decoders run, and stacked decoders are left out.
-    pub fn new(decoders: Option<&Value>, host: Option<Arc<DecoderHost>>) -> Arc<Self> {
-        let entries = decoders
+    /// Starts decoding `capture`, which stands at `position`, with every entry of `decoders`
+    /// (HSync's entries); `events` hears of progress and ends under `capture_id`.
+    pub fn start(
+        decoders: Option<&Value>,
+        capture: &Arc<RwLock<LogicCapture>>,
+        position: Position,
+        capture_id: u64,
+        events: Option<EventSink>,
+    ) -> Arc<Self> {
+        let set = Self {
+            capture_id,
+            capture: Arc::clone(capture),
+            entries: RwLock::new(Vec::new()),
+            position: Mutex::new(position),
+            events,
+        };
+        let entries: Vec<Entry> = decoders
             .and_then(Value::as_array)
             .into_iter()
             .flatten()
-            .map(|entry| {
-                let id = entry
-                    .get("id")
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_owned();
-                let stack = host
-                    .as_ref()
-                    .and_then(|_| Stack::from_dsview(entry))
-                    .filter(|stack| !stack.layers.is_empty());
-                let (bus, state) = match (Spec::from_dsview(entry), stack) {
-                    (Some(spec), Some(stack)) if stack.layers.len() > 1 => (
-                        Some(spec.bus),
-                        State::Pending(Job::NativeStacked(spec, stack)),
-                    ),
-                    (Some(spec), _) => (Some(spec.bus), State::Pending(Job::Native(spec))),
-                    (None, Some(stack)) => (Some(Bus::Other), State::Pending(Job::Python(stack))),
-                    (None, None) => (None, State::Unsupported),
-                };
-                Entry {
-                    id,
-                    bus,
-                    state,
-                    range: entry_range(entry),
-                }
-            })
+            .enumerate()
+            .map(|(index, value)| set.start_entry(index as u32, value))
             .collect();
-        Arc::new(Self {
-            entries: RwLock::new(entries),
-            host,
-            cancel: Arc::new(AtomicBool::new(false)),
-        })
+        *set.entries.write() = entries;
+        Arc::new(set)
     }
 
-    /// Stops the Python decoders still running; their results are not needed any more.
-    pub fn cancel(&self) {
-        self.cancel.store(true, Ordering::Relaxed);
-    }
-
-    /// Runs one job over the capture, or over `range` of it.
-    fn decode(
-        host: Option<&DecoderHost>,
-        job: Job,
-        range: Option<Range<u64>>,
-        capture: &Arc<RwLock<LogicCapture>>,
-        cancel: &Arc<AtomicBool>,
-    ) -> State {
-        let samples = |len: u64| {
-            range
-                .clone()
-                .map_or(0..len, |range| range.start.min(len)..range.end.min(len))
-        };
-        let native = |spec: &Spec| {
-            let capture = capture.read();
-            spec.run(&capture, samples(capture.len()))
-        };
-        let python = |stack: &Stack| -> Result<StackOutcome, String> {
-            let host = host.ok_or("no decoder host")?;
-            let len = capture.read().len();
-            hsync_srd::run_stack(host, capture, samples(len), stack, cancel)
-                .map_err(|error| error.to_string())
-        };
-        match job {
-            Job::Native(spec) => match native(&spec) {
-                Some(decoded) => State::Done(Arc::new(Presentation::new(&decoded)), Vec::new()),
-                None => State::MissingChannels,
-            },
-            Job::NativeStacked(spec, stack) => {
-                let Some(decoded) = native(&spec) else {
-                    return State::MissingChannels;
+    fn start_entry(&self, index: u32, value: &Value) -> Entry {
+        let entry = match DecoderEntry::parse(value) {
+            Ok(entry) => entry,
+            Err(error) => {
+                return Entry {
+                    label: value
+                        .get("label")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default()
+                        .to_owned(),
+                    kinds: Vec::new(),
+                    decoder: None,
+                    failure: Some((
+                        DecodeState::Invalid,
+                        UiError::new("error.decode.invalid").with("detail", error.to_string()),
+                    )),
                 };
-                let mut presentation = Presentation::new(&decoded);
-                match python(&stack) {
-                    Ok(outcome) => {
-                        let (lanes, annotations) = annotation_lanes(&outcome.layers[1..]);
-                        let names: Vec<String> =
-                            lanes.iter().map(|lane| lane.lane.clone()).collect();
-                        presentation.append_lanes(&names, annotations);
-                        match failure(&outcome) {
-                            None => State::Done(Arc::new(presentation), lanes),
-                            Some(error) => State::Failed(Arc::new(presentation), lanes, error),
-                        }
-                    }
-                    Err(error) => State::Failed(Arc::new(presentation), Vec::new(), error),
+            }
+        };
+        let rate = self.capture.read().samplerate();
+        let description = entry.description(entry.source_channels(), rate);
+        let events = self.events.clone();
+        let capture_id = self.capture_id;
+        let updates: Arc<dyn Fn(Update) + Send + Sync> = Arc::new(move |update| {
+            let Some(events) = &events else {
+                return;
+            };
+            match update {
+                Update::Progress => events(SessionEvent::DecodeProgress { capture_id, index }),
+                Update::Finished | Update::Failed(_) => {
+                    events(SessionEvent::Decoded { capture_id, index });
                 }
             }
-            Job::Python(stack) => match python(&stack) {
-                Ok(outcome) => {
-                    let (lanes, annotations) = annotation_lanes(&outcome.layers);
-                    let names: Vec<String> = lanes.iter().map(|lane| lane.lane.clone()).collect();
-                    let presentation = Arc::new(Presentation::annotations(&names, annotations));
-                    match failure(&outcome) {
-                        None => State::Done(presentation, lanes),
-                        Some(error) => State::Failed(presentation, lanes, error),
-                    }
+        });
+        let position = *self.position.lock();
+        let (decoder, failure) =
+            match Decoder::start(description, Arc::clone(&self.capture), position, updates) {
+                Ok(decoder) => (Some(decoder), None),
+                Err(error) => {
+                    log::info!("decoder {index} ({}) cannot start: {error}", entry.label());
+                    (None, Some(failure(error)))
                 }
-                Err(error) if error.contains("required channel") => State::MissingChannels,
-                Err(error) => State::Failed(
-                    Arc::new(Presentation::annotations(&[], Vec::new())),
-                    Vec::new(),
-                    error,
-                ),
-            },
+            };
+        Entry {
+            label: entry.label(),
+            kinds: entry.kinds(),
+            decoder,
+            failure,
         }
     }
 
-    /// Decodes every pending entry on its own thread; `done` hears of each one finished.
-    pub fn run(
-        self: &Arc<Self>,
-        capture: &Arc<RwLock<LogicCapture>>,
-        done: Arc<dyn Fn(u32) + Send + Sync>,
-    ) {
-        let mut entries = self.entries.write();
-        for (index, entry) in entries.iter_mut().enumerate() {
-            let State::Pending(job) = std::mem::replace(&mut entry.state, State::Running) else {
-                continue;
-            };
-            let set = Arc::clone(self);
-            let capture = Arc::clone(capture);
-            let done = Arc::clone(&done);
-            let id = entry.id.clone();
-            let range = entry.range.clone();
-            let spawned = std::thread::Builder::new()
-                .name(format!("decode-{id}"))
-                .spawn(move || {
-                    let began = std::time::Instant::now();
-                    let state =
-                        Self::decode(set.host.as_deref(), job, range, &capture, &set.cancel);
-                    log::debug!(
-                        "decoded {id} in {:.1} ms",
-                        began.elapsed().as_secs_f64() * 1e3
-                    );
-                    if let Some(entry) = set.entries.write().get_mut(index) {
-                        entry.state = state;
-                    }
-                    done(index as u32);
-                });
-            if let Err(error) = spawned {
-                log::warn!("starting the decoder failed: {error}");
-                entry.state = State::MissingChannels;
+    /// Tells every decoder where the capture has got.
+    pub fn advance(&self, position: Position) {
+        *self.position.lock() = position;
+        for entry in self.entries.read().iter() {
+            if let Some(decoder) = &entry.decoder {
+                decoder.notify(position);
+            }
+        }
+    }
+
+    /// Where the capture stood when the set last heard of it.
+    pub fn position(&self) -> Position {
+        *self.position.lock()
+    }
+
+    /// Stops every decoder; what was decoded stays readable.
+    pub fn cancel(&self) {
+        for entry in self.entries.read().iter() {
+            if let Some(decoder) = &entry.decoder {
+                decoder.cancel();
             }
         }
     }
@@ -344,159 +298,178 @@ impl DecodeSet {
             .read()
             .iter()
             .enumerate()
-            .map(|(index, entry)| DecoderStatus {
-                index: index as u32,
-                id: entry.id.clone(),
-                bus: entry.bus,
-                state: match entry.state {
-                    State::Pending(_) | State::Running => DecodeState::Running,
-                    State::Done(..) => DecodeState::Done,
-                    State::Failed(..) => DecodeState::Failed,
-                    State::MissingChannels => DecodeState::MissingChannels,
-                    State::Unsupported => DecodeState::Unsupported,
-                },
-                counts: match &entry.state {
-                    State::Done(presentation, _) | State::Failed(presentation, ..) => {
-                        Some(presentation.counts())
-                    }
-                    _ => None,
-                },
-                lanes: match &entry.state {
-                    State::Done(_, lanes) | State::Failed(_, lanes, _) => lanes.clone(),
-                    _ => Vec::new(),
-                },
-                error: match &entry.state {
-                    State::Failed(_, _, error) => Some(error.clone()),
-                    _ => None,
-                },
+            .map(|(index, entry)| {
+                let (state, error) = match (&entry.failure, &entry.decoder) {
+                    (Some((state, error)), _) => (*state, Some(error.clone())),
+                    (None, Some(decoder)) => match decoder.error() {
+                        Some(detail) => (
+                            DecodeState::Failed,
+                            Some(UiError::new("error.decode.failed").with("detail", detail)),
+                        ),
+                        None if decoder.is_finished() => (DecodeState::Done, None),
+                        None => (DecodeState::Running, None),
+                    },
+                    (None, None) => (DecodeState::Invalid, None),
+                };
+                let streams = entry.decoder.as_ref().map_or_else(Vec::new, |decoder| {
+                    decoder
+                        .streams()
+                        .iter()
+                        .enumerate()
+                        .map(|(stream, info)| StreamStatus {
+                            index: stream as u32,
+                            name: info.name().to_owned(),
+                            kind: info.kind().to_owned(),
+                            schema: info.schema().name.to_owned(),
+                            progress: decoder.progress(stream).unwrap_or(StreamProgress {
+                                events: 0,
+                                settled: 0,
+                                ended: false,
+                            }),
+                        })
+                        .collect()
+                });
+                DecoderStatus {
+                    index: index as u32,
+                    label: entry.label.clone(),
+                    kinds: entry.kinds.clone(),
+                    state,
+                    error,
+                    streams,
+                }
             })
             .collect()
     }
 
-    fn presentation(&self, index: u32) -> Option<Arc<Presentation>> {
-        match &self.entries.read().get(index as usize)?.state {
-            State::Done(presentation, _) | State::Failed(presentation, ..) => {
-                Some(Arc::clone(presentation))
-            }
-            _ => None,
-        }
+    fn with_decoder<R>(&self, index: u32, f: impl FnOnce(&Decoder) -> Option<R>) -> Option<R> {
+        let entries = self.entries.read();
+        let decoder = entries.get(index as usize)?.decoder.as_ref()?;
+        f(decoder)
     }
 
-    /// Lanes of every finished decoder over `start..end`.
-    pub fn view(&self, start: u64, end: u64, samples_per_pixel: f64) -> Vec<DecoderLanes> {
-        self.view_around(start..end, start..end, samples_per_pixel)
-    }
-
-    /// Lanes of every finished decoder over `window`, what depends on the view worked out for
-    /// `focus` (see [`Presentation::view_around`]).
-    pub fn view_around(
-        &self,
-        window: Range<u64>,
-        focus: Range<u64>,
-        samples_per_pixel: f64,
-    ) -> Vec<DecoderLanes> {
-        let finished: Vec<(u32, Arc<Presentation>)> = self
-            .entries
+    /// Lanes of every decoder over `window`.
+    pub fn view(&self, window: Range<SampleIndex>, samples_per_pixel: f64) -> Vec<DecoderLanes> {
+        self.entries
             .read()
             .iter()
             .enumerate()
-            .filter_map(|(index, entry)| match &entry.state {
-                State::Done(presentation, _) | State::Failed(presentation, ..) => {
-                    Some((index as u32, Arc::clone(presentation)))
-                }
-                _ => None,
-            })
-            .collect();
-        finished
-            .into_iter()
-            .map(|(index, presentation)| DecoderLanes {
-                index,
-                view: presentation.view_around(window.clone(), focus.clone(), samples_per_pixel),
+            .filter_map(|(index, entry)| {
+                let decoder = entry.decoder.as_ref()?;
+                let streams = (0..decoder.streams().len())
+                    .filter_map(|stream| {
+                        Some(StreamLanes {
+                            stream: stream as u32,
+                            view: decoder.view(
+                                stream,
+                                window.clone(),
+                                samples_per_pixel,
+                                LANE_LIMIT,
+                            )?,
+                        })
+                    })
+                    .collect();
+                Some(DecoderLanes {
+                    index: index as u32,
+                    streams,
+                })
             })
             .collect()
     }
 
-    /// `count` rows of decoder `index` from `offset`, of all rows or of those overlapping
-    /// `segment`.
+    /// `count` rows of stream `stream` of decoder `index` from `offset`, of all rows or of
+    /// those overlapping `segment`; `None` for a decoder or stream that is not there.
     pub fn stream(
         &self,
         index: u32,
-        mode: StreamMode,
-        segment: Option<(u64, u64)>,
+        stream: u32,
+        segment: Option<(SampleIndex, SampleIndex)>,
         only_segment: bool,
         offset: u32,
         count: u32,
     ) -> Option<StreamPage> {
-        let presentation = self.presentation(index)?;
-        let rows = presentation.rows(mode);
-        // Rows are not in time order (SPI lists MISO before MOSI), so scope them by scanning.
-        let scoped: Vec<&StreamRow> = match segment {
-            Some((from, to)) if only_segment => rows
-                .iter()
-                .filter(|row| row.end() >= from && row.start() < to)
-                .collect(),
-            _ => rows.iter().collect(),
-        };
-        let begin = (offset as usize).min(scoped.len());
-        let finish = (begin + count as usize).min(scoped.len());
-        Some(StreamPage {
-            total: scoped.len() as u32,
-            offset: begin as u32,
-            rows: scoped[begin..finish]
-                .iter()
-                .map(|&row| row.clone())
-                .collect(),
-            counts: presentation.counts(),
-            inside: segment.map(|(from, to)| presentation.count_inside(from, to)),
+        let ordered = segment.map(|(a, b)| a.min(b)..a.max(b));
+        self.with_decoder(index, |decoder| {
+            let stream = stream as usize;
+            let scope = ordered.clone().filter(|_| only_segment);
+            let page = decoder.page(stream, scope, offset as usize, count as usize)?;
+            let progress = decoder.progress(stream)?;
+            let inside = ordered.map(|range| decoder.inside(stream, range).unwrap_or(0) as u32);
+            Some(StreamPage {
+                total: page.total,
+                offset: page.offset,
+                rows: page.rows,
+                events: progress.events,
+                inside,
+            })
         })
     }
 
-    /// Values or text matching `query` in every finished decoder, with their rows in `mode`
-    /// listings; `None` for a blank query.
-    pub fn search(&self, query: &str, mode: StreamMode) -> Option<SearchResult> {
+    /// Position in stream `stream` of decoder `index` of the first event reaching past
+    /// `sample`, to scroll the listing to a place.
+    pub fn row_at(&self, index: u32, stream: u32, sample: SampleIndex) -> Option<u32> {
+        self.with_decoder(index, |decoder| {
+            decoder
+                .row_at(stream as usize, sample)
+                .map(|row| row as u32)
+        })
+    }
+
+    /// Events matching `query` in every stream of every decoder, in time order; `None` for
+    /// a blank query.
+    pub fn search(&self, query: &str) -> Option<SearchResult> {
         let needle = Needle::parse(query)?;
-        let finished: Vec<(u32, Arc<Presentation>)> = self
-            .entries
-            .read()
-            .iter()
-            .enumerate()
-            .filter_map(|(index, entry)| match &entry.state {
-                State::Done(presentation, _) | State::Failed(presentation, ..) => {
-                    Some((index as u32, Arc::clone(presentation)))
-                }
-                _ => None,
-            })
-            .collect();
-        let mut hits: Vec<SearchHit> = finished
-            .iter()
-            .flat_map(|(index, presentation)| {
-                presentation
-                    .search(&needle, mode)
-                    .into_iter()
-                    .map(|found| SearchHit {
-                        decoder: *index,
-                        start: found.start,
-                        end: found.end,
-                        line: found.line,
-                        row: found.row,
-                    })
-            })
-            .collect();
-        hits.sort_by_key(|hit| (hit.start, hit.decoder));
-        let truncated = hits.len() > SEARCH_LIMIT;
-        hits.truncate(SEARCH_LIMIT);
+        let mut hits = Vec::new();
+        let mut truncated = false;
+        for (index, entry) in self.entries.read().iter().enumerate() {
+            let Some(decoder) = &entry.decoder else {
+                continue;
+            };
+            for stream in 0..decoder.streams().len() {
+                let Some((found, more)) = decoder.search(stream, &needle, SEARCH_LIMIT) else {
+                    continue;
+                };
+                truncated |= more;
+                hits.extend(found.into_iter().map(|hit| SearchHit {
+                    decoder: index as u32,
+                    stream: stream as u32,
+                    row: hit.row,
+                    start: hit.start,
+                    end: hit.end,
+                }));
+            }
+        }
+        hits.sort_by_key(|hit| (hit.start, hit.decoder, hit.stream, hit.row));
+        if hits.len() > SEARCH_LIMIT {
+            hits.truncate(SEARCH_LIMIT);
+            truncated = true;
+        }
         Some(SearchResult { hits, truncated })
     }
 
-    /// Position of the first row (of all rows in `mode`) ending after `sample`, to scroll the
-    /// stream to a place.
-    pub fn row_at(&self, index: u32, mode: StreamMode, sample: u64) -> Option<u32> {
-        let presentation = self.presentation(index)?;
-        let rows = presentation.rows(mode);
-        Some(
-            rows.iter()
-                .position(|row| row.end() >= sample)
-                .unwrap_or(rows.len()) as u32,
-        )
+    /// The stretches of `range` where decoder `index` has events on any stream, those
+    /// closer than `resolution` samples joined; for the overview strip.
+    pub fn coverage(
+        &self,
+        index: u32,
+        range: Range<SampleIndex>,
+        resolution: u64,
+    ) -> Option<Vec<[SampleIndex; 2]>> {
+        self.with_decoder(index, |decoder| {
+            let mut stretches: Vec<[SampleIndex; 2]> = (0..decoder.streams().len())
+                .filter_map(|stream| decoder.coverage(stream, range.clone(), resolution))
+                .flatten()
+                .collect();
+            stretches.sort_unstable();
+            let mut joined: Vec<[SampleIndex; 2]> = Vec::new();
+            for [start, end] in stretches {
+                match joined.last_mut() {
+                    Some(last) if start <= last[1].saturating_add(resolution) => {
+                        last[1] = last[1].max(end);
+                    }
+                    _ => joined.push([start, end]),
+                }
+            }
+            Some(joined)
+        })
     }
 }

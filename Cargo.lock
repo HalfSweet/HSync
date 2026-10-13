@@ -1572,13 +1572,11 @@ version = "0.1.4"
 dependencies = [
  "hsync-atklogic",
  "hsync-core",
- "hsync-decode",
  "hsync-demo",
  "hsync-driver",
  "hsync-dslogic",
  "hsync-pxlogic",
  "hsync-session",
- "hsync-srd",
  "log",
  "parking_lot",
  "serde",
@@ -1726,17 +1724,18 @@ dependencies = [
  "crossbeam-channel",
  "hsync-capture",
  "hsync-core",
- "hsync-decode",
  "hsync-demo",
  "hsync-driver",
  "hsync-fileio",
- "hsync-srd",
+ "hsync-uiharu",
+ "indexmap 2.14.2",
  "log",
  "parking_lot",
  "serde",
  "serde_json",
  "thiserror 2.0.21",
  "ts-rs",
+ "uiharu-registry",
 ]
 
 [[package]]
@@ -1768,6 +1767,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "ts-rs",
  "uiharu-core",
  "uiharu-protocols",
  "uiharu-registry",
@@ -5047,6 +5047,7 @@ dependencies = [
 name = "uiharu-cli"
 version = "0.1.0"
 dependencies = [
+ "indexmap 2.14.2",
  "serde",
  "serde_json",
  "uiharu-core",
@@ -5079,6 +5080,7 @@ dependencies = [
 name = "uiharu-registry"
 version = "0.1.0"
 dependencies = [
+ "indexmap 2.14.2",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

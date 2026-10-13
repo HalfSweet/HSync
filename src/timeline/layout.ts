@@ -17,8 +17,8 @@ export interface Row {
   channel?: ChannelRef
   /** Whether the label column shows the channel (raw rows under SPI data lanes do not). */
   labeled: boolean
-  /** Decoder lane on `lane` rows, e.g. `miso`. */
-  lane?: string
+  /** On `lane` rows, the position of the decoder's stream the row shows. */
+  stream?: number
   /** A 1 px line above the row separates it from the previous group. */
   separator: boolean
 }
@@ -42,17 +42,16 @@ export function collapsedByDefault(group: ChannelGroup): boolean {
   return group.kind === 'can'
 }
 
-/** A lane of annotations a decoder of the group puts out (`decoder id/row id`). */
-export interface AnnotationLaneRef {
-  lane: string
-  desc: string
-}
-
+/**
+ * Lays out the rows: for each group its title row, which carries the decoder's first stream,
+ * a lane row for each further stream (`streamsOf` says how many a decoder has), then its
+ * channels.
+ */
 export function layoutRows(
   groups: ChannelGroup[],
   metrics: RowMetrics,
   isCollapsed: (group: ChannelGroup) => boolean,
-  annotationLanes: (group: ChannelGroup) => readonly AnnotationLaneRef[] = () => [],
+  streamsOf: (group: ChannelGroup) => number = () => 1,
 ): { rows: Row[]; height: number } {
   const rows: Row[] = []
   let top = 0
@@ -72,50 +71,28 @@ export function layoutRows(
       group,
     })
     if (!isCollapsed(group)) {
-      // Annotation rows: a decoder without a native presentation shows its first row on the
-      // title row, the rest (and those of stacked decoders) on rows of their own.
-      const annotations = annotationLanes(group)
-      for (const [position, lane] of annotations.entries()) {
-        if (group.kind === 'other' && position === 0) continue
+      // The decoder's first stream sits on the title row; a decoder stacked on it (the
+      // further streams) gets a lane of its own.
+      const streams = group.decoder === null ? 0 : streamsOf(group)
+      for (let stream = 1; stream < streams; stream++) {
         push({
-          key: `${group.key}:lane:${lane.lane}`,
+          key: `${group.key}:stream:${stream}`,
           kind: 'lane',
           height: metrics.lane,
           group,
-          lane: lane.lane,
+          stream,
         })
       }
       for (const channel of group.channels) {
         const wide = group.kind === 'i2c' || group.kind === 'uart'
-        const dataLine =
-          group.kind === 'spi' && (channel.role === 'miso' || channel.role === 'mosi')
-        if (dataLine) {
-          push({
-            key: `${group.key}:lane:${channel.index}`,
-            kind: 'lane',
-            height: metrics.lane,
-            group,
-            channel,
-            labeled: true,
-            lane: channel.role,
-          })
-          push({
-            key: `${group.key}:raw:${channel.index}`,
-            kind: 'trace-narrow',
-            height: metrics.traceNarrow,
-            group,
-            channel,
-          })
-        } else {
-          push({
-            key: `${group.key}:trace:${channel.index}`,
-            kind: wide ? 'trace' : 'trace-narrow',
-            height: wide ? metrics.trace : metrics.traceNarrow,
-            group,
-            channel,
-            labeled: true,
-          })
-        }
+        push({
+          key: `${group.key}:trace:${channel.index}`,
+          kind: wide ? 'trace' : 'trace-narrow',
+          height: wide ? metrics.trace : metrics.traceNarrow,
+          group,
+          channel,
+          labeled: true,
+        })
       }
     }
     push({ key: `${group.key}:after`, kind: 'gap', height: gap, group })

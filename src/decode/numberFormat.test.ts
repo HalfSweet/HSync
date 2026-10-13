@@ -1,28 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { entryFormat, formatValue, shownTexts } from './numberFormat'
+import { entryFormat, formatNumber } from './numberFormat'
 
 describe('number formats', () => {
-  it('convert like DSView', () => {
-    expect(formatValue('4F', 'hex')).toBe('4F')
-    expect(formatValue('4F', 'dec')).toBe('79')
-    expect(formatValue('4F', 'bin')).toBe('01001111')
-    expect(formatValue('4F', 'oct')).toBe('117')
-    expect(formatValue('0F', 'oct')).toBe('017')
-    expect(formatValue('41', 'ascii')).toBe('A')
-    expect(formatValue('0A', 'ascii')).toBe('[0A]')
-    expect(formatValue('12 34', 'dec')).toBe('18 52')
-  })
-
-  it('fill in the texts', () => {
-    expect(shownTexts(['Data: {$}', '{$}'], '4F', 'dec')).toEqual(['Data: 79', '79'])
-    expect(shownTexts([], '41', 'ascii')).toEqual(['A'])
-    expect(shownTexts(['Start'], null, 'hex')).toEqual(['Start'])
+  it('convert whole numbers', () => {
+    expect(formatNumber(0x53, 'hex')).toBe('53')
+    expect(formatNumber(0x123, 'hex')).toBe('0123')
+    expect(formatNumber(5, 'bin')).toBe('00000101')
+    expect(formatNumber(8, 'oct')).toBe('10')
+    expect(formatNumber(1234, 'dec')).toBe('1234')
+    expect(formatNumber(65, 'ascii')).toBe('A')
+    expect(formatNumber(10, 'ascii')).toBe('[0A]')
+    expect(formatNumber(-1, 'hex')).toBe('-01')
+    expect(formatNumber(1.5, 'hex')).toBe('1.5')
   })
 
   it('read the format of an entry', () => {
-    expect(entryFormat({ 'number format': 'bin' })).toBe('bin')
-    expect(entryFormat({ 'number format': 'weird' })).toBe('hex')
+    expect(entryFormat({ show: { numbers: 'dec' } })).toBe('dec')
+    expect(entryFormat({ show: { numbers: 'nonsense' } })).toBe('hex')
+    expect(entryFormat({})).toBe('hex')
     expect(entryFormat(undefined)).toBe('hex')
   })
 })

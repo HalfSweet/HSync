@@ -14,6 +14,7 @@ use serde::Deserialize;
 use ts_rs::TS;
 
 use crate::SessionError;
+use crate::entry::DecoderEntry;
 
 /// The formats a capture can be written in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
@@ -81,19 +82,17 @@ impl ExportSource {
     ) -> Result<serde_json::Value, SessionError> {
         let capture = self.capture.read();
         let channels = capture.info().channels;
-        let decoders = self
-            .decoders
-            .clone()
-            .unwrap_or_else(|| serde_json::Value::Array(Vec::new()));
-        self.write_dsl(path, &capture, &channels, &decoders, progress)
+        self.write_dsl(path, &capture, &channels, self.decoders.as_ref(), progress)
     }
 
+    /// Writes a `.dsl` file with HSync's `decoders` entries; DSView's own list stays empty,
+    /// as DSView cannot run uiharu's decoders.
     fn write_dsl(
         &self,
         path: &Path,
         capture: &LogicCapture,
         channels: &[ChannelIndex],
-        decoders: &serde_json::Value,
+        decoders: Option<&serde_json::Value>,
         progress: Progress<'_>,
     ) -> Result<serde_json::Value, SessionError> {
         let names: BTreeMap<ChannelIndex, String> = channels
@@ -101,18 +100,14 @@ impl ExportSource {
             .map(|&index| (index, self.name_of(index)))
             .collect();
         let info = capture.info();
-        let session = session_document(
-            self.session.as_ref(),
-            self.driver(),
-            &info,
-            &names,
-            decoders,
-        );
+        let none = serde_json::Value::Array(Vec::new());
+        let session = session_document(self.session.as_ref(), self.driver(), &info, &names, &none);
         let request = DslWriteRequest {
             driver: self.driver(),
             channel_names: &names,
             session: &session,
-            decoders,
+            decoders: &none,
+            hsync_decoders: decoders,
         };
         hsync_fileio::write_dsl_file(path, capture, &request, progress)?;
         Ok(session)
@@ -153,22 +148,25 @@ impl ExportSource {
             &sliced
         };
         if request.kind == ExportKind::Dsl {
-            // Decoders go along when every channel they use is written.
-            let decoders = serde_json::Value::Array(
-                self.decoders
-                    .as_ref()
-                    .and_then(serde_json::Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .filter(|entry| {
-                        decoder_channels(entry)
+            // Decoders go along when every channel they read is written.
+            let decoders: Vec<serde_json::Value> = self
+                .decoders
+                .as_ref()
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|entry| {
+                    DecoderEntry::parse(entry).is_ok_and(|entry| {
+                        entry
+                            .channels()
                             .iter()
                             .all(|index| channels.contains(index))
                     })
-                    .cloned()
-                    .collect(),
-            );
-            self.write_dsl(path, part, &channels, &decoders, progress)?;
+                })
+                .cloned()
+                .collect();
+            let decoders = (!decoders.is_empty()).then_some(serde_json::Value::Array(decoders));
+            self.write_dsl(path, part, &channels, decoders.as_ref(), progress)?;
             return Ok(());
         }
         let format = match request.kind {
@@ -221,20 +219,6 @@ pub fn read_text(path: &Path, limit: u64) -> Result<String, SessionError> {
         )));
     }
     Ok(std::fs::read_to_string(path).map_err(hsync_fileio::FileError::from)?)
-}
-
-/// Channels a DSView decoder entry uses.
-fn decoder_channels(entry: &serde_json::Value) -> Vec<ChannelIndex> {
-    entry
-        .get("channel")
-        .and_then(serde_json::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(serde_json::Value::as_object)
-        .flat_map(|roles| roles.values())
-        .filter_map(serde_json::Value::as_u64)
-        .filter_map(|index| ChannelIndex::try_from(index).ok())
-        .collect()
 }
 
 /// The current time in UTC, e.g. `2026-10-10 06:30:00 UTC`.

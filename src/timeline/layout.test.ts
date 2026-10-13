@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import fixture from '@/ipc/mock/fixtures/protocol-demo.json'
+import decoded from '@/ipc/mock/fixtures/protocol-uiharu.json'
 
 import { groupChannels, uartFormat } from './groups'
 import { collapsedByDefault, COMFORTABLE_METRICS, layoutRows, visibleRows } from './layout'
 
 const channels = fixture.channels.map(({ index, name }) => ({ index, name }))
-const groups = groupChannels(channels, fixture.decoders)
+const groups = groupChannels(channels, decoded.entries)
 
 describe('groupChannels', () => {
   it('groups the demo capture by decoder', () => {
@@ -21,6 +22,14 @@ describe('groupChannels', () => {
     expect(groups[1]?.channels[0]?.roleLabel).toBe('RX')
     expect(groups[0]?.channels[0]?.roleLabel).toBeUndefined()
     expect(groups.map((group) => group.kind)).toEqual(['i2c', 'uart', 'spi', 'can', 'other'])
+    expect(groups.map((group) => group.type)).toEqual(['i2c', 'uart', 'spi', 'can', null])
+    expect(groups.map((group) => group.key)).toEqual([
+      'decoder:0',
+      'decoder:1',
+      'decoder:2',
+      'decoder:3',
+      'unnamed',
+    ])
     expect(groups.at(-1)?.unnamed).toBe(true)
   })
 
@@ -37,14 +46,14 @@ describe('groupChannels', () => {
   it('shows a channel renamed within a decoder group by its name', () => {
     const renamed = groupChannels(
       channels.map((channel) => (channel.index === 1 ? { ...channel, name: 'Clock' } : channel)),
-      fixture.decoders,
+      decoded.entries,
     )
     const scl = renamed[0]?.channels[1]
     expect([scl?.label, scl?.roleLabel]).toEqual(['Clock', 'SCL'])
     // Back to its number, it shows its role again.
     const plain = groupChannels(
       channels.map((channel) => (channel.index === 1 ? { ...channel, name: '1' } : channel)),
-      fixture.decoders,
+      decoded.entries,
     )
     expect([plain[0]?.channels[1]?.label, plain[0]?.channels[1]?.roleLabel]).toEqual([
       'SCL',
@@ -59,33 +68,51 @@ describe('groupChannels', () => {
     expect(plain[0]?.channels[5]?.label).toBe('UART')
   })
 
+  it('names the lines of a channel list after their position', () => {
+    const parallel = groupChannels(channels, [
+      { nodes: { bus: { type: 'parallel', config: { data: [2, 3, 4], clock: 6 } } } },
+    ])
+    expect(parallel[0]?.channels.map((channel) => [channel.role, channel.label])).toEqual([
+      ['data0', 'DATA0'],
+      ['data1', 'DATA1'],
+      ['data2', 'DATA2'],
+      ['clock', 'CLOCK'],
+    ])
+    expect(parallel[0]?.title).toBe('')
+    expect(parallel[0]?.type).toBe('parallel')
+  })
+
   it('formats the UART line settings', () => {
     expect(uartFormat(groups[1]?.options ?? {})).toBe('115200 8N1')
+    expect(uartFormat({ baud: 9600, data_bits: 7, parity: 'even', stop_bits: 'two' })).toBe(
+      '9600 7E2',
+    )
     expect(uartFormat({})).toBeNull()
   })
 })
 
 describe('layoutRows', () => {
-  const layout = layoutRows(groups, COMFORTABLE_METRICS, collapsedByDefault)
+  // The I²C decoder carries a stacked EEPROM: two streams, so a lane row of its own.
+  const streamsOf = (group: { type: string | null }) => (group.type === 'i2c' ? 2 : 1)
+  const layout = layoutRows(groups, COMFORTABLE_METRICS, collapsedByDefault, streamsOf)
   const kinds = (key: string) =>
     layout.rows.filter((row) => row.group.key === key).map((row) => row.kind)
 
   it('follows the design row structure', () => {
-    expect(kinds('1:i2c')).toEqual(['gap', 'header', 'trace', 'trace', 'gap'])
-    expect(kinds('1:uart')).toEqual(['gap', 'header', 'trace', 'gap'])
-    expect(kinds('1:spi')).toEqual([
+    expect(kinds('decoder:0')).toEqual(['gap', 'header', 'lane', 'trace', 'trace', 'gap'])
+    expect(layout.rows.find((row) => row.kind === 'lane')?.stream).toBe(1)
+    expect(kinds('decoder:1')).toEqual(['gap', 'header', 'trace', 'gap'])
+    expect(kinds('decoder:2')).toEqual([
       'gap',
       'header',
-      'lane',
       'trace-narrow',
-      'lane',
       'trace-narrow',
       'trace-narrow',
       'trace-narrow',
       'gap',
     ])
     // CAN-FD starts collapsed.
-    expect(kinds('can-fd')).toEqual(['gap', 'header', 'gap'])
+    expect(kinds('decoder:3')).toEqual(['gap', 'header', 'gap'])
   })
 
   it('stacks rows without gaps or overlaps', () => {
@@ -95,13 +122,13 @@ describe('layoutRows', () => {
       top += row.height
     }
     expect(layout.height).toBe(top)
-    // I2C: 8 + 26 + 30 + 30 + 8 = 102.
-    expect(layout.rows.find((row) => row.key === '1:uart:before')?.top).toBe(102)
-    expect(layout.rows.find((row) => row.key === '1:uart:before')?.separator).toBe(true)
+    // I2C: 8 + 26 + 26 + 30 + 30 + 8 = 128.
+    expect(layout.rows.find((row) => row.key === 'decoder:1:before')?.top).toBe(128)
+    expect(layout.rows.find((row) => row.key === 'decoder:1:before')?.separator).toBe(true)
   })
 
   it('finds the rows in view', () => {
     const shown = visibleRows(layout.rows, 0, 40)
-    expect(shown.map((row) => row.kind)).toEqual(['gap', 'header', 'trace'])
+    expect(shown.map((row) => row.kind)).toEqual(['gap', 'header', 'lane'])
   })
 })

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { computed, shallowRef, watch } from 'vue'
 
+import { activeCatalog } from '@/decode/catalog'
 import { getBackend } from '@/ipc/backend'
 import type { CapturePreset } from '@/ipc/bindings/CapturePreset'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
@@ -132,7 +133,12 @@ export const useCaptureStore = defineStore('capture', () => {
   /** Channels grouped by decoder, in timeline order. */
   const groups = computed<ChannelGroup[]>(() =>
     summary.value
-      ? groupChannels(summary.value.channels, summary.value.decoders, useChannelsStore().colours)
+      ? groupChannels(
+          summary.value.channels,
+          summary.value.decoders,
+          useChannelsStore().colours,
+          activeCatalog.value,
+        )
       : [],
   )
 

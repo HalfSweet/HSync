@@ -7,7 +7,7 @@
  *   &segment=1910-2450   µs after the trigger marked as A–B, likewise
  *   &trig=0:fall,1:high  trigger conditions by channel index
  *   &autocapture=1       start a capture once a device is open (the app starts without one)
- *   &stream=0            open the data stream on decoder 0  &streamMode=hex
+ *   &stream=0            open the data stream on decoder 0
  *   &update=0.3.0        the mock backend announces this release, found at startup
  *   &import=1            open the import dialog on the waveform the mock backend reads
  *   &import=all          import every signal of it at once, to see the capture it makes
@@ -70,7 +70,6 @@ export function applyDevParams(search = window.location.search): void {
   if (streamDecoder !== null && /^\d+$/.test(streamDecoder)) {
     const stream = useStreamStore()
     stream.show(Number(streamDecoder))
-    if (params.get('streamMode') === 'hex') stream.mode = 'hex'
   }
 
   if (params.get('autocapture') === '1') {

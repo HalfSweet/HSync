@@ -3,4 +3,4 @@
 /**
  * Where a decoder is.
  */
-export type DecodeState = "running" | "done" | "missingChannels" | "unsupported" | "failed";
+export type DecodeState = "running" | "done" | "failed" | "missingChannels" | "invalid";

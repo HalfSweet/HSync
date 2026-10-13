@@ -23,6 +23,8 @@ proptest = "1.11.0"
 pyo3 = "=0.29.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.151", features = ["preserve_order"] }
+# Maps that keep insertion order, for pipeline descriptions whose node order matters.
+indexmap = { version = "2.14.2", features = ["serde"] }
 thiserror = "2.0.21"
 tracing = "0.1.44"
 ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
@@ -41,6 +43,8 @@ hsync-fileio = { path = "crates/hsync-fileio" }
 hsync-pxlogic = { path = "crates/hsync-pxlogic" }
 hsync-session = { path = "crates/hsync-session" }
 hsync-srd = { path = "crates/hsync-srd" }
+hsync-uiharu = { path = "crates/hsync-uiharu" }
+uiharu-registry = { path = "uiharu/crates/uiharu-registry" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

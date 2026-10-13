@@ -57,8 +57,8 @@
     },
     "search": {
       "aria": "搜索解码结果",
-      "placeholder": "搜索数值或文本，如 4F、HOST",
-      "tip": "解码结果：十六进制（4F、0x4F、4F 32）或文本（HOST）。电平模式：D3=R D5=1（0 低、1 高、R 上升沿、F 下降沿、C 任意沿、X 不关心）。回车下一处，Shift+回车上一处，Esc 清空",
+      "placeholder": "搜索数值或事件，如 0x4F、address",
+      "tip": "解码结果：数值（0x4F）、字节序列（0x4F 0x32）或事件种类（address）。电平模式：D3=R D5=1（0 低、1 高、R 上升沿、F 下降沿、C 任意沿、X 不关心）。回车下一处，Shift+回车上一处，Esc 清空",
       "none": "无结果",
       "count": "{count} 处",
       "position": "{current}/{count}",
@@ -330,88 +330,1139 @@
     "edges": "边沿"
   },
   "decode": {
-    "i2c": {
-      "write": "写",
-      "read": "读",
-      "ack": "ACK",
-      "nack": "NACK",
-      "start": "起始",
-      "repeatedStart": "重复起始",
-      "stop": "停止",
-      "addressTip": "从机地址 0x{address}，{direction}，{time} 起",
-      "dataTip": "数据 0x{value}，{time} 起"
+    "blockTip": "{label}，{time} 起",
+    "dense": "{count} 个事件",
+    "yes": "是",
+    "no": "否",
+    "none": "无",
+    "field": "{label}：{value}",
+    "running": "正在解码…",
+    "failed": "解码中断",
+    "missingChannels": "缺少通道",
+    "invalid": "无法解码"
+  },
+  "decoder": {
+    "category": {
+      "bus": "总线",
+      "line": "信号线",
+      "device": "设备"
     },
-    "uart": {
-      "space": "空格"
+    "am230x": {
+      "name": "AM2302 / DHT11",
+      "summary": "读取 AM2302 (DHT22) 或 DHT11 温湿度传感器单线上的读数",
+      "field": {
+        "data": "数据线",
+        "model": "型号",
+        "tolerance": "容差 (%)"
+      },
+      "value": {
+        "model": {
+          "am2302": "AM2302 (DHT22)",
+          "dht11": "DHT11"
+        }
+      },
+      "event": {
+        "reading": "读数",
+        "error": "错误"
+      },
+      "eventField": {
+        "bytes": "字节",
+        "checksumOk": "校验和正确",
+        "humidityRaw": "湿度原始值",
+        "temperatureRaw": "温度原始值",
+        "reason": "原因"
+      }
     },
-    "spi": {
-      "byteTip": "0x{value}，{time} 起"
+    "apa102": {
+      "name": "APA102 LED",
+      "summary": "读取控制器送入 APA102 / SK9822 LED 链的帧",
+      "field": {},
+      "value": {},
+      "event": {
+        "frame-begin": "帧开始",
+        "led": "LED",
+        "frame-end": "帧结束",
+        "error": "错误"
+      },
+      "eventField": {
+        "frame": "帧号",
+        "index": "LED 序号",
+        "brightness": "亮度",
+        "blue": "蓝",
+        "green": "绿",
+        "red": "红",
+        "leds": "LED 数",
+        "endBits": "结束位数",
+        "reason": "原因"
+      }
+    },
+    "avr-isp": {
+      "name": "AVR ISP",
+      "summary": "读取 AVR 单片机串行编程接口上的四字节指令",
+      "field": {},
+      "value": {},
+      "event": {
+        "instruction": "指令",
+        "unknown": "未知指令",
+        "error": "错误"
+      },
+      "eventField": {
+        "op": "操作号",
+        "tx": "事务号",
+        "command": "命令",
+        "address": "地址",
+        "dataIn": "输入数据",
+        "dataOut": "输出数据",
+        "inSync": "同步",
+        "bytes": "字节",
+        "reason": "原因"
+      }
     },
     "can": {
-      "noFramesInView": "画面内没有帧",
-      "previous": "上一帧",
-      "next": "下一帧",
-      "length": "{count} 个字节",
-      "crcError": "CRC 错误",
-      "frameTip": "ID 0x{id}，{time} 起"
+      "name": "CAN",
+      "summary": "从收发器的接收线解码 CAN 2.0 与 CAN FD 帧",
+      "field": {
+        "rx": "接收线 (RX)",
+        "dominant_low": "显性为低电平",
+        "bitrate": "比特率 (bit/s)",
+        "fd_bitrate": "FD 数据比特率 (bit/s)",
+        "sample_point": "采样点 (%)",
+        "fd": "识别 FD 帧"
+      },
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "id": "ID",
+        "control": "控制段",
+        "data": "数据",
+        "crc": "CRC",
+        "ack": "应答",
+        "end": "结束"
+      },
+      "eventField": {
+        "frame": "帧号",
+        "partial": "部分捕获",
+        "id": "ID",
+        "extended": "扩展帧",
+        "remote": "远程帧",
+        "fd": "FD",
+        "brs": "BRS",
+        "esi": "ESI",
+        "dlc": "DLC",
+        "length": "数据长度",
+        "offset": "偏移",
+        "bytes": "字节",
+        "value": "值",
+        "ok": "正确",
+        "stuffCount": "填充计数",
+        "acked": "已应答",
+        "reason": "原因"
+      }
+    },
+    "dmx512": {
+      "name": "DMX512",
+      "summary": "从 UART 字符与 Break 读取 DMX512-A 数据包",
+      "field": {},
+      "value": {},
+      "event": {
+        "packet-begin": "包开始",
+        "start-code": "起始码",
+        "slots": "时隙数据",
+        "packet-end": "包结束",
+        "error": "错误"
+      },
+      "eventField": {
+        "packet": "包号",
+        "breakTicks": "Break 时长 (采样点)",
+        "code": "起始码",
+        "offset": "偏移",
+        "values": "值",
+        "slots": "时隙数",
+        "reason": "原因",
+        "slot": "时隙号"
+      }
+    },
+    "ds18b20": {
+      "name": "DS18B20",
+      "summary": "读取发给 DS18B20 温度传感器的功能命令及其数据",
+      "field": {},
+      "value": {},
+      "event": {
+        "command": "命令",
+        "scratchpad": "暂存器",
+        "partial-scratchpad": "不完整暂存器",
+        "write-scratchpad": "写暂存器",
+        "power-supply": "供电方式",
+        "unknown-command": "未知命令",
+        "end": "结束"
+      },
+      "eventField": {
+        "tx": "事务号",
+        "code": "命令码",
+        "bytes": "字节",
+        "crcOk": "CRC 正确",
+        "temperatureRaw": "温度原始值",
+        "th": "TH 寄存器",
+        "tl": "TL 寄存器",
+        "config": "配置寄存器",
+        "resolution": "分辨率 (位)",
+        "parasite": "寄生供电",
+        "reason": "原因"
+      }
+    },
+    "eeprom24xx": {
+      "name": "24xx EEPROM",
+      "summary": "读取 24xx 系列 I²C EEPROM 收到的写入、读取与应答轮询",
+      "field": {
+        "address_bytes": "地址字节数",
+        "device_address": "器件地址"
+      },
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "address": "地址",
+        "data": "数据",
+        "end": "结束",
+        "ack-poll": "应答轮询",
+        "unknown": "未知操作"
+      },
+      "eventField": {
+        "op": "操作号",
+        "tx": "事务号",
+        "device": "器件地址",
+        "command": "命令",
+        "wordAddress": "字地址",
+        "offset": "偏移",
+        "bytes": "字节",
+        "reason": "原因",
+        "length": "长度",
+        "acked": "已应答"
+      }
+    },
+    "eeprom93xx": {
+      "name": "93Cxx EEPROM",
+      "summary": "读取 93Cxx 系列 EEPROM 在 Microwire 总线上的指令",
+      "field": {
+        "address_bits": "地址位数",
+        "organisation": "组织方式 (ORG)"
+      },
+      "value": {
+        "organisation": {
+          "x16": "16 位字 (x16)",
+          "x8": "8 位字 (x8)"
+        }
+      },
+      "event": {
+        "instruction": "指令",
+        "data": "数据",
+        "status": "就绪状态",
+        "end": "结束"
+      },
+      "eventField": {
+        "op": "操作号",
+        "tx": "事务号",
+        "command": "命令",
+        "address": "地址",
+        "direction": "方向",
+        "offset": "偏移",
+        "values": "字",
+        "ready": "就绪",
+        "reason": "原因"
+      }
+    },
+    "i2c": {
+      "name": "I²C",
+      "summary": "读取 SCL 与 SDA 上的事务：地址、数据字节与应答位",
+      "field": {
+        "scl": "SCL 线",
+        "sda": "SDA 线"
+      },
+      "value": {},
+      "event": {
+        "begin": "起始",
+        "address": "地址",
+        "data": "数据",
+        "restart": "重复起始",
+        "end": "结束"
+      },
+      "eventField": {
+        "tx": "事务号",
+        "partial": "部分捕获",
+        "address": "地址",
+        "tenBit": "10 位地址",
+        "read": "读",
+        "ack": "应答",
+        "byte": "字节",
+        "droppedBits": "丢弃位数",
+        "reason": "原因"
+      }
+    },
+    "i2s": {
+      "name": "I²S",
+      "summary": "读取 I²S 总线（含左对齐与右对齐格式）上的音频采样",
+      "field": {
+        "sck": "串行时钟 (SCK)",
+        "ws": "字选择 (WS)",
+        "sd": "串行数据 (SD)",
+        "format": "格式",
+        "bits": "字宽 (位)",
+        "sample_edge": "采样沿",
+        "ws_inverted": "WS 反相"
+      },
+      "value": {
+        "format": {
+          "i2s": "I²S (Philips)",
+          "left-justified": "左对齐",
+          "right-justified": "右对齐"
+        },
+        "sample_edge": {
+          "rising": "上升沿",
+          "falling": "下降沿"
+        }
+      },
+      "event": {
+        "sample": "音频采样"
+      },
+      "eventField": {
+        "frame": "帧号",
+        "channel": "声道",
+        "value": "值",
+        "bits": "位数",
+        "complete": "完整"
+      }
+    },
+    "ir-nec": {
+      "name": "红外 NEC",
+      "summary": "读取红外接收头输出中的 NEC 遥控帧与重复码",
+      "field": {
+        "channel": "接收头输出",
+        "polarity": "极性",
+        "tolerance": "容差 (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "低电平有效",
+          "active-high": "高电平有效"
+        }
+      },
+      "event": {
+        "frame": "帧",
+        "repeat": "重复码",
+        "error": "错误"
+      },
+      "eventField": {
+        "address": "地址",
+        "command": "命令",
+        "extended": "扩展 NEC",
+        "inverseOk": "反码正确",
+        "raw": "原始位",
+        "reason": "原因",
+        "bits": "位数"
+      }
+    },
+    "ir-rc5": {
+      "name": "红外 RC-5",
+      "summary": "读取红外接收头输出中的 Philips RC-5 与 RC-5X 遥控帧",
+      "field": {
+        "channel": "接收头输出",
+        "polarity": "极性",
+        "tolerance": "容差 (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "低电平有效",
+          "active-high": "高电平有效"
+        }
+      },
+      "event": {
+        "frame": "帧",
+        "error": "错误"
+      },
+      "eventField": {
+        "toggle": "切换位",
+        "address": "地址",
+        "command": "命令",
+        "extended": "RC-5X 扩展",
+        "reason": "原因",
+        "bits": "位数",
+        "raw": "原始位"
+      }
+    },
+    "ir-rc6": {
+      "name": "红外 RC-6",
+      "summary": "读取红外接收头输出中的 Philips RC-6 模式 0 遥控帧",
+      "field": {
+        "channel": "接收头输出",
+        "polarity": "极性",
+        "tolerance": "容差 (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "低电平有效",
+          "active-high": "高电平有效"
+        }
+      },
+      "event": {
+        "frame": "帧",
+        "error": "错误"
+      },
+      "eventField": {
+        "mode": "模式",
+        "toggle": "切换位",
+        "address": "地址",
+        "command": "命令",
+        "reason": "原因",
+        "bits": "位数",
+        "raw": "原始位"
+      }
+    },
+    "ir-sirc": {
+      "name": "红外 SIRC (Sony)",
+      "summary": "读取红外接收头输出中的 Sony SIRC 遥控帧（12/15/20 位）",
+      "field": {
+        "channel": "接收头输出",
+        "polarity": "极性",
+        "tolerance": "容差 (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "低电平有效",
+          "active-high": "高电平有效"
+        }
+      },
+      "event": {
+        "frame": "帧",
+        "error": "错误"
+      },
+      "eventField": {
+        "bits": "位数",
+        "command": "命令",
+        "address": "地址",
+        "extended": "扩展字段",
+        "reason": "原因",
+        "raw": "原始位"
+      }
+    },
+    "jtag": {
+      "name": "JTAG",
+      "summary": "跟踪 IEEE 1149.1 测试访问口：TAP 状态、复位与寄存器扫描",
+      "field": {
+        "tck": "TCK 线",
+        "tms": "TMS 线",
+        "tdi": "TDI 线",
+        "tdo": "TDO 线",
+        "trst": "TRST 线",
+        "initial_state": "初始状态"
+      },
+      "value": {
+        "initial_state": {
+          "unknown": "未知",
+          "test-logic-reset": "Test-Logic-Reset",
+          "run-test-idle": "Run-Test/Idle"
+        }
+      },
+      "event": {
+        "state": "状态",
+        "reset": "复位",
+        "scan-begin": "扫描开始",
+        "shift": "移位",
+        "scan-end": "扫描结束"
+      },
+      "eventField": {
+        "state": "状态",
+        "by": "复位来源",
+        "scan": "扫描号",
+        "register": "寄存器",
+        "offset": "偏移",
+        "tdi": "TDI",
+        "tdo": "TDO",
+        "bits": "位数",
+        "reason": "原因"
+      }
+    },
+    "lin": {
+      "name": "LIN",
+      "summary": "从 UART 字符读取 LIN 总线的帧：帧头、响应数据与校验和",
+      "field": {
+        "length_by_id": "按 ID 确定长度",
+        "min_break_bits": "最短 Break (位)"
+      },
+      "value": {},
+      "event": {
+        "header": "帧头",
+        "data": "数据",
+        "checksum": "校验和",
+        "error": "错误",
+        "end": "结束"
+      },
+      "eventField": {
+        "frame": "帧号",
+        "pid": "受保护 ID",
+        "id": "帧 ID",
+        "pidOk": "PID 校验正确",
+        "offset": "偏移",
+        "bytes": "字节",
+        "value": "值",
+        "classicOk": "经典校验和正确",
+        "enhancedOk": "增强校验和正确",
+        "reason": "原因"
+      }
+    },
+    "mdio": {
+      "name": "MDIO",
+      "summary": "读取以太网 PHY 管理接口上的帧（Clause 22 与 45）",
+      "field": {
+        "mdc": "MDC 线",
+        "mdio": "MDIO 线"
+      },
+      "value": {},
+      "event": {
+        "frame": "帧",
+        "error": "错误"
+      },
+      "eventField": {
+        "clause": "Clause",
+        "op": "操作",
+        "phy": "PHY 地址",
+        "reg": "寄存器 (REGAD/DEVAD)",
+        "turnaround": "周转位 (TA)",
+        "data": "数据",
+        "preambleBits": "前导位数",
+        "reason": "原因"
+      }
+    },
+    "microwire": {
+      "name": "Microwire",
+      "summary": "读取 Microwire 总线的片选、时钟、DI 与 DO，每个时钟脉冲报告一位",
+      "field": {
+        "cs": "片选线",
+        "sk": "时钟线 (SK)",
+        "di": "DI 线",
+        "do": "DO 线",
+        "cs_active_low": "片选低有效"
+      },
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "bit": "位",
+        "end": "结束"
+      },
+      "eventField": {
+        "tx": "事务号",
+        "partial": "部分捕获",
+        "di": "DI",
+        "do": "DO",
+        "bits": "位数",
+        "reason": "原因"
+      }
+    },
+    "midi": {
+      "name": "MIDI",
+      "summary": "从 UART 字符读取 MIDI 1.0 消息：通道、系统与实时消息",
+      "field": {},
+      "value": {},
+      "event": {
+        "channel-message": "通道消息",
+        "system-common": "系统通用消息",
+        "realtime": "实时消息",
+        "sysex": "SysEx 数据",
+        "sysex-end": "SysEx 结束",
+        "error": "错误"
+      },
+      "eventField": {
+        "message": "消息号",
+        "channel": "通道",
+        "status": "状态",
+        "data1": "数据 1",
+        "data2": "数据 2",
+        "running": "运行状态",
+        "byte": "字节值",
+        "offset": "偏移",
+        "bytes": "字节",
+        "reason": "原因"
+      }
+    },
+    "modbus-rtu": {
+      "name": "Modbus RTU",
+      "summary": "从 UART 字符的时序中读取 Modbus RTU 串行帧",
+      "field": {},
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "data": "数据",
+        "crc": "CRC",
+        "end": "结束"
+      },
+      "eventField": {
+        "frame": "帧号",
+        "address": "从站地址",
+        "function": "功能码",
+        "exception": "异常",
+        "partial": "部分捕获",
+        "offset": "偏移",
+        "bytes": "字节",
+        "value": "值",
+        "ok": "正确",
+        "reason": "原因"
+      }
+    },
+    "nrf24l01": {
+      "name": "nRF24L01+",
+      "summary": "读取主机与 nRF24L01+ 收发器之间的 SPI 命令",
+      "field": {},
+      "value": {},
+      "event": {
+        "command": "命令",
+        "data": "数据",
+        "end": "结束",
+        "unknown": "未知命令"
+      },
+      "eventField": {
+        "op": "操作号",
+        "tx": "事务号",
+        "command": "命令",
+        "register": "寄存器",
+        "registerName": "寄存器名",
+        "pipe": "管道",
+        "status": "STATUS 寄存器",
+        "direction": "方向",
+        "offset": "偏移",
+        "bytes": "字节",
+        "reason": "原因"
+      }
+    },
+    "onewire-link": {
+      "name": "1-Wire 链路层",
+      "summary": "读取 1-Wire 数据线上的每个低脉冲：复位、位或无效时隙",
+      "field": {
+        "data": "数据线",
+        "speed": "速度"
+      },
+      "value": {
+        "speed": {
+          "standard": "标准速度",
+          "overdrive": "高速 (Overdrive)"
+        }
+      },
+      "event": {
+        "reset": "复位",
+        "bit": "位",
+        "bad-slot": "无效时隙"
+      },
+      "eventField": {
+        "presence": "存在脉冲",
+        "value": "值",
+        "lowTicks": "低电平时长 (采样点)"
+      }
+    },
+    "onewire": {
+      "name": "1-Wire 网络层",
+      "summary": "读取 1-Wire 事务：ROM 命令、ROM 码或搜索结果及其后的字节",
+      "field": {},
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "rom-command": "ROM 命令",
+        "rom": "ROM 码",
+        "search": "ROM 搜索",
+        "byte": "字节",
+        "bits": "尾部位",
+        "end": "结束"
+      },
+      "eventField": {
+        "tx": "事务号",
+        "presence": "存在脉冲",
+        "code": "命令码",
+        "id": "ID",
+        "family": "家族码",
+        "crcOk": "CRC 正确",
+        "conflicts": "冲突数",
+        "unanswered": "无应答数",
+        "value": "值",
+        "count": "位数",
+        "reason": "原因"
+      }
+    },
+    "parallel": {
+      "name": "并行总线",
+      "summary": "把最多 64 条数据线读作一个字：按时钟沿或在任一线变化时",
+      "field": {
+        "data": "数据线",
+        "clock": "时钟线",
+        "clock_edge": "时钟沿"
+      },
+      "value": {
+        "clock_edge": {
+          "rising": "上升沿",
+          "falling": "下降沿",
+          "either": "任一沿"
+        }
+      },
+      "event": {
+        "word": "字"
+      },
+      "eventField": {
+        "value": "值",
+        "bits": "位数",
+        "initial": "初始电平"
+      }
+    },
+    "ps2": {
+      "name": "PS/2",
+      "summary": "读取 PS/2 键盘或鼠标与主机之间双向交换的帧",
+      "field": {
+        "clk": "时钟线",
+        "data": "数据线"
+      },
+      "value": {},
+      "event": {
+        "frame": "帧",
+        "error": "错误"
+      },
+      "eventField": {
+        "direction": "方向",
+        "value": "值",
+        "parityOk": "奇偶校验正确",
+        "stopOk": "停止位正确",
+        "ack": "应答",
+        "reason": "原因"
+      }
+    },
+    "pwm": {
+      "name": "PWM",
+      "summary": "测量 PWM 信号线的每个周期：周期与有效时长",
+      "field": {
+        "channel": "信号线",
+        "polarity": "极性"
+      },
+      "value": {
+        "polarity": {
+          "active-high": "高电平有效",
+          "active-low": "低电平有效"
+        }
+      },
+      "event": {
+        "cycle": "周期"
+      },
+      "eventField": {
+        "periodTicks": "周期 (采样点)",
+        "activeTicks": "有效时长 (采样点)"
+      }
+    },
+    "sdcard-spi": {
+      "name": "SD 卡 (SPI 模式)",
+      "summary": "读取主机与 SD 卡在 SPI 总线上的命令、响应、令牌与数据块",
+      "field": {
+        "block_length": "块长度 (字节)"
+      },
+      "value": {},
+      "event": {
+        "command": "命令",
+        "response": "响应",
+        "token": "令牌",
+        "data": "数据",
+        "block-end": "块结束",
+        "end": "结束",
+        "unknown-command": "未知命令"
+      },
+      "eventField": {
+        "op": "操作号",
+        "tx": "事务号",
+        "index": "命令索引",
+        "acmd": "ACMD",
+        "argument": "参数",
+        "crc7": "CRC7",
+        "crcOk": "CRC 正确",
+        "format": "响应格式",
+        "bytes": "字节",
+        "busyBytes": "忙字节数",
+        "token": "令牌类型",
+        "value": "值",
+        "offset": "偏移",
+        "crc16": "CRC16",
+        "length": "长度",
+        "reason": "原因",
+        "byte": "字节值"
+      }
+    },
+    "spi-nor": {
+      "name": "SPI NOR 闪存",
+      "summary": "读取主机通过单线 SPI 发给串行 NOR 闪存的命令",
+      "field": {
+        "address_bytes": "地址字节数"
+      },
+      "value": {
+        "address_bytes": {
+          "three": "3 字节",
+          "four": "4 字节",
+          "auto": "自动"
+        }
+      },
+      "event": {
+        "begin": "开始",
+        "address": "地址",
+        "dummy": "Dummy 字节",
+        "data": "数据",
+        "status": "状态寄存器",
+        "id": "ID",
+        "end": "结束",
+        "unknown-command": "未知命令"
+      },
+      "eventField": {
+        "op": "操作号",
+        "tx": "事务号",
+        "command": "命令",
+        "address": "地址",
+        "bytes": "字节",
+        "direction": "方向",
+        "offset": "偏移",
+        "register": "寄存器",
+        "value": "值",
+        "written": "写入",
+        "scheme": "ID 类型",
+        "reason": "原因",
+        "opcode": "操作码"
+      }
+    },
+    "spi": {
+      "name": "SPI",
+      "summary": "从逻辑采样解码单线 SPI：片选期间按时钟沿移入的字",
+      "field": {
+        "clk": "时钟线",
+        "cs": "片选线",
+        "mosi": "MOSI 线",
+        "miso": "MISO 线",
+        "mode": "SPI 模式",
+        "word_bits": "每字位数",
+        "bit_order": "位序",
+        "cs_active_low": "片选低有效"
+      },
+      "value": {
+        "bit_order": {
+          "msb-first": "高位在前",
+          "lsb-first": "低位在前"
+        }
+      },
+      "event": {
+        "begin": "开始",
+        "word": "字",
+        "end": "结束"
+      },
+      "eventField": {
+        "tx": "事务号",
+        "partial": "部分捕获",
+        "mosi": "MOSI",
+        "miso": "MISO",
+        "reason": "原因"
+      }
+    },
+    "swd": {
+      "name": "SWD",
+      "summary": "读取 Arm 串行线调试：数据包、线路复位与切换序列",
+      "field": {
+        "swclk": "SWCLK 线",
+        "swdio": "SWDIO 线"
+      },
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "request": "请求",
+        "ack": "应答",
+        "data": "数据",
+        "end": "结束",
+        "line-reset": "线路复位",
+        "switch": "切换"
+      },
+      "eventField": {
+        "tx": "包号",
+        "apndp": "APnDP",
+        "rnw": "RnW",
+        "addr": "地址",
+        "parityOk": "奇偶校验正确",
+        "value": "值",
+        "fromTarget": "来自目标",
+        "reason": "原因",
+        "to": "切换到"
+      }
+    },
+    "timing": {
+      "name": "边沿时序",
+      "summary": "报告一条线上的每个边沿及其与上一边沿的间隔",
+      "field": {
+        "channel": "信号线",
+        "edges": "边沿"
+      },
+      "value": {
+        "edges": {
+          "any": "任意",
+          "rising": "上升沿",
+          "falling": "下降沿"
+        }
+      },
+      "event": {
+        "edge": "边沿"
+      },
+      "eventField": {
+        "slope": "边沿方向",
+        "sincePrevious": "距上一边沿 (采样点)"
+      }
+    },
+    "uart": {
+      "name": "UART",
+      "summary": "读取一条异步串行线上的字符：起始位、数据位、校验位与停止位",
+      "field": {
+        "line": "信号线",
+        "baud": "波特率",
+        "data_bits": "数据位",
+        "parity": "校验",
+        "stop_bits": "停止位",
+        "bit_order": "位序",
+        "inverted": "电平反相",
+        "sample_point": "采样点 (%)"
+      },
+      "value": {
+        "parity": {
+          "none": "无校验",
+          "even": "偶校验",
+          "odd": "奇校验",
+          "mark": "Mark (恒为 1)",
+          "space": "Space (恒为 0)"
+        },
+        "stop_bits": {
+          "one": "1 位",
+          "one-and-a-half": "1.5 位",
+          "two": "2 位"
+        },
+        "bit_order": {
+          "lsb-first": "低位在前",
+          "msb-first": "高位在前"
+        }
+      },
+      "event": {
+        "frame": "帧",
+        "break": "Break 信号"
+      },
+      "eventField": {
+        "value": "值",
+        "parity": "校验结果",
+        "framingOk": "帧格式正确",
+        "ticks": "时长 (采样点)"
+      }
+    },
+    "usb-pd": {
+      "name": "USB PD",
+      "summary": "解码 CC 线上的 USB Power Delivery 数据包",
+      "field": {
+        "cc": "CC 线",
+        "bit_rate": "比特率 (bit/s)",
+        "tolerance": "容差 (%)"
+      },
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "sop": "SOP",
+        "header": "消息头",
+        "extended-header": "扩展消息头",
+        "object": "数据对象",
+        "pdo": "PDO",
+        "rdo": "RDO",
+        "data": "数据",
+        "crc": "CRC",
+        "hard-reset": "硬复位",
+        "cable-reset": "线缆复位",
+        "error": "错误",
+        "end": "结束"
+      },
+      "eventField": {
+        "pkt": "包号",
+        "set": "有序集",
+        "corrupt": "损坏 K 码位置",
+        "messageType": "消息类型",
+        "control": "控制消息",
+        "data": "数据消息",
+        "extendedMessage": "扩展消息",
+        "dataRole": "数据角色",
+        "powerRole": "电源角色",
+        "cablePlug": "线缆插头",
+        "revision": "规范版本",
+        "messageId": "消息 ID",
+        "objects": "数据对象数",
+        "extended": "扩展",
+        "dataSize": "数据大小",
+        "requestChunk": "请求分块",
+        "chunkNumber": "分块号",
+        "chunked": "分块",
+        "index": "对象序号",
+        "raw": "原始值",
+        "supply": "电源类型",
+        "millivolts": "电压 (mV)",
+        "milliamps": "电流 (mA)",
+        "flags": "标志",
+        "maxMillivolts": "最高电压 (mV)",
+        "minMillivolts": "最低电压 (mV)",
+        "milliwatts": "功率 (mW)",
+        "apdoType": "APDO 类型",
+        "position": "对象位置",
+        "giveBack": "GiveBack 标志",
+        "capabilityMismatch": "能力不匹配",
+        "usbCommunicationsCapable": "支持 USB 通信",
+        "noUsbSuspend": "不挂起 USB",
+        "unchunkedExtended": "支持非分块扩展消息",
+        "operating": "工作电流或功率",
+        "maximum": "最大电流或功率",
+        "offset": "偏移",
+        "bytes": "字节",
+        "value": "值",
+        "ok": "正确",
+        "reason": "原因"
+      }
+    },
+    "usb-transactions": {
+      "name": "USB 事务",
+      "summary": "把 USB 数据包组合成事务：令牌、SETUP、数据与握手",
+      "field": {},
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "setup": "SETUP 请求",
+        "data": "数据",
+        "handshake": "握手",
+        "end": "结束"
+      },
+      "eventField": {
+        "xact": "事务号",
+        "token": "令牌",
+        "address": "地址",
+        "endpoint": "端点",
+        "frame": "帧号",
+        "bmRequestType": "bmRequestType",
+        "bRequest": "bRequest",
+        "wValue": "wValue",
+        "wIndex": "wIndex",
+        "wLength": "wLength",
+        "pid": "PID",
+        "offset": "偏移",
+        "bytes": "字节",
+        "reason": "原因"
+      }
+    },
+    "usb": {
+      "name": "USB 低速/全速",
+      "summary": "从 D+ 与 D− 解码 USB 2.0 低速与全速的数据包与总线状态",
+      "field": {
+        "dp": "D+ 线",
+        "dm": "D− 线",
+        "speed": "速度"
+      },
+      "value": {
+        "speed": {
+          "low": "低速 (1.5 Mbit/s)",
+          "full": "全速 (12 Mbit/s)"
+        }
+      },
+      "event": {
+        "begin": "开始",
+        "pid": "PID",
+        "token": "令牌",
+        "sof": "SOF",
+        "data": "数据",
+        "data-end": "数据结束",
+        "split": "SPLIT",
+        "end": "结束",
+        "reset": "复位",
+        "suspend": "挂起",
+        "resume": "恢复",
+        "keep-alive": "保活"
+      },
+      "eventField": {
+        "pkt": "包号",
+        "pid": "PID",
+        "ok": "正确",
+        "address": "地址",
+        "endpoint": "端点",
+        "crc5": "CRC5",
+        "frame": "帧号",
+        "offset": "偏移",
+        "bytes": "字节",
+        "crc16": "CRC16",
+        "length": "长度",
+        "raw": "原始位",
+        "reason": "原因",
+        "ticks": "时长 (采样点)"
+      }
+    },
+    "wiegand": {
+      "name": "韦根 (Wiegand)",
+      "summary": "读取门禁读卡器 DATA0 与 DATA1 线上的帧",
+      "field": {
+        "d0": "DATA0 线",
+        "d1": "DATA1 线",
+        "frame_gap_us": "帧间隔 (µs)",
+        "pulse_min_us": "最短脉冲 (µs)",
+        "pulse_max_us": "最长脉冲 (µs)"
+      },
+      "value": {},
+      "event": {
+        "frame": "帧",
+        "error": "错误"
+      },
+      "eventField": {
+        "frame": "帧号",
+        "bits": "位数",
+        "data": "数据",
+        "parityOk": "奇偶校验正确",
+        "reason": "原因"
+      }
+    },
+    "ws281x": {
+      "name": "WS281x LED",
+      "summary": "读取 WS2812B 类 LED 链数据线上的帧",
+      "field": {
+        "data": "数据线",
+        "bits_per_led": "每颗 LED 位数",
+        "threshold_ns": "阈值 (ns)",
+        "reset_us": "复位时间 (µs)"
+      },
+      "value": {},
+      "event": {
+        "frame-begin": "帧开始",
+        "led": "LED",
+        "frame-end": "帧结束",
+        "error": "错误"
+      },
+      "eventField": {
+        "frame": "帧号",
+        "index": "LED 序号",
+        "bytes": "字节",
+        "leds": "LED 数",
+        "reason": "原因",
+        "bits": "位数"
+      }
     }
   },
   "decoderDialog": {
     "addTitle": "添加协议解码",
     "editTitle": "{name} 的解码设置",
     "protocol": "协议",
+    "search": "在 {count} 种协议中查找",
+    "noMatch": "没有匹配的协议",
+    "stack": "叠加解码",
+    "stackNone": "不叠加",
+    "stackHint": "读取 {name} 输出的上层协议",
+    "label": "名称",
+    "labelHint": "留空则显示协议名",
     "channels": "通道",
     "options": "选项",
-    "unused": "不使用",
-    "add": "添加",
-    "save": "保存",
-    "remove": "移除",
-    "cancel": "取消",
-    "edit": "修改解码设置",
-    "busy": "正在采集，采集结束后才能修改解码",
-    "needChannel": "请为 {role} 选择通道",
-    "needData": "MISO 和 MOSI 至少要用一个",
-    "option": {
-      "address_format": "地址显示",
-      "baudrate": "波特率",
-      "num_data_bits": "数据位",
-      "parity_type": "校验",
-      "num_stop_bits": "停止位",
-      "bit_order": "位序",
-      "invert": "信号反相",
-      "cpol": "时钟极性 CPOL",
-      "cpha": "时钟相位 CPHA",
-      "bitorder": "位序",
-      "wordsize": "字长（位）",
-      "cs_polarity": "片选极性",
-      "bitrate": "波特率",
-      "nominal_bitrate": "仲裁段波特率",
-      "fast_bitrate": "数据段波特率",
-      "sample_point": "采样点 %"
-    },
-    "value": {
-      "shifted": "7 位地址",
-      "unshifted": "8 位（含读写位）",
-      "none": "无",
-      "odd": "奇校验",
-      "even": "偶校验",
-      "zero": "恒为 0",
-      "one": "恒为 1",
-      "lsb-first": "低位在前",
-      "msb-first": "高位在前",
-      "yes": "是",
-      "no": "否",
-      "active-low": "低电平有效",
-      "active-high": "高电平有效"
-    },
-    "search": "在 {count} 个解码器中查找",
-    "noMatch": "没有匹配的解码器",
-    "stacksOn": "叠加在下层解码器上：{chain}",
-    "noStack": "找不到它所需的下层解码器",
     "optionsOf": "{name} 的选项",
+    "unused": "不使用",
+    "unset": "不设置",
+    "channelList": "通道编号，低位在前，用逗号分隔",
+    "needChannel": "请为 {role} 选择通道",
+    "duplicateChannel": "通道 D{channel} 被选了两次",
+    "badChannelList": "{field} 需要用逗号分隔的通道编号",
+    "badNumber": "{field} 需要一个整数",
     "display": "显示",
     "numberFormat": "数值进制",
-    "rows": "注解行",
     "formats": {
       "hex": "十六进制",
       "dec": "十进制",
@@ -419,22 +1470,18 @@
       "bin": "二进制",
       "ascii": "ASCII"
     },
-    "range": "解码范围",
-    "rangeAll": "全程",
-    "rangeSegment": "选段",
-    "rangeSpan": "{from} 至 {to}",
-    "rangeNone": "在标尺上拖出选段后可只解码其中一段"
+    "add": "添加",
+    "save": "保存",
+    "remove": "移除",
+    "cancel": "取消",
+    "edit": "修改解码设置"
   },
   "stream": {
     "title": "数据流",
     "resize": "拖动调整数据流的高度",
     "resizeTip": "拖动调整高度",
     "decoders": "解码器",
-    "mode": {
-      "label": "显示方式",
-      "text": "文本",
-      "hex": "十六进制"
-    },
+    "tab": "{decoder} › {stream}",
     "scope": {
       "label": "范围",
       "all": "全程",
@@ -447,47 +1494,13 @@
     "close": "收起数据流",
     "column": {
       "time": "时间 ms",
-      "wireOrder": "总线上的顺序",
-      "dataLine": "数据线",
-      "offset": "偏移",
-      "content": "内容",
-      "text": "文本",
-      "bytes": "字节",
-      "characters": "字符",
-      "identifier": "标识符",
-      "data": "数据",
-      "row": "注解行"
+      "kind": "事件",
+      "fields": "内容"
     },
     "summary": {
-      "transfers": "{count} 次传输",
-      "frames": "{count} 帧",
-      "transferBytes": "1 次传输，{count} 个字节",
-      "inSegment": "{total}，选段内 {count} {unit}",
-      "segmentOnly": "选段 {from} – {to} ms，{count} {unit}",
-      "unitBytes": "个字节",
-      "unitFrames": "帧"
-    },
-    "empty": "这一段里没有完整的{unit}。把选段拖长一些，或者切回全程。",
-    "note": {
-      "i2cHeadCut": "采集开始时这次传输已经在进行，缺少起始条件，没有解码",
-      "captureEnds": "采集在这里结束",
-      "beforeSegment": "这次传输靠前的部分在选段之外",
-      "afterSegment": "这次传输靠后的部分在选段之外",
-      "uartHeadCut": "采集开始时这一帧已经在传，没有解码",
-      "uartTailCut": "采集结束时这一帧还没传完，没有解码",
-      "canFrame": "FD，{count} 个字节，CRC 正确，已应答",
-      "canCut": "采集开始或结束时总线上的帧不完整，没有解码"
-    },
-    "can": {
-      "fd": "FD",
-      "classic": "CAN",
-      "bytes": "{count} 个字节",
-      "crcOk": "CRC 正确",
-      "crcError": "CRC 错误",
-      "acked": "已应答",
-      "noAck": "未应答",
-      "errorFrame": "帧出错",
-      "separator": "，"
+      "events": "{count} 个事件",
+      "inSegment": "{total}，选段内 {count} 个",
+      "segmentOnly": "选段 {from} – {to} ms，{count} 个事件"
     },
     "export": {
       "label": "导出",
@@ -495,7 +1508,8 @@
       "text": "导出为文本…",
       "timeColumn": "时间 (ms)",
       "decoderColumn": "解码器",
-      "labelColumn": "含义 / 数据线",
+      "streamColumn": "数据流",
+      "kindColumn": "事件",
       "contentColumn": "内容"
     }
   },
@@ -631,9 +1645,9 @@
       "tooManyChannels": "{count} 个通道超过了一次采集最多容纳的 {limit} 个"
     },
     "decode": {
-      "python": "解码器运行环境出错：{detail}",
-      "unknown": "没有解码器 {id}",
-      "invalid": "解码器 {id} 无法使用：{detail}"
+      "invalid": "解码器无法使用：{detail}",
+      "missingChannels": "解码器需要采集里没有的通道：{channels}",
+      "failed": "解码中断：{detail}"
     },
     "update": {
       "check": "检查更新失败：{detail}",

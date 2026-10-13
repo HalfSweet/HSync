@@ -57,8 +57,8 @@
     },
     "search": {
       "aria": "Search decoded data",
-      "placeholder": "Search values or text, e.g. 4F, HOST",
-      "tip": "Decoded data: hex (4F, 0x4F, 4F 32) or text (HOST). Level pattern: D3=R D5=1 (0 low, 1 high, R rising, F falling, C either edge, X any). Enter for the next, Shift+Enter for the previous, Esc to clear",
+      "placeholder": "Search values or events, e.g. 0x4F, address",
+      "tip": "Decoded data: a value (0x4F), a byte sequence (0x4F 0x32) or an event kind (address). Level pattern: D3=R D5=1 (0 low, 1 high, R rising, F falling, C either edge, X any). Enter for the next, Shift+Enter for the previous, Esc to clear",
       "none": "No matches",
       "count": "{count} found",
       "position": "{current} of {count}",
@@ -330,88 +330,1139 @@
     "edges": "Edges"
   },
   "decode": {
-    "i2c": {
-      "write": "W",
-      "read": "R",
-      "ack": "ACK",
-      "nack": "NACK",
-      "start": "Start",
-      "repeatedStart": "Repeated start",
-      "stop": "Stop",
-      "addressTip": "Target 0x{address}, {direction}, from {time}",
-      "dataTip": "Data 0x{value}, from {time}"
+    "blockTip": "{label}, from {time}",
+    "dense": "{count} events",
+    "yes": "yes",
+    "no": "no",
+    "none": "none",
+    "field": "{label}: {value}",
+    "running": "Decoding…",
+    "failed": "Decoding stopped",
+    "missingChannels": "Channels missing",
+    "invalid": "Cannot decode"
+  },
+  "decoder": {
+    "category": {
+      "bus": "Bus",
+      "line": "Signal line",
+      "device": "Device"
     },
-    "uart": {
-      "space": "Space"
+    "am230x": {
+      "name": "AM2302 / DHT11",
+      "summary": "Readings of an AM2302 (DHT22) or DHT11 sensor on its one data line",
+      "field": {
+        "data": "Data line",
+        "model": "Model",
+        "tolerance": "Tolerance (%)"
+      },
+      "value": {
+        "model": {
+          "am2302": "AM2302 (DHT22)",
+          "dht11": "DHT11"
+        }
+      },
+      "event": {
+        "reading": "Reading",
+        "error": "Error"
+      },
+      "eventField": {
+        "bytes": "Bytes",
+        "checksumOk": "Checksum OK",
+        "humidityRaw": "Raw humidity",
+        "temperatureRaw": "Raw temperature",
+        "reason": "Reason"
+      }
     },
-    "spi": {
-      "byteTip": "0x{value}, from {time}"
+    "apa102": {
+      "name": "APA102 LED",
+      "summary": "Frames a controller clocks into a chain of APA102 or SK9822 LEDs",
+      "field": {},
+      "value": {},
+      "event": {
+        "frame-begin": "Frame begin",
+        "led": "LED",
+        "frame-end": "Frame end",
+        "error": "Error"
+      },
+      "eventField": {
+        "frame": "Frame",
+        "index": "LED index",
+        "brightness": "Brightness",
+        "blue": "Blue",
+        "green": "Green",
+        "red": "Red",
+        "leds": "LEDs",
+        "endBits": "End bits",
+        "reason": "Reason"
+      }
+    },
+    "avr-isp": {
+      "name": "AVR ISP",
+      "summary": "Four-byte instructions of the AVR serial programming interface",
+      "field": {},
+      "value": {},
+      "event": {
+        "instruction": "Instruction",
+        "unknown": "Unknown instruction",
+        "error": "Error"
+      },
+      "eventField": {
+        "op": "Operation",
+        "tx": "Transaction",
+        "command": "Command",
+        "address": "Address",
+        "dataIn": "Data in",
+        "dataOut": "Data out",
+        "inSync": "In sync",
+        "bytes": "Bytes",
+        "reason": "Reason"
+      }
     },
     "can": {
-      "noFramesInView": "No frames in view",
-      "previous": "Previous",
-      "next": "Next",
-      "length": "{count} bytes",
-      "crcError": "CRC error",
-      "frameTip": "ID 0x{id}, from {time}"
+      "name": "CAN",
+      "summary": "Classic CAN 2.0 and CAN FD frames from a transceiver's receive line",
+      "field": {
+        "rx": "Receive line (RX)",
+        "dominant_low": "Dominant low",
+        "bitrate": "Bit rate (bit/s)",
+        "fd_bitrate": "FD data bit rate (bit/s)",
+        "sample_point": "Sample point (%)",
+        "fd": "Recognise FD frames"
+      },
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "id": "ID",
+        "control": "Control field",
+        "data": "Data",
+        "crc": "CRC",
+        "ack": "ACK",
+        "end": "End"
+      },
+      "eventField": {
+        "frame": "Frame",
+        "partial": "Partial",
+        "id": "ID",
+        "extended": "Extended frame",
+        "remote": "Remote frame",
+        "fd": "FD",
+        "brs": "BRS",
+        "esi": "ESI",
+        "dlc": "DLC",
+        "length": "Data length",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "value": "Value",
+        "ok": "OK",
+        "stuffCount": "Stuff count",
+        "acked": "Acknowledged",
+        "reason": "Reason"
+      }
+    },
+    "dmx512": {
+      "name": "DMX512",
+      "summary": "DMX512-A packets from UART characters and breaks",
+      "field": {},
+      "value": {},
+      "event": {
+        "packet-begin": "Packet begin",
+        "start-code": "Start code",
+        "slots": "Slot data",
+        "packet-end": "Packet end",
+        "error": "Error"
+      },
+      "eventField": {
+        "packet": "Packet",
+        "breakTicks": "Break length (ticks)",
+        "code": "Start code",
+        "offset": "Offset",
+        "values": "Values",
+        "slots": "Slots",
+        "reason": "Reason",
+        "slot": "Slot"
+      }
+    },
+    "ds18b20": {
+      "name": "DS18B20",
+      "summary": "Function commands sent to a DS18B20 thermometer and what they carry",
+      "field": {},
+      "value": {},
+      "event": {
+        "command": "Command",
+        "scratchpad": "Scratchpad",
+        "partial-scratchpad": "Partial scratchpad",
+        "write-scratchpad": "Write scratchpad",
+        "power-supply": "Power supply",
+        "unknown-command": "Unknown command",
+        "end": "End"
+      },
+      "eventField": {
+        "tx": "Transaction",
+        "code": "Command code",
+        "bytes": "Bytes",
+        "crcOk": "CRC OK",
+        "temperatureRaw": "Raw temperature",
+        "th": "TH register",
+        "tl": "TL register",
+        "config": "Configuration register",
+        "resolution": "Resolution (bits)",
+        "parasite": "Parasite power",
+        "reason": "Reason"
+      }
+    },
+    "eeprom24xx": {
+      "name": "24xx EEPROM",
+      "summary": "Writes, reads and acknowledge polls sent to a 24xx I²C EEPROM",
+      "field": {
+        "address_bytes": "Address bytes",
+        "device_address": "Device address"
+      },
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "address": "Address",
+        "data": "Data",
+        "end": "End",
+        "ack-poll": "ACK poll",
+        "unknown": "Unknown operation"
+      },
+      "eventField": {
+        "op": "Operation",
+        "tx": "Transaction",
+        "device": "Device address",
+        "command": "Command",
+        "wordAddress": "Word address",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "reason": "Reason",
+        "length": "Length",
+        "acked": "Acknowledged"
+      }
+    },
+    "eeprom93xx": {
+      "name": "93Cxx EEPROM",
+      "summary": "Instructions of 93C46/56/66/86 EEPROMs on a Microwire bus",
+      "field": {
+        "address_bits": "Address bits",
+        "organisation": "Organisation (ORG)"
+      },
+      "value": {
+        "organisation": {
+          "x16": "16-bit words (x16)",
+          "x8": "8-bit words (x8)"
+        }
+      },
+      "event": {
+        "instruction": "Instruction",
+        "data": "Data",
+        "status": "Ready status",
+        "end": "End"
+      },
+      "eventField": {
+        "op": "Operation",
+        "tx": "Transaction",
+        "command": "Command",
+        "address": "Address",
+        "direction": "Direction",
+        "offset": "Offset",
+        "values": "Words",
+        "ready": "Ready",
+        "reason": "Reason"
+      }
+    },
+    "i2c": {
+      "name": "I²C",
+      "summary": "Transactions on SCL and SDA: addresses, data bytes and ACK bits",
+      "field": {
+        "scl": "SCL line",
+        "sda": "SDA line"
+      },
+      "value": {},
+      "event": {
+        "begin": "Start",
+        "address": "Address",
+        "data": "Data",
+        "restart": "Repeated start",
+        "end": "End"
+      },
+      "eventField": {
+        "tx": "Transaction",
+        "partial": "Partial",
+        "address": "Address",
+        "tenBit": "10-bit address",
+        "read": "Read",
+        "ack": "ACK",
+        "byte": "Byte",
+        "droppedBits": "Dropped bits",
+        "reason": "Reason"
+      }
+    },
+    "i2s": {
+      "name": "I²S",
+      "summary": "Audio samples of an I²S bus, in I²S, left- or right-justified format",
+      "field": {
+        "sck": "Serial clock (SCK)",
+        "ws": "Word select (WS)",
+        "sd": "Serial data (SD)",
+        "format": "Format",
+        "bits": "Word width (bits)",
+        "sample_edge": "Sample edge",
+        "ws_inverted": "WS inverted"
+      },
+      "value": {
+        "format": {
+          "i2s": "I²S (Philips)",
+          "left-justified": "Left-justified",
+          "right-justified": "Right-justified"
+        },
+        "sample_edge": {
+          "rising": "Rising",
+          "falling": "Falling"
+        }
+      },
+      "event": {
+        "sample": "Audio sample"
+      },
+      "eventField": {
+        "frame": "Frame",
+        "channel": "Channel",
+        "value": "Value",
+        "bits": "Bits",
+        "complete": "Complete"
+      }
+    },
+    "ir-nec": {
+      "name": "NEC infrared",
+      "summary": "NEC remote-control frames and repeat codes from an IR receiver",
+      "field": {
+        "channel": "Receiver output",
+        "polarity": "Polarity",
+        "tolerance": "Tolerance (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "Active low",
+          "active-high": "Active high"
+        }
+      },
+      "event": {
+        "frame": "Frame",
+        "repeat": "Repeat code",
+        "error": "Error"
+      },
+      "eventField": {
+        "address": "Address",
+        "command": "Command",
+        "extended": "Extended NEC",
+        "inverseOk": "Inverse OK",
+        "raw": "Raw bits",
+        "reason": "Reason",
+        "bits": "Bits"
+      }
+    },
+    "ir-rc5": {
+      "name": "RC-5 infrared",
+      "summary": "Philips RC-5 and RC-5X remote-control frames from an IR receiver",
+      "field": {
+        "channel": "Receiver output",
+        "polarity": "Polarity",
+        "tolerance": "Tolerance (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "Active low",
+          "active-high": "Active high"
+        }
+      },
+      "event": {
+        "frame": "Frame",
+        "error": "Error"
+      },
+      "eventField": {
+        "toggle": "Toggle",
+        "address": "Address",
+        "command": "Command",
+        "extended": "RC-5X extended",
+        "reason": "Reason",
+        "bits": "Bits",
+        "raw": "Raw bits"
+      }
+    },
+    "ir-rc6": {
+      "name": "RC-6 infrared",
+      "summary": "Philips RC-6 mode 0 remote-control frames from an IR receiver",
+      "field": {
+        "channel": "Receiver output",
+        "polarity": "Polarity",
+        "tolerance": "Tolerance (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "Active low",
+          "active-high": "Active high"
+        }
+      },
+      "event": {
+        "frame": "Frame",
+        "error": "Error"
+      },
+      "eventField": {
+        "mode": "Mode",
+        "toggle": "Toggle",
+        "address": "Address",
+        "command": "Command",
+        "reason": "Reason",
+        "bits": "Bits",
+        "raw": "Raw bits"
+      }
+    },
+    "ir-sirc": {
+      "name": "Sony SIRC infrared",
+      "summary": "Sony SIRC frames of 12, 15 or 20 bits from an IR receiver output",
+      "field": {
+        "channel": "Receiver output",
+        "polarity": "Polarity",
+        "tolerance": "Tolerance (%)"
+      },
+      "value": {
+        "polarity": {
+          "active-low": "Active low",
+          "active-high": "Active high"
+        }
+      },
+      "event": {
+        "frame": "Frame",
+        "error": "Error"
+      },
+      "eventField": {
+        "bits": "Bits",
+        "command": "Command",
+        "address": "Address",
+        "extended": "Extended",
+        "reason": "Reason",
+        "raw": "Raw bits"
+      }
+    },
+    "jtag": {
+      "name": "JTAG",
+      "summary": "An IEEE 1149.1 test access port: TAP states, resets and scans",
+      "field": {
+        "tck": "TCK line",
+        "tms": "TMS line",
+        "tdi": "TDI line",
+        "tdo": "TDO line",
+        "trst": "TRST line",
+        "initial_state": "Initial state"
+      },
+      "value": {
+        "initial_state": {
+          "unknown": "Unknown",
+          "test-logic-reset": "Test-Logic-Reset",
+          "run-test-idle": "Run-Test/Idle"
+        }
+      },
+      "event": {
+        "state": "State",
+        "reset": "Reset",
+        "scan-begin": "Scan begin",
+        "shift": "Shift",
+        "scan-end": "Scan end"
+      },
+      "eventField": {
+        "state": "State",
+        "by": "Reset source",
+        "scan": "Scan",
+        "register": "Register",
+        "offset": "Offset",
+        "tdi": "TDI",
+        "tdo": "TDO",
+        "bits": "Bits",
+        "reason": "Reason"
+      }
+    },
+    "lin": {
+      "name": "LIN",
+      "summary": "LIN frames from UART characters: header, response data and checksum",
+      "field": {
+        "length_by_id": "Length by ID",
+        "min_break_bits": "Minimum break (bits)"
+      },
+      "value": {},
+      "event": {
+        "header": "Header",
+        "data": "Data",
+        "checksum": "Checksum",
+        "error": "Error",
+        "end": "End"
+      },
+      "eventField": {
+        "frame": "Frame",
+        "pid": "Protected ID",
+        "id": "Frame ID",
+        "pidOk": "PID parity OK",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "value": "Value",
+        "classicOk": "Classic checksum OK",
+        "enhancedOk": "Enhanced checksum OK",
+        "reason": "Reason"
+      }
+    },
+    "mdio": {
+      "name": "MDIO",
+      "summary": "Management frames of Ethernet PHYs, clause 22 and clause 45",
+      "field": {
+        "mdc": "MDC line",
+        "mdio": "MDIO line"
+      },
+      "value": {},
+      "event": {
+        "frame": "Frame",
+        "error": "Error"
+      },
+      "eventField": {
+        "clause": "Clause",
+        "op": "Operation",
+        "phy": "PHY address",
+        "reg": "Register (REGAD/DEVAD)",
+        "turnaround": "Turnaround (TA)",
+        "data": "Data",
+        "preambleBits": "Preamble bits",
+        "reason": "Reason"
+      }
+    },
+    "microwire": {
+      "name": "Microwire",
+      "summary": "Microwire bus: every clock pulse on CS, SK, DI and DO as a bit",
+      "field": {
+        "cs": "Chip select line",
+        "sk": "Clock line (SK)",
+        "di": "DI line",
+        "do": "DO line",
+        "cs_active_low": "Chip select active low"
+      },
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "bit": "Bit",
+        "end": "End"
+      },
+      "eventField": {
+        "tx": "Transaction",
+        "partial": "Partial",
+        "di": "DI",
+        "do": "DO",
+        "bits": "Bits",
+        "reason": "Reason"
+      }
+    },
+    "midi": {
+      "name": "MIDI",
+      "summary": "MIDI 1.0 messages from UART characters: channel, system, real-time",
+      "field": {},
+      "value": {},
+      "event": {
+        "channel-message": "Channel message",
+        "system-common": "System common",
+        "realtime": "Real-time",
+        "sysex": "SysEx data",
+        "sysex-end": "SysEx end",
+        "error": "Error"
+      },
+      "eventField": {
+        "message": "Message",
+        "channel": "Channel",
+        "status": "Status",
+        "data1": "Data 1",
+        "data2": "Data 2",
+        "running": "Running status",
+        "byte": "Byte",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "reason": "Reason"
+      }
+    },
+    "modbus-rtu": {
+      "name": "Modbus RTU",
+      "summary": "Modbus RTU frames read from the timing of UART characters",
+      "field": {},
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "data": "Data",
+        "crc": "CRC",
+        "end": "End"
+      },
+      "eventField": {
+        "frame": "Frame",
+        "address": "Server address",
+        "function": "Function code",
+        "exception": "Exception",
+        "partial": "Partial",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "value": "Value",
+        "ok": "OK",
+        "reason": "Reason"
+      }
+    },
+    "nrf24l01": {
+      "name": "nRF24L01+",
+      "summary": "SPI commands between a host and an nRF24L01+ transceiver",
+      "field": {},
+      "value": {},
+      "event": {
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "unknown": "Unknown command"
+      },
+      "eventField": {
+        "op": "Operation",
+        "tx": "Transaction",
+        "command": "Command",
+        "register": "Register",
+        "registerName": "Register name",
+        "pipe": "Pipe",
+        "status": "STATUS register",
+        "direction": "Direction",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "reason": "Reason"
+      }
+    },
+    "onewire-link": {
+      "name": "1-Wire link layer",
+      "summary": "Every low pulse on a 1-Wire line: a reset, a bit or a bad slot",
+      "field": {
+        "data": "Data line",
+        "speed": "Speed"
+      },
+      "value": {
+        "speed": {
+          "standard": "Standard",
+          "overdrive": "Overdrive"
+        }
+      },
+      "event": {
+        "reset": "Reset",
+        "bit": "Bit",
+        "bad-slot": "Bad slot"
+      },
+      "eventField": {
+        "presence": "Presence",
+        "value": "Value",
+        "lowTicks": "Low time (ticks)"
+      }
+    },
+    "onewire": {
+      "name": "1-Wire network layer",
+      "summary": "1-Wire transactions: ROM command, ROM code or search, then bytes",
+      "field": {},
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "rom-command": "ROM command",
+        "rom": "ROM code",
+        "search": "ROM search",
+        "byte": "Byte",
+        "bits": "Trailing bits",
+        "end": "End"
+      },
+      "eventField": {
+        "tx": "Transaction",
+        "presence": "Presence",
+        "code": "Command code",
+        "id": "ID",
+        "family": "Family code",
+        "crcOk": "CRC OK",
+        "conflicts": "Conflicts",
+        "unanswered": "Unanswered",
+        "value": "Value",
+        "count": "Bit count",
+        "reason": "Reason"
+      }
+    },
+    "parallel": {
+      "name": "Parallel bus",
+      "summary": "Up to 64 data lines read as one word, on clock edges or any change",
+      "field": {
+        "data": "Data lines",
+        "clock": "Clock line",
+        "clock_edge": "Clock edge"
+      },
+      "value": {
+        "clock_edge": {
+          "rising": "Rising",
+          "falling": "Falling",
+          "either": "Either"
+        }
+      },
+      "event": {
+        "word": "Word"
+      },
+      "eventField": {
+        "value": "Value",
+        "bits": "Bits",
+        "initial": "Initial levels"
+      }
+    },
+    "ps2": {
+      "name": "PS/2",
+      "summary": "Frames between a PS/2 keyboard or mouse and its host, both ways",
+      "field": {
+        "clk": "Clock line",
+        "data": "Data line"
+      },
+      "value": {},
+      "event": {
+        "frame": "Frame",
+        "error": "Error"
+      },
+      "eventField": {
+        "direction": "Direction",
+        "value": "Value",
+        "parityOk": "Parity OK",
+        "stopOk": "Stop bit OK",
+        "ack": "ACK",
+        "reason": "Reason"
+      }
+    },
+    "pwm": {
+      "name": "PWM",
+      "summary": "Each cycle of a PWM line: its period and its active time",
+      "field": {
+        "channel": "Signal line",
+        "polarity": "Polarity"
+      },
+      "value": {
+        "polarity": {
+          "active-high": "Active high",
+          "active-low": "Active low"
+        }
+      },
+      "event": {
+        "cycle": "Cycle"
+      },
+      "eventField": {
+        "periodTicks": "Period (ticks)",
+        "activeTicks": "Active time (ticks)"
+      }
+    },
+    "sdcard-spi": {
+      "name": "SD card (SPI mode)",
+      "summary": "SD card traffic on SPI: commands, responses, tokens and data blocks",
+      "field": {
+        "block_length": "Block length (bytes)"
+      },
+      "value": {},
+      "event": {
+        "command": "Command",
+        "response": "Response",
+        "token": "Token",
+        "data": "Data",
+        "block-end": "Block end",
+        "end": "End",
+        "unknown-command": "Unknown command"
+      },
+      "eventField": {
+        "op": "Operation",
+        "tx": "Transaction",
+        "index": "Command index",
+        "acmd": "ACMD",
+        "argument": "Argument",
+        "crc7": "CRC7",
+        "crcOk": "CRC OK",
+        "format": "Response format",
+        "bytes": "Bytes",
+        "busyBytes": "Busy bytes",
+        "token": "Token type",
+        "value": "Value",
+        "offset": "Offset",
+        "crc16": "CRC16",
+        "length": "Length",
+        "reason": "Reason",
+        "byte": "Byte"
+      }
+    },
+    "spi-nor": {
+      "name": "SPI NOR flash",
+      "summary": "Commands a host sends to a serial NOR flash over single-line SPI",
+      "field": {
+        "address_bytes": "Address bytes"
+      },
+      "value": {
+        "address_bytes": {
+          "three": "3 bytes",
+          "four": "4 bytes",
+          "auto": "Auto"
+        }
+      },
+      "event": {
+        "begin": "Begin",
+        "address": "Address",
+        "dummy": "Dummy bytes",
+        "data": "Data",
+        "status": "Status register",
+        "id": "ID",
+        "end": "End",
+        "unknown-command": "Unknown command"
+      },
+      "eventField": {
+        "op": "Operation",
+        "tx": "Transaction",
+        "command": "Command",
+        "address": "Address",
+        "bytes": "Bytes",
+        "direction": "Direction",
+        "offset": "Offset",
+        "register": "Register",
+        "value": "Value",
+        "written": "Written",
+        "scheme": "ID type",
+        "reason": "Reason",
+        "opcode": "Opcode"
+      }
+    },
+    "spi": {
+      "name": "SPI",
+      "summary": "Single-line SPI: words clocked in while chip select is asserted",
+      "field": {
+        "clk": "Clock line",
+        "cs": "Chip select line",
+        "mosi": "MOSI line",
+        "miso": "MISO line",
+        "mode": "SPI mode",
+        "word_bits": "Bits per word",
+        "bit_order": "Bit order",
+        "cs_active_low": "Chip select active low"
+      },
+      "value": {
+        "bit_order": {
+          "msb-first": "MSB first",
+          "lsb-first": "LSB first"
+        }
+      },
+      "event": {
+        "begin": "Begin",
+        "word": "Word",
+        "end": "End"
+      },
+      "eventField": {
+        "tx": "Transaction",
+        "partial": "Partial",
+        "mosi": "MOSI",
+        "miso": "MISO",
+        "reason": "Reason"
+      }
+    },
+    "swd": {
+      "name": "SWD",
+      "summary": "Arm Serial Wire Debug packets, line resets and switch sequences",
+      "field": {
+        "swclk": "SWCLK line",
+        "swdio": "SWDIO line"
+      },
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "request": "Request",
+        "ack": "ACK",
+        "data": "Data",
+        "end": "End",
+        "line-reset": "Line reset",
+        "switch": "Switch"
+      },
+      "eventField": {
+        "tx": "Packet",
+        "apndp": "APnDP",
+        "rnw": "RnW",
+        "addr": "Address",
+        "parityOk": "Parity OK",
+        "value": "Value",
+        "fromTarget": "From target",
+        "reason": "Reason",
+        "to": "Switched to"
+      }
+    },
+    "timing": {
+      "name": "Edge timing",
+      "summary": "Every edge of one line, with the ticks since the previous one",
+      "field": {
+        "channel": "Signal line",
+        "edges": "Edges"
+      },
+      "value": {
+        "edges": {
+          "any": "Any",
+          "rising": "Rising",
+          "falling": "Falling"
+        }
+      },
+      "event": {
+        "edge": "Edge"
+      },
+      "eventField": {
+        "slope": "Slope",
+        "sincePrevious": "Since previous (ticks)"
+      }
+    },
+    "uart": {
+      "name": "UART",
+      "summary": "Characters of one asynchronous serial line, start to stop bits",
+      "field": {
+        "line": "Line",
+        "baud": "Baud rate",
+        "data_bits": "Data bits",
+        "parity": "Parity",
+        "stop_bits": "Stop bits",
+        "bit_order": "Bit order",
+        "inverted": "Inverted",
+        "sample_point": "Sample point (%)"
+      },
+      "value": {
+        "parity": {
+          "none": "None",
+          "even": "Even",
+          "odd": "Odd",
+          "mark": "Mark (always 1)",
+          "space": "Space (always 0)"
+        },
+        "stop_bits": {
+          "one": "1 bit",
+          "one-and-a-half": "1.5 bits",
+          "two": "2 bits"
+        },
+        "bit_order": {
+          "lsb-first": "LSB first",
+          "msb-first": "MSB first"
+        }
+      },
+      "event": {
+        "frame": "Frame",
+        "break": "Break"
+      },
+      "eventField": {
+        "value": "Value",
+        "parity": "Parity",
+        "framingOk": "Framing OK",
+        "ticks": "Duration (ticks)"
+      }
+    },
+    "usb-pd": {
+      "name": "USB PD",
+      "summary": "USB Power Delivery packets on the CC line",
+      "field": {
+        "cc": "CC line",
+        "bit_rate": "Bit rate (bit/s)",
+        "tolerance": "Tolerance (%)"
+      },
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "sop": "SOP",
+        "header": "Header",
+        "extended-header": "Extended header",
+        "object": "Data object",
+        "pdo": "PDO",
+        "rdo": "RDO",
+        "data": "Data",
+        "crc": "CRC",
+        "hard-reset": "Hard reset",
+        "cable-reset": "Cable reset",
+        "error": "Error",
+        "end": "End"
+      },
+      "eventField": {
+        "pkt": "Packet",
+        "set": "Ordered set",
+        "corrupt": "Corrupt K-code position",
+        "messageType": "Message type",
+        "control": "Control message",
+        "data": "Data message",
+        "extendedMessage": "Extended message",
+        "dataRole": "Data role",
+        "powerRole": "Power role",
+        "cablePlug": "Cable plug",
+        "revision": "Revision",
+        "messageId": "Message ID",
+        "objects": "Data objects",
+        "extended": "Extended",
+        "dataSize": "Data size",
+        "requestChunk": "Request chunk",
+        "chunkNumber": "Chunk number",
+        "chunked": "Chunked",
+        "index": "Object index",
+        "raw": "Raw",
+        "supply": "Supply type",
+        "millivolts": "Voltage (mV)",
+        "milliamps": "Current (mA)",
+        "flags": "Flags",
+        "maxMillivolts": "Max voltage (mV)",
+        "minMillivolts": "Min voltage (mV)",
+        "milliwatts": "Power (mW)",
+        "apdoType": "APDO type",
+        "position": "Object position",
+        "giveBack": "GiveBack flag",
+        "capabilityMismatch": "Capability mismatch",
+        "usbCommunicationsCapable": "USB communications capable",
+        "noUsbSuspend": "No USB suspend",
+        "unchunkedExtended": "Unchunked extended",
+        "operating": "Operating current or power",
+        "maximum": "Maximum current or power",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "value": "Value",
+        "ok": "OK",
+        "reason": "Reason"
+      }
+    },
+    "usb-transactions": {
+      "name": "USB transactions",
+      "summary": "USB packets grouped into transactions: token, setup, data, handshake",
+      "field": {},
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "setup": "Setup request",
+        "data": "Data",
+        "handshake": "Handshake",
+        "end": "End"
+      },
+      "eventField": {
+        "xact": "Transaction",
+        "token": "Token",
+        "address": "Address",
+        "endpoint": "Endpoint",
+        "frame": "Frame number",
+        "bmRequestType": "bmRequestType",
+        "bRequest": "bRequest",
+        "wValue": "wValue",
+        "wIndex": "wIndex",
+        "wLength": "wLength",
+        "pid": "PID",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "reason": "Reason"
+      }
+    },
+    "usb": {
+      "name": "USB low/full speed",
+      "summary": "USB 2.0 low- and full-speed packets and bus states from D+ and D−",
+      "field": {
+        "dp": "D+ line",
+        "dm": "D− line",
+        "speed": "Speed"
+      },
+      "value": {
+        "speed": {
+          "low": "Low (1.5 Mbit/s)",
+          "full": "Full (12 Mbit/s)"
+        }
+      },
+      "event": {
+        "begin": "Begin",
+        "pid": "PID",
+        "token": "Token",
+        "sof": "SOF",
+        "data": "Data",
+        "data-end": "Data end",
+        "split": "SPLIT",
+        "end": "End",
+        "reset": "Reset",
+        "suspend": "Suspend",
+        "resume": "Resume",
+        "keep-alive": "Keep-alive"
+      },
+      "eventField": {
+        "pkt": "Packet",
+        "pid": "PID",
+        "ok": "OK",
+        "address": "Address",
+        "endpoint": "Endpoint",
+        "crc5": "CRC5",
+        "frame": "Frame number",
+        "offset": "Offset",
+        "bytes": "Bytes",
+        "crc16": "CRC16",
+        "length": "Length",
+        "raw": "Raw bits",
+        "reason": "Reason",
+        "ticks": "Duration (ticks)"
+      }
+    },
+    "wiegand": {
+      "name": "Wiegand",
+      "summary": "Frames an access-control reader sends on its DATA0 and DATA1 lines",
+      "field": {
+        "d0": "DATA0 line",
+        "d1": "DATA1 line",
+        "frame_gap_us": "Frame gap (µs)",
+        "pulse_min_us": "Shortest pulse (µs)",
+        "pulse_max_us": "Longest pulse (µs)"
+      },
+      "value": {},
+      "event": {
+        "frame": "Frame",
+        "error": "Error"
+      },
+      "eventField": {
+        "frame": "Frame",
+        "bits": "Bits",
+        "data": "Data",
+        "parityOk": "Parity OK",
+        "reason": "Reason"
+      }
+    },
+    "ws281x": {
+      "name": "WS281x LED",
+      "summary": "Frames of LED data on the line of a WS2812B-class LED chain",
+      "field": {
+        "data": "Data line",
+        "bits_per_led": "Bits per LED",
+        "threshold_ns": "Threshold (ns)",
+        "reset_us": "Reset time (µs)"
+      },
+      "value": {},
+      "event": {
+        "frame-begin": "Frame begin",
+        "led": "LED",
+        "frame-end": "Frame end",
+        "error": "Error"
+      },
+      "eventField": {
+        "frame": "Frame",
+        "index": "LED index",
+        "bytes": "Bytes",
+        "leds": "LEDs",
+        "reason": "Reason",
+        "bits": "Bits"
+      }
     }
   },
   "decoderDialog": {
     "addTitle": "Add decoder",
-    "editTitle": "{name} decoder",
+    "editTitle": "Decoder settings for {name}",
     "protocol": "Protocol",
+    "search": "Search {count} protocols",
+    "noMatch": "No matching protocol",
+    "stack": "Stack on it",
+    "stackNone": "Nothing",
+    "stackHint": "A higher-level protocol reading what {name} puts out",
+    "label": "Name",
+    "labelHint": "Leave empty to show the protocol's name",
     "channels": "Channels",
     "options": "Options",
-    "unused": "Not used",
-    "add": "Add",
-    "save": "Save",
-    "remove": "Remove",
-    "cancel": "Cancel",
-    "edit": "Decoder settings",
-    "busy": "A capture is running; change decoders once it ends",
+    "optionsOf": "Options of {name}",
+    "unused": "Unused",
+    "unset": "Not set",
+    "channelList": "Channel numbers, least significant first, separated by commas",
     "needChannel": "Choose a channel for {role}",
-    "needData": "Use MISO, MOSI or both",
-    "option": {
-      "address_format": "Addresses",
-      "baudrate": "Baud rate",
-      "num_data_bits": "Data bits",
-      "parity_type": "Parity",
-      "num_stop_bits": "Stop bits",
-      "bit_order": "Bit order",
-      "invert": "Inverted signal",
-      "cpol": "Clock polarity CPOL",
-      "cpha": "Clock phase CPHA",
-      "bitorder": "Bit order",
-      "wordsize": "Word size (bits)",
-      "cs_polarity": "Chip select",
-      "bitrate": "Bit rate",
-      "nominal_bitrate": "Nominal bit rate",
-      "fast_bitrate": "Data bit rate",
-      "sample_point": "Sample point %"
-    },
-    "value": {
-      "shifted": "7-bit",
-      "unshifted": "8-bit with R/W",
-      "none": "None",
-      "odd": "Odd",
-      "even": "Even",
-      "zero": "Always 0",
-      "one": "Always 1",
-      "lsb-first": "LSB first",
-      "msb-first": "MSB first",
-      "yes": "Yes",
-      "no": "No",
-      "active-low": "Active low",
-      "active-high": "Active high"
-    },
-    "search": "Search {count} decoders",
-    "noMatch": "No decoder matches",
-    "stacksOn": "Stacked on: {chain}",
-    "noStack": "The decoder it needs below cannot be found",
-    "optionsOf": "{name} options",
+    "duplicateChannel": "Channel D{channel} is chosen twice",
+    "badChannelList": "{field} needs channel numbers separated by commas",
+    "badNumber": "{field} needs a whole number",
     "display": "Display",
     "numberFormat": "Numbers",
-    "rows": "Annotation rows",
     "formats": {
       "hex": "Hex",
       "dec": "Dec",
@@ -419,75 +1470,37 @@
       "bin": "Bin",
       "ascii": "ASCII"
     },
-    "range": "Decode range",
-    "rangeAll": "Whole capture",
-    "rangeSegment": "Segment",
-    "rangeSpan": "{from} to {to}",
-    "rangeNone": "Drag a segment on the ruler to decode only part"
+    "add": "Add",
+    "save": "Save",
+    "remove": "Remove",
+    "cancel": "Cancel",
+    "edit": "Decoder settings"
   },
   "stream": {
     "title": "Data stream",
     "resize": "Drag to resize the data stream",
     "resizeTip": "Drag to resize",
     "decoders": "Decoders",
-    "mode": {
-      "label": "Display",
-      "text": "Text",
-      "hex": "Hex"
-    },
+    "tab": "{decoder} › {stream}",
     "scope": {
       "label": "Range",
       "all": "All",
       "segment": "Segment",
-      "allTip": "List every decoded result in the capture",
-      "segmentTip": "List only results between A and B",
+      "allTip": "List every decoded item of the capture",
+      "segmentTip": "List only what lies between A and B",
       "segmentDisabledTip": "Drag along the ruler to select a segment first"
     },
     "copy": "Copy",
-    "close": "Close data stream",
+    "close": "Close the data stream",
     "column": {
       "time": "Time ms",
-      "wireOrder": "On the wire",
-      "dataLine": "Line",
-      "offset": "Offset",
-      "content": "Content",
-      "text": "Text",
-      "bytes": "Bytes",
-      "characters": "Chars",
-      "identifier": "ID",
-      "data": "Data",
-      "row": "Row"
+      "kind": "Event",
+      "fields": "Content"
     },
     "summary": {
-      "transfers": "{count} transfers",
-      "frames": "{count} frames",
-      "transferBytes": "1 transfer, {count} bytes",
-      "inSegment": "{total}, {count} {unit} in segment",
-      "segmentOnly": "Segment {from} – {to} ms, {count} {unit}",
-      "unitBytes": "bytes",
-      "unitFrames": "frames"
-    },
-    "empty": "No complete {unit} in this segment. Widen the segment or switch back to All.",
-    "note": {
-      "i2cHeadCut": "This transfer was already under way when the capture began; without its start condition it is not decoded",
-      "captureEnds": "The capture ends here",
-      "beforeSegment": "The start of this transfer lies outside the segment",
-      "afterSegment": "The end of this transfer lies outside the segment",
-      "uartHeadCut": "This frame was already being sent when the capture began; it is not decoded",
-      "uartTailCut": "This frame was still being sent when the capture ended; it is not decoded",
-      "canFrame": "FD, {count} bytes, CRC OK, acknowledged",
-      "canCut": "A frame cut by the start or end of the capture was not decoded"
-    },
-    "can": {
-      "fd": "FD",
-      "classic": "CAN",
-      "bytes": "{count} bytes",
-      "crcOk": "CRC OK",
-      "crcError": "CRC error",
-      "acked": "acknowledged",
-      "noAck": "not acknowledged",
-      "errorFrame": "frame error",
-      "separator": ", "
+      "events": "{count} events",
+      "inSegment": "{total}, {count} in the segment",
+      "segmentOnly": "Segment {from} – {to} ms, {count} events"
     },
     "export": {
       "label": "Export",
@@ -495,7 +1508,8 @@
       "text": "Export as text…",
       "timeColumn": "Time (ms)",
       "decoderColumn": "Decoder",
-      "labelColumn": "Meaning / line",
+      "streamColumn": "Stream",
+      "kindColumn": "Event",
       "contentColumn": "Content"
     }
   },
@@ -631,9 +1645,9 @@
       "tooManyChannels": "{count} channels is more than the {limit} a capture holds"
     },
     "decode": {
-      "python": "The decoder runtime failed: {detail}",
-      "unknown": "No decoder {id}",
-      "invalid": "Decoder {id} cannot be used: {detail}"
+      "invalid": "The decoder cannot be used: {detail}",
+      "missingChannels": "The decoder needs channels the capture lacks: {channels}",
+      "failed": "Decoding stopped: {detail}"
     },
     "update": {
       "check": "Could not check for updates: {detail}",

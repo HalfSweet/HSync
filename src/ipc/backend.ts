@@ -9,7 +9,7 @@ import type { BinsRequest } from './bindings/BinsRequest'
 import type { CaptureRequest } from './bindings/CaptureRequest'
 import type { CaptureSummary } from './bindings/CaptureSummary'
 import type { ChannelEdges } from './bindings/ChannelEdges'
-import type { DecoderInfo } from './bindings/DecoderInfo'
+import type { CatalogEntry } from './bindings/CatalogEntry'
 import type { DecoderLanes } from './bindings/DecoderLanes'
 import type { DecoderStatus } from './bindings/DecoderStatus'
 import type { DeviceState } from './bindings/DeviceState'
@@ -23,7 +23,6 @@ import type { OptionValue } from './bindings/OptionValue'
 import type { PatternCondition } from './bindings/PatternCondition'
 import type { PulseInfo } from './bindings/PulseInfo'
 import type { SearchResult } from './bindings/SearchResult'
-import type { StreamMode } from './bindings/StreamMode'
 import type { StreamPage } from './bindings/StreamPage'
 import type { WaveformSummary } from './bindings/WaveformSummary'
 import { decodeBins, type BinsResult } from './bins'
@@ -33,11 +32,13 @@ import type { LogLevel } from './logLevels'
 /** Stops a subscription. */
 export type Unsubscribe = () => void
 
-/** A page of a decoder's data stream. */
+/** A page of a stream's listing in the data stream. */
 export interface StreamRequest {
   captureId: number
+  /** Position of the decoder in the capture's decoder list. */
   index: number
-  mode: StreamMode
+  /** Position of the stream among the decoder's. */
+  stream: number
   /** The marked segment, to count what lies inside it. */
   segment: [number, number] | null
   /** List only rows overlapping the segment. */
@@ -46,7 +47,7 @@ export interface StreamRequest {
   count: number
 }
 
-/** A decoder of capture `captureId` finished. */
+/** A decoder of capture `captureId` finished, failed, or has more to show. */
 export interface DecodedEvent {
   captureId: number
   index: number
@@ -137,8 +138,8 @@ export interface Backend {
   captureStart(request: CaptureRequest): Promise<CaptureSummary>
   captureStop(): Promise<void>
 
-  /** Every protocol decoder there is, for the decoder dialog. */
-  decodeCatalog(): Promise<DecoderInfo[]>
+  /** Every decoder there is, with its configuration fields and event kinds. */
+  decodeCatalog(): Promise<CatalogEntry[]>
 
   /** Which messages the app logs, and whether to the log file as well. */
   configureLog(level: LogLevel, file: boolean): Promise<void>
@@ -156,30 +157,36 @@ export interface Backend {
   updateCheck(): Promise<AvailableUpdate | null>
   /** Downloads and installs the release the last check found, then restarts the app. */
   updateInstall(onProgress: (progress: UpdateProgress) => void): Promise<void>
-  /** The decoders of a capture and how far they are. */
+  /** The decoders of a capture, their streams and how far they are. */
   decodeList(captureId: number): Promise<DecoderStatus[]>
-  /** Decode lanes of finished decoders over `start..end`. */
+  /** The lanes of every decoder's streams over `start..end`. */
   decodeView(
     captureId: number,
     start: number,
     end: number,
     samplesPerPixel: number,
-    /** The samples in view, when `start..end` reaches beyond them: SPI offsets, the I²C
-     * address and the frames beside an empty view are worked out for these. */
-    focus?: readonly [number, number],
   ): Promise<DecoderLanes[]>
   decodeStream(request: StreamRequest): Promise<StreamPage | null>
-  /** Replaces the capture's decoders (DSView's `decoders` list) and decodes again. */
+  /** Replaces the capture's decoders (its entries) and decodes again, while capturing too. */
   decodeSet(captureId: number, decoders: unknown[]): Promise<CaptureSummary>
-  /** Position in a decoder's data stream of the first row ending after `sample`. */
+  /** Position in a stream's listing of the first event reaching past `sample`. */
   decodeRowAt(
     captureId: number,
     index: number,
-    mode: StreamMode,
+    stream: number,
     sample: number,
   ): Promise<number | null>
-  /** Values or text in every decoder's results; `null` for a blank query. */
-  decodeSearch(captureId: number, query: string, mode: StreamMode): Promise<SearchResult | null>
+  /** Events matching `query` in every decoder's streams; `null` for a blank query. */
+  decodeSearch(captureId: number, query: string): Promise<SearchResult | null>
+  /** Where decoder `index` has events within `start..end`, as `[start, end]` stretches at
+   * most `resolution` samples apart; `null` for a decoder that is not there. */
+  decodeCoverage(
+    captureId: number,
+    index: number,
+    start: number,
+    end: number,
+    resolution: number,
+  ): Promise<[number, number][] | null>
 
   /** Progress and end of captures taken with a device. */
   onLive(handler: (status: LiveStatus) => void): Promise<Unsubscribe>
@@ -187,8 +194,10 @@ export interface Backend {
   onDevices(handler: (devices: DeviceSummary[]) => void): Promise<Unsubscribe>
   /** The open device, when it changed by itself (it was unplugged). */
   onDeviceState(handler: (state: DeviceState | null) => void): Promise<Unsubscribe>
-  /** A decoder finished. */
+  /** A decoder finished or failed. */
   onDecoded(handler: (event: DecodedEvent) => void): Promise<Unsubscribe>
+  /** A decoder has more to show. */
+  onDecodeProgress(handler: (event: DecodedEvent) => void): Promise<Unsubscribe>
 }
 
 /** A channel the backend reports the share done through. */
@@ -325,7 +334,7 @@ class TauriBackend implements Backend {
   }
 
   decodeCatalog() {
-    return invoke<DecoderInfo[]>('decode_catalog')
+    return invoke<CatalogEntry[]>('decode_catalog')
   }
 
   configureLog(level: LogLevel, file: boolean) {
@@ -385,20 +394,8 @@ class TauriBackend implements Backend {
     return invoke<DecoderStatus[]>('decode_list', { captureId })
   }
 
-  decodeView(
-    captureId: number,
-    start: number,
-    end: number,
-    samplesPerPixel: number,
-    focus?: readonly [number, number],
-  ) {
-    return invoke<DecoderLanes[]>('decode_view', {
-      captureId,
-      start,
-      end,
-      samplesPerPixel,
-      focus: focus ?? null,
-    })
+  decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
+    return invoke<DecoderLanes[]>('decode_view', { captureId, start, end, samplesPerPixel })
   }
 
   decodeStream(request: StreamRequest) {
@@ -409,12 +406,22 @@ class TauriBackend implements Backend {
     return invoke<CaptureSummary>('decode_set', { captureId, decoders })
   }
 
-  decodeRowAt(captureId: number, index: number, mode: StreamMode, sample: number) {
-    return invoke<number | null>('decode_row_at', { captureId, index, mode, sample })
+  decodeRowAt(captureId: number, index: number, stream: number, sample: number) {
+    return invoke<number | null>('decode_row_at', { captureId, index, stream, sample })
   }
 
-  decodeSearch(captureId: number, query: string, mode: StreamMode) {
-    return invoke<SearchResult | null>('decode_search', { captureId, query, mode })
+  decodeSearch(captureId: number, query: string) {
+    return invoke<SearchResult | null>('decode_search', { captureId, query })
+  }
+
+  decodeCoverage(captureId: number, index: number, start: number, end: number, resolution: number) {
+    return invoke<[number, number][] | null>('decode_coverage', {
+      captureId,
+      index,
+      start,
+      end,
+      resolution,
+    })
   }
 
   onLive(handler: (status: LiveStatus) => void) {
@@ -423,6 +430,10 @@ class TauriBackend implements Backend {
 
   onDecoded(handler: (event: DecodedEvent) => void) {
     return listen<DecodedEvent>('decode://done', (event) => handler(event.payload))
+  }
+
+  onDecodeProgress(handler: (event: DecodedEvent) => void) {
+    return listen<DecodedEvent>('decode://progress', (event) => handler(event.payload))
   }
 
   onDevices(handler: (devices: DeviceSummary[]) => void) {

@@ -27,7 +27,7 @@ const OWN_LOG_TARGETS: [&str; 8] = [
     "hsync_atklogic",
     "hsync_pxlogic",
     "hsync_demo",
-    "hsync_srd",
+    "hsync_uiharu",
 ];
 
 /// Size at which the log file starts over, keeping the previous ones.
@@ -49,23 +49,6 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         .resolve("demo/protocol.dsl", BaseDirectory::Resource)
         .ok();
     let firmware = resolver.resolve("firmware", BaseDirectory::Resource)?;
-    let decoders =
-        hsync_srd::DecoderHost::new(resolver.resolve("decoders", BaseDirectory::Resource)?);
-    // Release builds carry their own Python; development builds use the one they
-    // linked against.
-    let python = resolver.resolve("python", BaseDirectory::Resource)?;
-    let decoders = Arc::new(if python.is_dir() {
-        decoders.with_python_home(python)
-    } else {
-        decoders
-    });
-    // Reading the decoders starts Python and imports them all; do it before anyone asks.
-    let preload = Arc::clone(&decoders);
-    std::thread::Builder::new()
-        .name("decoder-catalog".into())
-        .spawn(move || {
-            let _ = preload.catalog();
-        })?;
     let manager = DeviceManager::new(vec![
         Arc::new(DemoDriver::new(demo)),
         Arc::new(DslogicDriver::new(FirmwareDir(firmware.clone()))),
@@ -74,20 +57,22 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     ]);
     let emitter = app.handle().clone();
     let events: EventSink = Arc::new(move |event| {
-        if let SessionEvent::Decoded { capture_id, index } = event {
-            let _ = emitter.emit(
-                commands::decode::DECODED_EVENT,
-                serde_json::json!({ "captureId": capture_id, "index": index }),
-            );
-        }
+        let (name, capture_id, index) = match event {
+            SessionEvent::Decoded { capture_id, index } => {
+                (commands::decode::DECODED_EVENT, capture_id, index)
+            }
+            SessionEvent::DecodeProgress { capture_id, index } => {
+                (commands::decode::DECODE_PROGRESS_EVENT, capture_id, index)
+            }
+            SessionEvent::Live(_) => return,
+        };
+        let _ = emitter.emit(
+            name,
+            serde_json::json!({ "captureId": capture_id, "index": index }),
+        );
     });
-    let mut workspace = Workspace::with_events(events);
-    workspace.set_decoder_host(Arc::clone(&decoders));
-    app.manage(AppState::new(
-        workspace,
-        Instrument::new(manager.clone()),
-        decoders,
-    ));
+    let workspace = Workspace::with_events(events);
+    app.manage(AppState::new(workspace, Instrument::new(manager.clone())));
     let handle = app.handle().clone();
     let watch = manager.watch(HOTPLUG_SETTLE, move || {
         commands::device::devices_changed(&handle);
@@ -146,6 +131,7 @@ pub fn run() {
             commands::decode::decode_catalog,
             commands::decode::decode_row_at,
             commands::decode::decode_search,
+            commands::decode::decode_coverage,
             commands::files::capture_export,
             commands::files::capture_save,
             commands::files::file_cancel,

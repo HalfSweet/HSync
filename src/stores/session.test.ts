@@ -59,8 +59,8 @@ vi.mock('@/ipc/backend', () => ({
     }),
 }))
 
-const I2C = [{ id: '1:i2c', channel: [{ scl: 1 }, { sda: 0 }] }]
-const UART = [{ id: '1:uart', channel: [{ rxtx: 5 }] }]
+const I2C = [{ nodes: { i2c: { type: 'i2c', config: { scl: 1, sda: 0 } } } }]
+const UART = [{ nodes: { uart: { type: 'uart', config: { line: 5 } } } }]
 
 function stateOf(driver: string): DeviceState {
   return {

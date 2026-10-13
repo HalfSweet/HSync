@@ -163,7 +163,7 @@ export const useSessionStore = defineStore('session', () => {
   }
 
   /** Writes the session to `path`. */
-  async function save(path: string): Promise<boolean> {
+  function save(path: string): Promise<boolean> {
     return capture.saveText(path, `${JSON.stringify(snapshot(), null, 2)}\n`)
   }
 

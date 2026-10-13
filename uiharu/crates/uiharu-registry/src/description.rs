@@ -2,8 +2,7 @@
 
 //! A pipeline as a file or a session describes it.
 
-use std::collections::BTreeMap;
-
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 /// A pipeline: a source, named nodes, the connections between their ports and the outputs
@@ -29,13 +28,13 @@ pub struct Description {
     /// The logic samples the pipeline reads.
     pub source: SourceDescription,
     /// The nodes by name; a name is not `source` and has no dot.
-    pub nodes: BTreeMap<String, NodeDescription>,
+    pub nodes: IndexMap<String, NodeDescription>,
     /// Connections from `source` or `node.port` to `node.port`.
     #[serde(default)]
     pub connections: Vec<Connection>,
     /// The outputs to expose, by the name the reader gets, as `node.port`.
     #[serde(default)]
-    pub expose: BTreeMap<String, String>,
+    pub expose: IndexMap<String, String>,
     /// Items each queue holds at most (default 256).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub queue: Option<usize>,

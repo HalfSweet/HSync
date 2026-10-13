@@ -1,318 +1,304 @@
 /**
- * Decoded demo data for the browser mock: the presentations `cargo run -p hsync-decode --example
- * decode_fixture` exported, queried the way `hsync_decode::Presentation` answers them.
+ * Decoded demo data for the browser mock: the events the real decoders put out for the demo
+ * capture (`HSYNC_WRITE_FIXTURES=1 cargo test -p hsync-session --test fixtures`), queried the
+ * way the stores of `hsync-uiharu` answer.
  */
-import type { Bus } from '../bindings/Bus'
-import type { DataLine } from '../bindings/DataLine'
+import { entryKinds, entryLabel, isEntry } from '@/decode/catalog'
+
 import type { DecoderLanes } from '../bindings/DecoderLanes'
 import type { DecoderStatus } from '../bindings/DecoderStatus'
-import type { DecoderView } from '../bindings/DecoderView'
-import type { LaneItem } from '../bindings/LaneItem'
+import type { EventRow } from '../bindings/EventRow'
+import type { LaneBlock } from '../bindings/LaneBlock'
 import type { SearchHit } from '../bindings/SearchHit'
 import type { SearchResult } from '../bindings/SearchResult'
-import type { StreamCounts } from '../bindings/StreamCounts'
-import type { StreamMode } from '../bindings/StreamMode'
 import type { StreamPage } from '../bindings/StreamPage'
-import type { StreamRow } from '../bindings/StreamRow'
-import decoded from './fixtures/protocol-decoded.json'
+import type { StreamView } from '../bindings/StreamView'
+import demo from './fixtures/protocol-demo.json'
+import fixture from './fixtures/protocol-uiharu.json'
 
-interface Snapshot {
-  bus: Bus
-  lanes: [string, LaneItem[]][]
-  textRows: StreamRow[]
-  hexRows: StreamRow[]
-  units: [number, number][]
-  counts: StreamCounts
-  sequences: { line: DataLine | null; words: [number, number, number][] }[]
-  ids: [number, number, number][]
-}
-
-interface Entry {
-  index: number
-  id: string
-  presentation: Snapshot
-}
-
-interface Lane {
+interface FixtureStream {
   name: string
-  items: LaneItem[]
-  maxEnd: number[]
+  kind: string
+  schema: string
+  rows: EventRow[]
 }
 
-/** First index in `[0, length)` where `predicate` turns false (it must be monotone). */
-function partition(length: number, predicate: (index: number) => boolean): number {
-  let lo = 0
-  let hi = length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if (predicate(mid)) lo = mid + 1
-    else hi = mid
-  }
-  return lo
+interface FixtureDecoder {
+  label: string
+  kinds: string[]
+  streams: FixtureStream[]
 }
 
-function lane(name: string, items: LaneItem[]): Lane {
-  const sorted = [...items].sort((a, b) => a.start - b.start)
-  let running = 0
-  const maxEnd = sorted.map((item) => (running = Math.max(running, item.end)))
-  return { name, items: sorted, maxEnd }
-}
+const RECORDED = fixture.decoders as FixtureDecoder[]
 
-/** `Lane::view` of hsync-decode. */
-function laneView(lane: Lane, start: number, end: number, minWidth: number): LaneItem[] {
-  const first = partition(lane.maxEnd.length, (i) => (lane.maxEnd[i] ?? 0) < start)
-  const out: LaneItem[] = []
-  for (let i = first; i < lane.items.length; i++) {
-    const item = lane.items[i]
-    if (!item || item.start >= end) break
-    const inside = item.start === item.end ? item.start >= start : item.end > start
-    if (!inside) continue
-    const narrow = item.end - item.start < minWidth
-    const last = out.at(-1)
-    if (narrow && last) {
-      if (last.type === 'dense' && item.start <= last.end + minWidth) {
-        last.end = Math.max(last.end, item.end)
-        continue
-      }
-      if (last.end - last.start < minWidth && item.start <= last.end + minWidth) {
-        out.pop()
-        out.push({ type: 'dense', start: last.start, end: Math.max(item.end, last.start) })
-        continue
-      }
-    }
-    out.push({ ...item })
-  }
-  return out
-}
+/** The demo capture's decoder entries, as the backend translates DSView's. */
+export const MOCK_ENTRIES: unknown[] = fixture.entries
 
-class Presentation {
-  readonly lanes: Lane[]
+/** Hits a search returns at most, as the backend. */
+const SEARCH_LIMIT = 10_000
+/** Blocks a lane returns at most, as the backend. */
+const LANE_LIMIT = 4096
 
-  constructor(readonly snapshot: Snapshot) {
-    this.lanes = snapshot.lanes.map(([name, items]) => lane(name, items))
-  }
+/** The first sample after an event, an event without length counting as one sample wide. */
+const reach = (row: EventRow) => Math.max(row.end, row.start + 1)
 
-  /** The lanes over `start..end`, the frames beside an empty `focus`, as the backend's
-   * `Presentation::view_around`. */
-  view(
-    start: number,
-    end: number,
-    samplesPerPixel: number,
-    focus: readonly [number, number] = [start, end],
-  ): DecoderView {
-    const minWidth = Math.ceil(samplesPerPixel * 3)
-    const lanes = this.lanes.map((one) => ({
-      lane: one.name,
-      items: laneView(one, start, end, minWidth),
-    }))
-    const [focusStart, focusEnd] = focus
-    const empty = lanes.every((one) =>
-      one.items.every((item) => item.end <= focusStart || item.start >= focusEnd),
-    )
-    const header = this.lanes[0]
-    let previous: number | null = null
-    let next: number | null = null
-    if (empty && header) {
-      previous = header.items.filter((item) => item.end <= focusStart).at(-1)?.start ?? null
-      next = header.items.find((item) => item.start >= focusEnd)?.start ?? null
-    }
-    return { lanes, previous, next }
-  }
-
-  rows(mode: StreamMode): StreamRow[] {
-    return mode === 'text' ? this.snapshot.textRows : this.snapshot.hexRows
-  }
-
-  countInside(start: number, end: number): number {
-    return this.snapshot.units.filter(([from, to]) => from >= start && from < end && to <= end)
-      .length
-  }
-}
-
-const fixtures = (decoded as unknown as Entry[]).map((entry) => ({
-  id: entry.id,
-  presentation: new Presentation(entry.presentation),
-}))
-
-interface Matched {
-  index: number
-  id: string
-  presentation: Presentation | null
-}
-
-/**
- * The mock's results for a decoder list: each entry gets the demo's presentation of the same
- * decoder id, the way the demo capture would decode it; others decode to nothing.
- */
-function match(decoders: unknown): Matched[] {
-  const list = Array.isArray(decoders) ? (decoders as unknown[]) : []
-  return list.map((entry, index) => {
-    const id =
-      typeof entry === 'object' &&
-      entry !== null &&
-      typeof (entry as { id?: unknown }).id === 'string'
-        ? (entry as { id: string }).id
-        : ''
-    return { index, id, presentation: fixtures.find((one) => one.id === id)?.presentation ?? null }
-  })
-}
-
-/** Decoder states of a capture: finished, or still running while it is captured. */
-export function mockStatuses(decoders: unknown, running: boolean): DecoderStatus[] {
-  return match(decoders).map(({ index, id, presentation }) => ({
-    index,
-    id,
-    bus: presentation?.snapshot.bus ?? null,
-    state: running ? 'running' : presentation ? 'done' : 'unsupported',
-    counts: running || !presentation ? null : presentation.snapshot.counts,
-    lanes: [],
-    error: null,
+/** The recording that goes with each of the capture's entries: the one of its first node type. */
+function matched(decoders: unknown): { entry: unknown; recorded: FixtureDecoder | null }[] {
+  return (Array.isArray(decoders) ? decoders : []).map((entry) => ({
+    entry,
+    recorded: isEntry(entry)
+      ? (RECORDED.find((one) => one.kinds[0] === entryKinds(entry)[0]) ?? null)
+      : null,
   }))
 }
 
-/** Lanes of the decoded demo over `start..end`. */
+function streamOf(decoders: unknown, index: number, stream: number): FixtureStream | null {
+  return matched(decoders)[index]?.recorded?.streams[stream] ?? null
+}
+
+export function mockStatuses(decoders: unknown, running: boolean): DecoderStatus[] {
+  return matched(decoders).map(({ entry, recorded }, index) => {
+    const kinds = isEntry(entry) ? entryKinds(entry) : []
+    const label = isEntry(entry) ? entryLabel(entry, (type) => type) : ''
+    if (!recorded) {
+      return {
+        index,
+        label,
+        kinds,
+        state: 'invalid',
+        error: { code: 'error.decode.invalid', params: { detail: 'not in the recording' } },
+        streams: [],
+      }
+    }
+    return {
+      index,
+      label,
+      kinds,
+      state: running ? 'running' : 'done',
+      error: null,
+      streams: recorded.streams.map((stream, at) => ({
+        index: at,
+        name: stream.name,
+        kind: stream.kind,
+        schema: stream.schema,
+        progress: {
+          events: running ? 0 : stream.rows.length,
+          settled: running ? 0 : demo.sampleCount,
+          ended: !running,
+        },
+      })),
+    }
+  })
+}
+
+/** The rows overlapping `start..end`, in time order. */
+function overlapping(rows: readonly EventRow[], start: number, end: number): EventRow[] {
+  return rows.filter((row) => row.start < end && reach(row) > start)
+}
+
+/** The lane over `start..end`, as `Store::view`: narrow events pack into dense blocks. */
+function laneView(rows: readonly EventRow[], start: number, end: number, spp: number): StreamView {
+  const unit = Math.max(1, Math.floor(spp * 2))
+  const blocks: LaneBlock[] = []
+  let run: { first: EventRow; start: number; end: number; count: number } | null = null
+  const flush = () => {
+    if (!run) return
+    if (run.count === 1) blocks.push({ type: 'event', ...run.first })
+    else blocks.push({ type: 'dense', start: run.start, end: run.end, count: run.count })
+    run = null
+  }
+  for (const row of overlapping(rows, start, end)) {
+    if (blocks.length >= LANE_LIMIT) return { blocks, truncated: true }
+    if (reach(row) - row.start >= unit) {
+      flush()
+      blocks.push({ type: 'event', ...row })
+      continue
+    }
+    if (run && row.start <= run.end + unit) {
+      run.end = Math.max(run.end, reach(row))
+      run.count += 1
+    } else {
+      flush()
+      run = { first: row, start: row.start, end: reach(row), count: 1 }
+    }
+  }
+  flush()
+  return { blocks, truncated: false }
+}
+
 export function mockView(
   decoders: unknown,
   start: number,
   end: number,
   samplesPerPixel: number,
-  focus: readonly [number, number] = [start, end],
 ): DecoderLanes[] {
-  return match(decoders).flatMap(({ index, presentation }) =>
-    presentation ? [{ index, view: presentation.view(start, end, samplesPerPixel, focus) }] : [],
+  return matched(decoders).flatMap(({ recorded }, index) =>
+    recorded
+      ? [
+          {
+            index,
+            streams: recorded.streams.map((stream, at) => ({
+              stream: at,
+              view: laneView(stream.rows, start, end, samplesPerPixel),
+            })),
+          },
+        ]
+      : [],
   )
 }
 
 export function mockStream(
   decoders: unknown,
   index: number,
-  mode: StreamMode,
+  stream: number,
   segment: [number, number] | null,
   onlySegment: boolean,
   offset: number,
   count: number,
 ): StreamPage | null {
-  const presentation = match(decoders)[index]?.presentation
-  if (!presentation) return null
-  const rows = presentation.rows(mode)
+  const found = streamOf(decoders, index, stream)
+  if (!found) return null
   const scoped =
-    segment && onlySegment
-      ? rows.filter((row) => row.end >= segment[0] && row.start < segment[1])
-      : rows
+    segment && onlySegment ? overlapping(found.rows, segment[0], segment[1]) : found.rows
   const begin = Math.min(offset, scoped.length)
+  const finish = Math.min(begin + count, scoped.length)
+  const inside = segment
+    ? overlapping(found.rows, segment[0], segment[1]).filter(
+        (row) => row.start >= segment[0] && reach(row) <= segment[1],
+      ).length
+    : null
   return {
     total: scoped.length,
     offset: begin,
-    rows: scoped.slice(begin, begin + count),
-    counts: presentation.snapshot.counts,
-    inside: segment ? presentation.countInside(segment[0], segment[1]) : null,
+    rows: scoped.slice(begin, finish),
+    events: found.rows.length,
+    inside,
   }
 }
 
 export function mockRowAt(
   decoders: unknown,
   index: number,
-  mode: StreamMode,
+  stream: number,
   sample: number,
 ): number | null {
-  const presentation = match(decoders)[index]?.presentation
-  if (!presentation) return null
-  const rows = presentation.rows(mode)
-  const at = rows.findIndex((row) => row.end >= sample)
-  return at < 0 ? rows.length : at
+  const found = streamOf(decoders, index, stream)
+  if (!found) return null
+  const at = found.rows.findIndex((row) => reach(row) > sample)
+  return at < 0 ? found.rows.length : at
 }
 
-/** `Needle::parse` of hsync-decode: word sequences to find (text ignoring ASCII case). */
-function parseNeedle(
-  query: string,
-): { sequences: [number[], boolean][]; number: number | null } | null {
-  const trimmed = query.trim()
-  if (!trimmed) return null
-  const sequences: [number[], boolean][] = []
-  let number: number | null = null
-  const tokens = trimmed.split(/\s+/).map((token) => token.replace(/^0x/i, ''))
-  if (tokens.every((digits) => /^[0-9a-f]{1,8}$/i.test(digits))) {
-    const values = tokens.map((digits) => parseInt(digits, 16))
-    const single = tokens.length === 1 ? tokens[0] : undefined
-    if (single !== undefined) {
-      number = values[0] ?? null
-      if (single.length > 2 && single.length % 2 === 0) {
-        sequences.push([single.match(/../g)?.map((pair) => parseInt(pair, 16)) ?? [], false])
-      }
+/** A query as `hsync_uiharu::Needle` reads it. */
+export interface Needle {
+  /** Runs of numbers: one is a value, more a sequence inside an array. */
+  sequences: number[][]
+  /** Kind and enumerated-value names, lower case. */
+  names: string[]
+}
+
+function parseNumber(word: string): number | null {
+  const hex = /^0x([0-9a-f]+)$/i.exec(word)
+  if (hex?.[1]) return parseInt(hex[1], 16)
+  if (/^-?\d+$/.test(word)) return parseInt(word, 10)
+  if (/^-?\d*\.\d+$/.test(word)) return parseFloat(word)
+  return null
+}
+
+export function parseNeedle(query: string): Needle | null {
+  const sequences: number[][] = []
+  const names: string[] = []
+  let run: number[] = []
+  for (const word of query.split(/\s+/).filter(Boolean)) {
+    const number = parseNumber(word)
+    if (number !== null) {
+      run.push(number)
+      continue
     }
-    sequences.push([values, false])
+    if (run.length > 0) sequences.push(run)
+    run = []
+    names.push(word.toLowerCase())
   }
-  const text = [...new TextEncoder().encode(trimmed)].map((byte) =>
-    byte >= 65 && byte <= 90 ? byte + 32 : byte,
-  )
-  if (!sequences.some(([words]) => words.join() === text.join())) sequences.push([text, true])
-  return { sequences, number }
+  if (run.length > 0) sequences.push(run)
+  return sequences.length > 0 || names.length > 0 ? { sequences, names } : null
 }
 
-/** The line a row lists words of; `undefined` for rows without words. */
-function rowLine(row: StreamRow): DataLine | null | undefined {
-  switch (row.type) {
-    case 'i2c':
-    case 'uartText':
-    case 'can':
-      return null
-    case 'hex':
-      return row.line
-    default:
-      return undefined
+/** Whether a payload matches: every name and every sequence is found; keys never match. */
+function matches(payload: unknown, needle: Needle): boolean {
+  const foundSequences = needle.sequences.map(() => false)
+  const foundNames = needle.names.map(() => false)
+  const number = (value: number) => {
+    needle.sequences.forEach((sequence, at) => {
+      if (sequence.length === 1 && sequence[0] === value) foundSequences[at] = true
+    })
   }
+  const array = (values: number[]) => {
+    needle.sequences.forEach((sequence, at) => {
+      if (sequence.length < 2 || foundSequences[at]) return
+      for (let from = 0; from + sequence.length <= values.length; from++) {
+        if (sequence.every((wanted, offset) => values[from + offset] === wanted)) {
+          foundSequences[at] = true
+          return
+        }
+      }
+    })
+  }
+  const walk = (value: unknown): void => {
+    if (typeof value === 'number') number(value)
+    else if (typeof value === 'string') {
+      const lower = value.toLowerCase()
+      needle.names.forEach((name, at) => {
+        if (lower === name) foundNames[at] = true
+      })
+    } else if (Array.isArray(value)) {
+      if (value.every((item) => typeof item === 'number')) array(value)
+      value.forEach(walk)
+    } else if (typeof value === 'object' && value !== null) {
+      Object.values(value).forEach(walk)
+    }
+  }
+  walk(payload)
+  return foundSequences.every(Boolean) && foundNames.every(Boolean)
 }
 
-/** Values or text in the decoded demo, as `DecodeSet::search` finds them. */
-export function mockSearch(
-  decoders: unknown,
-  query: string,
-  mode: StreamMode,
-): SearchResult | null {
+export function mockSearch(decoders: unknown, query: string): SearchResult | null {
   const needle = parseNeedle(query)
   if (!needle) return null
   const hits: SearchHit[] = []
-  for (const { index, presentation } of match(decoders)) {
-    if (!presentation) continue
-    const rows = presentation.rows(mode)
-    const found: [number, number, DataLine | null][] = []
-    for (const sequence of presentation.snapshot.sequences) {
-      for (const [pattern, fold] of needle.sequences) {
-        const words = sequence.words
-        let at = 0
-        while (pattern.length > 0 && at + pattern.length <= words.length) {
-          const same = pattern.every((wanted, i) => {
-            const word = words[at + i]?.[0] ?? -1
-            return (fold && word >= 65 && word <= 90 ? word + 32 : word) === wanted
-          })
-          if (same) {
-            found.push([
-              words[at]?.[1] ?? 0,
-              words[at + pattern.length - 1]?.[2] ?? 0,
-              sequence.line,
-            ])
-            at += pattern.length
-          } else {
-            at += 1
-          }
+  let truncated = false
+  matched(decoders).forEach(({ recorded }, decoder) => {
+    recorded?.streams.forEach((stream, at) => {
+      stream.rows.forEach((row, index) => {
+        if (!matches(row.payload, needle)) return
+        if (hits.length >= SEARCH_LIMIT) {
+          truncated = true
+          return
         }
-      }
-    }
-    if (needle.number !== null) {
-      for (const [id, start, end] of presentation.snapshot.ids) {
-        if (id === needle.number) found.push([start, end, null])
-      }
-    }
-    found.sort((a, b) => a[0] - b[0] || String(a[2]).localeCompare(String(b[2])) || b[1] - a[1])
-    found.forEach(([start, end, line], i) => {
-      const previous = found[i - 1]
-      if (previous && previous[0] === start && previous[2] === line) return
-      const row = rows.findIndex(
-        (one) => rowLine(one) === line && one.start <= start && start < one.end,
-      )
-      hits.push({ decoder: index, start, end, line, row: row < 0 ? null : row })
+        hits.push({ decoder, stream: at, row: index, start: row.start, end: row.end })
+      })
     })
+  })
+  hits.sort((a, b) => a.start - b.start || a.decoder - b.decoder || a.stream - b.stream)
+  return { hits, truncated }
+}
+
+/** Where decoder `index` has events within `start..end`, joined when closer than `resolution`. */
+export function mockCoverage(
+  decoders: unknown,
+  index: number,
+  start: number,
+  end: number,
+  resolution: number,
+): [number, number][] | null {
+  const recorded = matched(decoders)[index]?.recorded
+  if (!recorded) return null
+  const stretches = recorded.streams
+    .flatMap((stream) => overlapping(stream.rows, start, end).map((row) => [row.start, reach(row)]))
+    .sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0))
+  const joined: [number, number][] = []
+  for (const [from = 0, to = 0] of stretches) {
+    const last = joined.at(-1)
+    if (last && from <= last[1] + resolution) last[1] = Math.max(last[1], to)
+    else joined.push([from, to])
   }
-  hits.sort((a, b) => a.start - b.start || a.decoder - b.decoder)
-  return { hits: hits.slice(0, 10_000), truncated: hits.length > 10_000 }
+  return joined
 }

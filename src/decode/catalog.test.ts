@@ -1,85 +1,97 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  baseTypes,
   buildEntry,
-  decoderSpec,
+  DEFAULT_CATALOG,
   entryChannels,
-  entryStack,
-  specFromInfo,
-  stackFor,
+  entryKinds,
+  entryLabel,
+  isEntry,
+  nodeConfig,
+  stackableOn,
+  typeOf,
 } from './catalog'
 
-describe('decoder catalog', () => {
-  it('builds DSView entries', () => {
-    const spec = decoderSpec('1:spi')
-    expect(spec).toBeDefined()
-    if (!spec) return
-    const entry = buildEntry(spec, { clk: 12, miso: 15, mosi: null, cs: 13 }, { cpol: 1 })
-    expect(entry.channel).toEqual([{ clk: 12 }, { miso: 15 }, { cs: 13 }])
-    expect(entry.options).toMatchObject({ cpol: 1, cpha: 0, wordsize: 8 })
-    expect(entryChannels(entry)).toEqual({ clk: 12, miso: 15, cs: 13 })
+const uart = typeOf('uart')
+const i2c = typeOf('i2c')
+const eeprom = typeOf('eeprom24xx')
+
+describe('the built-in catalog', () => {
+  it('lists every node type with its ports', () => {
+    expect(DEFAULT_CATALOG).toHaveLength(37)
+    expect(uart?.inputs[0]?.schema).toBe('logic.samples')
+    expect(uart?.outputs[0]).toEqual({ port: 'events', schema: 'uart.events' })
+    expect(baseTypes(DEFAULT_CATALOG).map((type) => type.name)).toContain('uart')
+    expect(baseTypes(DEFAULT_CATALOG).map((type) => type.name)).not.toContain('eeprom24xx')
+  })
+
+  it('knows which types stack on which', () => {
+    expect(stackableOn(i2c!, DEFAULT_CATALOG).map((type) => type.name)).toEqual(['eeprom24xx'])
+    expect(stackableOn(typeOf('spi')!, DEFAULT_CATALOG).map((type) => type.name)).toContain(
+      'spi-nor',
+    )
+    expect(stackableOn(uart!, DEFAULT_CATALOG).map((type) => type.name)).toContain('modbus-rtu')
+    expect(stackableOn(eeprom!, DEFAULT_CATALOG)).toEqual([])
   })
 })
 
-describe('catalog entries', () => {
-  it('turn into decoder specs', () => {
-    const spec = specFromInfo({
-      id: 'onewire_link',
-      name: '1-Wire link layer',
-      longname: '1-Wire serial communication bus (link layer)',
-      desc: 'Bidirectional, half-duplex, asynchronous serial bus.',
-      license: 'gplv2+',
-      inputs: ['logic'],
-      outputs: ['onewire_link'],
-      tags: ['Embedded/industrial'],
-      channels: [{ id: 'owr', name: 'OWR', desc: '1-Wire signal line' }],
-      optionalChannels: [{ id: 'pwr', name: 'PWR', desc: '1-Wire power supply pin' }],
-      options: [
-        { id: 'overdrive', desc: 'Start in overdrive speed', default: 'no', values: ['yes', 'no'] },
-        { id: 'cnt_normal_bit', desc: 'Normal mode sample bit time (μs)', default: 15, values: [] },
-        { id: 'tag', desc: 'Tag', default: 'x', values: [] },
-        { id: 'weird', desc: 'Weird', default: null, values: [] },
-      ],
-      annotations: [],
-      annotationRows: [],
+describe('decoder entries', () => {
+  it('build a bus with its configuration and label', () => {
+    const entry = buildEntry(uart!, { line: 5, baud: 115200, inverted: undefined }, [], ' Console ')
+    expect(entry).toEqual({
+      nodes: { uart: { type: 'uart', config: { line: 5, baud: 115200 } } },
+      connections: [{ from: 'source', to: 'uart.logic' }],
+      expose: { uart: 'uart.events' },
+      label: 'Console',
     })
-    expect(spec.bus).toBe('other')
-    expect(spec.roles).toEqual([
-      { id: 'owr', name: 'OWR', required: true, desc: '1-Wire signal line' },
-      { id: 'pwr', name: 'PWR', required: false, desc: '1-Wire power supply pin' },
+    expect(isEntry(entry)).toBe(true)
+    expect(isEntry({ id: '1:uart' })).toBe(false)
+    expect(entryKinds(entry)).toEqual(['uart'])
+    expect(entryLabel(entry, (type) => type.toUpperCase())).toBe('Console')
+    expect(entryLabel({ nodes: entry.nodes }, (type) => type.toUpperCase())).toBe('UART')
+  })
+
+  it('stack a device decoder on the bus', () => {
+    const entry = buildEntry(
+      i2c!,
+      { scl: 1, sda: 0 },
+      [{ type: eeprom!, config: { address_bytes: 2, device_address: null } }],
+      undefined,
+      { numbers: 'dec' },
+    )
+    expect(Object.keys(entry.nodes)).toEqual(['i2c', 'eeprom24xx'])
+    expect(entry.connections).toEqual([
+      { from: 'source', to: 'i2c.logic' },
+      { from: 'i2c.events', to: 'eeprom24xx.bus' },
     ])
-    expect(spec.options.map((option) => option.kind)).toEqual(['choice', 'number', 'text'])
-  })
-})
-
-describe('decoder stacks', () => {
-  const i2c = { ...specFromInfoLike('1:i2c', ['logic'], ['i2c']) }
-  const lightI2c = { ...specFromInfoLike('0:i2c', ['logic'], ['i2c']) }
-  const eeprom = { ...specFromInfoLike('eeprom24xx', ['i2c'], []) }
-  const lonely = { ...specFromInfoLike('lonely', ['nothing'], []) }
-
-  function specFromInfoLike(id: string, inputs: string[], outputs: string[]) {
-    return {
-      id,
-      label: id,
-      bus: 'other' as const,
-      roles: [],
-      options: [{ id: 'level', kind: 'number' as const, default: 1, step: 1 }],
-      inputs,
-      outputs,
-    }
-  }
-
-  it('sits a decoder on the one it reads, skipping light variants', () => {
-    const catalog = [lightI2c, i2c, eeprom, lonely]
-    expect(stackFor(eeprom, catalog)?.map((spec) => spec.id)).toEqual(['1:i2c', 'eeprom24xx'])
-    expect(stackFor(i2c, catalog)?.map((spec) => spec.id)).toEqual(['1:i2c'])
-    expect(stackFor(lonely, catalog)).toBeNull()
+    expect(entry.expose).toEqual({ i2c: 'i2c.events', eeprom24xx: 'eeprom24xx.operations' })
+    expect(entry.nodes.eeprom24xx?.config).toEqual({ address_bytes: 2, device_address: null })
+    expect(entry.label).toBeUndefined()
+    expect(entry.show).toEqual({ numbers: 'dec' })
   })
 
-  it('stores the stacked decoders with their options', () => {
-    const entry = buildEntry(i2c, {}, {}, [{ spec: eeprom, options: { level: 3 } }])
-    expect(entry['stacked decoders']).toEqual([{ id: 'eeprom24xx', options: { level: 3 } }])
-    expect(entryStack(entry)).toEqual([{ id: 'eeprom24xx', options: { level: 3 } }])
+  it('tell which channels an entry reads, defaults included', () => {
+    const entry = buildEntry(i2c!, { scl: 9, sda: 2 })
+    expect(entryChannels(entry)).toEqual([
+      { node: 'i2c', field: 'scl', role: 'scl', index: 9 },
+      { node: 'i2c', field: 'sda', role: 'sda', index: 2 },
+    ])
+    expect(entryChannels({ nodes: { u: { type: 'uart' } } })).toEqual([
+      { node: 'u', field: 'line', role: 'line', index: 0 },
+    ])
+    expect(entryChannels({ nodes: { p: { type: 'parallel', config: { data: [3, 4] } } } })).toEqual(
+      [
+        { node: 'p', field: 'data', role: 'data0', index: 3 },
+        { node: 'p', field: 'data', role: 'data1', index: 4 },
+      ],
+    )
+    expect(nodeConfig({ type: 'uart', config: { line: 5 } })).toMatchObject({
+      line: 5,
+      baud: 115200,
+      data_bits: 8,
+      parity: 'none',
+    })
+    expect(entryChannels({ nodes: { x: { type: 'no-such-type' } } })).toEqual([])
   })
 })

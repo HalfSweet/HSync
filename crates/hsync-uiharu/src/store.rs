@@ -2,6 +2,7 @@
 
 use serde::Serialize;
 use serde_json::Value;
+use ts_rs::TS;
 use uiharu_core::{Tick, TickRange};
 
 use crate::search::Needle;
@@ -44,9 +45,10 @@ pub struct Store {
 }
 
 /// An event as the interface reads it.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct Row {
+#[ts(export)]
+pub struct EventRow {
     /// Its position in the stream's time order.
     pub index: u32,
     pub start: u64,
@@ -54,37 +56,41 @@ pub struct Row {
     /// The contract's kind of event.
     pub kind: String,
     /// The event as the contract serializes it.
+    #[ts(type = "Record<string, unknown>")]
     pub payload: Value,
 }
 
 /// Something drawn on a lane.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
-pub enum LaneItem {
+#[ts(export)]
+pub enum LaneBlock {
     /// One event.
-    Event(Row),
+    Event(EventRow),
     /// Events too narrow to tell apart at this scale, packed together.
     Dense { start: u64, end: u64, count: u32 },
 }
 
 /// A lane over a viewport.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct View {
-    pub items: Vec<LaneItem>,
+#[ts(export)]
+pub struct StreamView {
+    pub blocks: Vec<LaneBlock>,
     /// More items lay in the viewport than were returned.
     pub truncated: bool,
 }
 
 /// Part of a stream's rows.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
-pub struct Page {
+#[ts(export)]
+pub struct EventPage {
     /// Rows in the requested scope.
     pub total: u32,
     /// Position of the first row returned within the scope.
     pub offset: u32,
-    pub rows: Vec<Row>,
+    pub rows: Vec<EventRow>,
 }
 
 impl Store {
@@ -210,9 +216,9 @@ impl Store {
     }
 
     /// Event `index` as a row.
-    pub fn row(&self, index: usize) -> Option<Row> {
+    pub fn row(&self, index: usize) -> Option<EventRow> {
         let entry = self.entries.get(index)?;
-        Some(Row {
+        Some(EventRow {
             index: index as u32,
             start: entry.start,
             end: entry.end,
@@ -256,33 +262,33 @@ impl Store {
     /// The lane over `range` at `samples_per_pixel`: every event wide enough to be told
     /// apart on its own, runs of narrower ones packed into dense items; at most `limit`
     /// items.
-    pub fn view(&self, range: TickRange, samples_per_pixel: f64, limit: usize) -> View {
+    pub fn view(&self, range: TickRange, samples_per_pixel: f64, limit: usize) -> StreamView {
         // Narrower than two pixels is too narrow to tell apart.
         let unit = (samples_per_pixel * 2.0).max(1.0) as u64;
-        let mut view = View {
-            items: Vec::new(),
+        let mut view = StreamView {
+            blocks: Vec::new(),
             truncated: false,
         };
         let mut run: Option<(usize, u64, u64, u32)> = None;
-        let flush = |run: Option<(usize, u64, u64, u32)>, view: &mut View| match run {
+        let flush = |run: Option<(usize, u64, u64, u32)>, view: &mut StreamView| match run {
             Some((first, _, _, 1)) => view
-                .items
-                .push(LaneItem::Event(self.row(first).expect("the row is held"))),
+                .blocks
+                .push(LaneBlock::Event(self.row(first).expect("the row is held"))),
             Some((_, start, end, count)) => {
-                view.items.push(LaneItem::Dense { start, end, count });
+                view.blocks.push(LaneBlock::Dense { start, end, count });
             }
             None => {}
         };
         for index in self.overlapping(range) {
-            if view.items.len() >= limit {
+            if view.blocks.len() >= limit {
                 view.truncated = true;
                 return view;
             }
             let entry = &self.entries[index];
             if entry.reach() - entry.start >= unit {
                 flush(run.take(), &mut view);
-                view.items
-                    .push(LaneItem::Event(self.row(index).expect("the row is held")));
+                view.blocks
+                    .push(LaneBlock::Event(self.row(index).expect("the row is held")));
                 continue;
             }
             match &mut run {
@@ -301,14 +307,14 @@ impl Store {
     }
 
     /// `count` rows from `offset`, of all rows or of those overlapping `scope`.
-    pub fn page(&self, scope: Option<TickRange>, offset: usize, count: usize) -> Page {
+    pub fn page(&self, scope: Option<TickRange>, offset: usize, count: usize) -> EventPage {
         let indices: Vec<usize> = match scope {
             Some(scope) => self.overlapping(scope).collect(),
             None => (0..self.entries.len()).collect(),
         };
         let begin = offset.min(indices.len());
         let finish = begin.saturating_add(count).min(indices.len());
-        Page {
+        EventPage {
             total: indices.len() as u32,
             offset: begin as u32,
             rows: indices[begin..finish]
@@ -385,7 +391,7 @@ mod tests {
         assert_eq!(store.max_reach, [60, 180, 180, 180]);
         assert_eq!(
             store.row(1),
-            Some(Row {
+            Some(EventRow {
                 index: 1,
                 start: 100,
                 end: 180,
@@ -422,8 +428,8 @@ mod tests {
         // Each frame is 8 ticks: at 10 ticks per pixel, all pack together.
         let view = store.view(range(0, 1000), 10.0, 100);
         assert_eq!(
-            view.items,
-            [LaneItem::Dense {
+            view.blocks,
+            [LaneBlock::Dense {
                 start: 0,
                 end: 998,
                 count: 100
@@ -431,18 +437,18 @@ mod tests {
         );
         // At one tick per pixel every frame stands on its own.
         let view = store.view(range(0, 35), 1.0, 100);
-        assert_eq!(view.items.len(), 4);
-        assert!(matches!(&view.items[3], LaneItem::Event(row) if row.index == 3));
+        assert_eq!(view.blocks.len(), 4);
+        assert!(matches!(&view.blocks[3], LaneBlock::Event(row) if row.index == 3));
         assert!(!view.truncated);
         // A lone narrow event is drawn as itself; runs with a wide gap are split.
         let mut store = frames(3);
         store.push_event(range(500, 508), &json!({ "kind": "frame", "value": 50 }));
         let view = store.view(range(0, 1000), 10.0, 100);
-        assert_eq!(view.items.len(), 2);
-        assert!(matches!(&view.items[0], LaneItem::Dense { count: 3, .. }));
-        assert!(matches!(&view.items[1], LaneItem::Event(row) if row.start == 500));
+        assert_eq!(view.blocks.len(), 2);
+        assert!(matches!(&view.blocks[0], LaneBlock::Dense { count: 3, .. }));
+        assert!(matches!(&view.blocks[1], LaneBlock::Event(row) if row.start == 500));
         let view = store.view(range(0, 1000), 1.0, 2);
-        assert_eq!(view.items.len(), 2);
+        assert_eq!(view.blocks.len(), 2);
         assert!(view.truncated);
     }
 

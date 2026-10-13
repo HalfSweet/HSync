@@ -13,12 +13,21 @@ import { formatFrequencyShort, formatSamplerate } from '@/utils/units'
 const props = defineProps<{ group: ChannelGroup; collapsed: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
 
-const { t } = useI18n()
+const i18n = useI18n()
+const { t } = i18n
 const stream = useStreamStore()
 const decode = useDecodeStore()
 const showing = computed(() => stream.open && stream.decoder === props.group.decoder)
 
-const title = computed(() => (props.group.unnamed ? t('group.unnamed') : props.group.title))
+/** The decoder's label, else the name of its node type; the unnamed group has its own. */
+const title = computed(() => {
+  if (props.group.unnamed) return t('group.unnamed')
+  if (props.group.title) return props.group.title
+  const type = props.group.type ?? ''
+  // Node types come from the backend, so their names are checked at run time rather than typed.
+  const key = `decoder.${type}.name`
+  return i18n.te(key) ? t(key as never) : type
+})
 
 const SQUARES: Record<BusKind, string> = {
   i2c: 'bg-i2c',

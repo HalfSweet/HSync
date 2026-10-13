@@ -2,47 +2,65 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import AppIcon from '@/components/common/AppIcon.vue'
-import { shownTexts, type NumberFormat } from '@/decode/numberFormat'
-import type { DecoderView } from '@/ipc/bindings/DecoderView'
-import type { LaneItem } from '@/ipc/bindings/LaneItem'
+import type { NumberFormat } from '@/decode/numberFormat'
+import { fieldTexts, primaryFields, valueText, type Wording } from '@/decode/present'
+import type { EventRow } from '@/ipc/bindings/EventRow'
+import type { LaneBlock } from '@/ipc/bindings/LaneBlock'
+import type { StreamView } from '@/ipc/bindings/StreamView'
 import type { BusKind } from '@/timeline/groups'
 import type { Viewport } from '@/timeline/viewport'
 import { formatTime } from '@/utils/units'
 
 /**
- * One decode lane of the timeline (DESIGN.md §6.3): blocks for bytes, words and frames, marks
- * for I²C conditions and acknowledges.
+ * One decode lane of the timeline (DESIGN.md §6.3): a block per event, whatever the protocol,
+ * carrying the kind's name and the event's main value; events too close to tell apart at the
+ * scale come packed into a dense block.
  */
 const props = defineProps<{
+  /** The bus the decoder sits on, for the tint. */
   bus: BusKind
-  /** `header`, `miso`, `mosi` or an annotation row. */
-  lane: string
-  view: DecoderView | undefined
+  /** The node type whose events the lane shows, e.g. `i2c`; it names the kinds and fields. */
+  kind: string
+  view: StreamView | undefined
   viewport: Viewport
   decoder: number
+  /** Position of the stream among the decoder's. */
+  stream: number
   /** The block the marked segment came from. */
   selected: string | null
   /** Converts a sample to seconds from the trigger, for tips. */
   timeOf: (sample: number) => number
-  /** How annotation values show. */
+  /** How numbers show. */
   format: NumberFormat
 }>()
 const emit = defineEmits<{
   pick: [block: { id: string; start: number; end: number }]
-  go: [sample: number]
 }>()
 
-const { t } = useI18n()
+const i18n = useI18n()
+const { t } = i18n
 
 /** Blocks narrower than this share of the viewport hide their text (`la-tiny`). */
 const TINY_SHARE = 0.032
 
-const items = computed(
-  () => props.view?.lanes.find((lane) => lane.lane === props.lane)?.items ?? [],
-)
+/**
+ * `key` translated when the messages have it, else `fallback`. Kinds, fields and values come
+ * from the decoder, so they are checked at run time rather than typed.
+ */
+function named(key: string, fallback: string): string {
+  return i18n.te(key) ? t(key as never) : fallback
+}
 
-const hex = (value: number, digits = 2) => value.toString(16).toUpperCase().padStart(digits, '0')
+const kindLabel = (kind: string) => named(`decoder.${props.kind}.event.${kind}`, kind)
+const fieldLabel = (field: string) => named(`decoder.${props.kind}.eventField.${field}`, field)
+
+const wording = computed<Wording>(() => ({
+  enumValue: (field, value) => named(`decoder.${props.kind}.value.${field}.${value}`, value),
+  yes: t('decode.yes'),
+  no: t('decode.no'),
+  none: t('decode.none'),
+}))
+
 const at = (sample: number) => formatTime(props.timeOf(sample), 4, 'ms')
 
 interface Geometry {
@@ -68,19 +86,92 @@ function geometry(start: number, end: number): Geometry {
   }
 }
 
-const blockId = (item: LaneItem) => `${props.decoder}:${props.lane}:${item.start}:${item.end}`
+const blockId = (block: LaneBlock) => `${props.decoder}:${props.stream}:${block.start}:${block.end}`
 
-/** Rendered pieces in view: blocks and marks. Lanes reach beyond the view, so panning shows
- * them at once; what lies wholly outside is left out. */
-const pieces = computed(() => {
+/** An event's tip: its kind, every field as shown, and when it starts. */
+function tipOf(event: EventRow): string {
+  const fields = fieldTexts(event.payload, props.format, wording.value).map(({ name, text }) =>
+    t('decode.field', { label: fieldLabel(name), value: text }),
+  )
+  return t('decode.blockTip', {
+    label: [kindLabel(event.kind), ...fields].join(', '),
+    time: at(event.start),
+  })
+}
+
+interface DensePiece {
+  type: 'dense'
+  id: string
+  g: Geometry
+  count: number
+}
+
+interface EventPiece {
+  type: 'event'
+  id: string
+  g: Geometry
+  on: boolean
+  event: EventRow
+  /** The kind's name, shown when the block has room for it beside the value. */
+  label: string
+  /** The main values the block has room for (an SPI word's two lines, or the first alone),
+   * or nothing. */
+  value: string
+  /** Whether the kind's name fits before the value. */
+  labelFits: boolean
+  tip: string
+}
+
+/** Pixels of 12 px monospace and 11 px text per character, and the block's padding. */
+const VALUE_CHAR = 7.3
+const LABEL_CHAR = 6
+const PADDING = 16
+
+/**
+ * What a block `width` wide shows of `values`: all of them, else the first alone, else
+ * nothing; and whether the kind's name fits before that.
+ */
+function fitting(
+  label: string,
+  values: readonly string[],
+  width: number,
+): { value: string; label: boolean } {
+  const candidates = values.length > 1 ? [values.join(' · '), values[0] ?? ''] : [...values]
+  const value = candidates.find((text) => PADDING + text.length * VALUE_CHAR <= width) ?? ''
+  const valueWidth = value.length * VALUE_CHAR
+  return {
+    value,
+    label: PADDING + label.length * LABEL_CHAR + (value ? 8 + valueWidth : 0) <= width,
+  }
+}
+
+/** What is drawn in view. Lanes reach beyond the view, so panning shows them at once; what
+ * lies wholly outside is left out. */
+const pieces = computed<(DensePiece | EventPiece)[]>(() => {
   const { start: origin, samplesPerPixel, width } = props.viewport
   const end = origin + width * samplesPerPixel
-  return items.value
-    .filter((item) => item.end >= origin && item.start <= end)
-    .map((item) => {
-      const g = geometry(item.start, item.end)
-      const id = blockId(item)
-      return { item, g, id, on: props.selected === id }
+  return (props.view?.blocks ?? [])
+    .filter((block) => block.end >= origin && block.start <= end)
+    .map((block) => {
+      const g = geometry(block.start, block.end)
+      const id = blockId(block)
+      if (block.type === 'dense') return { type: 'dense', id, g, count: block.count }
+      const label = kindLabel(block.kind)
+      const values = primaryFields(block.payload).map(([name, held]) =>
+        valueText(name, held, props.format, wording.value),
+      )
+      const { value, label: labelFits } = fitting(label, values, g.width)
+      return {
+        type: 'event',
+        id,
+        g,
+        on: props.selected === id,
+        event: block,
+        label,
+        value,
+        labelFits,
+        tip: tipOf(block),
+      }
     })
 })
 
@@ -95,162 +186,57 @@ const tint = computed(
     })[props.bus],
 )
 
-const empty = computed(() => props.lane === 'header' && pieces.value.length === 0)
+/** The kind's name takes the bus colour. */
+const roleTint = computed(
+  () =>
+    ({
+      i2c: 'text-i2c',
+      uart: 'text-uart',
+      spi: 'text-spi',
+      can: 'text-can',
+      other: 'text-ink-2',
+    })[props.bus],
+)
 
-function blockClass(g: Geometry, on: boolean, extra = ''): string[] {
+function blockClass(g: Geometry, on: boolean): string[] {
   return [
     'blk',
-    on ? 'blk-on' : extra || tint.value,
+    on ? 'blk-on' : tint.value,
     g.cutLeft ? 'blk-cl' : '',
     g.cutRight ? 'blk-cr' : '',
     g.tiny ? 'blk-tiny' : '',
   ]
 }
 
-/** Characters of 12 px text that fit a block `width` wide, past its padding. */
-const fits = (text: string, width: number) => text.length * 7 + 16 <= width
-
-/** The longest of an annotation's texts that fits its block, or nothing. */
-function fitting(texts: readonly string[], width: number): string {
-  return texts.find((text) => fits(text, width)) ?? ''
-}
-
-function pick(item: LaneItem, id: string): void {
-  emit('pick', { id, start: item.start, end: item.end })
+function pick(piece: EventPiece): void {
+  emit('pick', { id: piece.id, start: piece.event.start, end: piece.event.end })
 }
 </script>
 
 <template>
   <div class="absolute inset-0 overflow-hidden">
-    <template v-for="{ item, g, id, on } in pieces" :key="id">
+    <template v-for="piece in pieces" :key="piece.id">
       <span
-        v-if="item.type === 'dense'"
+        v-if="piece.type === 'dense'"
         class="blk blk-tiny"
         :class="tint"
-        :style="{ left: `${g.left}px`, width: `${g.width}px` }"
-        aria-hidden="true"
+        :style="{ left: `${piece.g.left}px`, width: `${piece.g.width}px` }"
+        :title="t('decode.dense', { count: piece.count })"
       />
       <button
-        v-else-if="item.type === 'i2cAddress'"
-        :class="blockClass(g, on, 'border-i2c-mid bg-i2c-mid')"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :title="
-          t('decode.i2c.addressTip', {
-            address: hex(item.address),
-            direction: t(item.read ? 'decode.i2c.read' : 'decode.i2c.write'),
-            time: at(item.start),
-          })
-        "
-        @click="pick(item, id)"
+        v-else
+        :class="blockClass(piece.g, piece.on)"
+        :style="{ left: `${piece.g.left}px`, width: `${piece.g.width - 1}px` }"
+        :aria-pressed="piece.on"
+        :title="piece.tip"
+        @click="pick(piece)"
       >
-        <span class="role">{{ t(item.read ? 'decode.i2c.read' : 'decode.i2c.write') }}</span>
-        <span class="val">{{ hex(item.address) }}</span>
-      </button>
-      <button
-        v-else-if="item.type === 'i2cData'"
-        :class="blockClass(g, on)"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :title="t('decode.i2c.dataTip', { value: hex(item.value), time: at(item.start) })"
-        @click="pick(item, id)"
-      >
-        <span class="val">{{ hex(item.value) }}</span>
-      </button>
-      <span
-        v-else-if="item.type === 'i2cAck'"
-        class="ack"
-        :class="!item.ack && 'ack-n'"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :title="t(item.ack ? 'decode.i2c.ack' : 'decode.i2c.nack')"
-      >
-        {{ g.width >= 9 ? (item.ack ? 'A' : 'N') : '' }}
-      </span>
-      <span
-        v-else-if="item.type === 'i2cCondition'"
-        class="mk"
-        :style="{ left: `${g.left}px` }"
-        :title="
-          t(
-            item.condition === 'start'
-              ? 'decode.i2c.start'
-              : item.condition === 'stop'
-                ? 'decode.i2c.stop'
-                : 'decode.i2c.repeatedStart',
-          )
-        "
-      >
-        {{ item.condition === 'start' ? 'S' : item.condition === 'stop' ? 'P' : 'Sr' }}
-      </span>
-      <button
-        v-else-if="item.type === 'uartFrame'"
-        :class="blockClass(g, on)"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :title="t('decode.spi.byteTip', { value: hex(item.value), time: at(item.start) })"
-        @click="pick(item, id)"
-      >
-        <span v-if="item.value === 0x20" class="uc-sp">{{ t('decode.uart.space') }}</span>
-        <span v-else class="uc">{{
-          item.value > 0x20 && item.value < 0x7f ? String.fromCharCode(item.value) : '·'
-        }}</span>
-        <span class="val dim">{{ hex(item.value) }}</span>
-      </button>
-      <button
-        v-else-if="item.type === 'spiWord'"
-        :class="blockClass(g, on)"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        @click="pick(item, id)"
-      >
-        <span class="val">{{ hex(item.value) }}</span>
-      </button>
-      <button
-        v-else-if="item.type === 'canFrame'"
-        :class="blockClass(g, on)"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :title="
-          t('decode.can.frameTip', {
-            id: hex(item.id, item.extended ? 8 : 3),
-            time: at(item.start),
-          })
-        "
-        @click="pick(item, id)"
-      >
-        <span class="val">0x{{ hex(item.id, item.extended ? 8 : 3) }}</span>
-        <span class="dim"
-          >{{ item.fd ? 'FD · ' : '' }}{{ t('decode.can.length', { count: item.length }) }}</span
-        >
-        <span v-if="!item.ok" class="text-alert">{{ t('decode.can.crcError') }}</span>
-      </button>
-      <button
-        v-else-if="item.type === 'annotation'"
-        :class="blockClass(g, on)"
-        :style="{ left: `${g.left}px`, width: `${g.width - 1}px` }"
-        :aria-pressed="on"
-        :title="`${shownTexts(item.texts, item.value, format)[0] ?? ''} · ${at(item.start)}`"
-        @click="pick(item, id)"
-      >
-        <span class="min-w-0 truncate">{{
-          fitting(shownTexts(item.texts, item.value, format), g.width)
-        }}</span>
+        <template v-if="!piece.g.tiny">
+          <span v-if="piece.labelFits" class="role" :class="roleTint">{{ piece.label }}</span>
+          <span v-if="piece.value" class="val">{{ piece.value }}</span>
+        </template>
       </button>
     </template>
-    <div
-      v-if="empty && bus === 'can' && view"
-      class="flex h-full items-center gap-2 px-3 text-small text-ink-3"
-    >
-      <span>{{ t('decode.can.noFramesInView') }}</span>
-      <button v-if="view.previous !== null" class="btn-ghost" @click="emit('go', view.previous)">
-        <AppIcon name="chevron-left" />
-        <span>{{ t('decode.can.previous') }}</span>
-      </button>
-      <button v-if="view.next !== null" class="btn-ghost" @click="emit('go', view.next)">
-        <span>{{ t('decode.can.next') }}</span>
-        <AppIcon name="chevron-right" />
-      </button>
-    </div>
   </div>
 </template>
 
@@ -304,7 +290,6 @@ function pick(item: LaneItem, id: string): void {
 }
 
 .role {
-  color: var(--i2c);
   font-size: 11px;
 }
 
@@ -313,65 +298,13 @@ function pick(item: LaneItem, id: string): void {
   font-weight: 500;
 }
 
-.uc {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.uc-sp {
-  color: var(--ink-3);
-  font-size: 11px;
-}
-
 .dim {
   color: var(--ink-3);
 }
 
 .blk-on .role,
-.blk-on .dim,
-.blk-on .uc-sp {
+.blk-on .dim {
   color: inherit;
   opacity: 0.72;
-}
-
-/* la-ack */
-.ack {
-  position: absolute;
-  top: 2px;
-  bottom: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 2px;
-  color: var(--i2c);
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.ack-n {
-  box-shadow: inset 0 0 0 1px var(--line-2);
-  color: var(--ink);
-}
-
-/* la-mk */
-.mk {
-  position: absolute;
-  top: 5px;
-  bottom: 5px;
-  display: flex;
-  min-width: 14px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 1px;
-  transform: translateX(-50%);
-  border: 1px solid var(--line-2);
-  border-radius: 3px;
-  background: var(--canvas);
-  color: var(--ink-2);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
 }
 </style>

@@ -4,12 +4,12 @@ import { computed, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getBackend } from '@/ipc/backend'
-import type { DecoderLanes } from '@/ipc/bindings/DecoderLanes'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
+import { busKind, type BusKind } from '@/timeline/groups'
 import { overviewTicks } from '@/timeline/ticks'
 import { formatTimeShort } from '@/utils/units'
 
@@ -39,46 +39,75 @@ const found = computed(() => {
 
 const percent = (sample: number) => (capture.extent > 0 ? (sample / capture.extent) * 100 : 0)
 
-// Activity of each decoder over the whole capture: one 5 px row per decoder, in its bus colour.
-const overview = shallowRef<DecoderLanes[]>([])
-let overviewSequence = 0
+// Activity of each decoder over the whole capture: one 5 px row per decoder, in its bus colour,
+// over the stretches where it has events at the strip's resolution.
+interface Coverage {
+  index: number
+  bus: BusKind
+  stretches: [number, number][]
+}
+
+/** The decoders with streams to mark, each in the colour of the bus it starts with. */
+const marked = computed(() =>
+  decode.statuses
+    .filter((status) => status.streams.length > 0)
+    .map((status) => ({ index: status.index, bus: busKind(status.kinds[0]) })),
+)
+/** Changes when the decoders to mark do, which their statuses may do after the revision. */
+const markedKey = computed(() => marked.value.map(({ index, bus }) => `${index}:${bus}`).join())
+
+const coverage = shallowRef<Coverage[]>([])
+let coverageSequence = 0
 watch(
-  () => [capture.summary?.id, capture.extent, Math.round(width.value), decode.revision] as const,
+  () =>
+    [
+      capture.summary?.id,
+      capture.extent,
+      Math.round(width.value),
+      decode.revision,
+      markedKey.value,
+    ] as const,
   async ([id, extent, pixels]) => {
-    const current = ++overviewSequence
+    const current = ++coverageSequence
     if (id === undefined || extent <= 0 || pixels <= 0) {
-      overview.value = []
+      coverage.value = []
       return
     }
     try {
-      const found = await (await getBackend()).decodeView(id, 0, extent, extent / pixels)
-      if (current === overviewSequence) overview.value = found
+      const backend = await getBackend()
+      const found = await Promise.all(
+        marked.value.map(async ({ index, bus }) => ({
+          index,
+          bus,
+          stretches: (await backend.decodeCoverage(id, index, 0, extent, extent / pixels)) ?? [],
+        })),
+      )
+      if (current === coverageSequence) coverage.value = found
     } catch (error) {
-      console.error('overview decode lanes failed', error)
+      console.error('overview decode coverage failed', error)
     }
   },
   { immediate: true },
 )
 
-const BAND_COLOR: Record<string, string> = {
+const BAND_COLOR: Record<BusKind, string> = {
   i2c: 'bg-i2c',
   uart: 'bg-uart',
   spi: 'bg-spi',
   can: 'bg-can',
+  other: 'bg-ink-3',
 }
 
 const bands = computed(() =>
-  overview.value.flatMap(({ index, view }, row) => {
-    const bus = decode.statusOf(index)?.bus ?? 'other'
-    const items = view.lanes[0]?.items ?? []
-    return items.map((item) => ({
-      key: `${index}:${item.start}`,
+  coverage.value.flatMap(({ index, bus, stretches }, row) =>
+    stretches.map(([start, end]) => ({
+      key: `${index}:${start}`,
       top: 8 + row * 8,
-      left: percent(item.start),
-      width: Math.max(percent(item.end) - percent(item.start), 0.15),
-      color: BAND_COLOR[bus] ?? 'bg-ink-3',
-    }))
-  }),
+      left: percent(start),
+      width: Math.max(percent(end) - percent(start), 0.15),
+      color: BAND_COLOR[bus],
+    })),
+  ),
 )
 
 const box = computed(() => ({

@@ -188,6 +188,20 @@ mod tests {
     }
 
     #[test]
+    fn exposed_outputs_keep_the_order_of_the_description() {
+        let built = build(&parse(FLASH)).expect("builds");
+        let names: Vec<&str> = built
+            .streams
+            .iter()
+            .map(|stream| stream.name.as_str())
+            .collect();
+        assert_eq!(names, ["nor", "spi"]);
+        let description = parse(FLASH);
+        let nodes: Vec<&String> = description.nodes.keys().collect();
+        assert_eq!(nodes, ["spi", "flash"]);
+    }
+
+    #[test]
     fn a_described_pipeline_decodes_into_json_events() {
         let mut built = build(&parse(FLASH)).expect("builds");
         let mut waveform = SpiWaveform::new(SpiConfig::default(), 4, 3, Tick::ZERO);

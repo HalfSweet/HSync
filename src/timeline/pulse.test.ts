@@ -60,7 +60,7 @@ describe('readPulse', () => {
 
 describe('pulseMode', () => {
   it('derives the mode from the decoder role', () => {
-    expect(pulseMode({ index: 5, label: 'RX', numeric: false, wire: 5, role: 'rxtx' })).toBe('bits')
+    expect(pulseMode({ index: 5, label: 'RX', numeric: false, wire: 5, role: 'line' })).toBe('bits')
     expect(pulseMode({ index: 0, label: 'SDA', numeric: false, wire: 0, role: 'sda' })).toBe('data')
     expect(pulseMode({ index: 1, label: 'SCL', numeric: false, wire: 1, role: 'scl' })).toBe(
       'clock',
