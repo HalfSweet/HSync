@@ -3,6 +3,8 @@
  * connections and the outputs shown as lanes — with a label and display settings; and what the
  * catalog of node types says about them.
  */
+import { shallowRef } from 'vue'
+
 import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
 import type { CatalogField } from '@/ipc/bindings/CatalogField'
 import catalogFixture from '@/ipc/mock/fixtures/decoder-catalog.json'
@@ -36,6 +38,13 @@ export interface DecoderEntry {
 
 /** The catalog built into the app; the backend's replaces it once read. */
 export const DEFAULT_CATALOG: readonly CatalogEntry[] = catalogFixture as CatalogEntry[]
+
+/**
+ * The catalog in use: the built-in one until the decode store reads the backend's. Kept here,
+ * outside the stores, so that the capture store can group channels by it without depending
+ * on the decode store, which depends on the capture store.
+ */
+export const activeCatalog = shallowRef<readonly CatalogEntry[]>(DEFAULT_CATALOG)
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)

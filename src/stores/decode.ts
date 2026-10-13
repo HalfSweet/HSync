@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 
-import { DEFAULT_CATALOG, isEntry, typeOf, type DecoderEntry } from '@/decode/catalog'
+import { activeCatalog, isEntry, typeOf, type DecoderEntry } from '@/decode/catalog'
 import { getBackend } from '@/ipc/backend'
 import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
 import type { DecoderLanes } from '@/ipc/bindings/DecoderLanes'
@@ -26,7 +26,7 @@ export const useDecodeStore = defineStore('decode', () => {
   /** Lanes in the viewport by decoder position. */
   const lanes = shallowRef(new Map<number, DecoderLanes>())
   /** The node types the dialog offers: built in, until the backend's catalog is read. */
-  const catalog = shallowRef<readonly CatalogEntry[]>(DEFAULT_CATALOG)
+  const catalog = activeCatalog
 
   async function refreshStatuses(captureId: number): Promise<void> {
     try {

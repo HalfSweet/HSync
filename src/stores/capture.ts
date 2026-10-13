@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { useStorage } from '@vueuse/core'
 import { computed, shallowRef, watch } from 'vue'
 
+import { activeCatalog } from '@/decode/catalog'
 import { getBackend } from '@/ipc/backend'
 import type { CapturePreset } from '@/ipc/bindings/CapturePreset'
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
@@ -13,7 +14,6 @@ import { toUiError, type UiError } from '@/ipc/errors'
 import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
 import { useChannelsStore } from './channels'
-import { useDecodeStore } from './decode'
 import { useDeviceStore } from './device'
 import { usePreferencesStore } from './preferences'
 import type { TriggerRequest } from './trigger'
@@ -137,7 +137,7 @@ export const useCaptureStore = defineStore('capture', () => {
           summary.value.channels,
           summary.value.decoders,
           useChannelsStore().colours,
-          useDecodeStore().catalog,
+          activeCatalog.value,
         )
       : [],
   )
