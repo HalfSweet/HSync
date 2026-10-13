@@ -8,6 +8,8 @@
  *   &trig=0:fall,1:high  trigger conditions by channel index
  *   &autocapture=1       start a capture once a device is open (the app starts without one)
  *   &stream=0            open the data stream on decoder 0
+ *   &search=0x4F         search for this and show the first hit
+ *   &frame=1440x900      draw a macOS window of this size around the app, for the README screenshots
  *   &update=0.3.0        the mock backend announces this release, found at startup
  *   &import=1            open the import dialog on the waveform the mock backend reads
  *   &import=all          import every signal of it at once, to see the capture it makes
@@ -18,6 +20,7 @@ import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDeviceStore } from '@/stores/device'
+import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { useTriggerStore } from '@/stores/trigger'
 import { useUpdateStore } from '@/stores/update'
@@ -35,9 +38,40 @@ function oneOf<T extends string>(allowed: readonly T[], value: string | null): T
   return value !== null && (allowed as readonly string[]).includes(value) ? (value as T) : null
 }
 
+/**
+ * Draws a macOS window around the app, `width` × `height`, on a white page: the README
+ * screenshots are framed this way. Development only; the colours imitate macOS, not the design.
+ */
+function frameAsWindow(width: number, height: number, dark: boolean): void {
+  const app = document.getElementById('app')
+  if (!app?.parentNode) return
+  const [bar, left, top, bottom] = [38, 44, 28, 53]
+  const chrome = dark ? '#2b2b2e' : '#f2f2f4'
+  const text = dark ? '#c9c9cc' : '#3c3c3f'
+  const line = dark ? '#1b1b1d' : '#d9d9dc'
+  const edge = dark ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.14)'
+  document.documentElement.style.cssText = 'height:auto;background:#fff'
+  document.body.style.cssText = `margin:0;position:relative;overflow:hidden;background:#fff;width:${width + 2 * left}px;height:${height + bar + top + bottom}px`
+  const window_ = document.createElement('div')
+  window_.style.cssText = `position:absolute;left:${left}px;top:${top}px;width:${width}px;height:${height + bar}px;border-radius:10px;overflow:hidden;background:${chrome};box-shadow:0 0 0 1px ${edge},0 22px 48px rgba(0,0,0,0.28),0 4px 12px rgba(0,0,0,0.12)`
+  const title = document.createElement('div')
+  title.style.cssText = `position:relative;height:${bar}px;border-bottom:1px solid ${line};font:600 13px/${bar}px -apple-system,'SF Pro Text',Helvetica,Arial,sans-serif;color:${text};text-align:center`
+  title.textContent = 'HSync'
+  ;['#ff5f57', '#febc2e', '#28c840'].forEach((colour, at) => {
+    const light = document.createElement('i')
+    light.style.cssText = `position:absolute;top:13px;left:${14 + at * 20}px;width:12px;height:12px;border-radius:50%;background:${colour}`
+    title.append(light)
+  })
+  app.parentNode.insertBefore(window_, app)
+  window_.append(title, app)
+  app.style.cssText = `position:relative;width:${width}px;height:${height}px`
+}
+
 export function applyDevParams(search = window.location.search): void {
   const params = new URLSearchParams(search)
   const preferences = usePreferencesStore()
+  const frame = /^(\d+)x(\d+)$/.exec(params.get('frame') ?? '')
+  if (frame) frameAsWindow(Number(frame[1]), Number(frame[2]), params.get('theme') === 'dark')
   const capture = useCaptureStore()
   const view = useViewStore()
   const channels = useChannelsStore()
@@ -70,6 +104,21 @@ export function applyDevParams(search = window.location.search): void {
   if (streamDecoder !== null && /^\d+$/.test(streamDecoder)) {
     const stream = useStreamStore()
     stream.show(Number(streamDecoder))
+  }
+
+  const query = params.get('search')
+  if (query) {
+    const finder = useSearchStore()
+    finder.query = query
+    // Once the decoders answer, the first hit in view is shown, as pressing Enter would.
+    const stop = watch(
+      () => finder.result,
+      (result) => {
+        if (!result) return
+        void nextTick(() => stop())
+        void finder.step(true)
+      },
+    )
   }
 
   if (params.get('autocapture') === '1') {
