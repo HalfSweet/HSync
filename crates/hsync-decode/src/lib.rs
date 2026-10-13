@@ -5,16 +5,9 @@
 
 pub mod can;
 pub mod i2c;
-pub mod present;
 pub mod sampler;
-pub mod search;
 pub mod spec;
 pub mod spi;
 pub mod uart;
 
-pub use present::{
-    Annotation, DataLine, DecoderView, I2cCondition, I2cToken, LaneItem, LaneView, Presentation,
-    StreamCounts, StreamMode, StreamNote, StreamRow,
-};
-pub use search::{Found, Needle};
 pub use spec::{Bus, Decoded, Settings, Spec};

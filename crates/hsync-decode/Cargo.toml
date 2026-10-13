@@ -1,6 +1,6 @@
 [package]
 name = "hsync-decode"
-description = "Protocol decoders of HSync: a sigrok-style wait engine over bit-packed samples and native I2C, UART, SPI and CAN-FD decoders"
+description = "Native I2C, UART, SPI and CAN-FD decoders over bit-packed samples, kept as the cross-check of the uiharu engine (hsync-bench --compare)"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,7 +13,6 @@ hsync-capture.workspace = true
 hsync-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-ts-rs.workspace = true
 
 [dev-dependencies]
 hsync-fileio.workspace = true
