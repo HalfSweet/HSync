@@ -348,3 +348,177 @@ impl Store {
         (hits, false)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn range(start: u64, end: u64) -> TickRange {
+        TickRange::new(Tick(start), Tick(end))
+    }
+
+    /// Frames at 10-tick steps, 8 ticks wide, with values `0..count`.
+    fn frames(count: u64) -> Store {
+        let mut store = Store::new();
+        for value in 0..count {
+            store.push_event(
+                range(value * 10, value * 10 + 8),
+                &json!({ "kind": "frame", "value": value }),
+            );
+        }
+        store
+    }
+
+    #[test]
+    fn events_are_kept_in_time_order_whatever_their_arrival() {
+        let mut store = Store::new();
+        store.push_event(range(100, 180), &json!({ "kind": "begin", "tx": 1 }));
+        store.push_event(range(100, 120), &json!({ "kind": "address", "tx": 1 }));
+        store.push_event(range(120, 140), &json!({ "kind": "data", "tx": 1 }));
+        store.push_event(range(50, 60), &json!({ "kind": "late" }));
+        let kinds: Vec<String> = (0..store.len())
+            .map(|index| store.row(index).expect("a row").kind)
+            .collect();
+        assert_eq!(kinds, ["late", "begin", "address", "data"]);
+        assert_eq!(store.max_reach, [60, 180, 180, 180]);
+        assert_eq!(
+            store.row(1),
+            Some(Row {
+                index: 1,
+                start: 100,
+                end: 180,
+                kind: "begin".into(),
+                payload: json!({ "kind": "begin", "tx": 1 }),
+            })
+        );
+    }
+
+    #[test]
+    fn overlap_queries_find_long_events_and_marks() {
+        let mut store = Store::new();
+        store.push_event(range(0, 1000), &json!({ "kind": "long" }));
+        store.push_event(range(10, 20), &json!({ "kind": "short" }));
+        store.push_event(range(500, 500), &json!({ "kind": "mark" }));
+        store.push_event(range(2000, 2010), &json!({ "kind": "far" }));
+        let overlapping = |start, end| store.overlapping(range(start, end)).collect::<Vec<_>>();
+        assert_eq!(overlapping(900, 950), [0]);
+        assert_eq!(overlapping(15, 16), [0, 1]);
+        assert_eq!(overlapping(500, 501), [0, 2]);
+        assert_eq!(overlapping(499, 500), [0]);
+        assert_eq!(overlapping(1000, 2000), [] as [usize; 0]);
+        assert_eq!(overlapping(1000, 2001), [3]);
+        assert_eq!(store.inside(range(0, 1000)), 3);
+        assert_eq!(store.inside(range(10, 600)), 2);
+        assert_eq!(store.row_at(Tick(0)), 0);
+        assert_eq!(store.row_at(Tick(1000)), 3);
+        assert_eq!(store.row_at(Tick(3000)), 4);
+    }
+
+    #[test]
+    fn narrow_events_pack_into_dense_items() {
+        let store = frames(100);
+        // Each frame is 8 ticks: at 10 ticks per pixel, all pack together.
+        let view = store.view(range(0, 1000), 10.0, 100);
+        assert_eq!(
+            view.items,
+            [LaneItem::Dense {
+                start: 0,
+                end: 998,
+                count: 100
+            }]
+        );
+        // At one tick per pixel every frame stands on its own.
+        let view = store.view(range(0, 35), 1.0, 100);
+        assert_eq!(view.items.len(), 4);
+        assert!(matches!(&view.items[3], LaneItem::Event(row) if row.index == 3));
+        assert!(!view.truncated);
+        // A lone narrow event is drawn as itself; runs with a wide gap are split.
+        let mut store = frames(3);
+        store.push_event(range(500, 508), &json!({ "kind": "frame", "value": 50 }));
+        let view = store.view(range(0, 1000), 10.0, 100);
+        assert_eq!(view.items.len(), 2);
+        assert!(matches!(&view.items[0], LaneItem::Dense { count: 3, .. }));
+        assert!(matches!(&view.items[1], LaneItem::Event(row) if row.start == 500));
+        let view = store.view(range(0, 1000), 1.0, 2);
+        assert_eq!(view.items.len(), 2);
+        assert!(view.truncated);
+    }
+
+    #[test]
+    fn pages_and_scopes() {
+        let store = frames(10);
+        let page = store.page(None, 8, 5);
+        assert_eq!((page.total, page.offset), (10, 8));
+        assert_eq!(page.rows.len(), 2);
+        assert_eq!(page.rows[1].payload, json!({ "kind": "frame", "value": 9 }));
+        let page = store.page(Some(range(25, 55)), 0, 10);
+        assert_eq!(page.total, 4);
+        assert_eq!(
+            page.rows.iter().map(|row| row.index).collect::<Vec<_>>(),
+            [2, 3, 4, 5]
+        );
+        let page = store.page(None, 100, 5);
+        assert_eq!((page.total, page.offset, page.rows.len()), (10, 10, 0));
+    }
+
+    #[test]
+    fn coverage_joins_close_stretches() {
+        let mut store = frames(3);
+        store.push_event(range(100, 108), &json!({ "kind": "frame", "value": 10 }));
+        assert_eq!(
+            store.coverage(range(0, 200), 5),
+            [range(0, 28), range(100, 108)]
+        );
+        assert_eq!(store.coverage(range(0, 200), 100), [range(0, 108)]);
+        assert_eq!(store.coverage(range(104, 200), 1), [range(100, 108)]);
+    }
+
+    #[test]
+    fn searches_in_time_order_up_to_a_limit() {
+        let store = frames(20);
+        let needle = Needle::parse("frame").expect("a query");
+        assert_eq!(store.search(&needle, 100), ((0..20).collect(), false));
+        assert_eq!(store.search(&needle, 5), ((0..5).collect(), true));
+        let needle = Needle::parse("0x11").expect("a query");
+        assert_eq!(store.search(&needle, 100), (vec![17], false));
+    }
+
+    #[test]
+    fn progress_gaps_and_the_end_are_noted() {
+        let mut store = Store::new();
+        store.push_progress(Tick(50));
+        store.push_gap(range(60, 70));
+        store.push_gap(range(70, 80));
+        store.push_gap(range(90, 100));
+        assert_eq!(store.gaps(), [range(60, 80), range(90, 100)]);
+        assert_eq!(store.settled(), Tick(100));
+        assert_eq!(store.ended(), None);
+        store.push_end(Tick(120));
+        assert_eq!(
+            (store.settled(), store.ended()),
+            (Tick(120), Some(Tick(120)))
+        );
+    }
+
+    #[test]
+    fn pruning_forgets_what_lies_before_a_tick() {
+        let mut store = frames(10);
+        store.push_event(range(0, 95), &json!({ "kind": "long" }));
+        store.push_gap(range(30, 40));
+        store.push_gap(range(60, 62));
+        let bytes = store.text_bytes();
+        store.prune_before(Tick(50));
+        assert_eq!(store.len(), 6);
+        assert_eq!(store.row(0).expect("a row").kind, "long");
+        assert_eq!(store.row(1).expect("a row").payload["value"], 5);
+        assert_eq!(store.max_reach, [95, 95, 95, 95, 95, 98]);
+        assert_eq!(store.gaps(), [range(60, 62)]);
+        assert!(store.text_bytes() < bytes);
+        assert_eq!(
+            store.overlapping(range(0, 100)).collect::<Vec<_>>(),
+            [0, 1, 2, 3, 4, 5]
+        );
+    }
+}
