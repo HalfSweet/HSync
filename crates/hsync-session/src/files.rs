@@ -113,6 +113,7 @@ impl ExportSource {
             channel_names: &names,
             session: &session,
             decoders,
+            hsync_decoders: None,
         };
         hsync_fileio::write_dsl_file(path, capture, &request, progress)?;
         Ok(session)

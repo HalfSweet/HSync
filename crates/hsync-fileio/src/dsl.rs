@@ -30,6 +30,8 @@ pub struct DslDocument {
     pub session: Option<serde_json::Value>,
     /// The `decoders` entry: decoder stacks and their options.
     pub decoders: Option<serde_json::Value>,
+    /// The `hsync-decoders` entry HSync adds: its own decoder entries, which DSView ignores.
+    pub hsync_decoders: Option<serde_json::Value>,
 }
 
 /// Reads a `.dsl` file from disk.
@@ -90,11 +92,13 @@ pub fn read_dsl<R: Read + Seek>(reader: R) -> Result<DslDocument, FileError> {
 
     let session = read_json(&mut archive, "session")?;
     let decoders = read_json(&mut archive, "decoders")?;
+    let hsync_decoders = read_json(&mut archive, "hsync-decoders")?;
     Ok(DslDocument {
         header,
         capture,
         session,
         decoders,
+        hsync_decoders,
     })
 }
 
@@ -211,8 +215,10 @@ pub struct DslWriteRequest<'a> {
     pub channel_names: &'a BTreeMap<ChannelIndex, String>,
     /// The `session` document.
     pub session: &'a serde_json::Value,
-    /// The `decoders` document.
+    /// The `decoders` document, as DSView reads it.
     pub decoders: &'a serde_json::Value,
+    /// HSync's own decoder entries, written as `hsync-decoders` for HSync to read back.
+    pub hsync_decoders: Option<&'a serde_json::Value>,
 }
 
 /// Writes `capture` as a version 3 `.dsl` archive that DSView can open.
@@ -269,6 +275,10 @@ pub fn write_dsl_with<W: Write + Seek>(
     zip.write_all(header.to_text().as_bytes())?;
     zip.start_file("decoders", options)?;
     zip.write_all(json_text(request.decoders, "decoders")?.as_bytes())?;
+    if let Some(decoders) = request.hsync_decoders {
+        zip.start_file("hsync-decoders", options)?;
+        zip.write_all(json_text(decoders, "hsync-decoders")?.as_bytes())?;
+    }
     zip.start_file("session", options)?;
     zip.write_all(json_text(request.session, "session")?.as_bytes())?;
 
