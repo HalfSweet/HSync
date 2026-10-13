@@ -56,6 +56,9 @@ pub struct Kind {
     pub defaults: fn() -> serde_json::Value,
     /// Opens a reader on the node's output, or `None` when the output carries another type.
     pub open: fn(&mut Pipeline, DynExposedRef, String) -> Option<Box<dyn DynReader>>,
+    /// The `kind` tags of the events the node's output carries, in the order its contract
+    /// declares them: the kinds its manifest describes.
+    pub kinds: fn() -> Vec<String>,
 }
 
 impl std::fmt::Debug for Kind {
@@ -81,6 +84,34 @@ fn open_as<T: Serialize + EventSchema + Clone + 'static>(
         name,
         pipeline.exposed_dyn::<T>(exposed)?,
     )))
+}
+
+/// The `kind` tags of `T`'s events, in the order the contract declares them.
+fn kinds_of<T: DeserializeOwned>() -> Vec<String> {
+    // Serde knows them: asked for an event of a kind no contract has, it names those there are.
+    let unknown = serde_json::json!({ "kind": "\u{0}" });
+    match serde_json::from_value::<T>(unknown) {
+        Ok(_) => Vec::new(),
+        Err(error) => expected_variants(&error.to_string()),
+    }
+}
+
+/// The names a serde error about an unknown variant gives as expected, in order; none for any
+/// other error. Serde words them "expected `a`", "expected `a` or `b`" or "expected one of `a`,
+/// `b`, `c`".
+pub(crate) fn expected_variants(message: &str) -> Vec<String> {
+    let Some((_, expected)) = message
+        .strip_prefix("unknown variant ")
+        .and_then(|rest| rest.split_once(", expected "))
+    else {
+        return Vec::new();
+    };
+    expected
+        .split('`')
+        .skip(1)
+        .step_by(2)
+        .map(str::to_owned)
+        .collect()
 }
 
 /// The default configuration of a node configured by `C`, as JSON.
@@ -292,6 +323,7 @@ pub const KINDS: &[Kind] = &[
         build: build_spi,
         defaults: defaults_of::<SpiConfig>,
         open: open_as::<SpiEvent>,
+        kinds: kinds_of::<SpiEvent>,
     },
     Kind {
         name: "spi-nor",
@@ -299,6 +331,7 @@ pub const KINDS: &[Kind] = &[
         build: build_spi_nor,
         defaults: defaults_of::<SpiNorConfig>,
         open: open_as::<NorEvent>,
+        kinds: kinds_of::<NorEvent>,
     },
     Kind {
         name: "i2s",
@@ -306,6 +339,7 @@ pub const KINDS: &[Kind] = &[
         build: build_i2s,
         defaults: defaults_of::<I2sConfig>,
         open: open_as::<I2sEvent>,
+        kinds: kinds_of::<I2sEvent>,
     },
     Kind {
         name: "pwm",
@@ -313,6 +347,7 @@ pub const KINDS: &[Kind] = &[
         build: build_pwm,
         defaults: defaults_of::<PwmConfig>,
         open: open_as::<PwmEvent>,
+        kinds: kinds_of::<PwmEvent>,
     },
     Kind {
         name: "timing",
@@ -320,6 +355,7 @@ pub const KINDS: &[Kind] = &[
         build: build_timing,
         defaults: defaults_of::<TimingConfig>,
         open: open_as::<TimingEvent>,
+        kinds: kinds_of::<TimingEvent>,
     },
     Kind {
         name: "parallel",
@@ -327,6 +363,7 @@ pub const KINDS: &[Kind] = &[
         build: build_parallel,
         defaults: defaults_of::<ParallelConfig>,
         open: open_as::<ParallelEvent>,
+        kinds: kinds_of::<ParallelEvent>,
     },
     Kind {
         name: "uart",
@@ -334,6 +371,7 @@ pub const KINDS: &[Kind] = &[
         build: build_uart,
         defaults: defaults_of::<UartConfig>,
         open: open_as::<UartEvent>,
+        kinds: kinds_of::<UartEvent>,
     },
     Kind {
         name: "modbus-rtu",
@@ -341,6 +379,7 @@ pub const KINDS: &[Kind] = &[
         build: build_modbus_rtu,
         defaults: no_defaults,
         open: open_as::<ModbusEvent>,
+        kinds: kinds_of::<ModbusEvent>,
     },
     Kind {
         name: "i2c",
@@ -348,6 +387,7 @@ pub const KINDS: &[Kind] = &[
         build: build_i2c,
         defaults: defaults_of::<I2cConfig>,
         open: open_as::<I2cEvent>,
+        kinds: kinds_of::<I2cEvent>,
     },
     Kind {
         name: "eeprom24xx",
@@ -355,6 +395,7 @@ pub const KINDS: &[Kind] = &[
         build: build_eeprom24xx,
         defaults: defaults_of::<Eeprom24xxConfig>,
         open: open_as::<EepromEvent>,
+        kinds: kinds_of::<EepromEvent>,
     },
     Kind {
         name: "jtag",
@@ -362,6 +403,7 @@ pub const KINDS: &[Kind] = &[
         build: build_jtag,
         defaults: defaults_of::<JtagConfig>,
         open: open_as::<JtagEvent>,
+        kinds: kinds_of::<JtagEvent>,
     },
     Kind {
         name: "swd",
@@ -369,6 +411,7 @@ pub const KINDS: &[Kind] = &[
         build: build_swd,
         defaults: defaults_of::<SwdConfig>,
         open: open_as::<SwdEvent>,
+        kinds: kinds_of::<SwdEvent>,
     },
     Kind {
         name: "sdcard-spi",
@@ -376,6 +419,7 @@ pub const KINDS: &[Kind] = &[
         build: build_sdcard_spi,
         defaults: defaults_of::<SdCardSpiConfig>,
         open: open_as::<SdEvent>,
+        kinds: kinds_of::<SdEvent>,
     },
     Kind {
         name: "can",
@@ -383,6 +427,7 @@ pub const KINDS: &[Kind] = &[
         build: build_can,
         defaults: defaults_of::<CanConfig>,
         open: open_as::<CanEvent>,
+        kinds: kinds_of::<CanEvent>,
     },
     Kind {
         name: "onewire-link",
@@ -390,6 +435,7 @@ pub const KINDS: &[Kind] = &[
         build: build_onewire_link,
         defaults: defaults_of::<LinkConfig>,
         open: open_as::<LinkEvent>,
+        kinds: kinds_of::<LinkEvent>,
     },
     Kind {
         name: "onewire",
@@ -397,6 +443,7 @@ pub const KINDS: &[Kind] = &[
         build: build_onewire,
         defaults: no_defaults,
         open: open_as::<OneWireEvent>,
+        kinds: kinds_of::<OneWireEvent>,
     },
     Kind {
         name: "ds18b20",
@@ -404,6 +451,7 @@ pub const KINDS: &[Kind] = &[
         build: build_ds18b20,
         defaults: no_defaults,
         open: open_as::<Ds18b20Event>,
+        kinds: kinds_of::<Ds18b20Event>,
     },
     Kind {
         name: "usb",
@@ -411,6 +459,7 @@ pub const KINDS: &[Kind] = &[
         build: build_usb,
         defaults: defaults_of::<UsbConfig>,
         open: open_as::<UsbEvent>,
+        kinds: kinds_of::<UsbEvent>,
     },
     Kind {
         name: "usb-transactions",
@@ -418,6 +467,7 @@ pub const KINDS: &[Kind] = &[
         build: build_usb_transactions,
         defaults: no_defaults,
         open: open_as::<TransactionEvent>,
+        kinds: kinds_of::<TransactionEvent>,
     },
     Kind {
         name: "lin",
@@ -425,6 +475,7 @@ pub const KINDS: &[Kind] = &[
         build: build_lin,
         defaults: defaults_of::<LinConfig>,
         open: open_as::<LinEvent>,
+        kinds: kinds_of::<LinEvent>,
     },
     Kind {
         name: "midi",
@@ -432,6 +483,7 @@ pub const KINDS: &[Kind] = &[
         build: build_midi,
         defaults: no_defaults,
         open: open_as::<MidiEvent>,
+        kinds: kinds_of::<MidiEvent>,
     },
     Kind {
         name: "ws281x",
@@ -439,6 +491,7 @@ pub const KINDS: &[Kind] = &[
         build: build_ws281x,
         defaults: defaults_of::<Ws281xConfig>,
         open: open_as::<Ws281xEvent>,
+        kinds: kinds_of::<Ws281xEvent>,
     },
     Kind {
         name: "dmx512",
@@ -446,6 +499,7 @@ pub const KINDS: &[Kind] = &[
         build: build_dmx512,
         defaults: no_defaults,
         open: open_as::<Dmx512Event>,
+        kinds: kinds_of::<Dmx512Event>,
     },
     Kind {
         name: "apa102",
@@ -453,6 +507,7 @@ pub const KINDS: &[Kind] = &[
         build: build_apa102,
         defaults: no_defaults,
         open: open_as::<Apa102Event>,
+        kinds: kinds_of::<Apa102Event>,
     },
     Kind {
         name: "mdio",
@@ -460,6 +515,7 @@ pub const KINDS: &[Kind] = &[
         build: build_mdio,
         defaults: defaults_of::<MdioConfig>,
         open: open_as::<MdioEvent>,
+        kinds: kinds_of::<MdioEvent>,
     },
     Kind {
         name: "avr-isp",
@@ -467,6 +523,7 @@ pub const KINDS: &[Kind] = &[
         build: build_avr_isp,
         defaults: no_defaults,
         open: open_as::<IspEvent>,
+        kinds: kinds_of::<IspEvent>,
     },
     Kind {
         name: "nrf24l01",
@@ -474,6 +531,7 @@ pub const KINDS: &[Kind] = &[
         build: build_nrf24l01,
         defaults: no_defaults,
         open: open_as::<Nrf24Event>,
+        kinds: kinds_of::<Nrf24Event>,
     },
     Kind {
         name: "usb-pd",
@@ -481,6 +539,7 @@ pub const KINDS: &[Kind] = &[
         build: build_usb_pd,
         defaults: defaults_of::<UsbPdConfig>,
         open: open_as::<UsbPdEvent>,
+        kinds: kinds_of::<UsbPdEvent>,
     },
     Kind {
         name: "ir-nec",
@@ -488,6 +547,7 @@ pub const KINDS: &[Kind] = &[
         build: build_ir_nec,
         defaults: defaults_of::<NecConfig>,
         open: open_as::<NecEvent>,
+        kinds: kinds_of::<NecEvent>,
     },
     Kind {
         name: "ir-rc5",
@@ -495,6 +555,7 @@ pub const KINDS: &[Kind] = &[
         build: build_ir_rc5,
         defaults: defaults_of::<Rc5Config>,
         open: open_as::<Rc5Event>,
+        kinds: kinds_of::<Rc5Event>,
     },
     Kind {
         name: "ir-rc6",
@@ -502,6 +563,7 @@ pub const KINDS: &[Kind] = &[
         build: build_ir_rc6,
         defaults: defaults_of::<Rc6Config>,
         open: open_as::<Rc6Event>,
+        kinds: kinds_of::<Rc6Event>,
     },
     Kind {
         name: "ir-sirc",
@@ -509,6 +571,7 @@ pub const KINDS: &[Kind] = &[
         build: build_ir_sirc,
         defaults: defaults_of::<SircConfig>,
         open: open_as::<SircEvent>,
+        kinds: kinds_of::<SircEvent>,
     },
     Kind {
         name: "wiegand",
@@ -516,6 +579,7 @@ pub const KINDS: &[Kind] = &[
         build: build_wiegand,
         defaults: defaults_of::<WiegandConfig>,
         open: open_as::<WiegandEvent>,
+        kinds: kinds_of::<WiegandEvent>,
     },
     Kind {
         name: "ps2",
@@ -523,6 +587,7 @@ pub const KINDS: &[Kind] = &[
         build: build_ps2,
         defaults: defaults_of::<Ps2Config>,
         open: open_as::<Ps2Event>,
+        kinds: kinds_of::<Ps2Event>,
     },
     Kind {
         name: "am230x",
@@ -530,6 +595,7 @@ pub const KINDS: &[Kind] = &[
         build: build_am230x,
         defaults: defaults_of::<Am230xConfig>,
         open: open_as::<Am230xEvent>,
+        kinds: kinds_of::<Am230xEvent>,
     },
     Kind {
         name: "microwire",
@@ -537,6 +603,7 @@ pub const KINDS: &[Kind] = &[
         build: build_microwire,
         defaults: defaults_of::<MicrowireConfig>,
         open: open_as::<MicrowireEvent>,
+        kinds: kinds_of::<MicrowireEvent>,
     },
     Kind {
         name: "eeprom93xx",
@@ -544,5 +611,6 @@ pub const KINDS: &[Kind] = &[
         build: build_eeprom93xx,
         defaults: defaults_of::<Eeprom93xxConfig>,
         open: open_as::<Eeprom93xxEvent>,
+        kinds: kinds_of::<Eeprom93xxEvent>,
     },
 ];
