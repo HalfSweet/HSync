@@ -23,6 +23,11 @@
       "name": "clock",
       "kind": "channel",
       "optional": true
+    },
+    {
+      "name": "clock_edge",
+      "kind": "enum",
+      "values": ["rising", "falling", "either"]
     }
   ],
   "events": [

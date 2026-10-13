@@ -4,10 +4,11 @@ The `parallel` decoder reads up to 64 data lines as one word — on the edges of
 
 ## Configuration
 
-| Option  | Values                                                                             | Default      |
-| ------- | ---------------------------------------------------------------------------------- | ------------ |
-| `data`  | The data lines' channels, least significant bit first: 1 to 64 distinct channels   | channels 0–7 |
-| `clock` | None, or a channel and the edges that read a word: `rising`, `falling` or `either` | none         |
+| Option       | Values                                                                           | Default      |
+| ------------ | -------------------------------------------------------------------------------- | ------------ |
+| `data`       | The data lines' channels, least significant bit first: 1 to 64 distinct channels | channels 0–7 |
+| `clock`      | None, or the channel of the clock line                                           | none         |
+| `clock_edge` | The edges of the clock that read a word: `rising`, `falling` or `either`         | `rising`     |
 
 The clock's channel must not be a data line.
 

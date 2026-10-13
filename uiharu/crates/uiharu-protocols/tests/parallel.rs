@@ -7,7 +7,7 @@ use uiharu_core::{
     GraphConfig, Item, Levels, LogicBlock, LogicBlockBuilder, Tick, TickRange, TimeBase,
 };
 use uiharu_protocols::parallel::synth::ParallelWaveform;
-use uiharu_protocols::parallel::{Clock, ClockEdge, Parallel, ParallelConfig, ParallelEvent};
+use uiharu_protocols::parallel::{ClockEdge, Parallel, ParallelConfig, ParallelEvent};
 
 fn harness(
     config: &ParallelConfig,
@@ -68,7 +68,8 @@ fn decode(
 fn nibble_bus(clock: Option<ClockEdge>) -> ParallelConfig {
     ParallelConfig {
         data: vec![0, 1, 2, 3],
-        clock: clock.map(|edge| Clock { channel: 4, edge }),
+        clock: clock.map(|_| 4),
+        clock_edge: clock.unwrap_or_default(),
     }
 }
 
@@ -145,6 +146,7 @@ fn lines_are_listed_least_significant_first_on_wide_buses() {
     let config = ParallelConfig {
         data: vec![15, 3, 7, 0, 12, 9, 1, 14, 5, 10, 2, 13],
         clock: None,
+        clock_edge: ClockEdge::Rising,
     };
     let mut waveform = ParallelWaveform::new(config.clone(), 16, 1, Tick::ZERO);
     for value in [0xabc, 0x123, 0xfff, 0x800] {
@@ -168,6 +170,7 @@ fn lines_are_listed_least_significant_first_on_wide_buses() {
     let config = ParallelConfig {
         data: (0..64).rev().collect(),
         clock: None,
+        clock_edge: ClockEdge::Rising,
     };
     let mut waveform = ParallelWaveform::new(config.clone(), 64, 1, Tick::ZERO);
     for value in [(1 << 63) | 1, u64::MAX, 0x0123_4567_89ab_cdef, 0] {
@@ -191,6 +194,7 @@ fn after_a_gap_the_levels_are_found_again() {
     let config = ParallelConfig {
         data: vec![0, 1],
         clock: None,
+        clock_edge: ClockEdge::Rising,
     };
     let mut waveform = ParallelWaveform::new(config.clone(), 2, 1, Tick::ZERO);
     for value in [1, 2, 3, 0] {
@@ -263,7 +267,7 @@ fn naive(config: &ParallelConfig, block: &LogicBlock, gaps: &[TickRange]) -> Vec
         let changed = |channel: u8| {
             previous.is_some_and(|before| before.high(channel) != levels.high(channel))
         };
-        let read = match config.clock {
+        let read = match config.clock() {
             None if previous.is_none() => Some(true),
             None => config
                 .data
@@ -287,11 +291,13 @@ fn irregular_configs() -> Vec<ParallelConfig> {
     let mut configs = vec![ParallelConfig {
         data: vec![6, 1, 4],
         clock: None,
+        clock_edge: ClockEdge::Rising,
     }];
     for edge in [ClockEdge::Rising, ClockEdge::Falling, ClockEdge::Either] {
         configs.push(ParallelConfig {
             data: vec![0, 7, 5, 2],
-            clock: Some(Clock { channel: 3, edge }),
+            clock: Some(3),
+            clock_edge: edge,
         });
     }
     configs

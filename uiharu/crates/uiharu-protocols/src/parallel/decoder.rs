@@ -67,12 +67,15 @@ pub struct Clock {
 
 /// How the bus is wired.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct ParallelConfig {
     /// The data lines' channels, least significant bit first: 1 to 64 of them.
     pub data: Vec<u8>,
-    /// The clock, if the bus has one; without one, every change of the data lines is a word.
-    pub clock: Option<Clock>,
+    /// The clock line, if the bus has one; without one, every change of the data lines is a
+    /// word.
+    pub clock: Option<u8>,
+    /// The edges of the clock that read a word.
+    pub clock_edge: ClockEdge,
 }
 
 impl Default for ParallelConfig {
@@ -80,11 +83,20 @@ impl Default for ParallelConfig {
         Self {
             data: (0..8).collect(),
             clock: None,
+            clock_edge: ClockEdge::Rising,
         }
     }
 }
 
 impl ParallelConfig {
+    /// The clock line with the edges that read a word, if the bus has one.
+    pub fn clock(&self) -> Option<Clock> {
+        self.clock.map(|channel| Clock {
+            channel,
+            edge: self.clock_edge,
+        })
+    }
+
     /// The width of a word: one bit per data line.
     pub fn bits(&self) -> u8 {
         u8::try_from(self.data.len()).unwrap_or(u8::MAX)
@@ -92,10 +104,7 @@ impl ParallelConfig {
 
     /// The channels the decoder reads.
     pub fn channels(&self) -> impl Iterator<Item = u8> + '_ {
-        self.data
-            .iter()
-            .copied()
-            .chain(self.clock.map(|clock| clock.channel))
+        self.data.iter().copied().chain(self.clock)
     }
 
     /// The word the data lines make at `levels`.
@@ -210,7 +219,7 @@ impl Node for Parallel {
 
 async fn run(mut signal: SignalCursor, mut out: Outbox<ParallelEvent>, config: ParallelConfig) {
     let bits = config.bits();
-    let watch = match config.clock {
+    let watch = match config.clock() {
         Some(clock) => ChannelMask::one(clock.channel),
         None => config
             .data
@@ -242,7 +251,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<ParallelEvent>, config: P
         loop {
             match signal.next_change(watch).await {
                 Change::At { tick, levels, .. } => {
-                    if let Some(clock) = config.clock
+                    if let Some(clock) = config.clock()
                         && !clock.edge.reads(levels.high(clock.channel))
                     {
                         continue;
@@ -275,8 +284,12 @@ mod tests {
     use super::*;
     use crate::parallel::PARALLEL_EVENTS;
 
-    fn clocked(channel: u8, edge: ClockEdge) -> Option<Clock> {
-        Some(Clock { channel, edge })
+    fn bus(data: Vec<u8>, clock: Option<(u8, ClockEdge)>) -> ParallelConfig {
+        ParallelConfig {
+            data,
+            clock: clock.map(|(channel, _)| channel),
+            clock_edge: clock.map_or(ClockEdge::Rising, |(_, edge)| edge),
+        }
     }
 
     #[test]
@@ -291,18 +304,12 @@ mod tests {
 
     #[test]
     fn words_take_the_lines_least_significant_first() {
-        let config = ParallelConfig {
-            data: vec![5, 0, 63],
-            clock: None,
-        };
+        let config = bus(vec![5, 0, 63], None);
         assert_eq!(config.word(Levels(1 << 5)), 0b001);
         assert_eq!(config.word(Levels(1)), 0b010);
         assert_eq!(config.word(Levels(1 << 63)), 0b100);
         assert_eq!(config.word(Levels(u64::MAX)), 0b111);
-        let wide = ParallelConfig {
-            data: (0..64).rev().collect(),
-            clock: None,
-        };
+        let wide = bus((0..64).rev().collect(), None);
         assert_eq!(wide.word(Levels(1)), 1 << 63);
         assert_eq!(wide.word(Levels(u64::MAX)), u64::MAX);
     }
@@ -310,10 +317,8 @@ mod tests {
     #[test]
     fn configurations_are_checked() {
         assert_eq!(ParallelConfig::default().validate(), Ok(()));
-        let bad = |data: Vec<u8>, clock: Option<Clock>| {
-            ParallelConfig { data, clock }
-                .validate()
-                .expect_err("rejected")
+        let bad = |data: Vec<u8>, clock: Option<(u8, ClockEdge)>| {
+            bus(data, clock).validate().expect_err("rejected")
         };
         assert_eq!(bad(vec![], None), ParallelConfigError::NoData);
         assert_eq!(
@@ -321,12 +326,12 @@ mod tests {
             ParallelConfigError::DuplicateChannel(1)
         );
         assert_eq!(
-            bad(vec![0, 1, 2], clocked(2, ClockEdge::Rising)),
+            bad(vec![0, 1, 2], Some((2, ClockEdge::Rising))),
             ParallelConfigError::DuplicateChannel(2)
         );
         assert_eq!(bad(vec![0, 64], None), ParallelConfigError::Channel(64));
         assert_eq!(
-            bad(vec![0], clocked(99, ClockEdge::Either)),
+            bad(vec![0], Some((99, ClockEdge::Either))),
             ParallelConfigError::Channel(99)
         );
         assert_eq!(
@@ -334,26 +339,17 @@ mod tests {
             ParallelConfigError::TooManyLines(65)
         );
         assert_eq!(
-            Parallel::new(ParallelConfig {
-                data: vec![3, 3],
-                clock: None,
-            }),
+            Parallel::new(bus(vec![3, 3], None)),
             Err(ParallelConfigError::DuplicateChannel(3))
         );
-        let all = ParallelConfig {
-            data: (0..64).collect(),
-            clock: None,
-        };
+        let all = bus((0..64).collect(), None);
         assert_eq!(all.validate(), Ok(()));
         assert_eq!(all.bits(), 64);
     }
 
     #[test]
     fn props_and_requirements_describe_the_bus() {
-        let config = ParallelConfig {
-            data: vec![2, 9, 4],
-            clock: clocked(11, ClockEdge::Falling),
-        };
+        let config = bus(vec![2, 9, 4], Some((11, ClockEdge::Falling)));
         let props = config.props();
         assert_eq!(props.get("bits"), Some(&3i64.into()));
         assert_eq!(props.get("clocked"), Some(&true.into()));

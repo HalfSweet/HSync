@@ -27,7 +27,7 @@ impl ParallelWaveform {
             levels: Levels(0),
             config,
         };
-        if let Some(clock) = waveform.config.clock {
+        if let Some(clock) = waveform.config.clock() {
             waveform.set_line(clock.channel, clock.edge == ClockEdge::Falling);
         }
         waveform
@@ -69,7 +69,7 @@ impl ParallelWaveform {
     /// its other level as the data changes; a clock read on either edge changes once per
     /// word. Without a clock, `value` is held for a whole period.
     pub fn clocked(&mut self, value: u64) {
-        let Some(clock) = self.config.clock else {
+        let Some(clock) = self.config.clock() else {
             self.set(value, 2 * self.half_period);
             return;
         };
