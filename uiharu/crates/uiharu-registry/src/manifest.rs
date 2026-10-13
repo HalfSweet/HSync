@@ -245,6 +245,16 @@ mod tests {
         }
     }
 
+    /// A node's configuration may be left out, or be `{}`, for its defaults: every type
+    /// builds from an empty one.
+    #[test]
+    fn every_node_type_builds_from_an_empty_configuration() {
+        for kind in KINDS {
+            (kind.build)(&serde_json::json!({}))
+                .unwrap_or_else(|error| panic!("{}: {error}", kind.name));
+        }
+    }
+
     #[test]
     fn every_manifest_parses_and_names_its_kind() {
         for (kind, manifest) in KINDS.iter().zip(manifests()) {
