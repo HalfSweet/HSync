@@ -1768,6 +1768,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+ "ts-rs",
  "uiharu-core",
  "uiharu-protocols",
  "uiharu-registry",

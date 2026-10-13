@@ -16,6 +16,7 @@ parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
+ts-rs.workspace = true
 uiharu-core = { path = "../../uiharu/crates/uiharu-core" }
 uiharu-registry = { path = "../../uiharu/crates/uiharu-registry" }
 

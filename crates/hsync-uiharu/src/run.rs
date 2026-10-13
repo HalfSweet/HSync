@@ -10,7 +10,7 @@ use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use hsync_capture::LogicCapture;
 use hsync_core::{ChannelIndex, SampleIndex};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
-use uiharu_core::{PushError, SchemaId, SignalItem, Tick, TickRange};
+use uiharu_core::{PushError, SchemaId, SignalItem, Tick};
 use uiharu_registry::{BuildError, Description, DynItem, DynReader, FieldKind, Manifest};
 
 use crate::feed::{FeedError, Feeder};
@@ -465,9 +465,4 @@ impl Worker {
             (self.updates)(Update::Progress);
         }
     }
-}
-
-/// Converts a capture-relative range to the stores' ticks.
-pub fn absolute(range: std::ops::Range<SampleIndex>, dropped: SampleIndex) -> TickRange {
-    TickRange::new(Tick(range.start + dropped), Tick(range.end + dropped))
 }
