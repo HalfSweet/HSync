@@ -27,6 +27,7 @@ describe('sessions', () => {
     expect(session?.triggers).toEqual({ 1: 'fall' })
     expect(session?.channelNames).toEqual({ 0: 'SDA' })
     expect(session?.decoders).toEqual([{ id: '1:i2c' }])
+    expect(session?.view).toBeNull()
   })
 
   it('keep the external trigger of PXLogic devices', () => {

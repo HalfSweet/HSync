@@ -243,6 +243,7 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
         },
         channels: data.channels.map(({ index, name }) => ({ index, name })),
         decoders: MOCK_ENTRIES,
+        session: null,
       }
       return Promise.resolve(summary)
     },
@@ -567,6 +568,7 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
         },
         channels: enabled.map((index) => ({ index, name: names.get(index) ?? String(index) })),
         decoders,
+        session: null,
       }
       // A capture filling behind the shown one leaves its samples alone.
       const fill = (samples: number) => {

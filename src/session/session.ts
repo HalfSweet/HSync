@@ -1,6 +1,6 @@
 /**
  * Session files: HSync's own JSON with the device settings, channels, triggers
- * and decoders, and DSView's `.dsc` sessions: their device options (by libsigrok's option
+ * and decoders (and, stored in an `.hsync` capture, the view), and DSView's `.dsc` sessions: their device options (by libsigrok's option
  * names, list values as codes in version 3 and as English or Chinese text before), capture
  * mode, channels, triggers and decoders.
  */
@@ -23,6 +23,15 @@ export interface TriggerSettings {
   serial: SerialDraft
 }
 
+/** The timeline as it was when a capture was saved: the samples shown and the segment. */
+export interface SessionView {
+  /** First sample shown. */
+  start: number
+  /** Last sample shown. */
+  end: number
+  segment: { from: number; to: number } | null
+}
+
 export interface Session {
   format: typeof SESSION_FORMAT
   version: number
@@ -39,6 +48,8 @@ export interface Session {
   decoders: unknown[] | null
   /** Single, repeated or loop captures. */
   captureMode: CaptureMode | null
+  /** The timeline as shown when the capture was saved; only `.hsync` captures hold one. */
+  view: SessionView | null
 }
 
 const CAPTURE_MODES: readonly CaptureMode[] = ['single', 'repeat', 'loop']
@@ -113,6 +124,21 @@ function strings(value: unknown): Record<string, string> {
   )
 }
 
+function readView(value: unknown): SessionView | null {
+  if (!isRecord(value) || typeof value.start !== 'number' || typeof value.end !== 'number') {
+    return null
+  }
+  const segment = value.segment
+  return {
+    start: value.start,
+    end: value.end,
+    segment:
+      isRecord(segment) && typeof segment.from === 'number' && typeof segment.to === 'number'
+        ? { from: segment.from, to: segment.to }
+        : null,
+  }
+}
+
 /** Reads one of HSync's own sessions. */
 function readHsync(data: Record<string, unknown>): Session {
   const device = isRecord(data.device) ? data.device : null
@@ -140,6 +166,7 @@ function readHsync(data: Record<string, unknown>): Session {
     captureMode: CAPTURE_MODES.includes(data.captureMode as CaptureMode)
       ? (data.captureMode as CaptureMode)
       : null,
+    view: readView(data.view),
   }
 }
 
@@ -275,6 +302,7 @@ function readDsview(data: Record<string, unknown>): Session {
     // DSView's COLLECT_SINGLE, COLLECT_REPEAT, COLLECT_LOOP.
     captureMode:
       typeof data.CollectMode === 'number' ? (CAPTURE_MODES[data.CollectMode] ?? null) : null,
+    view: null,
   }
 }
 
@@ -286,6 +314,11 @@ export function parseSession(text: string): Session | null {
   } catch {
     return null
   }
+  return readSession(data)
+}
+
+/** Reads a session already parsed from JSON, such as the one stored in an `.hsync` capture. */
+export function readSession(data: unknown): Session | null {
   if (!isRecord(data)) return null
   if (data.format === SESSION_FORMAT) return readHsync(data)
   if (typeof data.Version === 'number' && ('Device' in data || 'channel' in data)) {

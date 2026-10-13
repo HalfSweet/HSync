@@ -96,6 +96,7 @@ function session(patch: Partial<Session>): Session {
     trigger: null,
     decoders: null,
     captureMode: null,
+    view: null,
     ...patch,
   }
 }
@@ -115,6 +116,7 @@ function captured(source: CaptureSummary['source'], names: string[], decoders: u
     },
     channels: names.map((name, index) => ({ index, name })),
     decoders,
+    session: null,
   } satisfies CaptureSummary
 }
 

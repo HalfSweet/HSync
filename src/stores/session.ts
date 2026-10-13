@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { watch } from 'vue'
+import { nextTick, watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
 import type { CapturePreset } from '@/ipc/bindings/CapturePreset'
@@ -8,6 +8,7 @@ import { toUiError, type UiError } from '@/ipc/errors'
 import {
   optionRank,
   parseSession,
+  readSession,
   SESSION_FORMAT,
   SESSION_VERSION,
   type Session,
@@ -19,6 +20,7 @@ import { useChannelsStore } from './channels'
 import { useDecodeStore } from './decode'
 import { useDeviceStore } from './device'
 import { useTriggerStore } from './trigger'
+import { useViewStore } from './view'
 
 /** Where the last settings of each driver are kept between runs. */
 const STORAGE_PREFIX = 'hsync.session.'
@@ -69,6 +71,7 @@ export const useSessionStore = defineStore('session', () => {
   const trigger = useTriggerStore()
   const capture = useCaptureStore()
   const decode = useDecodeStore()
+  const view = useViewStore()
 
   /** Everything a session holds, as things are now. */
   function snapshot(): Session {
@@ -96,7 +99,38 @@ export const useSessionStore = defineStore('session', () => {
       },
       decoders: decoders.length > 0 ? [...decoders] : null,
       captureMode: capture.mode,
+      view: null,
     }
+  }
+
+  /** The session to store with the open capture: the settings, and the timeline as shown. */
+  function captureDocument(): Session {
+    const marked = view.segment
+    return {
+      ...snapshot(),
+      view: {
+        start: view.viewport.start,
+        end: view.end,
+        segment: marked ? { from: marked.from, to: marked.to } : null,
+      },
+    }
+  }
+
+  /**
+   * Applies what an `.hsync` capture that has just opened stored of the interface: the channel
+   * colours and the timeline as it was. Its channel names and decoders came with the capture;
+   * the device settings it holds stay unapplied, as opening a file must not change the device.
+   */
+  async function applyCaptureDocument(document: unknown): Promise<void> {
+    const session = readSession(document)
+    if (!session) return
+    channels.colours = { ...session.colours }
+    const stored = session.view
+    if (!stored) return
+    // The view store fits a capture once it opens; the stored view comes after that.
+    await nextTick()
+    view.showRange(stored.start, stored.end)
+    view.setSegment(stored.segment)
   }
 
   /** Applies the device settings, channels and triggers of `session`. */
@@ -242,5 +276,5 @@ export const useSessionStore = defineStore('session', () => {
     return { ...settings, channelNames: kept?.channelNames ?? {}, decoders: kept?.decoders ?? null }
   }
 
-  return { snapshot, apply, save, load }
+  return { snapshot, apply, save, load, captureDocument, applyCaptureDocument }
 })

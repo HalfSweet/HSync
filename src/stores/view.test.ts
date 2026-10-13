@@ -26,6 +26,7 @@ function summary(
     info: { samplerate, sampleCount, triggerSample, triggerTimeMs: null, channels: [0] },
     channels: [{ index: 0, name: '0' }],
     decoders: null,
+    session: null,
   }
 }
 

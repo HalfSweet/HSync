@@ -27,6 +27,7 @@ const summary: CaptureSummary = {
     { index: 1, name: '1' },
   ],
   decoders: null,
+  session: null,
 }
 
 const requests: CaptureRequest[] = []

@@ -318,10 +318,13 @@ export const useCaptureStore = defineStore('capture', () => {
     }
   }
 
-  /** Writes the open capture to `path` as a `.dsl` file; it then counts as that file. */
-  function saveFile(path: string): Promise<boolean> {
+  /**
+   * Writes the open capture to `path` as an `.hsync` file, with `session`, the interface's
+   * session document; it then counts as that file.
+   */
+  function saveFile(path: string, session: unknown): Promise<boolean> {
     return fileJob('save', path, async (id, onProgress) => {
-      summary.value = await (await getBackend()).saveFile(id, path, onProgress)
+      summary.value = await (await getBackend()).saveFile(id, path, session, onProgress)
     })
   }
 
