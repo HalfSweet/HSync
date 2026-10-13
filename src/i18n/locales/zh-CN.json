@@ -57,8 +57,8 @@
     },
     "search": {
       "aria": "搜索解码结果",
-      "placeholder": "搜索数值或文本，如 4F、HOST",
-      "tip": "解码结果：十六进制（4F、0x4F、4F 32）或文本（HOST）。电平模式：D3=R D5=1（0 低、1 高、R 上升沿、F 下降沿、C 任意沿、X 不关心）。回车下一处，Shift+回车上一处，Esc 清空",
+      "placeholder": "搜索数值或事件，如 0x4F、address",
+      "tip": "解码结果：数值（0x4F）、字节序列（0x4F 0x32）或事件种类（address）。电平模式：D3=R D5=1（0 低、1 高、R 上升沿、F 下降沿、C 任意沿、X 不关心）。回车下一处，Shift+回车上一处，Esc 清空",
       "none": "无结果",
       "count": "{count} 处",
       "position": "{current}/{count}",
