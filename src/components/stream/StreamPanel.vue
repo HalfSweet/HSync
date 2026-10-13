@@ -5,22 +5,26 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { defaultCaptureName, withExtension } from '@/composables/useFileActions'
-import { entryFormat, shownTexts } from '@/decode/numberFormat'
-import { escapePieces, hex, hexBytes, type TextPiece } from '@/decode/text'
+import { entryFormat } from '@/decode/numberFormat'
+import { fieldTexts, type Wording } from '@/decode/present'
 import { getBackend } from '@/ipc/backend'
 import { pickSavePath } from '@/ipc/dialogs'
-import type { StreamRow } from '@/ipc/bindings/StreamRow'
+import type { EventRow } from '@/ipc/bindings/EventRow'
 import { vIndicator } from '@/motion/indicator'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useSearchStore } from '@/stores/search'
-import { useStreamStore } from '@/stores/stream'
+import { useStreamStore, type Listing } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
 import { csvLines } from '@/stream/csv'
-import type { BusKind } from '@/timeline/groups'
+import { busKind, type BusKind } from '@/timeline/groups'
 
-/** The data stream under the timeline (DESIGN.md §9). */
-const { t } = useI18n()
+/**
+ * The data stream under the timeline (DESIGN.md §9): the events of one decoder's stream, one
+ * row each, with the event's kind and its fields as the contract names them.
+ */
+const i18n = useI18n()
+const { t } = i18n
 const capture = useCaptureStore()
 const decode = useDecodeStore()
 const stream = useStreamStore()
@@ -46,280 +50,161 @@ const SQUARES: Record<BusKind, string> = {
   other: 'bg-ink-2',
 }
 
+/** The translation under `key` when the locale has one, else `fallback`. */
+function named(key: string, fallback: string): string {
+  return i18n.te(key) ? t(key as never) : fallback
+}
+
+/** What a node type is called: `decoder.<type>.name`, else the type itself. */
+function typeName(type: string): string {
+  return named(`decoder.${type}.name`, type)
+}
+
+/** What decoder `index` is called: its label, else the name of its first node type. */
+function decoderName(index: number): string {
+  const label = decode.entries[index]?.label?.trim()
+  if (label) return label
+  const status = decode.statusOf(index)
+  const first = status?.kinds[0]
+  return first === undefined ? (status?.label ?? '') : typeName(first)
+}
+
+/** A tab's text: the decoder, and the stream too when the decoder has several. */
+function tabName(listing: Listing): string {
+  const decoder = decoderName(listing.decoder)
+  if (listing.streams <= 1) return decoder
+  // The bus itself goes by the decoder's name; the decoders stacked on it are named too.
+  if (listing.stream === 0) return decoder
+  return t('stream.tab', { decoder, stream: typeName(listing.kind) })
+}
+
 const tabs = computed(() =>
-  stream.decoders.map((status) => {
-    const group = capture.groups.find((one) => one.decoder === status.index)
-    return {
-      index: status.index,
-      name: group?.title ?? status.id,
-      square: SQUARES[status.bus ?? 'other'],
-    }
-  }),
+  stream.listings.map((listing) => ({
+    listing,
+    key: `${listing.decoder}:${listing.stream}`,
+    name: tabName(listing),
+    square: SQUARES[busKind(listing.kind)],
+  })),
 )
 
-const bus = computed(() => stream.bus)
-/** How the listed decoder's annotation values show. */
+function isCurrent(listing: Listing): boolean {
+  const current = stream.current
+  return (
+    current !== null && current.decoder === listing.decoder && current.stream === listing.stream
+  )
+}
+
+/** The node type whose events are listed, e.g. `i2c`; it names their kinds and fields. */
+const type = computed(() => stream.current?.kind)
+
+/** How the listed decoder's numbers show. */
 const format = computed(() =>
   entryFormat(stream.decoder === null ? undefined : decode.entries[stream.decoder]),
 )
 
-/** "9 transfers, 4 bytes in the segment" and its variants. */
-const summary = computed(() => {
-  const counts = stream.counts
-  if (!counts) return ''
-  const bytes = bus.value === 'can' ? counts.frames : counts.bytes
-  const unit = t(
-    bus.value === 'can' || bus.value === 'uart'
-      ? 'stream.summary.unitFrames'
-      : 'stream.summary.unitBytes',
-  )
-  let total: string
-  if (bus.value === 'spi' && counts.transfers === 1) {
-    total = t('stream.summary.transferBytes', { count: counts.bytes })
-  } else if (bus.value === 'i2c' || bus.value === 'spi') {
-    total = t('stream.summary.transfers', { count: counts.transfers })
-  } else {
-    total = t('stream.summary.frames', { count: bus.value === 'can' ? counts.frames : bytes })
-  }
-  const inside = stream.inside
-  if (inside === null || !stream.segment) return total
-  if (stream.onlySegment) {
-    const [from, to] = stream.segment
-    return t('stream.summary.segmentOnly', {
-      from: (capture.timeOf(from) * 1000).toFixed(3),
-      to: (capture.timeOf(to) * 1000).toFixed(3),
-      count: inside,
-      unit,
-    })
-  }
-  return t('stream.summary.inSegment', { total, count: inside, unit })
-})
+const wording = computed<Wording>(() => ({
+  enumValue: (field, value) =>
+    type.value === undefined
+      ? value
+      : named(`decoder.${type.value}.value.${field}.${value}`, value),
+  yes: t('decode.yes'),
+  no: t('decode.no'),
+  none: t('decode.none'),
+}))
 
-/** Width of the label column by bus, as the design sets it. */
-const LABEL_WIDTHS: Partial<Record<BusKind, string>> = {
-  spi: '36px',
-  can: '64px',
-  other: '120px',
+/** A sample's time in ms with `decimals` decimals, relative to the trigger point. */
+function ms(sample: number, decimals: number): string {
+  return (capture.timeOf(sample) * 1000).toFixed(decimals)
 }
-const labelWidth = computed(() => (bus.value ? (LABEL_WIDTHS[bus.value] ?? null) : null))
 
-const header = computed(() => {
-  switch (bus.value) {
-    case 'i2c':
-      return {
-        label: null,
-        offset: false,
-        content: t('stream.column.wireOrder'),
-        chars: false,
-      }
-    case 'spi':
-      return {
-        label: t('stream.column.dataLine'),
-        offset: true,
-        content: t('stream.column.content'),
-        chars: false,
-      }
-    case 'can':
-      return {
-        label: t('stream.column.identifier'),
-        offset: false,
-        content: t('stream.column.data'),
-        chars: false,
-      }
-    case 'other':
-      return {
-        label: t('stream.column.row'),
-        offset: false,
-        content: t('stream.column.content'),
-        chars: false,
-      }
-    default:
-      return stream.effectiveMode === 'hex'
-        ? { label: null, offset: true, content: t('stream.column.bytes'), chars: true }
-        : { label: null, offset: false, content: t('stream.column.text'), chars: false }
+function time(row: EventRow): string {
+  return ms(row.start, 4)
+}
+
+/** "9 events", "9 events, 4 in the segment" and the segment's own variant. */
+const summary = computed(() => {
+  if (!stream.current) return ''
+  const total = t('stream.summary.events', { count: stream.events })
+  const inside = stream.inside
+  const segment = stream.segment
+  if (inside === null || !segment) return total
+  if (stream.onlySegment) {
+    const [from, to] = segment
+    return t('stream.summary.segmentOnly', { from: ms(from, 3), to: ms(to, 3), count: inside })
   }
+  return t('stream.summary.inSegment', { total, count: inside })
 })
 
-/** Search hits of the decoder listed, in time order. */
-const decoderHits = computed(() =>
-  (finder.result?.hits ?? []).filter((hit) => hit.decoder === stream.decoder),
-)
-
-/** Whether `row` lists a search hit: `current` for the one shown. */
-function findOf(row: StreamRow): 'current' | 'hit' | null {
-  if (row.type === 'gap' || row.type === 'note') return null
-  const hits = decoderHits.value
-  const line = 'line' in row ? row.line : null
-  let lo = 0
-  let hi = hits.length
-  while (lo < hi) {
-    const mid = (lo + hi) >>> 1
-    if ((hits[mid]?.start ?? 0) < row.start) lo = mid + 1
-    else hi = mid
-  }
-  let found: 'hit' | null = null
-  for (let at = lo; at < hits.length; at++) {
-    const hit = hits[at]
-    if (!hit || hit.start >= row.end) break
-    if (hit.line !== line) continue
-    if (hit === finder.hit) return 'current'
-    found = 'hit'
-  }
+/** The search hits in the listed stream by their row: `current` for the one shown. */
+const marks = computed(() => {
+  const found = new Map<number, 'current' | 'hit'>()
+  ;(finder.result?.hits ?? []).forEach((hit, at) => {
+    if (hit.decoder !== stream.decoder || hit.stream !== stream.stream) return
+    found.set(hit.row, at === finder.current ? 'current' : 'hit')
+  })
   return found
+})
+
+/** The kind of an event as named: `decoder.<type>.event.<kind>`, else the kind itself. */
+function kindText(row: EventRow): string {
+  return type.value === undefined
+    ? row.kind
+    : named(`decoder.${type.value}.event.${row.kind}`, row.kind)
+}
+
+/** A field's label: `decoder.<type>.eventField.<name>`, else the name itself. */
+function fieldLabel(name: string): string {
+  return type.value === undefined ? name : named(`decoder.${type.value}.eventField.${name}`, name)
+}
+
+/** The fields of an event as shown, "label: value" each, in the contract's order. */
+function cellsOf(row: EventRow): string[] {
+  return fieldTexts(row.payload, format.value, wording.value).map(({ name, text }) =>
+    t('decode.field', { label: fieldLabel(name), value: text }),
+  )
+}
+
+interface Shown {
+  index: number
+  /** Not yet there while its page is fetched. */
+  row: EventRow | undefined
+  find: 'current' | 'hit' | null
+  kind: string
+  cells: string[]
 }
 
 // Virtual list: only the rows in sight, and a few more.
-const visible = computed(() => {
+const visible = computed<Shown[]>(() => {
   const first = Math.max(0, Math.floor(scrollTop.value / ROW) - OVERSCAN)
   const last = Math.min(
     stream.total,
     Math.ceil((scrollTop.value + listHeight.value) / ROW) + OVERSCAN,
   )
-  const rows: { index: number; row: StreamRow | undefined; find: 'current' | 'hit' | null }[] = []
-  // Reading `pages` makes the list update as pages arrive.
-  void stream.pages
+  const rows: Shown[] = []
   for (let index = first; index < last; index++) {
     const row = stream.row(index)
-    rows.push({ index, row, find: row ? findOf(row) : null })
+    rows.push({
+      index,
+      row,
+      find: row ? (marks.value.get(row.index) ?? null) : null,
+      kind: row ? kindText(row) : '',
+      cells: row ? cellsOf(row) : [],
+    })
   }
   return rows
 })
 
-function time(row: StreamRow): string {
-  return (capture.timeOf(row.start) * 1000).toFixed(4)
-}
-
-/** Whether a row lies entirely inside the marked segment; I²C shades its bytes instead. */
-function inSegment(row: StreamRow): boolean {
-  return row.type !== 'gap' && row.type !== 'i2c' && spanInside(row.start, row.end)
-}
-
-interface Cell {
-  text: string
-  kind: 'plain' | 'muted' | 'nack' | 'escape' | 'note'
-  prefix?: string
-  /** The cell lies inside the segment (I²C shades byte by byte). */
-  inside?: boolean
-}
-
-function spanInside(start: number, end: number): boolean {
+/** Whether an event lies wholly inside the marked segment. */
+function inSegment(row: EventRow): boolean {
   const segment = stream.segment
-  return !!segment && start >= segment[0] && end <= segment[1]
-}
-
-function noteText(row: Extract<StreamRow, { type: 'note' }>): string {
-  return t(`stream.note.${row.note}`)
-}
-
-function textCells(pieces: TextPiece[]): Cell[] {
-  return pieces.map((piece) => ({ text: piece.text, kind: piece.escape ? 'escape' : 'plain' }))
-}
-
-function cellsOf(row: StreamRow): Cell[] {
-  switch (row.type) {
-    case 'note':
-      return [{ text: noteText(row), kind: 'note' }]
-    case 'i2c': {
-      const cells: Cell[] = row.tokens.map((token) => {
-        const inside = spanInside(token.start, token.end)
-        switch (token.type) {
-          case 'start':
-            return { text: 'S', kind: 'muted', inside }
-          case 'repeatedStart':
-            return { text: 'Sr', kind: 'muted', inside }
-          case 'stop':
-            return { text: 'P', kind: 'muted', inside }
-          case 'nack':
-            return { text: 'N', kind: 'nack', inside }
-          case 'address':
-            return {
-              text: hex(token.address),
-              kind: 'plain',
-              prefix: t(token.read ? 'decode.i2c.read' : 'decode.i2c.write'),
-              inside,
-            }
-          default:
-            return { text: hex(token.value), kind: 'plain', inside }
-        }
-      })
-      if (row.cut)
-        cells.push(
-          { text: '…', kind: 'muted' },
-          { text: t('stream.note.captureEnds'), kind: 'note' },
-        )
-      return cells
-    }
-    case 'uartText':
-      return textCells(escapePieces(row.text))
-    case 'hex':
-      return [
-        {
-          text: row.values.map((value) => hex(value, Math.ceil(row.bits / 4))).join(' '),
-          kind: 'plain',
-        },
-      ]
-    case 'can': {
-      const parts = [
-        t(row.fd ? 'stream.can.fd' : 'stream.can.classic'),
-        t('stream.can.bytes', { count: row.data.length }),
-        t(row.ok ? 'stream.can.crcOk' : 'stream.can.crcError'),
-        t(row.acked ? 'stream.can.acked' : 'stream.can.noAck'),
-      ]
-      if (row.error) parts.push(t('stream.can.errorFrame'))
-      return [
-        { text: hexBytes(row.data), kind: 'plain' },
-        { text: parts.join(t('stream.can.separator')), kind: 'note' },
-      ]
-    }
-    case 'annotation':
-      return [
-        {
-          text: shownTexts([row.text].filter(Boolean), row.value, format.value)[0] ?? '',
-          kind: 'plain',
-        },
-      ]
-    default:
-      return []
-  }
-}
-
-function labelOf(row: StreamRow): string {
-  switch (row.type) {
-    case 'hex':
-      return row.line ? row.line.toUpperCase() : ''
-    case 'can':
-      return `0x${hex(row.id, row.extended ? 8 : 3)}`
-    case 'annotation':
-      return decode.statusOf(stream.decoder)?.lanes[row.row]?.desc ?? ''
-    default:
-      return ''
-  }
-}
-
-function offsetOf(row: StreamRow): string {
-  return 'offset' in row ? String(row.offset) : ''
-}
-
-function charsOf(row: StreamRow): string {
-  if (row.type !== 'hex') return ''
-  return row.values
-    .map((value) => (value >= 0x20 && value < 0x7f ? String.fromCharCode(value) : '·'))
-    .join('')
-}
-
-/** Only the first of a run of rows on one data line names the line. */
-function showLabel(index: number, row: StreamRow): boolean {
-  if (bus.value !== 'spi') return true
-  const previous = stream.row(index - 1)
-  return !previous || !('line' in previous) || previous.line !== ('line' in row ? row.line : null)
+  return segment !== null && row.start >= segment[0] && row.end <= segment[1]
 }
 
 function onScroll(): void {
   scrollTop.value = list.value?.scrollTop ?? 0
 }
 
-function goTo(row: StreamRow): void {
-  if (row.type === 'gap') return
+function goTo(row: EventRow): void {
   view.centerOn((row.start + row.end) / 2)
   view.setSegment({ from: row.start, to: row.end })
 }
@@ -336,7 +221,7 @@ watch(
   },
 )
 
-// The search hit shown scrolls into view, one row below the top, once its decoder is listed.
+// The search hit shown scrolls into view, one row below the top, once its stream is listed.
 const pendingRow = shallowRef<number | null>(null)
 watch(
   () => finder.hit,
@@ -344,10 +229,19 @@ watch(
   { immediate: true },
 )
 watch(
-  () => [pendingRow.value, stream.total, stream.decoder, stream.onlySegment] as const,
-  async ([row, total, decoder, onlySegment]) => {
+  () =>
+    [pendingRow.value, stream.total, stream.decoder, stream.stream, stream.onlySegment] as const,
+  async ([row, total, decoder, streamIndex, onlySegment]) => {
     const hit = finder.hit
-    if (row === null || !hit || hit.decoder !== decoder || onlySegment || total <= row) return
+    if (
+      row === null ||
+      !hit ||
+      hit.decoder !== decoder ||
+      hit.stream !== streamIndex ||
+      onlySegment ||
+      total <= row
+    )
+      return
     pendingRow.value = null
     await nextTick()
     const box = list.value
@@ -362,44 +256,52 @@ watch(
 async function scrollToSample(sample: number): Promise<void> {
   const id = capture.summary?.id
   if (id === undefined || stream.decoder === null) return
-  const index = await (
-    await getBackend()
-  ).decodeRowAt(id, stream.decoder, stream.effectiveMode, sample)
+  const index = await (await getBackend()).decodeRowAt(id, stream.decoder, stream.stream, sample)
   if (index === null) return
   await nextTick()
   list.value?.scrollTo({ top: Math.max(0, (index - 1) * ROW) })
 }
 
-function contentOf(row: StreamRow): string {
-  return cellsOf(row)
-    .map((cell) => (cell.prefix ?? '') + cell.text)
-    .join(' ')
-}
+/** The decoder and stream names the copy and the exports write beside every row. */
+const names = computed(() => {
+  const current = stream.current
+  if (!current) return { decoder: '', stream: '' }
+  return { decoder: decoderName(current.decoder), stream: typeName(current.kind) }
+})
 
-/** A row as the panel shows it, its columns separated by tabs. */
-function textLine(row: StreamRow): string {
-  if (row.type === 'gap') return ''
-  return [time(row), labelOf(row), offsetOf(row), contentOf(row), charsOf(row)]
-    .filter((part) => part !== '')
-    .join('\t')
+/** A row's columns: time, decoder, stream, kind and the fields, two spaces apart. */
+function columnsOf(row: EventRow): string[] {
+  return [
+    time(row),
+    names.value.decoder,
+    names.value.stream,
+    kindText(row),
+    cellsOf(row).join('  '),
+  ]
 }
 
 async function copyRows(): Promise<void> {
   const rows = await stream.allRows()
-  await copy(rows.map(textLine).join('\n'))
+  await copy(rows.map((row) => columnsOf(row).join('\t')).join('\n'))
 }
 
-// Exporting the listing: CSV with time, decoder, label, offset and content
-// columns, or text as the panel shows it.
+// Exporting the listing: CSV with time, decoder, stream, event and content columns, or the
+// same columns as text, separated by tabs.
 const exportMenu = ref(false)
 const exportRoot = useTemplateRef<HTMLElement>('exportRoot')
 onClickOutside(exportRoot, () => (exportMenu.value = false))
 
 async function exportRows(kind: 'csv' | 'text'): Promise<void> {
   exportMenu.value = false
-  const decoderName = tabs.value.find((tab) => tab.index === stream.decoder)?.name ?? 'stream'
+  const current = stream.current
   const extension = kind === 'csv' ? 'csv' : 'txt'
-  const safeName = decoderName.replace(/[\\/:*?"<>|\s]+/g, '_')
+  // The file is named after the decoder, and its stream when the decoder has several.
+  const name = !current
+    ? 'stream'
+    : current.streams > 1
+      ? `${names.value.decoder}-${names.value.stream}`
+      : names.value.decoder
+  const safeName = name.replace(/[\\/:*?"<>|\s]+/g, '_')
   const suggested = defaultCaptureName(new Date(), extension).replace(
     `.${extension}`,
     `-${safeName}.${extension}`,
@@ -408,26 +310,20 @@ async function exportRows(kind: 'csv' | 'text'): Promise<void> {
     { name: t(`stream.export.${kind}`), extensions: [extension] },
   ])
   if (!path) return
-  const rows = (await stream.fetchAll()).filter((row) => row.type !== 'gap')
+  const lines = (await stream.fetchAll()).map(columnsOf)
   const text =
     kind === 'csv'
       ? csvLines([
           [
             t('stream.export.timeColumn'),
             t('stream.export.decoderColumn'),
-            t('stream.export.labelColumn'),
-            t('stream.column.offset'),
+            t('stream.export.streamColumn'),
+            t('stream.export.kindColumn'),
             t('stream.export.contentColumn'),
           ],
-          ...rows.map((row) => [
-            time(row),
-            decoderName,
-            labelOf(row),
-            offsetOf(row),
-            [contentOf(row), charsOf(row)].filter(Boolean).join(' '),
-          ]),
+          ...lines,
         ])
-      : rows.map(textLine).join('\n') + '\n'
+      : lines.map((line) => line.join('\t')).join('\n') + '\n'
   await capture.saveText(withExtension(path, extension), text)
 }
 
@@ -481,11 +377,11 @@ function onGripUp(): void {
       >
         <button
           v-for="tab in tabs"
-          :key="tab.index"
+          :key="tab.key"
           role="tab"
-          :aria-selected="tab.index === stream.decoder"
+          :aria-selected="isCurrent(tab.listing)"
           class="inline-flex items-center gap-1.5 px-2.5 text-small font-medium whitespace-nowrap text-ink-2 hover:text-ink aria-selected:text-ink"
-          @click="stream.decoder = tab.index"
+          @click="stream.select(tab.listing.decoder, tab.listing.stream)"
         >
           <i class="size-2 rounded-2" :class="tab.square" />
           <span>{{ tab.name }}</span>
@@ -493,20 +389,6 @@ function onGripUp(): void {
       </div>
       <span class="self-center truncate text-small text-ink-2">{{ summary }}</span>
       <div class="ml-auto flex items-center gap-2">
-        <div
-          v-if="stream.hasModes"
-          v-indicator
-          role="group"
-          :aria-label="t('stream.mode.label')"
-          class="flex gap-0.5 rounded-6 bg-hover p-0.5"
-        >
-          <button class="seg" :aria-pressed="stream.mode === 'text'" @click="stream.mode = 'text'">
-            {{ t('stream.mode.text') }}
-          </button>
-          <button class="seg" :aria-pressed="stream.mode === 'hex'" @click="stream.mode = 'hex'">
-            {{ t('stream.mode.hex') }}
-          </button>
-        </div>
         <div
           v-indicator
           role="group"
@@ -584,63 +466,36 @@ function onGripUp(): void {
     >
       <div class="sticky top-0 z-[1] flex gap-4 bg-canvas px-4 whitespace-nowrap text-ink-3">
         <span class="w-[6ch] flex-none text-right font-sans">{{ t('stream.column.time') }}</span>
-        <span v-if="labelWidth" class="flex-none font-sans" :style="{ width: labelWidth }">{{
-          header.label
-        }}</span>
-        <span v-if="header.offset" class="w-[4ch] flex-none text-right font-sans">{{
-          t('stream.column.offset')
-        }}</span>
-        <span class="font-sans" :class="header.chars && 'w-[48ch] flex-none'">{{
-          header.content
-        }}</span>
-        <span v-if="header.chars" class="font-sans">{{ t('stream.column.characters') }}</span>
+        <span class="w-[120px] flex-none font-sans">{{ t('stream.column.kind') }}</span>
+        <span class="font-sans">{{ t('stream.column.fields') }}</span>
       </div>
-      <!-- Another decoder, mode or scope is another listing, which rises in. -->
+      <!-- Another stream or scope is another listing, which rises in. -->
       <div
-        :key="`${stream.decoder}:${stream.mode}:${stream.scope}`"
+        :key="`${stream.decoder}:${stream.stream}:${stream.scope}`"
         class="rise-in relative"
         :style="{ height: `${stream.total * ROW}px` }"
       >
-        <template v-for="{ index, row, find } in visible" :key="index">
+        <template v-for="{ index, row, find, kind, cells } in visible" :key="index">
           <div
             v-if="row"
-            class="absolute inset-x-0 flex h-5 gap-4 px-4"
-            :class="[
+            class="absolute inset-x-0 flex h-5 cursor-pointer gap-4 px-4 hover:bg-hover"
+            :class="
               find === 'current'
                 ? 'bg-find-strong'
                 : find === 'hit'
                   ? 'bg-find'
-                  : inSegment(row) && 'bg-sel',
-              row.type !== 'gap' && row.type !== 'note' && 'cursor-pointer hover:bg-hover',
-            ]"
+                  : inSegment(row) && 'bg-sel'
+            "
             :style="{ top: `${index * ROW}px` }"
-            @mouseenter="row.type !== 'gap' && (stream.hot = { start: row.start, end: row.end })"
+            @mouseenter="stream.hot = { start: row.start, end: row.end }"
             @mouseleave="stream.hot = null"
             @click="goTo(row)"
           >
-            <template v-if="row.type !== 'gap'">
-              <span class="w-[6ch] flex-none text-right text-ink-3">{{ time(row) }}</span>
-              <span
-                v-if="labelWidth"
-                class="flex-none truncate font-sans text-ink-2"
-                :style="{ width: labelWidth }"
-                >{{ showLabel(index, row) ? labelOf(row) : '' }}</span
-              >
-              <span v-if="header.offset" class="w-[4ch] flex-none text-right text-ink-3">{{
-                offsetOf(row)
-              }}</span>
-              <span class="min-w-0 whitespace-pre" :class="header.chars && 'w-[48ch] flex-none'"
-                ><span
-                  v-for="(cell, at) in cellsOf(row)"
-                  :key="at"
-                  class="cell"
-                  :class="[`cell-${cell.kind}`, cell.inside && 'bg-sel']"
-                  ><i v-if="cell.prefix" class="cell-prefix">{{ cell.prefix }}</i
-                  >{{ cell.text }}</span
-                ></span
-              >
-              <span v-if="header.chars" class="whitespace-pre text-ink-2">{{ charsOf(row) }}</span>
-            </template>
+            <span class="w-[6ch] flex-none text-right text-ink-3">{{ time(row) }}</span>
+            <span class="w-[120px] flex-none truncate font-sans text-ink-2">{{ kind }}</span>
+            <span class="min-w-0 whitespace-pre"
+              ><span v-for="(cell, at) in cells" :key="at" class="cell">{{ cell }}</span></span
+            >
           </div>
         </template>
       </div>
@@ -651,31 +506,5 @@ function onGripUp(): void {
 <style scoped>
 .cell + .cell {
   margin-left: 1ch;
-}
-
-.cell-muted,
-.cell-escape {
-  color: var(--ink-3);
-}
-
-.cell-escape + .cell-escape,
-.cell-plain + .cell-escape,
-.cell-escape + .cell-plain {
-  margin-left: 0;
-}
-
-.cell-nack {
-  font-weight: 600;
-}
-
-.cell-note {
-  color: var(--ink-3);
-  font-family: var(--sans);
-}
-
-.cell-prefix {
-  margin-right: 3px;
-  color: var(--i2c);
-  font: normal 11px/1 var(--sans);
 }
 </style>
