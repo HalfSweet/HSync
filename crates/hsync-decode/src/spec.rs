@@ -8,15 +8,13 @@ use hsync_capture::LogicCapture;
 use hsync_core::ChannelIndex;
 use serde::Serialize;
 use serde_json::Value;
-use ts_rs::TS;
 
 use crate::{can, i2c, spi, uart};
 
 /// How a decoder's results are presented: the buses with native decoders, and `Other` for the
 /// annotations of any other decoder.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-#[ts(export)]
 pub enum Bus {
     I2c,
     Uart,

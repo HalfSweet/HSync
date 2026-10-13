@@ -1,6 +1,6 @@
 [package]
 name = "hsync-bench"
-description = "Benchmark harness: the uiharu decode engine against HSync's native decoders and DSView's Python decoders on the same captures"
+description = "Benchmark harness: the uiharu decode engine against HSync's native decoders on the same captures"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -17,7 +17,6 @@ hsync-capture.workspace = true
 hsync-core.workspace = true
 hsync-decode.workspace = true
 hsync-fileio.workspace = true
-hsync-srd.workspace = true
 parking_lot.workspace = true
 serde.workspace = true
 serde_json.workspace = true

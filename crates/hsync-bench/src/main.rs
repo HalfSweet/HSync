@@ -1,5 +1,4 @@
-//! Decoding speed of the uiharu engine against HSync's native decoders and DSView's Python
-//! decoders — the sigrok decoders in the embedded interpreter — on the same captures.
+//! Decoding speed of the uiharu engine against HSync's native decoders on the same captures.
 //!
 //! Every case runs in a child process of its own, under `/usr/bin/time` where there is one, so
 //! that its peak memory is the decoder's and not another's. The parent prints a table, or JSON
@@ -10,9 +9,6 @@
 //! cargo run --release -p hsync-bench -- --repeats 256 --runs 5 --json
 //! cargo run --release -p hsync-bench -- --case uiharu-spi:demo
 //! ```
-//!
-//! The Python decoder walks the samples one edge at a time in the interpreter, so it gets a
-//! workload `--python-divisor` times shorter; the rates stay comparable.
 //!
 //! `--compare` runs no benchmark: it decodes the demo capture's I²C, UART, CAN FD and SPI with
 //! uiharu and with the native decoders and reports where they disagree (see `compare`).
@@ -33,13 +29,12 @@ use workload::{Source, Workload};
 const USAGE: &str = "\
 hsync-bench [options]
 
-  Measures uiharu's SPI and SPI → SPI NOR decoders, hsync-decode's native SPI decoder and
-  DSView's Python SPI decoder (through hsync-srd) on DSView's protocol demo repeated many times
-  and on synthetic SPI NOR traffic, each case in a child process.
+  Measures uiharu's SPI and SPI → SPI NOR decoders and hsync-decode's native SPI decoder on
+  DSView's protocol demo repeated many times and on synthetic SPI NOR traffic, each case in a
+  child process.
 
       --repeats <N>            times the demo capture is repeated (default 128)
       --samples <N>            samples of synthetic traffic (default 50000000)
-      --python-divisor <N>     the Python decoder gets 1/N of the samples (default 16)
       --runs <N>               runs per case; the median is reported (default 3)
       --chunk <SAMPLES>        samples per block fed to uiharu (default 65536)
       --bytes <N>              data bytes per synthetic read (default 64)
@@ -55,7 +50,6 @@ hsync-bench [options]
 struct Options {
     repeats: u64,
     samples: u64,
-    python_divisor: u64,
     runs: usize,
     chunk: u64,
     bytes: usize,
@@ -72,7 +66,6 @@ impl Options {
         let mut options = Options {
             repeats: 128,
             samples: 50_000_000,
-            python_divisor: 16,
             runs: 3,
             chunk: 65_536,
             bytes: 64,
@@ -110,7 +103,6 @@ impl Options {
             match name {
                 "repeats" => options.repeats = number(name)?.max(1),
                 "samples" => options.samples = number(name)?.max(1),
-                "python-divisor" => options.python_divisor = number(name)?.max(1),
                 "runs" => options.runs = number(name)?.max(1) as usize,
                 "chunk" => options.chunk = number(name)?.max(1),
                 "bytes" => options.bytes = number(name)? as usize,
@@ -153,8 +145,6 @@ impl Options {
             self.repeats.to_string(),
             "--samples".to_owned(),
             self.samples.to_string(),
-            "--python-divisor".to_owned(),
-            self.python_divisor.to_string(),
             "--chunk".to_owned(),
             self.chunk.to_string(),
             "--bytes".to_owned(),
@@ -198,18 +188,9 @@ fn repo_root() -> PathBuf {
 /// Runs one case in this process and prints its JSON line.
 fn run_case(decoder: Decoder, workload: Workload, options: &Options) -> Result<(), String> {
     let root = repo_root();
-    let divisor = if decoder.is_python() {
-        options.python_divisor
-    } else {
-        1
-    };
     let source = match workload {
-        Workload::Demo => Source::demo(&root, options.repeats.div_ceil(divisor).max(1))?,
-        Workload::Nor => Source::nor(
-            (options.samples / divisor).max(1),
-            options.bytes,
-            options.half_period,
-        ),
+        Workload::Demo => Source::demo(&root, options.repeats.max(1))?,
+        Workload::Nor => Source::nor(options.samples.max(1), options.bytes, options.half_period),
     };
     let mut result = CaseResult {
         decoder: decoder.name().to_owned(),
@@ -224,7 +205,7 @@ fn run_case(decoder: Decoder, workload: Workload, options: &Options) -> Result<(
         peak_rss: None,
         runs: 1,
     };
-    match decoders::run(decoder, &source, options.chunk, &root)? {
+    match decoders::run(decoder, &source, options.chunk)? {
         Outcome::Measured(measured) => {
             result.samples = measured.samples;
             result.words = measured.words;
@@ -378,7 +359,7 @@ fn print_table(results: &[CaseResult], out: &mut impl Write) -> std::io::Result<
             continue;
         };
         let mut ratios = Vec::new();
-        for other in ["hsync-decode-spi", "sigrok-spi", "sigrok-cli-spi"] {
+        for other in ["hsync-decode-spi", "sigrok-cli-spi"] {
             if let Some(rate) = rate(other, workload.name()) {
                 ratios.push(format!("{:.2}x {other}", uiharu / rate));
             }

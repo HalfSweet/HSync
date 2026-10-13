@@ -26,7 +26,7 @@
   <img src="assets/screenshots/zh-CN/hero-light.webp" alt="HSync 显示一段包含 I²C、UART、SPI 与 CAN-FD 总线的采集：解码结果位于对应波形上方，下方是 I²C 的数据流">
 </picture>
 
-HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic 与 PXLogic 的 PX-Logic 系列（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，采集还没结束就能看到，另有 30 种协议解码器搜索即用。HSync 能打开、保存 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件、解码器，以及解码器依赖的 Python 运行环境。
+HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic 与 PXLogic 的 PX-Logic 系列（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，采集还没结束就能看到，另有 30 种协议解码器搜索即用。HSync 能打开、保存 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件与解码器。
 
 手边没有硬件？HSync 会打开内置的「演示设备」，回放一段包含四种总线的采集数据，所有功能都可以马上试用。
 
@@ -56,7 +56,7 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 - **数值可用十六进制、十进制、八进制、二进制或 ASCII 显示**，每个解码器各自选择。
 - **数据流**列出一个解码器的全部结果：点一行跳到波形上的对应位置，也可以复制列表或导出为 CSV、文本。
 
-![搜索 HOST：对应的字节 48 4F 53 54 在 SPI 的 MISO 解码与数据流中都被高亮](assets/screenshots/zh-CN/search.webp)
+![搜索 0x4F：含有它的 I²C 数据字节在时间线与数据流中都被高亮](assets/screenshots/zh-CN/search.webp)
 
 ### 测量与搜索
 
@@ -92,7 +92,7 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 | Windows | `-setup.exe`（x64）                  | Windows 10 或 11                   |
 | Linux   | `.AppImage`、`.deb` 或 `.rpm`（x64） | Ubuntu 22.04、Debian 12 或更新版本 |
 
-固件、协议解码器及其依赖的 Python 都已包含在内，无需另装厂商软件或 Python。其他平台可以[从源码构建](#从源码构建)。
+固件与协议解码器都已包含在内，无需另装厂商软件。其他平台可以[从源码构建](#从源码构建)。
 
 ### 首次运行
 
@@ -159,7 +159,7 @@ HSync 与每台设备的通信方式都与其厂商的软件逐字节一致：DS
 ## 常见问题
 
 **需要安装逻辑分析仪厂商的软件吗？**
-不需要。HSync 自带固件、解码器与 Python 运行环境。DSView 等厂商软件可以同时安装，HSync 也能打开 DSView 的采集文件与会话。
+不需要。HSync 自带固件与解码器。DSView 等厂商软件可以同时安装，HSync 也能打开 DSView 的采集文件与会话。
 
 **能把采集数据带到其他软件里吗？**
 可以：导出为 sigrok 会话后用 PulseView 打开，导出为 VCD 或 FST 后用 GTKWave、Surfer 等波形查看器打开，或导出为 CSV 用表格与脚本处理。反过来，「打开文件…」也能导入这些工具和 FPGA 片上逻辑分析仪写出的 VCD、FST、GHW 波形。
@@ -174,28 +174,3 @@ HSync 与每台设备的通信方式都与其厂商的软件逐字节一致：DS
 - [Node.js](https://nodejs.org/) 22.12 或更高版本，以及 [pnpm](https://pnpm.io/) 12
 - [Rust](https://rustup.rs/)（stable）
 - 所在平台的 [Tauri 系统依赖](https://tauri.app/start/prerequisites/)
-- 运行 `pnpm tauri dev` 时需要带共享库的 Python 3（协议解码器运行在它之上）：Debian 与 Ubuntu 安装 `python3-dev`；python.org 的安装包与 Homebrew 的 Python 已自带
-
-```sh
-git clone https://github.com/HalfSweet/HSync.git
-cd HSync
-pnpm install
-pnpm tauri dev    # 从源码运行 HSync
-pnpm bundle       # 构建本机的安装包
-```
-
-`pnpm bundle` 与发行版的构建方式相同：它会下载随 HSync 发布的 Python 运行环境，安装包输出到 `target/release/bundle/`。在 macOS 上它构建同时支持 Apple 芯片与 Intel 的通用版本，输出到 `target/universal-apple-darwin/release/bundle/`，构建前先运行 `rustup target add aarch64-apple-darwin x86_64-apple-darwin`。参与开发请先阅读 [AGENTS.md](AGENTS.md)（英文），其中有项目的硬性要求、常用命令与提交规范。
-
-## 致谢
-
-- DreamSourceLab 的 [DSView](https://github.com/DreamSourceLab/DSView)：DSLogic 的支持与协议解码器移植自其中的 libsigrok4DSL 与 libsigrokdecode4DSL，它们源自 [sigrok](https://sigrok.org/) 项目。
-- DSLogic 固件与 FPGA 位流来自 DreamSourceLab，以 MIT 许可分发。
-- 正点原子的 [ATK-Logic](https://github.com/alientek-openedv/atk-logic)：ATK-Logic 设备的支持移植自它。
-- PXLogic 的 [PXView](https://github.com/PXLogic/PXView)：PX-Logic 设备的支持移植自其中的 `pxlogic` 驱动，设备固件与 FPGA 位流也取自它。
-- [IBM Plex](https://github.com/IBM/plex) 字体，以 SIL Open Font License 1.1 许可分发。
-- [Lucide](https://lucide.dev/) 图标，以 ISC 许可分发。
-- 基于 [Tauri](https://tauri.app/)、[Vue](https://vuejs.org/) 与 [Rust](https://www.rust-lang.org/) 构建。
-
-## 许可
-
-HSync 是自由软件。它自身的代码采用双重许可：你可以选择 [Apache 许可证 2.0](LICENSE-APACHE) 或 [GNU 通用公共许可证 3.0 或更高版本](LICENSE-GPL)。随 DSView 提供的协议解码器（`src-tauri/resources/decoders/`）保持其原有的 GPL 许可，因此捆绑了它们的安装包以 GPL-3.0-or-later 分发。解码引擎 [uiharu](uiharu/) 仅以 [Apache 许可证 2.0](uiharu/LICENSE) 授权。

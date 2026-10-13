@@ -12,9 +12,6 @@ src-tauri/gen/schemas/
 coverage/
 *.tsbuildinfo
 
-# Python bytecode (the decoder host imports the bundled decoders)
-__pycache__/
-
 # Logs
 *.log
 npm-debug.log*
