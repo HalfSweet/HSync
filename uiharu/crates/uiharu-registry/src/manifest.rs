@@ -173,14 +173,23 @@ mod tests {
         }
     }
 
-    /// Writes a skeleton manifest for every node type from the node itself; run with
-    /// `UIHARU_WRITE_MANIFESTS=1`, then refine the fields by hand.
+    /// Writes a skeleton manifest for every node type that has none yet, from the node
+    /// itself; run with `UIHARU_WRITE_MANIFESTS=1` after adding a decoder, then refine the
+    /// fields and list the event kinds by hand. Manifests that exist are left alone.
     #[test]
     fn write_manifest_skeletons() {
         if std::env::var_os("UIHARU_WRITE_MANIFESTS").is_none() {
             return;
         }
         for kind in KINDS {
+            let path = format!(
+                "{}/manifests/{}.json",
+                env!("CARGO_MANIFEST_DIR"),
+                kind.name
+            );
+            if std::path::Path::new(&path).exists() {
+                continue;
+            }
             let defaults = (kind.defaults)();
             let node = (kind.build)(&defaults).expect("the defaults build");
             let spec = node.spec();
@@ -231,11 +240,6 @@ mod tests {
                 config,
                 events: Vec::new(),
             };
-            let path = format!(
-                "{}/manifests/{}.json",
-                env!("CARGO_MANIFEST_DIR"),
-                kind.name
-            );
             let text = serde_json::to_string_pretty(&manifest).expect("serializes");
             std::fs::write(&path, text + "\n").expect("writes the skeleton");
         }
