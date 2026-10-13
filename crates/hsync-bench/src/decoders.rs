@@ -2,18 +2,11 @@
 //! building the samples in the decoder's layout happens before the clock starts, reading the
 //! results happens before it stops, as an application would have to do both.
 
-use std::collections::BTreeMap;
-use std::path::Path;
 use std::process::Command;
-use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use hsync_core::ChannelIndex;
 use hsync_decode::spi;
-use hsync_srd::{DecoderHost, Layer, Stack, run_stack};
-use parking_lot::RwLock;
-use serde_json::{Map, json};
 use uiharu_core::{
     Exposed, Graph, Pipeline, PushError, SignalItem, SourceId, SourceSpec, Tick, TimeBase,
 };
@@ -31,19 +24,15 @@ pub enum Decoder {
     UiharuSpiNor,
     /// `hsync-decode`'s native SPI decoder, a Rust port of DSView's.
     HsyncDecodeSpi,
-    /// DSView's own Python `1:spi` decoder in the embedded interpreter (`hsync-srd`): the
-    /// sigrok decoder as the app runs it today.
-    SigrokSpi,
     /// `sigrok-cli`, when it is installed.
     SigrokCliSpi,
 }
 
 impl Decoder {
-    pub const ALL: [Decoder; 5] = [
+    pub const ALL: [Decoder; 4] = [
         Decoder::UiharuSpi,
         Decoder::UiharuSpiNor,
         Decoder::HsyncDecodeSpi,
-        Decoder::SigrokSpi,
         Decoder::SigrokCliSpi,
     ];
 
@@ -52,18 +41,12 @@ impl Decoder {
             Decoder::UiharuSpi => "uiharu-spi",
             Decoder::UiharuSpiNor => "uiharu-spi-nor",
             Decoder::HsyncDecodeSpi => "hsync-decode-spi",
-            Decoder::SigrokSpi => "sigrok-spi",
             Decoder::SigrokCliSpi => "sigrok-cli-spi",
         }
     }
 
     pub fn parse(name: &str) -> Option<Self> {
         Self::ALL.into_iter().find(|decoder| decoder.name() == name)
-    }
-
-    /// Whether the decoder walks the samples in Python and so gets a shorter workload.
-    pub fn is_python(self) -> bool {
-        matches!(self, Decoder::SigrokSpi | Decoder::SigrokCliSpi)
     }
 }
 
@@ -74,7 +57,7 @@ pub struct Measured {
     /// SPI words decoded.
     pub words: u64,
     /// Everything the decoder put out: uiharu's events, the native decoder's words and
-    /// transfers, the Python decoder's annotations (which include one per bit).
+    /// transfers.
     pub events: u64,
     pub seconds: f64,
     /// The resident set just before and just after decoding, where the platform tells.
@@ -115,12 +98,11 @@ pub fn current_rss() -> Option<u64> {
 }
 
 /// Runs `decoder` over `source`; uiharu gets the samples in blocks of `chunk`.
-pub fn run(decoder: Decoder, source: &Source, chunk: u64, root: &Path) -> Result<Outcome, String> {
+pub fn run(decoder: Decoder, source: &Source, chunk: u64) -> Result<Outcome, String> {
     match decoder {
         Decoder::UiharuSpi => uiharu(source, chunk, false).map(Outcome::Measured),
         Decoder::UiharuSpiNor => uiharu(source, chunk, true).map(Outcome::Measured),
         Decoder::HsyncDecodeSpi => native(source).map(Outcome::Measured),
-        Decoder::SigrokSpi => python(source, root).map(Outcome::Measured),
         Decoder::SigrokCliSpi => Ok(match sigrok_cli_version() {
             Some(version) => Outcome::Skipped(format!(
                 "{version} is installed but the harness does not drive it yet"
@@ -282,74 +264,6 @@ fn native(source: &Source) -> Result<Measured, String> {
         samples: capture.len(),
         words: trace.words.len() as u64,
         events: (trace.words.len() + trace.transfers.len()) as u64,
-        seconds,
-        rss_before,
-        rss_after: current_rss(),
-    })
-}
-
-fn python(source: &Source, root: &Path) -> Result<Measured, String> {
-    let capture = Arc::new(RwLock::new(source.capture()));
-    let len = capture.read().len();
-    let host = DecoderHost::new(root.join("src-tauri/resources/decoders"));
-    // Starts the interpreter and imports every decoder, before the clock.
-    host.catalog().map_err(|error| error.to_string())?;
-    let info = host.info("1:spi").map_err(|error| error.to_string())?;
-    let mosi_data = info
-        .annotations
-        .iter()
-        .position(|class| class.id == "mosi-data");
-    let mut options = Map::new();
-    options.insert("bitorder".to_owned(), json!("msb-first"));
-    options.insert("cpha".to_owned(), json!(0));
-    options.insert("cpol".to_owned(), json!(0));
-    options.insert("cs_polarity".to_owned(), json!("active-low"));
-    options.insert("frame".to_owned(), json!("yes"));
-    options.insert("wordsize".to_owned(), json!(8));
-    let bus = source.bus;
-    let channels: BTreeMap<String, ChannelIndex> = [
-        ("clk", bus.clk),
-        ("cs", bus.cs),
-        ("mosi", bus.mosi),
-        ("miso", bus.miso),
-    ]
-    .into_iter()
-    .map(|(role, index)| (role.to_owned(), index))
-    .collect();
-    let stack = Stack {
-        layers: vec![Layer {
-            id: "1:spi".to_owned(),
-            options,
-        }],
-        channels,
-    };
-    let cancel = Arc::new(AtomicBool::new(false));
-    let rss_before = current_rss();
-    let started = Instant::now();
-    let outcome =
-        run_stack(&host, &capture, 0..len, &stack, &cancel).map_err(|error| error.to_string())?;
-    let seconds = started.elapsed().as_secs_f64();
-    if let Some(error) = outcome.error {
-        return Err(error.to_string());
-    }
-    let layer = outcome
-        .layers
-        .first()
-        .ok_or("the decoder produced no annotations")?;
-    if let Some(error) = &layer.error {
-        return Err(error.clone());
-    }
-    let words = mosi_data.map_or(0, |class| {
-        layer
-            .annotations
-            .iter()
-            .filter(|annotation| annotation.class as usize == class)
-            .count() as u64
-    });
-    Ok(Measured {
-        samples: len,
-        words,
-        events: layer.annotations.len() as u64,
         seconds,
         rss_before,
         rss_after: current_rss(),
