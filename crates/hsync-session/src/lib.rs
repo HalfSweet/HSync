@@ -94,6 +94,10 @@ pub struct CaptureSummary {
     /// The decoders stored with the capture: HSync's entries (see [`DecoderEntry`]).
     #[ts(type = "unknown")]
     pub decoders: Option<serde_json::Value>,
+    /// The interface's session document stored in an `.hsync` file, for the interface to
+    /// apply; `None` for captures from elsewhere.
+    #[ts(type = "unknown")]
+    pub session: Option<serde_json::Value>,
 }
 
 /// The run of equal samples around a position, plus where the run after it ends: the two make
@@ -146,8 +150,13 @@ struct OpenCapture {
     decoding: Arc<DecodeSet>,
     /// Driver that took the capture, as `.dsl` headers record it.
     driver: String,
-    /// The `session` document of a capture read from a file, kept when saving it again.
+    /// DSView's `session` document of a capture read from a `.dsl` file, kept when exporting
+    /// one again.
     session: Option<serde_json::Value>,
+    /// The interface's session document, from an `.hsync` file or the last save.
+    hsync_session: Option<serde_json::Value>,
+    /// The device the capture came from, as the files record it.
+    model: String,
     /// For a capture taken behind a held one: whether it replaces it, once it has ended.
     verdict: Option<Verdict>,
 }
@@ -171,7 +180,12 @@ struct Loaded {
     channel_names: BTreeMap<ChannelIndex, String>,
     decoders: Option<serde_json::Value>,
     driver: String,
+    /// DSView's session document, from a `.dsl` file, written back when exporting one.
     session: Option<serde_json::Value>,
+    /// The interface's session document, from an `.hsync` file.
+    hsync_session: Option<serde_json::Value>,
+    /// The device model the file records.
+    model: String,
 }
 
 /// The captures of one window.
@@ -228,12 +242,16 @@ impl Workspace {
         }
     }
 
-    /// Opens a `.dsl` file.
+    /// Opens a capture file: HSync's own `.hsync`, or DSView's `.dsl`.
     pub fn open_file(&mut self, path: &Path) -> Result<CaptureSummary, SessionError> {
         let source = CaptureSource::File {
             path: path.to_string_lossy().into_owned(),
         };
-        self.load(path, source)
+        if hsync_fileio::is_hsync_path(path) {
+            self.load_hsync(path, source)
+        } else {
+            self.load(path, source)
+        }
     }
 
     /// Opens the bundled demo capture.
@@ -252,6 +270,37 @@ impl Workspace {
             decoders: document.hsync_decoders.or(document.decoders),
             driver: document.header.driver,
             session: document.session,
+            hsync_session: None,
+            model: String::new(),
+        })
+    }
+
+    fn load_hsync(
+        &mut self,
+        path: &Path,
+        source: CaptureSource,
+    ) -> Result<CaptureSummary, SessionError> {
+        let document = hsync_fileio::read_hsync_file(path)?;
+        let channel_names = document
+            .manifest
+            .channels
+            .iter()
+            .map(|channel| (channel.index, channel.name.clone()))
+            .collect();
+        let (driver, model) = document
+            .manifest
+            .source
+            .map(|origin| (origin.driver, origin.model))
+            .unwrap_or_default();
+        self.install(Loaded {
+            source,
+            capture: document.capture,
+            channel_names,
+            decoders: document.decoders,
+            driver,
+            session: None,
+            hsync_session: document.session,
+            model,
         })
     }
 
@@ -271,6 +320,8 @@ impl Workspace {
             decoders: None,
             driver: String::new(),
             session: None,
+            hsync_session: None,
+            model: String::new(),
         })
     }
 
@@ -307,6 +358,8 @@ impl Workspace {
             decoding,
             driver: loaded.driver,
             session: loaded.session,
+            hsync_session: loaded.hsync_session,
+            model: loaded.model,
             verdict: None,
         });
         self.summary().ok_or(SessionError::NoCapture)
@@ -397,9 +450,9 @@ impl Workspace {
             self.last_id,
             self.events.clone(),
         );
-        let driver = match &source {
-            CaptureSource::Device { driver, .. } => driver.clone(),
-            _ => String::new(),
+        let (driver, model) = match &source {
+            CaptureSource::Device { driver, model } => (driver.clone(), model.clone()),
+            _ => (String::new(), String::new()),
         };
         let open = OpenCapture {
             id: self.last_id,
@@ -410,6 +463,8 @@ impl Workspace {
             decoding: Arc::clone(&decoding),
             driver,
             session: None,
+            hsync_session: None,
+            model,
             verdict: verdict.clone(),
         };
         let summary = summarize(&open);
@@ -480,11 +535,13 @@ impl Workspace {
             channel_names: open.channel_names.clone(),
             decoders: open.decoders.clone(),
             driver: open.driver.clone(),
+            model: open.model.clone(),
             session: open.session.clone(),
         })
     }
 
-    /// Notes that capture `id` was saved to `path` with `session`: it then counts as that file.
+    /// Notes that capture `id` was saved to `path` with the interface's `session`: it then
+    /// counts as that file.
     pub fn finish_save(
         &mut self,
         id: u64,
@@ -492,17 +549,23 @@ impl Workspace {
         session: serde_json::Value,
     ) -> Result<CaptureSummary, SessionError> {
         let open = self.find_mut(id)?;
-        open.session = Some(session);
+        open.hsync_session = Some(session);
         open.source = CaptureSource::File {
             path: path.to_string_lossy().into_owned(),
         };
         Ok(summarize(open))
     }
 
-    /// Writes capture `id` to `path` as a DSView `.dsl` file with its channel names and
-    /// decoders; the capture then counts as that file.
-    pub fn save(&mut self, id: u64, path: &Path) -> Result<CaptureSummary, SessionError> {
-        let session = self.export_source(id)?.save(path, &mut |_| true)?;
+    /// Writes capture `id` to `path` as an `.hsync` file with its channel names, decoders and
+    /// the interface's `session`; the capture then counts as that file.
+    pub fn save(
+        &mut self,
+        id: u64,
+        path: &Path,
+        session: serde_json::Value,
+    ) -> Result<CaptureSummary, SessionError> {
+        self.export_source(id)?
+            .save(path, &session, &mut |_| true)?;
         self.finish_save(id, path, session)
     }
 
@@ -582,6 +645,7 @@ fn summarize(open: &OpenCapture) -> CaptureSummary {
         info,
         channels,
         decoders: open.decoders.clone(),
+        session: open.hsync_session.clone(),
     }
 }
 

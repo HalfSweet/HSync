@@ -3,4 +3,4 @@
 /**
  * The formats a capture can be written in.
  */
-export type ExportKind = "dsl" | "csv" | "vcd" | "fst" | "sigrok" | "binary";
+export type ExportKind = "hsync" | "dsl" | "csv" | "vcd" | "fst" | "sigrok" | "binary";

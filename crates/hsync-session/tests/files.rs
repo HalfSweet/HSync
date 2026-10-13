@@ -119,8 +119,8 @@ fn cancelling_leaves_no_file() {
     let (mut workspace, _) = fresh();
     let opened = workspace.open_demo(&demo_path()).expect("demo");
     let source = workspace.export_source(opened.id).expect("source");
-    let path = temp("cancelled.dsl");
-    let result = source.save(&path, &mut |_| false);
+    let path = temp("cancelled.hsync");
+    let result = source.save(&path, &serde_json::json!({}), &mut |_| false);
     assert!(matches!(
         result,
         Err(SessionError::File(hsync_fileio::FileError::Cancelled))
@@ -161,8 +161,10 @@ fn renamed_channels_are_saved_with_their_names() {
     assert!(workspace.rename_channel(opened.id, 99, "x").is_err());
     let back = workspace.rename_channel(opened.id, 0, "").expect("clear");
     assert_eq!(back.channels[0].name, "0");
-    let path = temp("renamed.dsl");
-    workspace.save(opened.id, &path).expect("save");
+    let path = temp("renamed.hsync");
+    workspace
+        .save(opened.id, &path, serde_json::json!({}))
+        .expect("save");
     let (mut other, _) = fresh();
     let reopened = other.open_file(&path).expect("reopen");
     assert_eq!(reopened.channels[2].name, "RESET");

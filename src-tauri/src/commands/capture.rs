@@ -23,7 +23,7 @@ pub fn capture_summary(state: State<'_, AppState>) -> Option<CaptureSummary> {
     state.workspace.lock().summary()
 }
 
-/// Opens a `.dsl` capture file.
+/// Opens a capture file: HSync's own `.hsync`, or DSView's `.dsl`.
 #[tauri::command]
 pub async fn capture_open_file(app: AppHandle, path: PathBuf) -> CommandResult<CaptureSummary> {
     open(app, move |workspace| workspace.open_file(&path)).await
