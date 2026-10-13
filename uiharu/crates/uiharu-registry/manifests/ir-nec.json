@@ -1,6 +1,6 @@
 {
   "name": "ir-nec",
-  "category": "bus",
+  "category": "line",
   "inputs": [
     {
       "port": "logic",
@@ -21,12 +21,27 @@
     {
       "name": "polarity",
       "kind": "enum",
-      "values": ["active-low"]
+      "values": ["active-low", "active-high"]
     },
     {
       "name": "tolerance",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1,
+      "max": 50
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "frame",
+      "fields": ["address", "command", "extended", "inverseOk", "raw"]
+    },
+    {
+      "kind": "repeat",
+      "fields": []
+    },
+    {
+      "kind": "error",
+      "fields": ["reason", "bits", "raw"]
+    }
+  ]
 }

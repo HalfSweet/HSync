@@ -1,6 +1,6 @@
 {
   "name": "parallel",
-  "category": "bus",
+  "category": "line",
   "inputs": [
     {
       "port": "logic",
@@ -16,7 +16,8 @@
   "config": [
     {
       "name": "data",
-      "kind": "channels"
+      "kind": "channels",
+      "max": 64
     },
     {
       "name": "clock",
@@ -24,5 +25,10 @@
       "optional": true
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "word",
+      "fields": ["value", "bits", "initial"]
+    }
+  ]
 }

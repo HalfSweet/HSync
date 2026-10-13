@@ -1,6 +1,6 @@
 {
   "name": "ws281x",
-  "category": "bus",
+  "category": "line",
   "inputs": [
     {
       "port": "logic",
@@ -20,16 +20,37 @@
     },
     {
       "name": "bits_per_led",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 24,
+      "max": 32
     },
     {
       "name": "threshold_ns",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1
     },
     {
       "name": "reset_us",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "frame-begin",
+      "fields": ["frame"]
+    },
+    {
+      "kind": "led",
+      "fields": ["frame", "index", "bytes"]
+    },
+    {
+      "kind": "frame-end",
+      "fields": ["frame", "leds", "reason"]
+    },
+    {
+      "kind": "error",
+      "fields": ["frame", "reason", "bits"]
+    }
+  ]
 }

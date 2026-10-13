@@ -1,6 +1,6 @@
 {
   "name": "timing",
-  "category": "bus",
+  "category": "line",
   "inputs": [
     {
       "port": "logic",
@@ -21,8 +21,13 @@
     {
       "name": "edges",
       "kind": "enum",
-      "values": ["any"]
+      "values": ["any", "rising", "falling"]
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "edge",
+      "fields": ["slope", "sincePrevious"]
+    }
+  ]
 }

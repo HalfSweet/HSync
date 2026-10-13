@@ -1,6 +1,6 @@
 {
   "name": "pwm",
-  "category": "bus",
+  "category": "line",
   "inputs": [
     {
       "port": "logic",
@@ -21,8 +21,13 @@
     {
       "name": "polarity",
       "kind": "enum",
-      "values": ["active-high"]
+      "values": ["active-high", "active-low"]
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "cycle",
+      "fields": ["periodTicks", "activeTicks"]
+    }
+  ]
 }
