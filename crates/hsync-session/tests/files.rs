@@ -67,7 +67,7 @@ fn exports_a_segment_as_a_capture_with_the_decoders_it_can_keep() {
     decoders_done(&events, reopened.id, 1);
     let statuses = other.decoding(reopened.id).expect("decoders").statuses();
     assert_eq!(statuses.len(), 1);
-    assert_eq!(statuses[0].id, "1:i2c");
+    assert_eq!(statuses[0].kinds, ["i2c", "eeprom24xx"]);
     let _ = std::fs::remove_file(path);
 }
 
