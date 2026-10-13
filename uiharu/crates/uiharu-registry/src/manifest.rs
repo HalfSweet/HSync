@@ -138,9 +138,10 @@ pub fn manifests() -> &'static [Manifest] {
 mod tests {
     use std::collections::BTreeSet;
 
-    use uiharu_core::Node;
+    use uiharu_core::{MAX_CHANNELS, Node};
 
     use super::*;
+    use crate::kinds::expected_variants;
 
     /// A field's kind guessed from its default value, for a skeleton the maintainer refines.
     fn guess(name: &str, value: &serde_json::Value) -> (FieldKind, bool) {
@@ -315,6 +316,153 @@ mod tests {
                         field.name
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn manifests_list_the_event_kinds_of_their_contracts() {
+        for (kind, manifest) in KINDS.iter().zip(manifests()) {
+            let kinds = (kind.kinds)();
+            assert!(
+                !kinds.is_empty(),
+                "{}: serde names no event kind",
+                kind.name
+            );
+            let declared: Vec<&str> = manifest
+                .events
+                .iter()
+                .map(|event| event.kind.as_str())
+                .collect();
+            assert_eq!(declared, kinds, "{}: event kinds", kind.name);
+        }
+    }
+
+    #[test]
+    fn enum_fields_list_every_name_of_their_enum() {
+        for (kind, manifest) in KINDS.iter().zip(manifests()) {
+            for field in &manifest.config {
+                let FieldKind::Enum { values } = &field.kind else {
+                    continue;
+                };
+                // Given a name its enum does not have, the configuration names those it has.
+                let mut config = (kind.defaults)();
+                config[field.name.as_str()] = serde_json::Value::from("\u{0}");
+                let Err(error) = (kind.build)(&config) else {
+                    panic!("{}: {} takes a name no variant has", kind.name, field.name);
+                };
+                assert_eq!(
+                    *values,
+                    expected_variants(&error),
+                    "{}: {}",
+                    kind.name,
+                    field.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn integer_fields_default_within_their_bounds() {
+        for (kind, manifest) in KINDS.iter().zip(manifests()) {
+            let defaults = (kind.defaults)();
+            for field in &manifest.config {
+                let FieldKind::Integer { min, max } = &field.kind else {
+                    continue;
+                };
+                let default = &defaults[field.name.as_str()];
+                if field.optional && default.is_null() {
+                    continue;
+                }
+                let value = default
+                    .as_i64()
+                    .expect("an integer field defaults to an integer");
+                assert!(
+                    min.is_none_or(|min| min <= value) && max.is_none_or(|max| value <= max),
+                    "{}: {} defaults to {value}, outside {min:?} to {max:?}",
+                    kind.name,
+                    field.name
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn integer_fields_refuse_numbers_beyond_their_bounds() {
+        for (kind, manifest) in KINDS.iter().zip(manifests()) {
+            for field in &manifest.config {
+                let FieldKind::Integer { min, max } = &field.kind else {
+                    continue;
+                };
+                let beyond = [
+                    min.and_then(|min| min.checked_sub(1)),
+                    max.and_then(|max| max.checked_add(1)),
+                ];
+                for value in beyond.into_iter().flatten() {
+                    let mut config = (kind.defaults)();
+                    config[field.name.as_str()] = value.into();
+                    assert!(
+                        (kind.build)(&config).is_err(),
+                        "{}: {} takes {value}, beyond its bounds",
+                        kind.name,
+                        field.name
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn channel_fields_default_to_channels_a_source_has() {
+        let channel = |value: &serde_json::Value| {
+            value
+                .as_u64()
+                .is_some_and(|channel| channel < u64::from(MAX_CHANNELS))
+        };
+        for (kind, manifest) in KINDS.iter().zip(manifests()) {
+            let defaults = (kind.defaults)();
+            for field in &manifest.config {
+                let default = &defaults[field.name.as_str()];
+                match &field.kind {
+                    FieldKind::Channel if !(field.optional && default.is_null()) => {
+                        assert!(
+                            channel(default),
+                            "{}: {} defaults to {default}",
+                            kind.name,
+                            field.name
+                        );
+                    }
+                    FieldKind::Channels { max } => {
+                        let channels = default
+                            .as_array()
+                            .expect("a channel list defaults to a list");
+                        assert!(
+                            channels.iter().all(channel)
+                                && max.is_none_or(|max| channels.len() <= usize::from(max)),
+                            "{}: {} defaults to {default}",
+                            kind.name,
+                            field.name
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn only_optional_fields_may_be_left_unset() {
+        for (kind, manifest) in KINDS.iter().zip(manifests()) {
+            for field in &manifest.config {
+                let mut config = (kind.defaults)();
+                config[field.name.as_str()] = serde_json::Value::Null;
+                assert_eq!(
+                    (kind.build)(&config).is_ok(),
+                    field.optional,
+                    "{}: {} set to null",
+                    kind.name,
+                    field.name
+                );
             }
         }
     }
