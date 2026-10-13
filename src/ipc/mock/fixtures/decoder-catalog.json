@@ -1,0 +1,2924 @@
+[
+  {
+    "name": "spi",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "spi.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "clk",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "cs",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": 1
+      },
+      {
+        "name": "mosi",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": 2
+      },
+      {
+        "name": "miso",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": 3
+      },
+      {
+        "name": "mode",
+        "kind": {
+          "kind": "integer",
+          "min": 0,
+          "max": 3
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "word_bits",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 8
+        },
+        "optional": false,
+        "default": 8
+      },
+      {
+        "name": "bit_order",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "msb-first",
+            "lsb-first"
+          ]
+        },
+        "optional": false,
+        "default": "msb-first"
+      },
+      {
+        "name": "cs_active_low",
+        "kind": {
+          "kind": "bool"
+        },
+        "optional": false,
+        "default": true
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "tx",
+          "partial"
+        ]
+      },
+      {
+        "kind": "word",
+        "fields": [
+          "tx",
+          "mosi",
+          "miso"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "tx",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "spi-nor",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "bus",
+        "schema": "spi.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "nor.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "address_bytes",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "three",
+            "four",
+            "auto"
+          ]
+        },
+        "optional": false,
+        "default": "three"
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "op",
+          "tx",
+          "command"
+        ]
+      },
+      {
+        "kind": "address",
+        "fields": [
+          "op",
+          "address",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "dummy",
+        "fields": [
+          "op",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "op",
+          "direction",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "status",
+        "fields": [
+          "op",
+          "register",
+          "value",
+          "written"
+        ]
+      },
+      {
+        "kind": "id",
+        "fields": [
+          "op",
+          "scheme",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "op",
+          "reason"
+        ]
+      },
+      {
+        "kind": "unknown-command",
+        "fields": [
+          "tx",
+          "opcode"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "i2s",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "i2s.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "sck",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "ws",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      },
+      {
+        "name": "sd",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 2
+      },
+      {
+        "name": "format",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "i2s",
+            "left-justified",
+            "right-justified"
+          ]
+        },
+        "optional": false,
+        "default": "i2s"
+      },
+      {
+        "name": "bits",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 32
+        },
+        "optional": true,
+        "default": null
+      },
+      {
+        "name": "sample_edge",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "rising",
+            "falling"
+          ]
+        },
+        "optional": false,
+        "default": "rising"
+      },
+      {
+        "name": "ws_inverted",
+        "kind": {
+          "kind": "bool"
+        },
+        "optional": false,
+        "default": false
+      }
+    ],
+    "events": [
+      {
+        "kind": "sample",
+        "fields": [
+          "frame",
+          "channel",
+          "value",
+          "bits",
+          "complete"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "pwm",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "pwm.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "channel",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "polarity",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "active-high",
+            "active-low"
+          ]
+        },
+        "optional": false,
+        "default": "active-high"
+      }
+    ],
+    "events": [
+      {
+        "kind": "cycle",
+        "fields": [
+          "periodTicks",
+          "activeTicks"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "timing",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "timing.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "channel",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "edges",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "any",
+            "rising",
+            "falling"
+          ]
+        },
+        "optional": false,
+        "default": "any"
+      }
+    ],
+    "events": [
+      {
+        "kind": "edge",
+        "fields": [
+          "slope",
+          "sincePrevious"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "parallel",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "parallel.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "data",
+        "kind": {
+          "kind": "channels",
+          "max": 64
+        },
+        "optional": false,
+        "default": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ]
+      },
+      {
+        "name": "clock",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": null
+      },
+      {
+        "name": "clock_edge",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "rising",
+            "falling",
+            "either"
+          ]
+        },
+        "optional": false,
+        "default": "rising"
+      }
+    ],
+    "events": [
+      {
+        "kind": "word",
+        "fields": [
+          "value",
+          "bits",
+          "initial"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "uart",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "uart.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "line",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "baud",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 115200
+      },
+      {
+        "name": "data_bits",
+        "kind": {
+          "kind": "integer",
+          "min": 5,
+          "max": 9
+        },
+        "optional": false,
+        "default": 8
+      },
+      {
+        "name": "parity",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "none",
+            "even",
+            "odd",
+            "mark",
+            "space"
+          ]
+        },
+        "optional": false,
+        "default": "none"
+      },
+      {
+        "name": "stop_bits",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "one",
+            "one-and-a-half",
+            "two"
+          ]
+        },
+        "optional": false,
+        "default": "one"
+      },
+      {
+        "name": "bit_order",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "lsb-first",
+            "msb-first"
+          ]
+        },
+        "optional": false,
+        "default": "lsb-first"
+      },
+      {
+        "name": "inverted",
+        "kind": {
+          "kind": "bool"
+        },
+        "optional": false,
+        "default": false
+      },
+      {
+        "name": "sample_point",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 99
+        },
+        "optional": false,
+        "default": 50
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "value",
+          "parity",
+          "framingOk"
+        ]
+      },
+      {
+        "kind": "break",
+        "fields": [
+          "ticks"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "modbus-rtu",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "uart",
+        "schema": "uart.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "modbus.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "frame",
+          "address",
+          "function",
+          "exception",
+          "partial"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "frame",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "crc",
+        "fields": [
+          "frame",
+          "value",
+          "ok"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "frame",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "i2c",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "i2c.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "scl",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "sda",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "tx",
+          "partial"
+        ]
+      },
+      {
+        "kind": "address",
+        "fields": [
+          "tx",
+          "address",
+          "tenBit",
+          "read",
+          "ack"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "tx",
+          "byte",
+          "ack"
+        ]
+      },
+      {
+        "kind": "restart",
+        "fields": [
+          "tx",
+          "droppedBits"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "tx",
+          "reason",
+          "droppedBits"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "eeprom24xx",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "bus",
+        "schema": "i2c.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "operations",
+        "schema": "eeprom24xx.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "address_bytes",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 2
+        },
+        "optional": false,
+        "default": 2
+      },
+      {
+        "name": "device_address",
+        "kind": {
+          "kind": "integer",
+          "min": 0,
+          "max": 127
+        },
+        "optional": true,
+        "default": null
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "op",
+          "tx",
+          "device",
+          "command"
+        ]
+      },
+      {
+        "kind": "address",
+        "fields": [
+          "op",
+          "wordAddress"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "op",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "op",
+          "reason",
+          "length"
+        ]
+      },
+      {
+        "kind": "ack-poll",
+        "fields": [
+          "tx",
+          "device",
+          "acked"
+        ]
+      },
+      {
+        "kind": "unknown",
+        "fields": [
+          "tx",
+          "device"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "jtag",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "jtag.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "tck",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "tms",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      },
+      {
+        "name": "tdi",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": 2
+      },
+      {
+        "name": "tdo",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": 3
+      },
+      {
+        "name": "trst",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": null
+      },
+      {
+        "name": "initial_state",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "unknown",
+            "test-logic-reset",
+            "run-test-idle"
+          ]
+        },
+        "optional": false,
+        "default": "unknown"
+      }
+    ],
+    "events": [
+      {
+        "kind": "state",
+        "fields": [
+          "state"
+        ]
+      },
+      {
+        "kind": "reset",
+        "fields": [
+          "by"
+        ]
+      },
+      {
+        "kind": "scan-begin",
+        "fields": [
+          "scan",
+          "register"
+        ]
+      },
+      {
+        "kind": "shift",
+        "fields": [
+          "scan",
+          "offset",
+          "tdi",
+          "tdo",
+          "bits"
+        ]
+      },
+      {
+        "kind": "scan-end",
+        "fields": [
+          "scan",
+          "bits",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "swd",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "swd.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "swclk",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "swdio",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "tx"
+        ]
+      },
+      {
+        "kind": "request",
+        "fields": [
+          "tx",
+          "apndp",
+          "rnw",
+          "addr",
+          "parityOk"
+        ]
+      },
+      {
+        "kind": "ack",
+        "fields": [
+          "tx",
+          "value"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "tx",
+          "value",
+          "parityOk",
+          "fromTarget"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "tx",
+          "reason"
+        ]
+      },
+      {
+        "kind": "line-reset",
+        "fields": []
+      },
+      {
+        "kind": "switch",
+        "fields": [
+          "to"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "sdcard-spi",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "bus",
+        "schema": "spi.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "sdcard.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "block_length",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 2048
+        },
+        "optional": false,
+        "default": 512
+      }
+    ],
+    "events": [
+      {
+        "kind": "command",
+        "fields": [
+          "op",
+          "tx",
+          "index",
+          "acmd",
+          "argument",
+          "crc7",
+          "crcOk"
+        ]
+      },
+      {
+        "kind": "response",
+        "fields": [
+          "op",
+          "format",
+          "bytes",
+          "busyBytes"
+        ]
+      },
+      {
+        "kind": "token",
+        "fields": [
+          "op",
+          "token",
+          "value"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "op",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "block-end",
+        "fields": [
+          "op",
+          "crc16",
+          "crcOk",
+          "length"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "op",
+          "reason"
+        ]
+      },
+      {
+        "kind": "unknown-command",
+        "fields": [
+          "tx",
+          "byte"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "can",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "can.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "rx",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "dominant_low",
+        "kind": {
+          "kind": "bool"
+        },
+        "optional": false,
+        "default": true
+      },
+      {
+        "name": "bitrate",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 500000
+      },
+      {
+        "name": "fd_bitrate",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": true,
+        "default": null
+      },
+      {
+        "name": "sample_point",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 99
+        },
+        "optional": false,
+        "default": 87
+      },
+      {
+        "name": "fd",
+        "kind": {
+          "kind": "bool"
+        },
+        "optional": false,
+        "default": true
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "frame",
+          "partial"
+        ]
+      },
+      {
+        "kind": "id",
+        "fields": [
+          "frame",
+          "id",
+          "extended"
+        ]
+      },
+      {
+        "kind": "control",
+        "fields": [
+          "frame",
+          "remote",
+          "fd",
+          "brs",
+          "esi",
+          "dlc",
+          "length"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "frame",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "crc",
+        "fields": [
+          "frame",
+          "value",
+          "ok",
+          "stuffCount"
+        ]
+      },
+      {
+        "kind": "ack",
+        "fields": [
+          "frame",
+          "acked"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "frame",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "onewire-link",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "onewire.link"
+      }
+    ],
+    "config": [
+      {
+        "name": "data",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "speed",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "standard",
+            "overdrive"
+          ]
+        },
+        "optional": false,
+        "default": "standard"
+      }
+    ],
+    "events": [
+      {
+        "kind": "reset",
+        "fields": [
+          "presence"
+        ]
+      },
+      {
+        "kind": "bit",
+        "fields": [
+          "value"
+        ]
+      },
+      {
+        "kind": "bad-slot",
+        "fields": [
+          "lowTicks"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "onewire",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "link",
+        "schema": "onewire.link"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "onewire.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "tx",
+          "presence"
+        ]
+      },
+      {
+        "kind": "rom-command",
+        "fields": [
+          "tx",
+          "code"
+        ]
+      },
+      {
+        "kind": "rom",
+        "fields": [
+          "tx",
+          "id",
+          "family",
+          "crcOk"
+        ]
+      },
+      {
+        "kind": "search",
+        "fields": [
+          "tx",
+          "id",
+          "crcOk",
+          "conflicts",
+          "unanswered"
+        ]
+      },
+      {
+        "kind": "byte",
+        "fields": [
+          "tx",
+          "value"
+        ]
+      },
+      {
+        "kind": "bits",
+        "fields": [
+          "tx",
+          "value",
+          "count"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "tx",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ds18b20",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "bus",
+        "schema": "onewire.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "ds18b20.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "command",
+        "fields": [
+          "tx",
+          "code"
+        ]
+      },
+      {
+        "kind": "scratchpad",
+        "fields": [
+          "tx",
+          "bytes",
+          "crcOk",
+          "temperatureRaw",
+          "th",
+          "tl",
+          "config",
+          "resolution"
+        ]
+      },
+      {
+        "kind": "partial-scratchpad",
+        "fields": [
+          "tx",
+          "bytes",
+          "temperatureRaw"
+        ]
+      },
+      {
+        "kind": "write-scratchpad",
+        "fields": [
+          "tx",
+          "th",
+          "tl",
+          "config"
+        ]
+      },
+      {
+        "kind": "power-supply",
+        "fields": [
+          "tx",
+          "parasite"
+        ]
+      },
+      {
+        "kind": "unknown-command",
+        "fields": [
+          "tx",
+          "code"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "tx",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "usb",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "packets",
+        "schema": "usb.packets"
+      }
+    ],
+    "config": [
+      {
+        "name": "dp",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "dm",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      },
+      {
+        "name": "speed",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "low",
+            "full"
+          ]
+        },
+        "optional": false,
+        "default": "full"
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "pkt"
+        ]
+      },
+      {
+        "kind": "pid",
+        "fields": [
+          "pkt",
+          "pid",
+          "ok"
+        ]
+      },
+      {
+        "kind": "token",
+        "fields": [
+          "pkt",
+          "address",
+          "endpoint",
+          "crc5",
+          "ok"
+        ]
+      },
+      {
+        "kind": "sof",
+        "fields": [
+          "pkt",
+          "frame",
+          "crc5",
+          "ok"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "pkt",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "data-end",
+        "fields": [
+          "pkt",
+          "crc16",
+          "ok",
+          "length"
+        ]
+      },
+      {
+        "kind": "split",
+        "fields": [
+          "pkt",
+          "raw"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "pkt",
+          "reason"
+        ]
+      },
+      {
+        "kind": "reset",
+        "fields": [
+          "ticks"
+        ]
+      },
+      {
+        "kind": "suspend",
+        "fields": []
+      },
+      {
+        "kind": "resume",
+        "fields": []
+      },
+      {
+        "kind": "keep-alive",
+        "fields": []
+      }
+    ]
+  },
+  {
+    "name": "usb-transactions",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "packets",
+        "schema": "usb.packets"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "transactions",
+        "schema": "usb.transactions"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "xact",
+          "token",
+          "address",
+          "endpoint",
+          "frame"
+        ]
+      },
+      {
+        "kind": "setup",
+        "fields": [
+          "xact",
+          "bmRequestType",
+          "bRequest",
+          "wValue",
+          "wIndex",
+          "wLength"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "xact",
+          "pid",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "handshake",
+        "fields": [
+          "xact",
+          "pid"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "xact",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "lin",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "uart",
+        "schema": "uart.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "lin.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "length_by_id",
+        "kind": {
+          "kind": "bool"
+        },
+        "optional": false,
+        "default": false
+      },
+      {
+        "name": "min_break_bits",
+        "kind": {
+          "kind": "integer",
+          "min": 9,
+          "max": 13
+        },
+        "optional": false,
+        "default": 11
+      }
+    ],
+    "events": [
+      {
+        "kind": "header",
+        "fields": [
+          "frame",
+          "pid",
+          "id",
+          "pidOk"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "frame",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "checksum",
+        "fields": [
+          "frame",
+          "value",
+          "classicOk",
+          "enhancedOk"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "frame",
+          "reason"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "frame",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "midi",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "uart",
+        "schema": "uart.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "midi.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "channel-message",
+        "fields": [
+          "message",
+          "channel",
+          "status",
+          "data1",
+          "data2",
+          "running"
+        ]
+      },
+      {
+        "kind": "system-common",
+        "fields": [
+          "message",
+          "status",
+          "data1",
+          "data2"
+        ]
+      },
+      {
+        "kind": "realtime",
+        "fields": [
+          "status",
+          "byte"
+        ]
+      },
+      {
+        "kind": "sysex",
+        "fields": [
+          "message",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "sysex-end",
+        "fields": [
+          "message",
+          "bytes",
+          "reason"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason",
+          "byte"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ws281x",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "ws281x.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "data",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "bits_per_led",
+        "kind": {
+          "kind": "integer",
+          "min": 24,
+          "max": 32
+        },
+        "optional": false,
+        "default": 24
+      },
+      {
+        "name": "threshold_ns",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 625
+      },
+      {
+        "name": "reset_us",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 50
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame-begin",
+        "fields": [
+          "frame"
+        ]
+      },
+      {
+        "kind": "led",
+        "fields": [
+          "frame",
+          "index",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "frame-end",
+        "fields": [
+          "frame",
+          "leds",
+          "reason"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "frame",
+          "reason",
+          "bits"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "dmx512",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "uart",
+        "schema": "uart.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "dmx512.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "packet-begin",
+        "fields": [
+          "packet",
+          "breakTicks"
+        ]
+      },
+      {
+        "kind": "start-code",
+        "fields": [
+          "packet",
+          "code"
+        ]
+      },
+      {
+        "kind": "slots",
+        "fields": [
+          "packet",
+          "offset",
+          "values"
+        ]
+      },
+      {
+        "kind": "packet-end",
+        "fields": [
+          "packet",
+          "slots",
+          "reason"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "packet",
+          "slot"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "apa102",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "bus",
+        "schema": "spi.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "apa102.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "frame-begin",
+        "fields": [
+          "frame"
+        ]
+      },
+      {
+        "kind": "led",
+        "fields": [
+          "frame",
+          "index",
+          "brightness",
+          "blue",
+          "green",
+          "red"
+        ]
+      },
+      {
+        "kind": "frame-end",
+        "fields": [
+          "frame",
+          "leds",
+          "endBits",
+          "reason"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "frame",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "mdio",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "mdio.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "mdc",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "mdio",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "clause",
+          "op",
+          "phy",
+          "reg",
+          "turnaround",
+          "data",
+          "preambleBits"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "avr-isp",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "bus",
+        "schema": "spi.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "avrisp.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "instruction",
+        "fields": [
+          "op",
+          "tx",
+          "command",
+          "address",
+          "dataIn",
+          "dataOut",
+          "inSync",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "unknown",
+        "fields": [
+          "tx",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "tx",
+          "reason",
+          "bytes"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "nrf24l01",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "bus",
+        "schema": "spi.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "nrf24l01.events"
+      }
+    ],
+    "config": [],
+    "events": [
+      {
+        "kind": "command",
+        "fields": [
+          "op",
+          "tx",
+          "command",
+          "register",
+          "registerName",
+          "pipe",
+          "status"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "op",
+          "direction",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "op",
+          "reason"
+        ]
+      },
+      {
+        "kind": "unknown",
+        "fields": [
+          "tx",
+          "command",
+          "status"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "usb-pd",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "usbpd.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "cc",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "bit_rate",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 300000
+      },
+      {
+        "name": "tolerance",
+        "kind": {
+          "kind": "integer",
+          "min": 0,
+          "max": 25
+        },
+        "optional": false,
+        "default": 10
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "pkt"
+        ]
+      },
+      {
+        "kind": "sop",
+        "fields": [
+          "pkt",
+          "set",
+          "corrupt"
+        ]
+      },
+      {
+        "kind": "header",
+        "fields": [
+          "pkt",
+          "messageType",
+          "control",
+          "data",
+          "extendedMessage",
+          "dataRole",
+          "powerRole",
+          "cablePlug",
+          "revision",
+          "messageId",
+          "objects",
+          "extended"
+        ]
+      },
+      {
+        "kind": "extended-header",
+        "fields": [
+          "pkt",
+          "dataSize",
+          "requestChunk",
+          "chunkNumber",
+          "chunked"
+        ]
+      },
+      {
+        "kind": "object",
+        "fields": [
+          "pkt",
+          "index",
+          "raw"
+        ]
+      },
+      {
+        "kind": "pdo",
+        "fields": [
+          "pkt",
+          "index",
+          "supply",
+          "millivolts",
+          "milliamps",
+          "flags",
+          "maxMillivolts",
+          "minMillivolts",
+          "milliwatts",
+          "apdoType"
+        ]
+      },
+      {
+        "kind": "rdo",
+        "fields": [
+          "pkt",
+          "position",
+          "giveBack",
+          "capabilityMismatch",
+          "usbCommunicationsCapable",
+          "noUsbSuspend",
+          "unchunkedExtended",
+          "operating",
+          "maximum"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "pkt",
+          "offset",
+          "bytes"
+        ]
+      },
+      {
+        "kind": "crc",
+        "fields": [
+          "pkt",
+          "value",
+          "ok"
+        ]
+      },
+      {
+        "kind": "hard-reset",
+        "fields": [
+          "pkt",
+          "corrupt"
+        ]
+      },
+      {
+        "kind": "cable-reset",
+        "fields": [
+          "pkt",
+          "corrupt"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "pkt",
+          "reason"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "pkt",
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ir-nec",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "nec.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "channel",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "polarity",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "active-low",
+            "active-high"
+          ]
+        },
+        "optional": false,
+        "default": "active-low"
+      },
+      {
+        "name": "tolerance",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 50
+        },
+        "optional": false,
+        "default": 25
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "address",
+          "command",
+          "extended",
+          "inverseOk",
+          "raw"
+        ]
+      },
+      {
+        "kind": "repeat",
+        "fields": []
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason",
+          "bits",
+          "raw"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ir-rc5",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "rc5.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "channel",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "polarity",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "active-low",
+            "active-high"
+          ]
+        },
+        "optional": false,
+        "default": "active-low"
+      },
+      {
+        "name": "tolerance",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 50
+        },
+        "optional": false,
+        "default": 25
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "toggle",
+          "address",
+          "command",
+          "extended"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason",
+          "bits",
+          "raw"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ir-rc6",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "rc6.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "channel",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "polarity",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "active-low",
+            "active-high"
+          ]
+        },
+        "optional": false,
+        "default": "active-low"
+      },
+      {
+        "name": "tolerance",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 50
+        },
+        "optional": false,
+        "default": 25
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "mode",
+          "toggle",
+          "address",
+          "command"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason",
+          "bits",
+          "raw"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ir-sirc",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "sirc.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "channel",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "polarity",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "active-low",
+            "active-high"
+          ]
+        },
+        "optional": false,
+        "default": "active-low"
+      },
+      {
+        "name": "tolerance",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 50
+        },
+        "optional": false,
+        "default": 25
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "bits",
+          "command",
+          "address",
+          "extended"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason",
+          "bits",
+          "raw"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "wiegand",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "wiegand.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "d0",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "d1",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      },
+      {
+        "name": "frame_gap_us",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 10000
+      },
+      {
+        "name": "pulse_min_us",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 20
+      },
+      {
+        "name": "pulse_max_us",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": null
+        },
+        "optional": false,
+        "default": 100
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "frame",
+          "bits",
+          "data",
+          "parityOk"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "ps2",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "ps2.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "clk",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "data",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      }
+    ],
+    "events": [
+      {
+        "kind": "frame",
+        "fields": [
+          "direction",
+          "value",
+          "parityOk",
+          "stopOk",
+          "ack"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "am230x",
+    "category": "line",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "am230x.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "data",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 0
+      },
+      {
+        "name": "model",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "am2302",
+            "dht11"
+          ]
+        },
+        "optional": false,
+        "default": "am2302"
+      },
+      {
+        "name": "tolerance",
+        "kind": {
+          "kind": "integer",
+          "min": 0,
+          "max": 40
+        },
+        "optional": false,
+        "default": 30
+      }
+    ],
+    "events": [
+      {
+        "kind": "reading",
+        "fields": [
+          "bytes",
+          "checksumOk",
+          "humidityRaw",
+          "temperatureRaw"
+        ]
+      },
+      {
+        "kind": "error",
+        "fields": [
+          "reason"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "microwire",
+    "category": "bus",
+    "inputs": [
+      {
+        "port": "logic",
+        "schema": "logic.samples"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "microwire.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "cs",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": 0
+      },
+      {
+        "name": "sk",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 1
+      },
+      {
+        "name": "di",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": false,
+        "default": 2
+      },
+      {
+        "name": "do",
+        "kind": {
+          "kind": "channel"
+        },
+        "optional": true,
+        "default": 3
+      },
+      {
+        "name": "cs_active_low",
+        "kind": {
+          "kind": "bool"
+        },
+        "optional": false,
+        "default": false
+      }
+    ],
+    "events": [
+      {
+        "kind": "begin",
+        "fields": [
+          "tx",
+          "partial"
+        ]
+      },
+      {
+        "kind": "bit",
+        "fields": [
+          "tx",
+          "di",
+          "do"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "tx",
+          "bits",
+          "reason",
+          "do"
+        ]
+      }
+    ]
+  },
+  {
+    "name": "eeprom93xx",
+    "category": "device",
+    "inputs": [
+      {
+        "port": "microwire",
+        "schema": "microwire.events"
+      }
+    ],
+    "outputs": [
+      {
+        "port": "events",
+        "schema": "eeprom93xx.events"
+      }
+    ],
+    "config": [
+      {
+        "name": "address_bits",
+        "kind": {
+          "kind": "integer",
+          "min": 2,
+          "max": 16
+        },
+        "optional": false,
+        "default": 6
+      },
+      {
+        "name": "organisation",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "x16",
+            "x8"
+          ]
+        },
+        "optional": false,
+        "default": "x16"
+      }
+    ],
+    "events": [
+      {
+        "kind": "instruction",
+        "fields": [
+          "op",
+          "tx",
+          "command",
+          "address"
+        ]
+      },
+      {
+        "kind": "data",
+        "fields": [
+          "op",
+          "direction",
+          "offset",
+          "values"
+        ]
+      },
+      {
+        "kind": "status",
+        "fields": [
+          "op",
+          "tx",
+          "ready"
+        ]
+      },
+      {
+        "kind": "end",
+        "fields": [
+          "op",
+          "reason"
+        ]
+      }
+    ]
+  }
+]
