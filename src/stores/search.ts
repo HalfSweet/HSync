@@ -58,13 +58,8 @@ export const useSearchStore = defineStore('search', () => {
   let timer: ReturnType<typeof setTimeout> | undefined
   watch(
     () =>
-      [
-        kind.value === 'decode' ? query.value : '',
-        capture.summary?.id,
-        decode.revision,
-        stream.effectiveMode,
-      ] as const,
-    ([text, id, , mode]) => {
+      [kind.value === 'decode' ? query.value : '', capture.summary?.id, decode.revision] as const,
+    ([text, id]) => {
       clearTimeout(timer)
       const mine = ++sequence
       current.value = null
@@ -75,7 +70,7 @@ export const useSearchStore = defineStore('search', () => {
       timer = setTimeout(() => {
         void (async () => {
           try {
-            const next = await (await getBackend()).decodeSearch(id, text, mode)
+            const next = await (await getBackend()).decodeSearch(id, text)
             if (mine === sequence) result.value = next
           } catch (error) {
             console.error('search failed', error)
@@ -128,7 +123,7 @@ export const useSearchStore = defineStore('search', () => {
     const shown = hits[next]
     if (!shown) return
     reveal(shown.start, shown.end)
-    stream.select(shown.decoder)
+    stream.select(shown.decoder, shown.stream)
   }
 
   async function stepPattern(forward: boolean): Promise<void> {

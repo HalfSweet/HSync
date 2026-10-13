@@ -1,290 +1,176 @@
 /**
- * The decoders the decoder dialog offers, with DSView's ids, channel roles and options, so the
- * entries they produce are the ones DSView stores in `.dsl` files. The list
- * comes from the Python decoders' catalog; the natively decoded buses below stand in when the
- * catalog cannot be read.
+ * Decoders as a capture stores them: a uiharu pipeline without its source — nodes, their
+ * connections and the outputs shown as lanes — with a label and display settings; and what the
+ * catalog of node types says about them.
  */
-import type { DecoderInfo } from '@/ipc/bindings/DecoderInfo'
-import { busKind, type BusKind } from '@/timeline/groups'
+import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
+import type { CatalogField } from '@/ipc/bindings/CatalogField'
+import catalogFixture from '@/ipc/mock/fixtures/decoder-catalog.json'
 
-export interface RoleSpec {
-  id: string
-  /** Shown on the timeline, e.g. `SCL`. */
-  name: string
-  required: boolean
-  /** The decoder's own description, in English. */
-  desc?: string
+import type { NumberFormat } from './numberFormat'
+
+/** The schema of the samples a pipeline's source carries. */
+export const LOGIC_SCHEMA = 'logic.samples'
+
+export interface NodeEntry {
+  type: string
+  config?: Record<string, unknown>
 }
 
-interface OptionBase {
-  id: string
-  /** The decoder's own description, in English, for options without a translated label. */
-  desc?: string
+/** How a decoder's results show; decoding does not read it. */
+export interface DisplaySettings {
+  numbers?: NumberFormat
 }
 
-export type OptionSpec =
-  | (OptionBase & {
-      kind: 'choice'
-      values: readonly (string | number)[]
-      default: string | number
-    })
-  | (OptionBase & { kind: 'number'; default: number; min?: number; max?: number; step: number })
-  | (OptionBase & { kind: 'text'; default: string })
-
-export interface DecoderSpec {
-  /** DSView's decoder id. */
-  id: string
-  /** DSView's label, which the timeline shows without the version prefix. */
-  label: string
-  bus: BusKind
-  roles: readonly RoleSpec[]
-  options: readonly OptionSpec[]
-  longname?: string
-  desc?: string
-  tags?: readonly string[]
-  /** What the decoder reads (`logic`, or another decoder's output such as `i2c`). */
-  inputs?: readonly string[]
-  outputs?: readonly string[]
-}
-
-/** A decoder as the catalog describes it. */
-export function specFromInfo(info: DecoderInfo): DecoderSpec {
-  const role = (required: boolean) => (channel: DecoderInfo['channels'][number]) => ({
-    id: channel.id,
-    name: channel.name || channel.id.toUpperCase(),
-    required,
-    desc: channel.desc,
-  })
-  const options = info.options.flatMap((option): OptionSpec[] => {
-    const value = option.default
-    const values = option.values.filter(
-      (one): one is string | number => typeof one === 'string' || typeof one === 'number',
-    )
-    if (values.length > 0 && (typeof value === 'string' || typeof value === 'number')) {
-      return [{ id: option.id, desc: option.desc, kind: 'choice', values, default: value }]
-    }
-    if (typeof value === 'number') {
-      const step = Number.isInteger(value) ? 1 : 0.1
-      return [{ id: option.id, desc: option.desc, kind: 'number', default: value, step }]
-    }
-    if (typeof value === 'string') {
-      return [{ id: option.id, desc: option.desc, kind: 'text', default: value }]
-    }
-    return []
-  })
-  return {
-    id: info.id,
-    label: info.name || info.id,
-    bus: busKind(info.id),
-    roles: [...info.channels.map(role(true)), ...info.optionalChannels.map(role(false))],
-    options,
-    longname: info.longname,
-    desc: info.desc,
-    tags: info.tags,
-    inputs: info.inputs,
-    outputs: info.outputs,
-  }
-}
-
-export const DECODERS: readonly DecoderSpec[] = [
-  {
-    id: '1:i2c',
-    label: '1:I²C',
-    bus: 'i2c',
-    roles: [
-      { id: 'scl', name: 'SCL', required: true },
-      { id: 'sda', name: 'SDA', required: true },
-    ],
-    options: [
-      {
-        id: 'address_format',
-        kind: 'choice',
-        values: ['shifted', 'unshifted'],
-        // DSView's 1:i2c shows 8-bit addresses unless told otherwise.
-        default: 'unshifted',
-      },
-    ],
-  },
-  {
-    id: '1:uart',
-    label: '1:UART',
-    bus: 'uart',
-    roles: [{ id: 'rxtx', name: 'RX/TX', required: true }],
-    options: [
-      { id: 'baudrate', kind: 'number', default: 115200, min: 1, max: 100_000_000, step: 1 },
-      { id: 'num_data_bits', kind: 'choice', values: [5, 6, 7, 8, 9], default: 8 },
-      {
-        id: 'parity_type',
-        kind: 'choice',
-        values: ['none', 'odd', 'even', 'zero', 'one'],
-        default: 'none',
-      },
-      { id: 'num_stop_bits', kind: 'choice', values: [0.5, 1, 1.5, 2], default: 1 },
-      { id: 'bit_order', kind: 'choice', values: ['lsb-first', 'msb-first'], default: 'lsb-first' },
-      { id: 'invert', kind: 'choice', values: ['no', 'yes'], default: 'no' },
-    ],
-  },
-  {
-    id: '1:spi',
-    label: '1:SPI',
-    bus: 'spi',
-    roles: [
-      { id: 'clk', name: 'CLK', required: true },
-      { id: 'miso', name: 'MISO', required: false },
-      { id: 'mosi', name: 'MOSI', required: false },
-      { id: 'cs', name: 'CS#', required: false },
-    ],
-    options: [
-      { id: 'cpol', kind: 'choice', values: [0, 1], default: 0 },
-      { id: 'cpha', kind: 'choice', values: [0, 1], default: 0 },
-      { id: 'bitorder', kind: 'choice', values: ['msb-first', 'lsb-first'], default: 'msb-first' },
-      { id: 'wordsize', kind: 'number', default: 8, min: 1, max: 32, step: 1 },
-      {
-        id: 'cs_polarity',
-        kind: 'choice',
-        values: ['active-low', 'active-high'],
-        default: 'active-low',
-      },
-    ],
-  },
-  {
-    id: 'can',
-    label: 'CAN',
-    bus: 'can',
-    roles: [{ id: 'can_rx', name: 'CAN', required: true }],
-    options: [
-      { id: 'bitrate', kind: 'number', default: 1_000_000, min: 1000, max: 10_000_000, step: 1000 },
-      { id: 'sample_point', kind: 'number', default: 70, min: 10, max: 95, step: 0.5 },
-    ],
-  },
-  {
-    id: 'can-fd',
-    label: 'CAN-FD',
-    bus: 'can',
-    roles: [{ id: 'can_rx', name: 'CAN', required: true }],
-    options: [
-      {
-        id: 'nominal_bitrate',
-        kind: 'number',
-        default: 1_000_000,
-        min: 1000,
-        max: 10_000_000,
-        step: 1000,
-      },
-      {
-        id: 'fast_bitrate',
-        kind: 'number',
-        default: 2_000_000,
-        min: 1000,
-        max: 20_000_000,
-        step: 1000,
-      },
-      { id: 'sample_point', kind: 'number', default: 70, min: 10, max: 95, step: 0.5 },
-    ],
-  },
-]
-
-/** The entry of a DSView decoder id in `catalog` (the native buses by default). */
-export function decoderSpec(
-  id: string,
-  catalog: readonly DecoderSpec[] = DECODERS,
-): DecoderSpec | undefined {
-  return catalog.find((spec) => spec.id === id)
-}
-
-/**
- * The stack a decoder needs, bottom first, as DSView's protocol dock builds it: a decoder that
- * does not read logic sits on one whose first output is its first input, skipping the light
- * `0:` variants. `null` when no such chain reaches the logic.
- */
-export function stackFor(spec: DecoderSpec, catalog: readonly DecoderSpec[]): DecoderSpec[] | null {
-  const chain = [spec]
-  for (let depth = 0; depth < 8; depth++) {
-    const input = chain[0]?.inputs?.[0]
-    if (!input || input === 'logic') return chain
-    const below = catalog.find(
-      (one) => one.outputs?.[0] === input && (!one.id.startsWith('0:') || one.id === input),
-    )
-    if (!below) return null
-    chain.unshift(below)
-  }
-  return null
-}
-
-/** A decoder as DSView stores it in a capture's `decoders` list. */
+/** A decoder entry, as the backend reads it (`hsync_session::DecoderEntry`). */
 export interface DecoderEntry {
-  id: string
-  label: string
-  channel: Record<string, number>[]
-  options: Record<string, string | number>
-  'stacked decoders': { id: string; options: Record<string, string | number> }[]
-  version: number
+  /** The nodes by name, the bus first. */
+  nodes: Record<string, NodeEntry>
+  /** Connections between `source` or `node.port` and `node.port`. */
+  connections?: { from: string; to: string }[]
+  /** The outputs shown as lanes, by name, in lane order. */
+  expose?: Record<string, string>
+  label?: string
+  show?: DisplaySettings
 }
 
-function optionValues(
-  spec: DecoderSpec,
-  options: Record<string, string | number>,
-): Record<string, string | number> {
-  return Object.fromEntries(
-    spec.options.map((option) => [option.id, options[option.id] ?? option.default]),
+/** The catalog built into the app; the backend's replaces it once read. */
+export const DEFAULT_CATALOG: readonly CatalogEntry[] = catalogFixture as CatalogEntry[]
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Whether `value` is a decoder entry (DSView's, which the backend translates, are not). */
+export function isEntry(value: unknown): value is DecoderEntry {
+  return isRecord(value) && isRecord(value.nodes)
+}
+
+/** The node types of an entry, in its order. */
+export function entryKinds(entry: DecoderEntry): string[] {
+  return Object.values(entry.nodes).map((node) => node.type)
+}
+
+/** What an entry is called: its label, else the name of its first node type. */
+export function entryLabel(entry: DecoderEntry, nameOf: (type: string) => string): string {
+  const label = entry.label?.trim()
+  if (label) return label
+  const first = entryKinds(entry)[0]
+  return first === undefined ? '' : nameOf(first)
+}
+
+export function typeOf(
+  name: string,
+  catalog: readonly CatalogEntry[] = DEFAULT_CATALOG,
+): CatalogEntry | undefined {
+  return catalog.find((type) => type.name === name)
+}
+
+/** Node types reading samples: those a decoder starts with. */
+export function baseTypes(catalog: readonly CatalogEntry[]): CatalogEntry[] {
+  return catalog.filter((type) => type.inputs[0]?.schema === LOGIC_SCHEMA)
+}
+
+/** Node types that read what `base` puts out, to stack on it. */
+export function stackableOn(base: CatalogEntry, catalog: readonly CatalogEntry[]): CatalogEntry[] {
+  const schema = base.outputs[0]?.schema
+  return schema === undefined
+    ? []
+    : catalog.filter((type) => type.inputs[0]?.schema === schema && type.name !== base.name)
+}
+
+/** The configuration fields of `type` naming channels. */
+export function channelFields(type: CatalogEntry): CatalogField[] {
+  return type.config.filter(
+    (field) => field.kind.kind === 'channel' || field.kind.kind === 'channels',
   )
 }
 
-/**
- * Builds the entry for `spec` with channels by role and options by id, and the decoders
- * `stacked` on it with theirs.
- */
-export function buildEntry(
-  spec: DecoderSpec,
-  channels: Record<string, number | null>,
-  options: Record<string, string | number>,
-  stacked: readonly { spec: DecoderSpec; options: Record<string, string | number> }[] = [],
-): DecoderEntry {
-  return {
-    id: spec.id,
-    label: spec.label,
-    channel: spec.roles.flatMap((role) => {
-      const index = channels[role.id]
-      return index === null || index === undefined ? [] : [{ [role.id]: index }]
-    }),
-    options: optionValues(spec, options),
-    'stacked decoders': stacked.map((layer) => ({
-      id: layer.spec.id,
-      options: optionValues(layer.spec, layer.options),
-    })),
-    version: 2,
-  }
+/** A node's configuration with the type's defaults filled in. */
+export function nodeConfig(
+  node: NodeEntry,
+  catalog: readonly CatalogEntry[] = DEFAULT_CATALOG,
+): Record<string, unknown> {
+  const type = typeOf(node.type, catalog)
+  const config: Record<string, unknown> = {}
+  for (const field of type?.config ?? []) config[field.name] = field.default
+  for (const [name, value] of Object.entries(node.config ?? {})) config[name] = value
+  return config
 }
 
-/** Ids and options of the decoders stacked in a stored entry. */
-export function entryStack(entry: unknown): { id: string; options: Record<string, unknown> }[] {
-  const stacked = (entry as { 'stacked decoders'?: unknown })['stacked decoders']
-  return (Array.isArray(stacked) ? stacked : []).flatMap((layer) => {
-    if (typeof layer !== 'object' || layer === null) return []
-    const { id, options } = layer as { id?: unknown; options?: unknown }
-    return typeof id === 'string'
-      ? [
-          {
-            id,
-            options:
-              typeof options === 'object' && options !== null
-                ? (options as Record<string, unknown>)
-                : {},
-          },
-        ]
-      : []
-  })
+/** A channel a decoder reads: through which node and field, under which role. */
+export interface ChannelUse {
+  node: string
+  field: string
+  /** The field name, or `field0`, `field1`… for the lines of a channel list. */
+  role: string
+  index: number
 }
 
-/** Channels by role of a stored entry. */
-export function entryChannels(entry: unknown): Record<string, number> {
-  const mapping = (entry as { channel?: unknown }).channel
-  const out: Record<string, number> = {}
-  for (const item of Array.isArray(mapping) ? mapping : []) {
-    if (typeof item !== 'object' || item === null) continue
-    for (const [role, index] of Object.entries(item as Record<string, unknown>)) {
-      if (typeof index === 'number') out[role] = index
+/** Every channel an entry's nodes read, in the entry's order. */
+export function entryChannels(
+  entry: DecoderEntry,
+  catalog: readonly CatalogEntry[] = DEFAULT_CATALOG,
+): ChannelUse[] {
+  const uses: ChannelUse[] = []
+  for (const [node, spec] of Object.entries(entry.nodes)) {
+    const type = typeOf(spec.type, catalog)
+    if (!type) continue
+    const config = nodeConfig(spec, catalog)
+    for (const field of channelFields(type)) {
+      const value = config[field.name]
+      if (field.kind.kind === 'channel') {
+        if (typeof value === 'number')
+          uses.push({ node, field: field.name, role: field.name, index: value })
+      } else if (Array.isArray(value)) {
+        value.forEach((index, at) => {
+          if (typeof index === 'number')
+            uses.push({ node, field: field.name, role: `${field.name}${at}`, index })
+        })
+      }
     }
   }
-  return out
+  return uses
+}
+
+/** A value of a field as the dialog holds it: `undefined` leaves the field out. */
+export type FieldValue = unknown
+
+function cleanConfig(config: Record<string, FieldValue>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(config).filter(([, value]) => value !== undefined))
+}
+
+/**
+ * Builds the entry of `base` configured with `config`, and of the device decoders `stacked`
+ * on its output, each with their own; the nodes are named after their types.
+ */
+export function buildEntry(
+  base: CatalogEntry,
+  config: Record<string, FieldValue>,
+  stacked: readonly { type: CatalogEntry; config: Record<string, FieldValue> }[] = [],
+  label?: string,
+  show?: DisplaySettings,
+): DecoderEntry {
+  const nodes: Record<string, NodeEntry> = {
+    [base.name]: { type: base.name, config: cleanConfig(config) },
+  }
+  const connections = [{ from: 'source', to: `${base.name}.${base.inputs[0]?.port ?? 'logic'}` }]
+  const expose: Record<string, string> = {
+    [base.name]: `${base.name}.${base.outputs[0]?.port ?? 'events'}`,
+  }
+  let below = base
+  for (const layer of stacked) {
+    nodes[layer.type.name] = { type: layer.type.name, config: cleanConfig(layer.config) }
+    connections.push({
+      from: `${below.name}.${below.outputs[0]?.port ?? 'events'}`,
+      to: `${layer.type.name}.${layer.type.inputs[0]?.port ?? 'bus'}`,
+    })
+    expose[layer.type.name] = `${layer.type.name}.${layer.type.outputs[0]?.port ?? 'events'}`
+    below = layer.type
+  }
+  const entry: DecoderEntry = { nodes, connections, expose }
+  const trimmed = label?.trim()
+  if (trimmed) entry.label = trimmed
+  if (show && Object.keys(show).length > 0) entry.show = show
+  return entry
 }

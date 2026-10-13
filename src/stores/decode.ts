@@ -1,28 +1,32 @@
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 
-import { DECODERS, specFromInfo, type DecoderSpec } from '@/decode/catalog'
+import { DEFAULT_CATALOG, isEntry, typeOf, type DecoderEntry } from '@/decode/catalog'
 import { getBackend } from '@/ipc/backend'
+import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
+import type { DecoderLanes } from '@/ipc/bindings/DecoderLanes'
 import type { DecoderStatus } from '@/ipc/bindings/DecoderStatus'
-import type { DecoderView } from '@/ipc/bindings/DecoderView'
+import type { StreamView } from '@/ipc/bindings/StreamView'
 import { viewportEnd } from '@/timeline/viewport'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
 
-/** How long the view rests before what depends on it is worked out again. */
-const REFOCUS_MS = 150
-
 import { useCaptureStore } from './capture'
 import { useViewStore } from './view'
+
+/** A decoder's progress refreshes what shows this often at most. */
+const PROGRESS_MS = 120
 
 /** The decoders of the open capture and what they show in the viewport (DESIGN.md §6.3). */
 export const useDecodeStore = defineStore('decode', () => {
   const capture = useCaptureStore()
   const view = useViewStore()
   const statuses = shallowRef<DecoderStatus[]>([])
-  /** Grows whenever a decoder finished, so views that depend on results ask again. */
+  /** Grows whenever a decoder has more to show, so views that depend on results ask again. */
   const revision = shallowRef(0)
   /** Lanes in the viewport by decoder position. */
-  const lanes = shallowRef(new Map<number, DecoderView>())
+  const lanes = shallowRef(new Map<number, DecoderLanes>())
+  /** The node types the dialog offers: built in, until the backend's catalog is read. */
+  const catalog = shallowRef<readonly CatalogEntry[]>(DEFAULT_CATALOG)
 
   async function refreshStatuses(captureId: number): Promise<void> {
     try {
@@ -43,31 +47,44 @@ export const useDecodeStore = defineStore('decode', () => {
     { immediate: true },
   )
 
-  /** The decoders the dialog offers: the host's catalog, or the native ones without it. */
-  const catalog = shallowRef<readonly DecoderSpec[]>(DECODERS)
-
   async function loadCatalog(): Promise<void> {
     try {
       const found = await (await getBackend()).decodeCatalog()
-      if (found.length > 0) catalog.value = found.map(specFromInfo)
+      if (found.length > 0) catalog.value = found
     } catch (error) {
       console.warn('the decoder catalog is not available', error)
     }
   }
 
+  /** Decoders decode as the capture fills: their progress refreshes the views, throttled. */
+  let progressTimer: ReturnType<typeof setTimeout> | null = null
+  function changed(captureId: number, now: boolean): void {
+    if (capture.summary?.id !== captureId) return
+    if (now) {
+      if (progressTimer !== null) clearTimeout(progressTimer)
+      progressTimer = null
+      void refreshStatuses(captureId)
+      revision.value += 1
+      return
+    }
+    if (progressTimer !== null) return
+    progressTimer = setTimeout(() => {
+      progressTimer = null
+      if (capture.summary?.id !== captureId) return
+      void refreshStatuses(captureId)
+      revision.value += 1
+    }, PROGRESS_MS)
+  }
+
   let subscribed = false
-  /** Follows decoders finishing in the background. */
+  /** Follows decoders working in the background. */
   async function init(): Promise<void> {
     if (subscribed) return
     subscribed = true
     void loadCatalog()
-    await (
-      await getBackend()
-    ).onDecoded(({ captureId }) => {
-      if (capture.summary?.id !== captureId) return
-      void refreshStatuses(captureId)
-      revision.value += 1
-    })
+    const backend = await getBackend()
+    await backend.onDecoded(({ captureId }) => changed(captureId, true))
+    await backend.onDecodeProgress(({ captureId }) => changed(captureId, false))
   }
 
   /** The visible samples, for the decode lanes. */
@@ -88,52 +105,32 @@ export const useDecodeStore = defineStore('decode', () => {
   })
 
   // Lanes are fetched a view's width beyond each side, so panning shows what is at hand; one
-  // request at a time, the latest wanted once it returns. What depends on the view (the frames
-  // beside an empty view) is worked out for the samples in view, and again once the view has
-  // rested after moving within the fetched window.
-  let fetched: { key: string; window: SampleWindow; focus: [number, number] } | null = null
+  // request at a time, the latest wanted once it returns.
+  let fetched: { key: string; window: SampleWindow } | null = null
   let loading = false
   let again = false
-  let refocus: ReturnType<typeof setTimeout> | null = null
 
-  const focusOf = (window: SampleWindow): [number, number] => [
-    Math.max(0, Math.floor(window.start)),
-    Math.ceil(window.end),
-  ]
-
-  async function loadLanes(force = false): Promise<void> {
+  async function loadLanes(): Promise<void> {
     const want = wanted.value
     if (!want) {
       lanes.value = new Map()
       fetched = null
       return
     }
-    if (!force && fetched?.key === want.key && covers(fetched.window, want.window, want.extent)) {
-      const [from, to] = focusOf(want.window)
-      if (fetched.focus[0] !== from || fetched.focus[1] !== to) {
-        if (refocus !== null) clearTimeout(refocus)
-        refocus = setTimeout(() => {
-          refocus = null
-          void loadLanes(true)
-        }, REFOCUS_MS)
-      }
-      return
-    }
+    if (fetched?.key === want.key && covers(fetched.window, want.window, want.extent)) return
     if (loading) {
       again = true
       return
     }
     loading = true
     try {
-      const window =
-        force && fetched?.key === want.key ? fetched.window : overscan(want.window, want.extent)
-      const focus = focusOf(want.window)
+      const window = overscan(want.window, want.extent)
       const found = await (
         await getBackend()
-      ).decodeView(want.captureId, window.start, window.end, window.samplesPerPixel, focus)
+      ).decodeView(want.captureId, window.start, window.end, window.samplesPerPixel)
       if (wanted.value?.captureId !== want.captureId) return
-      lanes.value = new Map(found.map((one) => [one.index, one.view]))
-      fetched = { key: want.key, window, focus }
+      lanes.value = new Map(found.map((one) => [one.index, one]))
+      fetched = { key: want.key, window }
     } catch (error) {
       console.error('decode lanes failed', error)
     } finally {
@@ -150,8 +147,18 @@ export const useDecodeStore = defineStore('decode', () => {
     return decoder === null ? undefined : statuses.value.find((one) => one.index === decoder)
   }
 
-  function lanesOf(decoder: number | null): DecoderView | undefined {
+  function lanesOf(decoder: number | null): DecoderLanes | undefined {
     return decoder === null ? undefined : lanes.value.get(decoder)
+  }
+
+  /** The lane of stream `stream` of decoder `decoder` in the viewport. */
+  function streamView(decoder: number | null, stream: number): StreamView | undefined {
+    return lanesOf(decoder)?.streams.find((one) => one.stream === stream)?.view
+  }
+
+  /** The node type `name` as the catalog describes it. */
+  function typeNamed(name: string): CatalogEntry | undefined {
+    return typeOf(name, catalog.value)
   }
 
   /** The decoder dialog: closed, adding (`null`) or editing decoder `index`. */
@@ -165,10 +172,10 @@ export const useDecodeStore = defineStore('decode', () => {
     editor.value = null
   }
 
-  /** The capture's decoder list as stored with it. */
-  const entries = computed<unknown[]>(() => {
+  /** The capture's decoder entries as stored with it. */
+  const entries = computed<DecoderEntry[]>(() => {
     const decoders = capture.summary?.decoders
-    return Array.isArray(decoders) ? (decoders as unknown[]) : []
+    return Array.isArray(decoders) ? decoders.filter(isEntry) : []
   })
 
   /** Replaces the decoder list; the capture decodes again. */
@@ -188,6 +195,8 @@ export const useDecodeStore = defineStore('decode', () => {
     init,
     statusOf,
     lanesOf,
+    streamView,
+    typeNamed,
     openEditor,
     closeEditor,
     setEntries,

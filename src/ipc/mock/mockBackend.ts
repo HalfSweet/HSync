@@ -7,6 +7,7 @@ import type { Backend, DecodedEvent, StreamRequest, Unsubscribe } from '../backe
 import type { BinsRequest } from '../bindings/BinsRequest'
 import type { CaptureRequest } from '../bindings/CaptureRequest'
 import type { CaptureSummary } from '../bindings/CaptureSummary'
+import type { CatalogEntry } from '../bindings/CatalogEntry'
 import type { DeviceState } from '../bindings/DeviceState'
 import type { DeviceSummary } from '../bindings/DeviceSummary'
 import type { Direction } from '../bindings/Direction'
@@ -23,8 +24,17 @@ import {
   CELL_TRANSITION,
   type BinsResult,
 } from '../bins'
+import catalog from './fixtures/decoder-catalog.json'
 import fixture from './fixtures/protocol-demo.json'
-import { mockRowAt, mockSearch, mockStatuses, mockStream, mockView } from './mockDecode'
+import {
+  MOCK_ENTRIES,
+  mockCoverage,
+  mockRowAt,
+  mockSearch,
+  mockStatuses,
+  mockStream,
+  mockView,
+} from './mockDecode'
 import { DEMO_ID, MOCK_DEVICES, MockDemoDevice, uiError } from './mockDevice'
 
 /** How long a simulated capture takes to fill, and in how many steps. */
@@ -232,7 +242,7 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
           channels: data.channels.map((channel) => channel.index),
         },
         channels: data.channels.map(({ index, name }) => ({ index, name })),
-        decoders: data.decoders,
+        decoders: MOCK_ENTRIES,
       }
       return Promise.resolve(summary)
     },
@@ -340,8 +350,7 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
     },
 
     async decodeCatalog() {
-      // No Python in the browser: the dialog keeps its built-in list.
-      return Promise.reject(uiError('error.app.unavailableInBrowser'))
+      return Promise.resolve(catalog as CatalogEntry[])
     },
 
     async configureLog() {
@@ -387,17 +396,11 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
       return Promise.resolve(mockStatuses(summary.decoders, live?.status.captureId === captureId))
     },
 
-    async decodeView(
-      captureId: number,
-      start: number,
-      end: number,
-      samplesPerPixel: number,
-      focus?: readonly [number, number],
-    ) {
+    async decodeView(captureId: number, start: number, end: number, samplesPerPixel: number) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
       if (live?.status.captureId === captureId) return Promise.resolve([])
-      return Promise.resolve(mockView(summary.decoders, start, end, samplesPerPixel, focus))
+      return Promise.resolve(mockView(summary.decoders, start, end, samplesPerPixel))
     },
 
     async decodeStream(request: StreamRequest) {
@@ -408,7 +411,7 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
         mockStream(
           summary.decoders,
           request.index,
-          request.mode,
+          request.stream,
           request.segment,
           request.onlySegment,
           request.offset,
@@ -417,19 +420,26 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
       )
     },
 
-    async decodeRowAt(captureId, index, mode, sample) {
+    async decodeRowAt(captureId, index, stream, sample) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
-      return Promise.resolve(mockRowAt(summary.decoders, index, mode, sample))
+      return Promise.resolve(mockRowAt(summary.decoders, index, stream, sample))
     },
 
-    async decodeSearch(captureId, query, mode) {
+    async decodeSearch(captureId, query) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
-      const result = mockSearch(summary.decoders, query, mode)
+      const result = mockSearch(summary.decoders, query)
       // Decoders of a capture still being taken have found nothing yet.
       const running = live?.status.captureId === captureId
       return Promise.resolve(result && running ? { hits: [], truncated: false } : result)
+    },
+
+    async decodeCoverage(captureId, index, start, end, resolution) {
+      if (!summary || !known(captureId))
+        return Promise.reject(uiError('error.session.staleCapture'))
+      if (live?.status.captureId === captureId) return Promise.resolve([])
+      return Promise.resolve(mockCoverage(summary.decoders, index, start, end, resolution))
     },
 
     async renameChannel(captureId, index, name) {
@@ -480,7 +490,6 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
     async decodeSet(captureId: number, decoders: unknown[]) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
-      if (live) return Promise.reject(uiError('error.session.busy'))
       summary = { ...summary, decoders: decoders.length > 0 ? decoders : null }
       const id = summary.id
       setTimeout(() => {
@@ -545,7 +554,7 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
             ? Object.entries(preset.channelNames).map(([index, name]) => [Number(index), name])
             : data.channels.map(({ index, name }) => [index, name]),
       )
-      const decoders = summary ? summary.decoders : preset ? preset.decoders : data.decoders
+      const decoders = summary ? summary.decoders : preset ? preset.decoders : MOCK_ENTRIES
       summary = {
         id: lastId,
         source: { kind: 'device', driver: 'virtual-demo', model: 'Demo' },
@@ -648,6 +657,11 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
 
     onDecoded(handler) {
       return subscribe(decodedHandlers, handler)
+    },
+
+    onDecodeProgress() {
+      // The recording is complete from the start: nothing progresses.
+      return Promise.resolve<Unsubscribe>(() => undefined)
     },
   }
 }

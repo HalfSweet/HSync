@@ -13,15 +13,14 @@ export type PulseMode = 'data' | 'clock' | 'bits'
 /** UART lines count bits, data lines show the pulse only, everything else reads a period. */
 export function pulseMode(channel: ChannelRef): PulseMode {
   switch (channel.role) {
-    case 'rxtx':
-    case 'rx':
+    case 'line':
     case 'tx':
       return 'bits'
     case 'sda':
     case 'miso':
     case 'mosi':
     case 'cs':
-    case 'can_rx':
+    case 'rx':
       return 'data'
     default:
       return 'clock'

@@ -13,6 +13,7 @@ import { toUiError, type UiError } from '@/ipc/errors'
 import { groupChannels, type ChannelGroup } from '@/timeline/groups'
 
 import { useChannelsStore } from './channels'
+import { useDecodeStore } from './decode'
 import { useDeviceStore } from './device'
 import { usePreferencesStore } from './preferences'
 import type { TriggerRequest } from './trigger'
@@ -132,7 +133,12 @@ export const useCaptureStore = defineStore('capture', () => {
   /** Channels grouped by decoder, in timeline order. */
   const groups = computed<ChannelGroup[]>(() =>
     summary.value
-      ? groupChannels(summary.value.channels, summary.value.decoders, useChannelsStore().colours)
+      ? groupChannels(
+          summary.value.channels,
+          summary.value.decoders,
+          useChannelsStore().colours,
+          useDecodeStore().catalog,
+        )
       : [],
   )
 
