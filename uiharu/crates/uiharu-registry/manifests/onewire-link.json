@@ -21,8 +21,21 @@
     {
       "name": "speed",
       "kind": "enum",
-      "values": ["standard"]
+      "values": ["standard", "overdrive"]
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "reset",
+      "fields": ["presence"]
+    },
+    {
+      "kind": "bit",
+      "fields": ["value"]
+    },
+    {
+      "kind": "bad-slot",
+      "fields": ["lowTicks"]
+    }
+  ]
 }

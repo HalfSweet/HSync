@@ -16,35 +16,42 @@
   "config": [
     {
       "name": "sck",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "ws",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "sd",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "format",
       "kind": "enum",
-      "values": ["i2s"]
+      "values": ["i2s", "left-justified", "right-justified"]
     },
     {
       "name": "bits",
-      "kind": "channel",
+      "kind": "integer",
+      "min": 1,
+      "max": 32,
       "optional": true
     },
     {
       "name": "sample_edge",
       "kind": "enum",
-      "values": ["rising"]
+      "values": ["rising", "falling"]
     },
     {
       "name": "ws_inverted",
       "kind": "bool"
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "sample",
+      "fields": ["frame", "channel", "value", "bits", "complete"]
+    }
+  ]
 }

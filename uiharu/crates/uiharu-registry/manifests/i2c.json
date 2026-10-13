@@ -23,5 +23,26 @@
       "kind": "channel"
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "address",
+      "fields": ["tx", "address", "tenBit", "read", "ack"]
+    },
+    {
+      "kind": "data",
+      "fields": ["tx", "byte", "ack"]
+    },
+    {
+      "kind": "restart",
+      "fields": ["tx", "droppedBits"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason", "droppedBits"]
+    }
+  ]
 }

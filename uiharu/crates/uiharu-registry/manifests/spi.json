@@ -20,33 +20,53 @@
     },
     {
       "name": "cs",
-      "kind": "channel"
+      "kind": "channel",
+      "optional": true
     },
     {
       "name": "mosi",
-      "kind": "channel"
+      "kind": "channel",
+      "optional": true
     },
     {
       "name": "miso",
-      "kind": "channel"
+      "kind": "channel",
+      "optional": true
     },
     {
       "name": "mode",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 0,
+      "max": 3
     },
     {
       "name": "word_bits",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1,
+      "max": 8
     },
     {
       "name": "bit_order",
       "kind": "enum",
-      "values": ["msb-first"]
+      "values": ["msb-first", "lsb-first"]
     },
     {
       "name": "cs_active_low",
       "kind": "bool"
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "word",
+      "fields": ["tx", "mosi", "miso"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason"]
+    }
+  ]
 }

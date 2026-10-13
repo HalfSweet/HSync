@@ -16,19 +16,21 @@
   "config": [
     {
       "name": "tck",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "tms",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "tdi",
-      "kind": "integer"
+      "kind": "channel",
+      "optional": true
     },
     {
       "name": "tdo",
-      "kind": "integer"
+      "kind": "channel",
+      "optional": true
     },
     {
       "name": "trst",
@@ -38,8 +40,29 @@
     {
       "name": "initial_state",
       "kind": "enum",
-      "values": ["unknown"]
+      "values": ["unknown", "test-logic-reset", "run-test-idle"]
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "state",
+      "fields": ["state"]
+    },
+    {
+      "kind": "reset",
+      "fields": ["by"]
+    },
+    {
+      "kind": "scan-begin",
+      "fields": ["scan", "register"]
+    },
+    {
+      "kind": "shift",
+      "fields": ["scan", "offset", "tdi", "tdo", "bits"]
+    },
+    {
+      "kind": "scan-end",
+      "fields": ["scan", "bits", "reason"]
+    }
+  ]
 }

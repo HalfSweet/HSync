@@ -20,12 +20,102 @@
     },
     {
       "name": "bit_rate",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1
     },
     {
       "name": "tolerance",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 0,
+      "max": 25
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["pkt"]
+    },
+    {
+      "kind": "sop",
+      "fields": ["pkt", "set", "corrupt"]
+    },
+    {
+      "kind": "header",
+      "fields": [
+        "pkt",
+        "messageType",
+        "control",
+        "data",
+        "extendedMessage",
+        "dataRole",
+        "powerRole",
+        "cablePlug",
+        "revision",
+        "messageId",
+        "objects",
+        "extended"
+      ]
+    },
+    {
+      "kind": "extended-header",
+      "fields": ["pkt", "dataSize", "requestChunk", "chunkNumber", "chunked"]
+    },
+    {
+      "kind": "object",
+      "fields": ["pkt", "index", "raw"]
+    },
+    {
+      "kind": "pdo",
+      "fields": [
+        "pkt",
+        "index",
+        "supply",
+        "millivolts",
+        "milliamps",
+        "flags",
+        "maxMillivolts",
+        "minMillivolts",
+        "milliwatts",
+        "apdoType"
+      ]
+    },
+    {
+      "kind": "rdo",
+      "fields": [
+        "pkt",
+        "position",
+        "giveBack",
+        "capabilityMismatch",
+        "usbCommunicationsCapable",
+        "noUsbSuspend",
+        "unchunkedExtended",
+        "operating",
+        "maximum"
+      ]
+    },
+    {
+      "kind": "data",
+      "fields": ["pkt", "offset", "bytes"]
+    },
+    {
+      "kind": "crc",
+      "fields": ["pkt", "value", "ok"]
+    },
+    {
+      "kind": "hard-reset",
+      "fields": ["pkt", "corrupt"]
+    },
+    {
+      "kind": "cable-reset",
+      "fields": ["pkt", "corrupt"]
+    },
+    {
+      "kind": "error",
+      "fields": ["pkt", "reason"]
+    },
+    {
+      "kind": "end",
+      "fields": ["pkt", "reason"]
+    }
+  ]
 }

@@ -16,24 +16,36 @@
   "config": [
     {
       "name": "d0",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "d1",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "frame_gap_us",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1
     },
     {
       "name": "pulse_min_us",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1
     },
     {
       "name": "pulse_max_us",
-      "kind": "integer"
+      "kind": "integer",
+      "min": 1
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "frame",
+      "fields": ["frame", "bits", "data", "parityOk"]
+    },
+    {
+      "kind": "error",
+      "fields": ["reason"]
+    }
+  ]
 }

@@ -23,5 +23,14 @@
       "kind": "channel"
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "frame",
+      "fields": ["clause", "op", "phy", "reg", "turnaround", "data", "preambleBits"]
+    },
+    {
+      "kind": "error",
+      "fields": ["reason"]
+    }
+  ]
 }

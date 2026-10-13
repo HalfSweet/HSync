@@ -23,5 +23,14 @@
       "kind": "channel"
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "frame",
+      "fields": ["direction", "value", "parityOk", "stopOk", "ack"]
+    },
+    {
+      "kind": "error",
+      "fields": ["reason"]
+    }
+  ]
 }

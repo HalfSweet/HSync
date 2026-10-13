@@ -16,12 +16,41 @@
   "config": [
     {
       "name": "swclk",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "swdio",
-      "kind": "integer"
+      "kind": "channel"
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "request",
+      "fields": ["tx", "apndp", "rnw", "addr", "parityOk"]
+    },
+    {
+      "kind": "ack",
+      "fields": ["tx", "value"]
+    },
+    {
+      "kind": "data",
+      "fields": ["tx", "value", "parityOk", "fromTarget"]
+    },
+    {
+      "kind": "end",
+      "fields": ["tx", "reason"]
+    },
+    {
+      "kind": "line-reset",
+      "fields": []
+    },
+    {
+      "kind": "switch",
+      "fields": ["to"]
+    }
+  ]
 }

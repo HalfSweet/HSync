@@ -16,17 +16,66 @@
   "config": [
     {
       "name": "dp",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "dm",
-      "kind": "integer"
+      "kind": "channel"
     },
     {
       "name": "speed",
       "kind": "enum",
-      "values": ["full"]
+      "values": ["low", "full"]
     }
   ],
-  "events": []
+  "events": [
+    {
+      "kind": "begin",
+      "fields": ["pkt"]
+    },
+    {
+      "kind": "pid",
+      "fields": ["pkt", "pid", "ok"]
+    },
+    {
+      "kind": "token",
+      "fields": ["pkt", "address", "endpoint", "crc5", "ok"]
+    },
+    {
+      "kind": "sof",
+      "fields": ["pkt", "frame", "crc5", "ok"]
+    },
+    {
+      "kind": "data",
+      "fields": ["pkt", "offset", "bytes"]
+    },
+    {
+      "kind": "data-end",
+      "fields": ["pkt", "crc16", "ok", "length"]
+    },
+    {
+      "kind": "split",
+      "fields": ["pkt", "raw"]
+    },
+    {
+      "kind": "end",
+      "fields": ["pkt", "reason"]
+    },
+    {
+      "kind": "reset",
+      "fields": ["ticks"]
+    },
+    {
+      "kind": "suspend",
+      "fields": []
+    },
+    {
+      "kind": "resume",
+      "fields": []
+    },
+    {
+      "kind": "keep-alive",
+      "fields": []
+    }
+  ]
 }
