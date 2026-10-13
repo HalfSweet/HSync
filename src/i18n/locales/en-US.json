@@ -73,7 +73,8 @@
     "withShortcut": "{label} ({shortcut})"
   },
   "file": {
-    "filter": "DSView capture",
+    "filter": "HSync capture",
+    "dslFilter": "DSView capture",
     "filterAll": "Captures and waveforms",
     "waveformFilter": "HDL waveform (VCD, FST, GHW)",
     "open": "Open file…",
@@ -95,6 +96,7 @@
     "title": "Export",
     "format": "Format",
     "formats": {
+      "hsync": "HSync capture",
       "dsl": "DSView capture",
       "csv": "CSV table",
       "vcd": "VCD waveform",
@@ -103,7 +105,8 @@
       "binary": "Raw binary"
     },
     "formatTips": {
-      "dsl": "Opens in HSync and DSView, decoders included",
+      "hsync": "HSync’s own format: keeps the decoders, channel colours and the view",
+      "dsl": "Opens in DSView too, decoders included",
       "csv": "A time and every channel level per row, for spreadsheets",
       "vcd": "The common digital waveform format, for GTKWave and others",
       "fst": "GTKWave’s compact waveform format, far smaller than VCD",

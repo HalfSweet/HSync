@@ -73,7 +73,8 @@
     "withShortcut": "{label}（{shortcut}）"
   },
   "file": {
-    "filter": "DSView 采集文件",
+    "filter": "HSync 采集文件",
+    "dslFilter": "DSView 采集文件",
     "filterAll": "采集与波形文件",
     "waveformFilter": "HDL 波形（VCD、FST、GHW）",
     "open": "打开文件…",
@@ -95,6 +96,7 @@
     "title": "导出",
     "format": "格式",
     "formats": {
+      "hsync": "HSync 采集文件",
       "dsl": "DSView 采集文件",
       "csv": "CSV 表格",
       "vcd": "VCD 波形",
@@ -103,7 +105,8 @@
       "binary": "原始二进制"
     },
     "formatTips": {
-      "dsl": "HSync 与 DSView 都能打开，保留解码设置",
+      "hsync": "HSync 自己的格式：保留解码器、通道颜色与视图",
+      "dsl": "DSView 也能打开，保留解码设置",
       "csv": "每行一个时刻与各通道的电平，可用表格软件打开",
       "vcd": "通用的数字波形格式，GTKWave 等工具可打开",
       "fst": "GTKWave 的紧凑波形格式，比 VCD 小得多",
