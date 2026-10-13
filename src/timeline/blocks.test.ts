@@ -9,9 +9,10 @@ const T = CELL_TRANSITION
 const HIGH = CELL_FIRST_HIGH | CELL_LAST_HIGH
 
 const spi: ChannelGroup = {
-  key: '1:spi',
+  key: 'decoder:0',
   kind: 'spi',
   title: 'SPI',
+  type: 'spi',
   unnamed: false,
   options: {},
   decoder: 0,

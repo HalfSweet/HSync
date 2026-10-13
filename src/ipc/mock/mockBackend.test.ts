@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
 import { CELL_FIRST_HIGH, CELL_LAST_HIGH, CELL_TRANSITION } from '../bins'
-import decoded from './fixtures/protocol-decoded.json'
 import { createMockBackend, findPattern, MockChannel } from './mockBackend'
 
 describe('MockChannel', () => {
@@ -99,15 +98,17 @@ describe('findPattern', () => {
       { channel: 1, level: 'high' as const },
     ]
     const found = await backend.find(summary.id, conditions, 0, 'next')
-    const lanes = (
-      decoded as unknown as {
-        presentation: { lanes: [string, { type: string; condition?: string; start: number }[]][] }
-      }[]
-    )[0]?.presentation.lanes
-    const starts = lanes
-      ?.flatMap(([, items]) => items)
-      .filter((item) => item.type === 'i2cCondition' && item.condition === 'start')
-      .map((item) => item.start)
-    expect(found).toBe(starts?.[0])
+    const page = await backend.decodeStream({
+      captureId: summary.id,
+      index: 0,
+      stream: 0,
+      segment: null,
+      onlySegment: false,
+      offset: 0,
+      count: 1000,
+    })
+    const starts = page?.rows.filter((row) => row.kind === 'begin').map((row) => row.start) ?? []
+    expect(starts.length).toBeGreaterThan(0)
+    expect(found).toBe(starts[0])
   })
 })
