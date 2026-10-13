@@ -1,0 +1,32 @@
+{
+  "name": "ir-sirc",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "sirc.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "channel",
+      "kind": "channel"
+    },
+    {
+      "name": "polarity",
+      "kind": "enum",
+      "values": ["active-low"]
+    },
+    {
+      "name": "tolerance",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

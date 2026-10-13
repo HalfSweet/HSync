@@ -1,0 +1,27 @@
+{
+  "name": "mdio",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "mdio.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "mdc",
+      "kind": "channel"
+    },
+    {
+      "name": "mdio",
+      "kind": "channel"
+    }
+  ],
+  "events": []
+}

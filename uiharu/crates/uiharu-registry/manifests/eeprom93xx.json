@@ -1,0 +1,28 @@
+{
+  "name": "eeprom93xx",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "microwire",
+      "schema": "microwire.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "eeprom93xx.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address_bits",
+      "kind": "integer"
+    },
+    {
+      "name": "organisation",
+      "kind": "enum",
+      "values": ["x16"]
+    }
+  ],
+  "events": []
+}

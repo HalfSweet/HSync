@@ -1,0 +1,24 @@
+{
+  "name": "spi-nor",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "nor.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address_bytes",
+      "kind": "enum",
+      "values": ["three"]
+    }
+  ],
+  "events": []
+}

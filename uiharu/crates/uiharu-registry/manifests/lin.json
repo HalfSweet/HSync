@@ -1,0 +1,27 @@
+{
+  "name": "lin",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "uart",
+      "schema": "uart.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "lin.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "length_by_id",
+      "kind": "bool"
+    },
+    {
+      "name": "min_break_bits",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

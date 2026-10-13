@@ -1,0 +1,54 @@
+{
+  "name": "uart",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "uart.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "line",
+      "kind": "channel"
+    },
+    {
+      "name": "baud",
+      "kind": "integer"
+    },
+    {
+      "name": "data_bits",
+      "kind": "integer"
+    },
+    {
+      "name": "parity",
+      "kind": "enum",
+      "values": ["none"]
+    },
+    {
+      "name": "stop_bits",
+      "kind": "enum",
+      "values": ["one"]
+    },
+    {
+      "name": "bit_order",
+      "kind": "enum",
+      "values": ["lsb-first"]
+    },
+    {
+      "name": "inverted",
+      "kind": "bool"
+    },
+    {
+      "name": "sample_point",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

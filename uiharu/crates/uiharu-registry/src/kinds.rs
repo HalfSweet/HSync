@@ -1,0 +1,548 @@
+// SPDX-License-Identifier: Apache-2.0
+
+//! The node types by name: how to build each from a JSON configuration, its defaults, its
+//! manifest and how to read its output without the event type.
+
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use uiharu_core::{DynExposedRef, EventSchema, Node, Pipeline};
+use uiharu_protocols::am230x::{Am230x, Am230xConfig, Am230xEvent};
+use uiharu_protocols::apa102::{Apa102, Apa102Event};
+use uiharu_protocols::avr_isp::{AvrIsp, IspEvent};
+use uiharu_protocols::can::{Can, CanConfig, CanEvent};
+use uiharu_protocols::dmx512::{Dmx512, Dmx512Event};
+use uiharu_protocols::ds18b20::{Ds18b20, Ds18b20Event};
+use uiharu_protocols::eeprom24xx::{Eeprom24xx, Eeprom24xxConfig, EepromEvent};
+use uiharu_protocols::eeprom93xx::{Eeprom93xx, Eeprom93xxConfig, Eeprom93xxEvent};
+use uiharu_protocols::i2c::{I2c, I2cConfig, I2cEvent};
+use uiharu_protocols::i2s::{I2s, I2sConfig, I2sEvent};
+use uiharu_protocols::ir_nec::{Nec, NecConfig, NecEvent};
+use uiharu_protocols::ir_rc5::{Rc5, Rc5Config, Rc5Event};
+use uiharu_protocols::ir_rc6::{Rc6, Rc6Config, Rc6Event};
+use uiharu_protocols::ir_sirc::{Sirc, SircConfig, SircEvent};
+use uiharu_protocols::jtag::{Jtag, JtagConfig, JtagEvent};
+use uiharu_protocols::lin::{Lin, LinConfig, LinEvent};
+use uiharu_protocols::mdio::{Mdio, MdioConfig, MdioEvent};
+use uiharu_protocols::microwire::{Microwire, MicrowireConfig, MicrowireEvent};
+use uiharu_protocols::midi::{Midi, MidiEvent};
+use uiharu_protocols::modbus_rtu::{ModbusEvent, ModbusRtu};
+use uiharu_protocols::nrf24l01::{Nrf24Event, Nrf24l01};
+use uiharu_protocols::onewire::{LinkConfig, LinkEvent, OneWireEvent, OneWireLink, OneWireNetwork};
+use uiharu_protocols::parallel::{Parallel, ParallelConfig, ParallelEvent};
+use uiharu_protocols::ps2::{Ps2, Ps2Config, Ps2Event};
+use uiharu_protocols::pwm::{Pwm, PwmConfig, PwmEvent};
+use uiharu_protocols::sdcard_spi::{SdCardSpi, SdCardSpiConfig, SdEvent};
+use uiharu_protocols::spi::{Spi, SpiConfig, SpiEvent};
+use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
+use uiharu_protocols::swd::{Swd, SwdConfig, SwdEvent};
+use uiharu_protocols::timing::{Timing, TimingConfig, TimingEvent};
+use uiharu_protocols::uart::{Uart, UartConfig, UartEvent};
+use uiharu_protocols::usb::{TransactionEvent, UsbConfig, UsbEvent, UsbPackets, UsbTransactions};
+use uiharu_protocols::usb_pd::{UsbPd, UsbPdConfig, UsbPdEvent};
+use uiharu_protocols::wiegand::{Wiegand, WiegandConfig, WiegandEvent};
+use uiharu_protocols::ws281x::{Ws281x, Ws281xConfig, Ws281xEvent};
+
+use crate::dynamic::{DynReader, TypedReader};
+
+/// A node type.
+pub struct Kind {
+    /// The name a description uses.
+    pub name: &'static str,
+    /// The manifest, as JSON; see [`crate::Manifest`].
+    pub manifest: &'static str,
+    /// Builds the node from its configuration, which it validates.
+    pub build: fn(&serde_json::Value) -> Result<Box<dyn Node>, String>,
+    /// The default configuration, as JSON (`{}` for a node without one).
+    pub defaults: fn() -> serde_json::Value,
+    /// Opens a reader on the node's output, or `None` when the output carries another type.
+    pub open: fn(&mut Pipeline, DynExposedRef, String) -> Option<Box<dyn DynReader>>,
+}
+
+impl std::fmt::Debug for Kind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Kind")
+            .field("name", &self.name)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The node type named `name`, if there is one.
+pub fn kind(name: &str) -> Option<&'static Kind> {
+    KINDS.iter().find(|kind| kind.name == name)
+}
+
+/// Opens a reader on an output carrying `T` events.
+fn open_as<T: Serialize + EventSchema + Clone + 'static>(
+    pipeline: &mut Pipeline,
+    exposed: DynExposedRef,
+    name: String,
+) -> Option<Box<dyn DynReader>> {
+    Some(Box::new(TypedReader::new(
+        name,
+        pipeline.exposed_dyn::<T>(exposed)?,
+    )))
+}
+
+/// The default configuration of a node configured by `C`, as JSON.
+fn defaults_of<C: Default + Serialize>() -> serde_json::Value {
+    // A configuration is plain data; serializing it cannot fail.
+    serde_json::to_value(C::default()).unwrap_or(serde_json::Value::Null)
+}
+
+/// The configuration of a node that takes none.
+fn no_defaults() -> serde_json::Value {
+    serde_json::Value::Object(serde_json::Map::new())
+}
+
+fn config<T: DeserializeOwned>(value: &serde_json::Value) -> Result<T, String> {
+    let value = match value {
+        serde_json::Value::Null => serde_json::Value::Object(serde_json::Map::new()),
+        other => other.clone(),
+    };
+    serde_json::from_value(value).map_err(|error| error.to_string())
+}
+
+/// Builds a node from its configuration with `make`, which validates it.
+fn build_node<C, N, E>(
+    value: &serde_json::Value,
+    make: fn(C) -> Result<N, E>,
+) -> Result<Box<dyn Node>, String>
+where
+    C: DeserializeOwned,
+    N: Node,
+    E: std::fmt::Display,
+{
+    let config: C = config(value)?;
+    make(config)
+        .map(|node| Box::new(node) as Box<dyn Node>)
+        .map_err(|error| error.to_string())
+}
+
+fn build_spi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Spi::new)
+}
+
+/// Checks that a node without configuration was given none.
+fn no_config(value: &serde_json::Value) -> Result<(), String> {
+    if !matches!(value, serde_json::Value::Null) && value != &serde_json::json!({}) {
+        return Err("takes no configuration".to_owned());
+    }
+    Ok(())
+}
+
+fn build_spi_nor(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    let config: SpiNorConfig = config(value)?;
+    Ok(Box::new(SpiNor::new(config)))
+}
+
+fn build_sdcard_spi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, SdCardSpi::new)
+}
+
+fn build_i2s(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, I2s::new)
+}
+
+fn build_pwm(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Pwm::new)
+}
+
+fn build_timing(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Timing::new)
+}
+
+fn build_parallel(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Parallel::new)
+}
+
+fn build_onewire_link(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, OneWireLink::new)
+}
+
+fn build_onewire(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(OneWireNetwork::new()))
+}
+
+fn build_ds18b20(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Ds18b20::new()))
+}
+
+fn build_usb(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, UsbPackets::new)
+}
+
+fn build_usb_transactions(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(UsbTransactions::new()))
+}
+
+fn build_can(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Can::new)
+}
+
+fn build_i2c(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, I2c::new)
+}
+
+fn build_eeprom24xx(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Eeprom24xx::new)
+}
+
+fn build_jtag(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Jtag::new)
+}
+
+fn build_swd(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Swd::new)
+}
+
+fn build_uart(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Uart::new)
+}
+
+fn build_modbus_rtu(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(ModbusRtu::new()))
+}
+
+fn build_lin(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Lin::new)
+}
+
+fn build_midi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Midi::new()))
+}
+
+fn build_ws281x(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Ws281x::new)
+}
+
+fn build_dmx512(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Dmx512::new()))
+}
+
+fn build_apa102(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Apa102::new()))
+}
+
+fn build_mdio(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Mdio::new)
+}
+
+fn build_avr_isp(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(AvrIsp::new()))
+}
+
+fn build_nrf24l01(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    no_config(value)?;
+    Ok(Box::new(Nrf24l01::new()))
+}
+
+fn build_usb_pd(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, UsbPd::new)
+}
+
+fn build_ir_nec(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Nec::new)
+}
+
+fn build_ir_rc5(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Rc5::new)
+}
+
+fn build_ir_rc6(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Rc6::new)
+}
+
+fn build_ir_sirc(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Sirc::new)
+}
+
+fn build_wiegand(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Wiegand::new)
+}
+
+fn build_ps2(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Ps2::new)
+}
+
+fn build_am230x(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Am230x::new)
+}
+
+fn build_microwire(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Microwire::new)
+}
+
+fn build_eeprom93xx(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Eeprom93xx::new)
+}
+
+/// Every node type, by the name a description uses.
+pub const KINDS: &[Kind] = &[
+    Kind {
+        name: "spi",
+        manifest: include_str!("../manifests/spi.json"),
+        build: build_spi,
+        defaults: defaults_of::<SpiConfig>,
+        open: open_as::<SpiEvent>,
+    },
+    Kind {
+        name: "spi-nor",
+        manifest: include_str!("../manifests/spi-nor.json"),
+        build: build_spi_nor,
+        defaults: defaults_of::<SpiNorConfig>,
+        open: open_as::<NorEvent>,
+    },
+    Kind {
+        name: "i2s",
+        manifest: include_str!("../manifests/i2s.json"),
+        build: build_i2s,
+        defaults: defaults_of::<I2sConfig>,
+        open: open_as::<I2sEvent>,
+    },
+    Kind {
+        name: "pwm",
+        manifest: include_str!("../manifests/pwm.json"),
+        build: build_pwm,
+        defaults: defaults_of::<PwmConfig>,
+        open: open_as::<PwmEvent>,
+    },
+    Kind {
+        name: "timing",
+        manifest: include_str!("../manifests/timing.json"),
+        build: build_timing,
+        defaults: defaults_of::<TimingConfig>,
+        open: open_as::<TimingEvent>,
+    },
+    Kind {
+        name: "parallel",
+        manifest: include_str!("../manifests/parallel.json"),
+        build: build_parallel,
+        defaults: defaults_of::<ParallelConfig>,
+        open: open_as::<ParallelEvent>,
+    },
+    Kind {
+        name: "uart",
+        manifest: include_str!("../manifests/uart.json"),
+        build: build_uart,
+        defaults: defaults_of::<UartConfig>,
+        open: open_as::<UartEvent>,
+    },
+    Kind {
+        name: "modbus-rtu",
+        manifest: include_str!("../manifests/modbus-rtu.json"),
+        build: build_modbus_rtu,
+        defaults: no_defaults,
+        open: open_as::<ModbusEvent>,
+    },
+    Kind {
+        name: "i2c",
+        manifest: include_str!("../manifests/i2c.json"),
+        build: build_i2c,
+        defaults: defaults_of::<I2cConfig>,
+        open: open_as::<I2cEvent>,
+    },
+    Kind {
+        name: "eeprom24xx",
+        manifest: include_str!("../manifests/eeprom24xx.json"),
+        build: build_eeprom24xx,
+        defaults: defaults_of::<Eeprom24xxConfig>,
+        open: open_as::<EepromEvent>,
+    },
+    Kind {
+        name: "jtag",
+        manifest: include_str!("../manifests/jtag.json"),
+        build: build_jtag,
+        defaults: defaults_of::<JtagConfig>,
+        open: open_as::<JtagEvent>,
+    },
+    Kind {
+        name: "swd",
+        manifest: include_str!("../manifests/swd.json"),
+        build: build_swd,
+        defaults: defaults_of::<SwdConfig>,
+        open: open_as::<SwdEvent>,
+    },
+    Kind {
+        name: "sdcard-spi",
+        manifest: include_str!("../manifests/sdcard-spi.json"),
+        build: build_sdcard_spi,
+        defaults: defaults_of::<SdCardSpiConfig>,
+        open: open_as::<SdEvent>,
+    },
+    Kind {
+        name: "can",
+        manifest: include_str!("../manifests/can.json"),
+        build: build_can,
+        defaults: defaults_of::<CanConfig>,
+        open: open_as::<CanEvent>,
+    },
+    Kind {
+        name: "onewire-link",
+        manifest: include_str!("../manifests/onewire-link.json"),
+        build: build_onewire_link,
+        defaults: defaults_of::<LinkConfig>,
+        open: open_as::<LinkEvent>,
+    },
+    Kind {
+        name: "onewire",
+        manifest: include_str!("../manifests/onewire.json"),
+        build: build_onewire,
+        defaults: no_defaults,
+        open: open_as::<OneWireEvent>,
+    },
+    Kind {
+        name: "ds18b20",
+        manifest: include_str!("../manifests/ds18b20.json"),
+        build: build_ds18b20,
+        defaults: no_defaults,
+        open: open_as::<Ds18b20Event>,
+    },
+    Kind {
+        name: "usb",
+        manifest: include_str!("../manifests/usb.json"),
+        build: build_usb,
+        defaults: defaults_of::<UsbConfig>,
+        open: open_as::<UsbEvent>,
+    },
+    Kind {
+        name: "usb-transactions",
+        manifest: include_str!("../manifests/usb-transactions.json"),
+        build: build_usb_transactions,
+        defaults: no_defaults,
+        open: open_as::<TransactionEvent>,
+    },
+    Kind {
+        name: "lin",
+        manifest: include_str!("../manifests/lin.json"),
+        build: build_lin,
+        defaults: defaults_of::<LinConfig>,
+        open: open_as::<LinEvent>,
+    },
+    Kind {
+        name: "midi",
+        manifest: include_str!("../manifests/midi.json"),
+        build: build_midi,
+        defaults: no_defaults,
+        open: open_as::<MidiEvent>,
+    },
+    Kind {
+        name: "ws281x",
+        manifest: include_str!("../manifests/ws281x.json"),
+        build: build_ws281x,
+        defaults: defaults_of::<Ws281xConfig>,
+        open: open_as::<Ws281xEvent>,
+    },
+    Kind {
+        name: "dmx512",
+        manifest: include_str!("../manifests/dmx512.json"),
+        build: build_dmx512,
+        defaults: no_defaults,
+        open: open_as::<Dmx512Event>,
+    },
+    Kind {
+        name: "apa102",
+        manifest: include_str!("../manifests/apa102.json"),
+        build: build_apa102,
+        defaults: no_defaults,
+        open: open_as::<Apa102Event>,
+    },
+    Kind {
+        name: "mdio",
+        manifest: include_str!("../manifests/mdio.json"),
+        build: build_mdio,
+        defaults: defaults_of::<MdioConfig>,
+        open: open_as::<MdioEvent>,
+    },
+    Kind {
+        name: "avr-isp",
+        manifest: include_str!("../manifests/avr-isp.json"),
+        build: build_avr_isp,
+        defaults: no_defaults,
+        open: open_as::<IspEvent>,
+    },
+    Kind {
+        name: "nrf24l01",
+        manifest: include_str!("../manifests/nrf24l01.json"),
+        build: build_nrf24l01,
+        defaults: no_defaults,
+        open: open_as::<Nrf24Event>,
+    },
+    Kind {
+        name: "usb-pd",
+        manifest: include_str!("../manifests/usb-pd.json"),
+        build: build_usb_pd,
+        defaults: defaults_of::<UsbPdConfig>,
+        open: open_as::<UsbPdEvent>,
+    },
+    Kind {
+        name: "ir-nec",
+        manifest: include_str!("../manifests/ir-nec.json"),
+        build: build_ir_nec,
+        defaults: defaults_of::<NecConfig>,
+        open: open_as::<NecEvent>,
+    },
+    Kind {
+        name: "ir-rc5",
+        manifest: include_str!("../manifests/ir-rc5.json"),
+        build: build_ir_rc5,
+        defaults: defaults_of::<Rc5Config>,
+        open: open_as::<Rc5Event>,
+    },
+    Kind {
+        name: "ir-rc6",
+        manifest: include_str!("../manifests/ir-rc6.json"),
+        build: build_ir_rc6,
+        defaults: defaults_of::<Rc6Config>,
+        open: open_as::<Rc6Event>,
+    },
+    Kind {
+        name: "ir-sirc",
+        manifest: include_str!("../manifests/ir-sirc.json"),
+        build: build_ir_sirc,
+        defaults: defaults_of::<SircConfig>,
+        open: open_as::<SircEvent>,
+    },
+    Kind {
+        name: "wiegand",
+        manifest: include_str!("../manifests/wiegand.json"),
+        build: build_wiegand,
+        defaults: defaults_of::<WiegandConfig>,
+        open: open_as::<WiegandEvent>,
+    },
+    Kind {
+        name: "ps2",
+        manifest: include_str!("../manifests/ps2.json"),
+        build: build_ps2,
+        defaults: defaults_of::<Ps2Config>,
+        open: open_as::<Ps2Event>,
+    },
+    Kind {
+        name: "am230x",
+        manifest: include_str!("../manifests/am230x.json"),
+        build: build_am230x,
+        defaults: defaults_of::<Am230xConfig>,
+        open: open_as::<Am230xEvent>,
+    },
+    Kind {
+        name: "microwire",
+        manifest: include_str!("../manifests/microwire.json"),
+        build: build_microwire,
+        defaults: defaults_of::<MicrowireConfig>,
+        open: open_as::<MicrowireEvent>,
+    },
+    Kind {
+        name: "eeprom93xx",
+        manifest: include_str!("../manifests/eeprom93xx.json"),
+        build: build_eeprom93xx,
+        defaults: defaults_of::<Eeprom93xxConfig>,
+        open: open_as::<Eeprom93xxEvent>,
+    },
+];

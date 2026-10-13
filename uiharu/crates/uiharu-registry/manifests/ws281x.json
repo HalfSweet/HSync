@@ -1,0 +1,35 @@
+{
+  "name": "ws281x",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ws281x.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "bits_per_led",
+      "kind": "integer"
+    },
+    {
+      "name": "threshold_ns",
+      "kind": "integer"
+    },
+    {
+      "name": "reset_us",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

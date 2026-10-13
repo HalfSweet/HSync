@@ -1,0 +1,27 @@
+{
+  "name": "ps2",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ps2.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    }
+  ],
+  "events": []
+}

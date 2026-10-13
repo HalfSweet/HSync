@@ -1,0 +1,44 @@
+{
+  "name": "can",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "can.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "rx",
+      "kind": "channel"
+    },
+    {
+      "name": "dominant_low",
+      "kind": "bool"
+    },
+    {
+      "name": "bitrate",
+      "kind": "integer"
+    },
+    {
+      "name": "fd_bitrate",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "sample_point",
+      "kind": "integer"
+    },
+    {
+      "name": "fd",
+      "kind": "bool"
+    }
+  ],
+  "events": []
+}

@@ -1,0 +1,28 @@
+{
+  "name": "parallel",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "parallel.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channels"
+    },
+    {
+      "name": "clock",
+      "kind": "channel",
+      "optional": true
+    }
+  ],
+  "events": []
+}

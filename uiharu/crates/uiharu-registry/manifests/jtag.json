@@ -1,0 +1,45 @@
+{
+  "name": "jtag",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "jtag.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "tck",
+      "kind": "integer"
+    },
+    {
+      "name": "tms",
+      "kind": "integer"
+    },
+    {
+      "name": "tdi",
+      "kind": "integer"
+    },
+    {
+      "name": "tdo",
+      "kind": "integer"
+    },
+    {
+      "name": "trst",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "initial_state",
+      "kind": "enum",
+      "values": ["unknown"]
+    }
+  ],
+  "events": []
+}

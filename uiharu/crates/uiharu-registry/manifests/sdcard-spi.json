@@ -1,0 +1,23 @@
+{
+  "name": "sdcard-spi",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "sdcard.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "block_length",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

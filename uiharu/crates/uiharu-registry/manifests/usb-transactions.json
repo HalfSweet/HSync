@@ -1,0 +1,18 @@
+{
+  "name": "usb-transactions",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "packets",
+      "schema": "usb.packets"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "transactions",
+      "schema": "usb.transactions"
+    }
+  ],
+  "config": [],
+  "events": []
+}

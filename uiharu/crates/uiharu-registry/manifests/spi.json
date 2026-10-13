@@ -1,0 +1,52 @@
+{
+  "name": "spi",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "spi.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "cs",
+      "kind": "channel"
+    },
+    {
+      "name": "mosi",
+      "kind": "channel"
+    },
+    {
+      "name": "miso",
+      "kind": "channel"
+    },
+    {
+      "name": "mode",
+      "kind": "integer"
+    },
+    {
+      "name": "word_bits",
+      "kind": "integer"
+    },
+    {
+      "name": "bit_order",
+      "kind": "enum",
+      "values": ["msb-first"]
+    },
+    {
+      "name": "cs_active_low",
+      "kind": "bool"
+    }
+  ],
+  "events": []
+}

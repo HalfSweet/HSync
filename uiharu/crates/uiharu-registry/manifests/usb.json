@@ -1,0 +1,32 @@
+{
+  "name": "usb",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "packets",
+      "schema": "usb.packets"
+    }
+  ],
+  "config": [
+    {
+      "name": "dp",
+      "kind": "integer"
+    },
+    {
+      "name": "dm",
+      "kind": "integer"
+    },
+    {
+      "name": "speed",
+      "kind": "enum",
+      "values": ["full"]
+    }
+  ],
+  "events": []
+}

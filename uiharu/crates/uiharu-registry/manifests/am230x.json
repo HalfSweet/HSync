@@ -1,0 +1,32 @@
+{
+  "name": "am230x",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "am230x.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "model",
+      "kind": "enum",
+      "values": ["am2302"]
+    },
+    {
+      "name": "tolerance",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

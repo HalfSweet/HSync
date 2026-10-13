@@ -1,0 +1,32 @@
+{
+  "name": "ir-nec",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "nec.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "channel",
+      "kind": "channel"
+    },
+    {
+      "name": "polarity",
+      "kind": "enum",
+      "values": ["active-low"]
+    },
+    {
+      "name": "tolerance",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

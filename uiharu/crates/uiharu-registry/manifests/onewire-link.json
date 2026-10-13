@@ -1,0 +1,28 @@
+{
+  "name": "onewire-link",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "onewire.link"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "speed",
+      "kind": "enum",
+      "values": ["standard"]
+    }
+  ],
+  "events": []
+}

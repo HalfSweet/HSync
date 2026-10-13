@@ -1,0 +1,28 @@
+{
+  "name": "eeprom24xx",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "i2c.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "operations",
+      "schema": "eeprom24xx.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address_bytes",
+      "kind": "integer"
+    },
+    {
+      "name": "device_address",
+      "kind": "channel",
+      "optional": true
+    }
+  ],
+  "events": []
+}

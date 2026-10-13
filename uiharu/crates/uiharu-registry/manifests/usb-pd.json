@@ -1,0 +1,31 @@
+{
+  "name": "usb-pd",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "usbpd.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "cc",
+      "kind": "channel"
+    },
+    {
+      "name": "bit_rate",
+      "kind": "integer"
+    },
+    {
+      "name": "tolerance",
+      "kind": "integer"
+    }
+  ],
+  "events": []
+}

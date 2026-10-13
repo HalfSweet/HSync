@@ -1,0 +1,28 @@
+{
+  "name": "pwm",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "pwm.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "channel",
+      "kind": "channel"
+    },
+    {
+      "name": "polarity",
+      "kind": "enum",
+      "values": ["active-high"]
+    }
+  ],
+  "events": []
+}
