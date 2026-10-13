@@ -29,22 +29,62 @@ const isNumbers = (value: unknown): value is number[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'number')
 
 /** Fields that count or number things rather than carry what the bus said. */
-const COUNTERS = new Set(['tx', 'index', 'op', 'seq', 'frame', 'packet', 'pkt'])
+const COUNTERS = new Set(['tx', 'index', 'op', 'seq', 'frame', 'packet', 'pkt', 'xact'])
 
 /**
- * The field a block shows beside the kind: the first number or byte array that is not a
- * counter, else any number or byte array, else the first string; nothing for an event of
- * booleans alone.
+ * Fields that measure or count — ticks, bits, lengths, offsets, currents — and so read in
+ * decimal whatever the number format, which is for what the bus carried (values, bytes,
+ * addresses, identifiers).
  */
-export function primaryField(payload: Record<string, unknown>): [string, unknown] | null {
+const QUANTITIES = new Set([
+  ...COUNTERS,
+  'offset',
+  'length',
+  'dlc',
+  'bits',
+  'ticks',
+  'count',
+  'slot',
+  'slots',
+  'leds',
+  'position',
+  'objects',
+  'resolution',
+  'revision',
+  'milliamps',
+  'millivolts',
+  'milliwatts',
+  'maximum',
+  'operating',
+  'sincePrevious',
+  'channel',
+  'endpoint',
+  'clause',
+])
+
+/** Whether a field is a quantity rather than a word the bus carried. */
+export function isQuantity(name: string): boolean {
+  return QUANTITIES.has(name) || /(Ticks|Bits|Count|Number|Size|Millivolts|Milliamps)$/.test(name)
+}
+
+/**
+ * The fields a block shows beside the kind, at most `limit` of them: the numbers and byte
+ * arrays that are not counters (the two lines of an SPI word, the one value of a UART
+ * frame), else the first counter, else the first string; nothing for an event of booleans
+ * alone.
+ */
+export function primaryFields(payload: Record<string, unknown>, limit = 2): [string, unknown][] {
   const fields = payloadFields(payload)
   const numeric = fields.filter(([, value]) => typeof value === 'number' || isNumbers(value))
-  return (
-    numeric.find(([name]) => !COUNTERS.has(name)) ??
-    numeric[0] ??
-    fields.find(([, value]) => typeof value === 'string') ??
-    null
-  )
+  const main = numeric.filter(([name]) => !COUNTERS.has(name)).slice(0, limit)
+  if (main.length > 0) return main
+  const fallback = numeric[0] ?? fields.find(([, value]) => typeof value === 'string')
+  return fallback ? [fallback] : []
+}
+
+/** The first of [`primaryFields`], or nothing. */
+export function primaryField(payload: Record<string, unknown>): [string, unknown] | null {
+  return primaryFields(payload, 1)[0] ?? null
 }
 
 /** A field's value as shown. */
@@ -55,7 +95,7 @@ export function valueText(
   wording: Wording,
 ): string {
   if (value === null || value === undefined) return wording.none
-  if (typeof value === 'number') return formatNumber(value, format)
+  if (typeof value === 'number') return formatNumber(value, isQuantity(field) ? 'dec' : format)
   if (typeof value === 'boolean') return value ? wording.yes : wording.no
   if (typeof value === 'string') return wording.enumValue(field, value)
   if (isNumbers(value)) return value.map((item) => formatNumber(item, format)).join(' ')
