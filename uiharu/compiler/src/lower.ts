@@ -320,6 +320,14 @@ export class Lowerer {
       }
       const compound = COMPOUND_OPS[op]
       if (compound) {
+        // A narrowed option is written as a whole: its new value is computed from the binding.
+        const key = this.key(bare.left)
+        if (key !== undefined && this.narrowing(key)?.kind === 'some') {
+          const current = this.expr(bare.left)
+          const right = this.expr(bare.right)
+          const value: Expr = { expr: 'binary', op: compound, left: current, right }
+          return { stmt: 'assign', target: this.target(bare.left), value }
+        }
         const value = this.expr(bare.right)
         return { stmt: 'assign', target: this.target(bare.left), op: compound, value }
       }
@@ -472,12 +480,10 @@ export class Lowerer {
     return [stmt]
   }
 
-  /** The name an option's value is bound to: the place's own name, unless taken. */
+  /** The name an option's value is bound to: the place's own name, unless taken — a local
+   * narrowed gets a new name, so that the IR tells its value from the local itself. */
   private bindName(place: ts.Expression): string {
-    const bare = unparen(place)
-    // A local shadows itself, as TypeScript narrows it.
-    if (ts.isIdentifier(bare)) return bare.text
-    return this.fresh(this.leaf(bare))
+    return this.fresh(this.leaf(unparen(place)))
   }
 
   /** Runs `f` in a scope where `place` is narrowed, with `declare` (the bound local, if

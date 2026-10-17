@@ -1409,7 +1409,7 @@
               "expr": "local",
               "name": "wanted"
             },
-            "bind": "wanted",
+            "bind": "wanted_2",
             "then": [
               {
                 "stmt": "let",
@@ -1495,7 +1495,7 @@
                     },
                     "right": {
                       "expr": "local",
-                      "name": "wanted"
+                      "name": "wanted_2"
                     }
                   },
                   "then": {
@@ -1655,7 +1655,7 @@
             "body": [
               {
                 "stmt": "let-some",
-                "bind": "point",
+                "bind": "point_2",
                 "value": {
                   "expr": "local",
                   "name": "point"
@@ -1681,7 +1681,7 @@
                       },
                       {
                         "expr": "local",
-                        "name": "point"
+                        "name": "point_2"
                       }
                     ]
                   }
@@ -1745,7 +1745,7 @@
                   },
                   "right": {
                     "expr": "local",
-                    "name": "point"
+                    "name": "point_2"
                   }
                 }
               }
@@ -1995,7 +1995,7 @@
           },
           {
             "stmt": "let-some",
-            "bind": "timing",
+            "bind": "timing_2",
             "value": {
               "expr": "local",
               "name": "timing"
@@ -2071,7 +2071,7 @@
                     "args": [
                       {
                         "expr": "local",
-                        "name": "timing"
+                        "name": "timing_2"
                       },
                       {
                         "expr": "field",
@@ -2104,7 +2104,7 @@
                   "expr": "local",
                   "name": "found"
                 },
-                "bind": "found",
+                "bind": "found_2",
                 "then": [
                   {
                     "stmt": "expr",
@@ -2116,7 +2116,7 @@
                           "expr": "field",
                           "of": {
                             "expr": "local",
-                            "name": "found"
+                            "name": "found_2"
                           },
                           "name": "event"
                         },
@@ -2124,7 +2124,7 @@
                           "expr": "field",
                           "of": {
                             "expr": "local",
-                            "name": "found"
+                            "name": "found_2"
                           },
                           "name": "at"
                         }
