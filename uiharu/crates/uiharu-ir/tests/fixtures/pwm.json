@@ -1,0 +1,320 @@
+{
+  "ir": 1,
+  "name": "pwm",
+  "types": [
+    {
+      "name": "PwmEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "cycle",
+          "fields": [
+            { "name": "periodTicks", "type": "u64" },
+            { "name": "activeTicks", "type": "u64" }
+          ]
+        }
+      ]
+    },
+    { "name": "Polarity", "type": "enum", "variants": ["active-high", "active-low"] },
+    {
+      "name": "PwmConfig",
+      "type": "record",
+      "fields": [
+        { "name": "channel", "type": "u8", "channel": true },
+        { "name": "polarity", "type": "Polarity" }
+      ]
+    }
+  ],
+  "contracts": [{ "schema": { "name": "pwm.events", "version": 1 }, "event": "PwmEvent" }],
+  "functions": [
+    {
+      "name": "isActive",
+      "params": [
+        { "name": "polarity", "type": "Polarity" },
+        { "name": "high", "type": "bool" }
+      ],
+      "ret": "bool",
+      "body": [
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "binary",
+            "op": "eq",
+            "left": { "expr": "local", "name": "high" },
+            "right": {
+              "expr": "binary",
+              "op": "eq",
+              "left": { "expr": "local", "name": "polarity" },
+              "right": { "expr": "enum", "type": "Polarity", "value": "active-high" }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "validate",
+      "params": [{ "name": "config", "type": "PwmConfig" }],
+      "ret": { "option": "text" },
+      "body": [
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "ternary",
+            "cond": {
+              "expr": "binary",
+              "op": "ge",
+              "left": {
+                "expr": "field",
+                "of": { "expr": "local", "name": "config" },
+                "name": "channel"
+              },
+              "right": { "expr": "intrinsic", "name": "max-channels", "args": [] }
+            },
+            "then": {
+              "expr": "format",
+              "parts": [
+                { "expr": "text", "value": "channel " },
+                { "expr": "field", "of": { "expr": "local", "name": "config" }, "name": "channel" },
+                { "expr": "text", "value": " is out of range; channels are 0 to " },
+                {
+                  "expr": "binary",
+                  "op": "sub",
+                  "left": { "expr": "intrinsic", "name": "max-channels", "args": [] },
+                  "right": { "expr": "lit", "value": 1 }
+                }
+              ]
+            },
+            "else": { "expr": "none" }
+          }
+        }
+      ]
+    }
+  ],
+  "decoder": {
+    "name": "pwm",
+    "category": "line",
+    "config": {
+      "type": "PwmConfig",
+      "defaults": { "channel": 0, "polarity": "active-high" },
+      "validate": "validate"
+    },
+    "input": { "kind": "logic" },
+    "requires": [
+      {
+        "key": "channels",
+        "requirement": "at-least",
+        "values": [
+          {
+            "expr": "binary",
+            "op": "add",
+            "left": {
+              "expr": "field",
+              "of": { "expr": "local", "name": "config" },
+              "name": "channel"
+            },
+            "right": { "expr": "lit", "value": 1 }
+          }
+        ]
+      }
+    ],
+    "output": { "schema": { "name": "pwm.events", "version": 1 } },
+    "props": [
+      {
+        "key": "polarity",
+        "value": {
+          "expr": "field",
+          "of": { "expr": "local", "name": "config" },
+          "name": "polarity"
+        }
+      }
+    ],
+    "state": [
+      {
+        "name": "watch",
+        "type": "mask",
+        "init": {
+          "expr": "intrinsic",
+          "name": "mask",
+          "args": [
+            { "expr": "field", "of": { "expr": "self", "field": "config" }, "name": "channel" }
+          ]
+        },
+        "readonly": true
+      },
+      { "name": "leading", "type": { "option": "u64" }, "init": { "expr": "none" } },
+      { "name": "trailing", "type": { "option": "u64" }, "init": { "expr": "none" } }
+    ],
+    "methods": [
+      {
+        "name": "hold",
+        "ret": { "option": "u64" },
+        "body": [{ "stmt": "return", "value": { "expr": "self", "field": "leading" } }]
+      },
+      {
+        "name": "onGap",
+        "params": [{ "name": "range", "type": "range" }],
+        "body": [
+          {
+            "stmt": "assign",
+            "target": { "expr": "self", "field": "leading" },
+            "value": { "expr": "none" }
+          },
+          {
+            "stmt": "assign",
+            "target": { "expr": "self", "field": "trailing" },
+            "value": { "expr": "none" }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "async": true,
+        "body": [
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "edge",
+                "value": {
+                  "expr": "await",
+                  "op": { "op": "next-change", "mask": { "expr": "self", "field": "watch" } }
+                }
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "unary",
+                  "op": "not",
+                  "value": {
+                    "expr": "call",
+                    "name": "isActive",
+                    "args": [
+                      {
+                        "expr": "field",
+                        "of": { "expr": "self", "field": "config" },
+                        "name": "polarity"
+                      },
+                      {
+                        "expr": "intrinsic",
+                        "name": "levels-high",
+                        "args": [
+                          {
+                            "expr": "field",
+                            "of": { "expr": "local", "name": "edge" },
+                            "name": "levels"
+                          },
+                          {
+                            "expr": "field",
+                            "of": { "expr": "self", "field": "config" },
+                            "name": "channel"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "if-some",
+                    "value": { "expr": "self", "field": "leading" },
+                    "bind": "leading",
+                    "then": [
+                      {
+                        "stmt": "assign",
+                        "target": { "expr": "self", "field": "trailing" },
+                        "value": {
+                          "expr": "field",
+                          "of": { "expr": "local", "name": "edge" },
+                          "name": "tick"
+                        }
+                      }
+                    ]
+                  },
+                  { "stmt": "continue" }
+                ]
+              },
+              {
+                "stmt": "if-some",
+                "value": { "expr": "self", "field": "leading" },
+                "bind": "leading",
+                "then": [
+                  {
+                    "stmt": "if-some",
+                    "value": { "expr": "self", "field": "trailing" },
+                    "bind": "trailing",
+                    "then": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "PwmEvent",
+                              "kind": "cycle",
+                              "fields": {
+                                "periodTicks": {
+                                  "expr": "binary",
+                                  "op": "sub",
+                                  "left": {
+                                    "expr": "field",
+                                    "of": { "expr": "local", "name": "edge" },
+                                    "name": "tick"
+                                  },
+                                  "right": { "expr": "local", "name": "leading" }
+                                },
+                                "activeTicks": {
+                                  "expr": "binary",
+                                  "op": "sub",
+                                  "left": { "expr": "local", "name": "trailing" },
+                                  "right": { "expr": "local", "name": "leading" }
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "intrinsic",
+                              "name": "over",
+                              "args": [
+                                { "expr": "local", "name": "leading" },
+                                {
+                                  "expr": "field",
+                                  "of": { "expr": "local", "name": "edge" },
+                                  "name": "tick"
+                                },
+                                {
+                                  "expr": "field",
+                                  "of": { "expr": "local", "name": "edge" },
+                                  "name": "tick"
+                                }
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "stmt": "assign",
+                "target": { "expr": "self", "field": "leading" },
+                "value": {
+                  "expr": "field",
+                  "of": { "expr": "local", "name": "edge" },
+                  "name": "tick"
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": { "expr": "self", "field": "trailing" },
+                "value": { "expr": "none" }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
