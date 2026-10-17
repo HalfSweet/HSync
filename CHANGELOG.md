@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 (2026-10-17)
+
+### Features
+
+- **uiharu:** Define the decoder DSL and its IR (#32) ([0267fde](https://github.com/HalfSweet/HSync/commit/0267fde20bcdb4c243172a91234d7d3ae1331781))
+- **uiharu:** Lower the decoder DSL to the IR (#33) ([42ba615](https://github.com/HalfSweet/HSync/commit/42ba615b377d9a744d5512bd23d064f76f583bb4))
+- **uiharu:** Emit Rust from the decoder IR (#34) ([076f0e2](https://github.com/HalfSweet/HSync/commit/076f0e21528b5470d363f49c7fc3f2dd96518d59))
+- **uiharu:** Decode PWM, SPI, SPI NOR and UART from the DSL (#35) ([1a4157a](https://github.com/HalfSweet/HSync/commit/1a4157a88e43e19397496fe7efba49d4a2187935))
+- **uiharu:** Declare hand-written decoders' contracts in the DSL (#36) ([6e67839](https://github.com/HalfSweet/HSync/commit/6e67839dd0030d185649611860f20bb847688b17))
+
 ## 0.2.0 (2026-10-13)
 
 ### Features
