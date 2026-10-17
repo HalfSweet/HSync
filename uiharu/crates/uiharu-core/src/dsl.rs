@@ -811,15 +811,17 @@ pub async fn run_logic<D: LogicDecoder>(
     loop {
         match decoder.run(&mut io).await {
             Ok(()) => return pass_through_logic(&mut io).await,
+            // Progress is announced up to the cut, held back to what the body had under way
+            // when it was cut — before the hook forgets it.
             Err(Cut::Gap(range)) => {
-                decoder.on_gap(&mut io, range).await;
                 let held = held(decoder.hold(), range.start);
+                decoder.on_gap(&mut io, range).await;
                 io.out.progress(held).await;
                 io.out.gap(range).await;
             }
             Err(Cut::End(tick)) => {
-                decoder.on_end(&mut io, tick.0).await;
                 let held = held(decoder.hold(), tick);
+                decoder.on_end(&mut io, tick.0).await;
                 io.out.progress(held).await;
                 io.out.end(tick).await;
                 return;
@@ -930,15 +932,17 @@ pub async fn run_stream<D: StreamDecoder>(
                     }
                 }
             },
+            // Progress is announced up to the cut, held back to what the body had under way
+            // when it was cut — before the hook forgets it.
             Err(Cut::Gap(range)) => {
-                decoder.on_gap(&mut io, range).await;
                 let held = held(decoder.hold(), range.start);
+                decoder.on_gap(&mut io, range).await;
                 io.out.progress(held).await;
                 io.out.gap(range).await;
             }
             Err(Cut::End(tick)) => {
-                decoder.on_end(&mut io, tick.0).await;
                 let held = held(decoder.hold(), tick);
+                decoder.on_end(&mut io, tick.0).await;
                 io.out.progress(held).await;
                 io.out.end(tick).await;
                 return;
