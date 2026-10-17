@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { i18n } from '@/i18n'
 import type { AvailableUpdate } from '@/ipc/backend'
+import type { ModuleInfo } from '@/ipc/bindings/ModuleInfo'
+import { useDecodeStore } from '@/stores/decode'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useSettingsStore } from '@/stores/settings'
 import { useUpdateStore } from '@/stores/update'
@@ -16,8 +18,15 @@ const backend = {
   revealLog: vi.fn(() => Promise.resolve()),
   updateCheck: vi.fn<() => Promise<AvailableUpdate | null>>(() => Promise.resolve(null)),
   updateInstall: vi.fn(() => Promise.resolve()),
+  decodeCatalog: vi.fn(() => Promise.resolve([])),
+  decodeLoadModule: vi.fn<(path: string) => Promise<ModuleInfo>>((path) =>
+    Promise.resolve({ name: 'uart', path, category: 'bus', shadows: true }),
+  ),
+  decodeUnloadModule: vi.fn(() => Promise.resolve(true)),
 }
 vi.mock('@/ipc/backend', () => ({ getBackend: () => Promise.resolve(backend) }))
+const picked = vi.fn<() => Promise<string | null>>(() => Promise.resolve(null))
+vi.mock('@/ipc/dialogs', () => ({ pickFile: () => picked() }))
 
 async function page() {
   const settings = useSettingsStore()
@@ -65,6 +74,50 @@ describe('settings page', () => {
     expect(usePreferencesStore().wheelZoom).toBe(false)
     await option?.find('input').setValue(true)
     expect(usePreferencesStore().wheelZoom).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('loads decoder modules from Decoders, remembers them and lets them go', async () => {
+    localStorage.clear()
+    const { wrapper, settings } = await page()
+    await tab(wrapper, 'Decoders')?.trigger('click')
+    expect(settings.section).toBe('decoders')
+    const panel = () => wrapper.find('[role="tabpanel"]')
+    expect(panel().text()).toContain('No decoder module is loaded')
+
+    picked.mockResolvedValueOnce('/decoders/uart.json')
+    const load = panel()
+      .findAll('button')
+      .find((one) => one.text() === 'Load module…')
+    await load?.trigger('click')
+    await flushPromises()
+    expect(backend.decodeLoadModule).toHaveBeenCalledWith('/decoders/uart.json')
+    expect(panel().text()).toContain('UART')
+    expect(panel().text()).toContain('Stands in for the built-in UART decoder')
+    expect(usePreferencesStore().decoderModules).toEqual(['/decoders/uart.json'])
+    expect(useDecodeStore().modules.map((entry) => entry.info?.name)).toEqual(['uart'])
+
+    backend.decodeLoadModule.mockRejectedValueOnce({
+      code: 'error.decode.module',
+      params: { path: '/decoders/bad.json', detail: 'the module does not parse' },
+    })
+    picked.mockResolvedValueOnce('/decoders/bad.json')
+    await load?.trigger('click')
+    await flushPromises()
+    expect(panel().find('[role="alert"]').text()).toBe(
+      'The decoder module cannot be loaded: the module does not parse',
+    )
+    expect(usePreferencesStore().decoderModules).toEqual(['/decoders/uart.json'])
+
+    const remove = panel()
+      .findAll('button')
+      .filter((one) => one.text() === 'Remove')
+    expect(remove).toHaveLength(2)
+    await remove[0]?.trigger('click')
+    await flushPromises()
+    expect(backend.decodeUnloadModule).toHaveBeenCalledWith('uart')
+    expect(usePreferencesStore().decoderModules).toEqual([])
+    expect(panel().text()).not.toContain('UART')
     wrapper.unmount()
   })
 

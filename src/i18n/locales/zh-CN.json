@@ -1481,7 +1481,8 @@
     "save": "保存",
     "remove": "移除",
     "cancel": "取消",
-    "edit": "修改解码设置"
+    "edit": "修改解码设置",
+    "loadedFrom": "从 {file} 加载"
   },
   "stream": {
     "title": "数据流",
@@ -1544,6 +1545,7 @@
     "sections": {
       "appearance": "外观",
       "behaviour": "行为",
+      "decoders": "解码器",
       "diagnostics": "诊断",
       "about": "关于"
     },
@@ -1579,6 +1581,15 @@
       "wheelZoom": "滚轮直接缩放波形",
       "keepStopped": "重复模式下停止后显示最新数据",
       "checkUpdates": "启动时检查更新"
+    },
+    "decoders": {
+      "intro": "用 HSync 的 DSL 编写的解码器可以与内置解码器一起使用：加载编译器（pnpm dsl:compile）写出的模块文件。与内置解码器同名的模块在加载期间会替代它，当前采集也会用它重新解码。",
+      "load": "加载模块…",
+      "filter": "解码器模块",
+      "empty": "尚未加载解码器模块。",
+      "remove": "移除",
+      "replaces": "替代内置的 {name} 解码器",
+      "loading": "加载中…"
     },
     "diagnostics": {
       "level": "日志级别",
@@ -1655,7 +1666,8 @@
     "decode": {
       "invalid": "解码器无法使用：{detail}",
       "missingChannels": "解码器需要采集里没有的通道：{channels}",
-      "failed": "解码中断：{detail}"
+      "failed": "解码中断：{detail}",
+      "module": "无法加载解码器模块：{detail}"
     },
     "update": {
       "check": "检查更新失败：{detail}",
