@@ -22,9 +22,11 @@ use hsync_capture::{CaptureInfo, LogicCapture};
 use hsync_core::{ChannelIndex, SampleIndex};
 use hsync_driver::CapturePreset;
 use hsync_fileio::ImportedCapture;
+use indexmap::IndexMap;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+use uiharu_registry::Catalog;
 
 pub use bins::{BINS_FORMAT_VERSION, BinsRequest, encode_bins};
 pub use decoding::{
@@ -32,7 +34,8 @@ pub use decoding::{
     SearchResult, StreamLanes, StreamPage, StreamStatus,
 };
 pub use entry::{
-    CatalogEntry, CatalogEvent, CatalogField, CatalogFieldKind, CatalogPort, DecoderEntry, catalog,
+    CatalogEntry, CatalogEvent, CatalogField, CatalogFieldKind, CatalogPort, DecoderEntry,
+    ModuleInfo, catalog,
 };
 pub use error::SessionError;
 pub use files::{ExportKind, ExportRequest, ExportSource, read_text, write_text};
@@ -197,6 +200,10 @@ pub struct Workspace {
     held: Option<OpenCapture>,
     last_id: u64,
     events: Option<EventSink>,
+    /// The node types decoders may name: the engine's and the modules loaded.
+    catalog: Catalog,
+    /// The modules loaded, by name, in the order they were.
+    modules: IndexMap<String, ModuleInfo>,
 }
 
 impl std::fmt::Debug for Workspace {
@@ -344,6 +351,7 @@ impl Workspace {
         };
         let decoding = DecodeSet::start(
             decoders.as_ref(),
+            &self.catalog,
             &capture,
             position,
             self.last_id,
@@ -445,6 +453,7 @@ impl Workspace {
         }
         let decoding = DecodeSet::start(
             decoders.as_ref(),
+            &self.catalog,
             &samples,
             Position::default(),
             self.last_id,
@@ -486,6 +495,7 @@ impl Workspace {
         decoders: serde_json::Value,
     ) -> Result<CaptureSummary, SessionError> {
         let events = self.events.clone();
+        let catalog = self.catalog.clone();
         let open = self.find_mut(id)?;
         let decoders = normalize_decoders(Some(decoders));
         // Only how results are shown changed (labels, display settings): keep the results.
@@ -495,6 +505,7 @@ impl Workspace {
         }
         let decoding = DecodeSet::start(
             decoders.as_ref(),
+            &catalog,
             &open.capture,
             open.decoding.position(),
             id,
@@ -504,6 +515,80 @@ impl Workspace {
         open.decoders = decoders;
         open.decoding = decoding;
         Ok(summarize(open))
+    }
+
+    /// Loads the decoder module at `path` — a decoder written in the DSL, as its IR — under
+    /// the module's name, in place of a decoder of that name built in or loaded before; the
+    /// captures whose decoders name it decode again with it.
+    pub fn load_module(&mut self, path: &Path) -> Result<ModuleInfo, SessionError> {
+        let shown = path.to_string_lossy().into_owned();
+        let module = |detail: String| SessionError::Module {
+            path: shown.clone(),
+            detail,
+        };
+        let json = std::fs::read_to_string(path).map_err(|error| module(error.to_string()))?;
+        let loaded = self
+            .catalog
+            .load_json(&json)
+            .map_err(|error| module(error.to_string()))?;
+        let info = ModuleInfo {
+            name: loaded.name().to_owned(),
+            path: shown,
+            category: entry::category_name(loaded.manifest().category),
+            shadows: loaded.shadows_builtin(),
+        };
+        self.modules.shift_remove(&info.name);
+        self.modules.insert(info.name.clone(), info.clone());
+        self.restart_using(&info.name);
+        Ok(info)
+    }
+
+    /// Forgets the decoder module `name`; the captures whose decoders name it decode again
+    /// with the decoder built in, if there is one. Whether there was such a module.
+    pub fn unload_module(&mut self, name: &str) -> bool {
+        if self.modules.shift_remove(name).is_none() {
+            return false;
+        }
+        self.catalog.unload(name);
+        self.restart_using(name);
+        true
+    }
+
+    /// The decoder modules loaded, in the order they were.
+    pub fn modules(&self) -> Vec<ModuleInfo> {
+        self.modules.values().cloned().collect()
+    }
+
+    /// Every node type decoders may name, built in or loaded, with its manifest and defaults.
+    pub fn catalog(&self) -> Vec<CatalogEntry> {
+        entry::catalog_of(&self.catalog, |name| {
+            self.modules.get(name).map(|module| module.path.clone())
+        })
+    }
+
+    /// Decodes again the captures whose decoders name the node type `kind`, from where they
+    /// stand, with the node types as they are now.
+    fn restart_using(&mut self, kind: &str) {
+        let events = self.events.clone();
+        let catalog = self.catalog.clone();
+        for open in [self.current.as_mut(), self.held.as_mut()]
+            .into_iter()
+            .flatten()
+        {
+            if !open.decoding.uses(kind) {
+                continue;
+            }
+            let decoding = DecodeSet::start(
+                open.decoders.as_ref(),
+                &catalog,
+                &open.capture,
+                open.decoding.position(),
+                open.id,
+                events.clone(),
+            );
+            open.decoding.cancel();
+            open.decoding = decoding;
+        }
     }
 
     /// Renames channel `channel` of capture `id`; an empty name goes back to the channel number.
@@ -534,6 +619,7 @@ impl Workspace {
             capture: Arc::clone(&open.capture),
             channel_names: open.channel_names.clone(),
             decoders: open.decoders.clone(),
+            catalog: self.catalog.clone(),
             driver: open.driver.clone(),
             model: open.model.clone(),
             session: open.session.clone(),

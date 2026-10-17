@@ -55,6 +55,8 @@ pub struct ExportSource {
     pub(crate) capture: Arc<RwLock<LogicCapture>>,
     pub(crate) channel_names: BTreeMap<ChannelIndex, String>,
     pub(crate) decoders: Option<serde_json::Value>,
+    /// The node types the decoders name, to know which channels each reads.
+    pub(crate) catalog: uiharu_registry::Catalog,
     pub(crate) driver: String,
     pub(crate) model: String,
     pub(crate) session: Option<serde_json::Value>,
@@ -197,7 +199,7 @@ impl ExportSource {
                 .filter(|entry| {
                     DecoderEntry::parse(entry).is_ok_and(|entry| {
                         entry
-                            .channels()
+                            .channels(&self.catalog)
                             .iter()
                             .all(|index| channels.contains(index))
                     })

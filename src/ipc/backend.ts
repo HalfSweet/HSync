@@ -18,6 +18,7 @@ import type { Direction } from './bindings/Direction'
 import type { ExportRequest } from './bindings/ExportRequest'
 import type { ImportRequest } from './bindings/ImportRequest'
 import type { LiveStatus } from './bindings/LiveStatus'
+import type { ModuleInfo } from './bindings/ModuleInfo'
 import type { OptionKey } from './bindings/OptionKey'
 import type { OptionValue } from './bindings/OptionValue'
 import type { PatternCondition } from './bindings/PatternCondition'
@@ -143,8 +144,15 @@ export interface Backend {
   captureStart(request: CaptureRequest): Promise<CaptureSummary>
   captureStop(): Promise<void>
 
-  /** Every decoder there is, with its configuration fields and event kinds. */
+  /** Every decoder there is, built in or loaded, with its configuration fields and event kinds. */
   decodeCatalog(): Promise<CatalogEntry[]>
+  /** The decoder modules loaded, in the order they were. */
+  decodeModules(): Promise<ModuleInfo[]>
+  /** Loads a decoder module (a decoder written in the DSL, as its IR file) under its name, in
+   * place of a decoder of that name built in; the capture's decoders naming it decode again. */
+  decodeLoadModule(path: string): Promise<ModuleInfo>
+  /** Forgets a decoder module; the decoder built in takes over. Whether there was one. */
+  decodeUnloadModule(name: string): Promise<boolean>
 
   /** Which messages the app logs, and whether to the log file as well. */
   configureLog(level: LogLevel, file: boolean): Promise<void>
@@ -341,6 +349,18 @@ class TauriBackend implements Backend {
 
   decodeCatalog() {
     return invoke<CatalogEntry[]>('decode_catalog')
+  }
+
+  decodeModules() {
+    return invoke<ModuleInfo[]>('decode_modules')
+  }
+
+  decodeLoadModule(path: string) {
+    return invoke<ModuleInfo>('decode_load_module', { path })
+  }
+
+  decodeUnloadModule(name: string) {
+    return invoke<boolean>('decode_unload_module', { name })
   }
 
   configureLog(level: LogLevel, file: boolean) {

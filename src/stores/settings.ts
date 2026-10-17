@@ -5,7 +5,13 @@ import { shallowRef } from 'vue'
  * The settings page's sections, in the order its side bar lists them, About at its foot
  * (DESIGN.md §11).
  */
-export const SETTINGS_SECTIONS = ['appearance', 'behaviour', 'diagnostics', 'about'] as const
+export const SETTINGS_SECTIONS = [
+  'appearance',
+  'behaviour',
+  'decoders',
+  'diagnostics',
+  'about',
+] as const
 export type SettingsSection = (typeof SETTINGS_SECTIONS)[number]
 
 /** Whether the settings page is open, and the section it shows, kept for the next opening. */

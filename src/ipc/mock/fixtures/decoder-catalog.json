@@ -111,7 +111,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "spi-nor",
@@ -207,7 +208,8 @@
           "opcode"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "i2s",
@@ -304,7 +306,8 @@
           "complete"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "pwm",
@@ -351,7 +354,8 @@
           "activeTicks"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "timing",
@@ -399,7 +403,8 @@
           "sincePrevious"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "parallel",
@@ -466,7 +471,8 @@
           "initial"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "uart",
@@ -586,7 +592,8 @@
           "ticks"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "modbus-rtu",
@@ -638,7 +645,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "i2c",
@@ -714,7 +722,8 @@
           "droppedBits"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "eeprom24xx",
@@ -801,7 +810,8 @@
           "device"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "jtag",
@@ -911,7 +921,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "swd",
@@ -996,7 +1007,8 @@
           "to"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "sdcard-spi",
@@ -1086,7 +1098,8 @@
           "byte"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "can",
@@ -1218,7 +1231,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "onewire-link",
@@ -1276,7 +1290,8 @@
           "lowTicks"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "onewire",
@@ -1350,7 +1365,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "ds18b20",
@@ -1427,7 +1443,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "usb",
@@ -1557,7 +1574,8 @@
         "kind": "keep-alive",
         "fields": []
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "usb-transactions",
@@ -1620,7 +1638,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "lin",
@@ -1698,7 +1717,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "midi",
@@ -1767,7 +1787,8 @@
           "byte"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "ws281x",
@@ -1855,7 +1876,8 @@
           "bits"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "dmx512",
@@ -1911,7 +1933,8 @@
           "slot"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "apa102",
@@ -1963,7 +1986,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "mdio",
@@ -2017,7 +2041,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "avr-isp",
@@ -2064,7 +2089,8 @@
           "bytes"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "nrf24l01",
@@ -2119,7 +2145,8 @@
           "status"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "usb-pd",
@@ -2289,7 +2316,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "ir-nec",
@@ -2361,7 +2389,8 @@
           "raw"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "ir-rc5",
@@ -2428,7 +2457,8 @@
           "raw"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "ir-rc6",
@@ -2495,7 +2525,8 @@
           "raw"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "ir-sirc",
@@ -2562,7 +2593,8 @@
           "raw"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "wiegand",
@@ -2643,7 +2675,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "ps2",
@@ -2695,7 +2728,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "am230x",
@@ -2760,7 +2794,8 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "microwire",
@@ -2844,7 +2879,8 @@
           "do"
         ]
       }
-    ]
+    ],
+    "module": null
   },
   {
     "name": "eeprom93xx",
@@ -2919,6 +2955,7 @@
           "reason"
         ]
       }
-    ]
+    ],
+    "module": null
   }
 ]

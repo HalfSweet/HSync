@@ -9,7 +9,7 @@ use hsync_uiharu::{DecodeError, Decoder, EventRow, Needle, Position, Update};
 use parking_lot::RwLock;
 use serde_json::json;
 use uiharu_core::{Tick, TickRange};
-use uiharu_registry::Description;
+use uiharu_registry::{Catalog, Description};
 
 /// Where the demo capture's buses are.
 const SDA: u8 = 0;
@@ -57,6 +57,7 @@ fn start(
     let (sender, receiver) = crossbeam_channel::unbounded();
     let decoder = Decoder::start(
         description,
+        &Catalog::new(),
         capture,
         position,
         Arc::new(move |update| {
