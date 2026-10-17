@@ -41,6 +41,7 @@ describe('the modules', () => {
 
   test('are the contracts and the decoders', () => {
     expect(files.map((file) => path.basename(file.fileName))).toEqual([
+      'i2c.ts',
       'pwm.ts',
       'spi-nor.ts',
       'spi.ts',
@@ -54,6 +55,25 @@ describe('the modules', () => {
     const { module, diagnostics } = lowerModule(project, file)
     expect(diagnostics).toEqual([])
     expect(module).toEqual(read(fixture))
+  })
+
+  test('i2c declares a contract and no decoder', () => {
+    const file = files.find((candidate) => candidate.fileName.endsWith('i2c.ts'))
+    if (!file) throw new Error('i2c.ts is a contract module')
+    const { module, diagnostics } = lowerModule(project, file)
+    expect(diagnostics).toEqual([])
+    expect(module?.decoder).toBeUndefined()
+    expect(module?.contracts?.map((contract) => contract.framing)).toEqual([
+      {
+        begin: 'begin',
+        items: ['address', 'data', 'restart'],
+        end: 'end',
+        id: 'tx',
+        partial: 'partial',
+        reason: 'reason',
+        normal: ['stop', 'restart'],
+      },
+    ])
   })
 
   test.each(files.map((file) => [path.basename(file.fileName, '.ts'), file] as const))(

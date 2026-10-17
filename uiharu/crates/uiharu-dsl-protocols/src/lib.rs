@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod i2c;
 pub mod pwm;
 pub mod spi;
 pub mod spi_nor;
