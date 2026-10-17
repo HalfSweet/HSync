@@ -56,6 +56,14 @@ impl ChannelMask {
         self.0 == 0
     }
 
+    /// The set of the given channels; a line that is not connected (`None`) is left out.
+    pub fn of(channels: impl IntoIterator<Item = Option<u8>>) -> Self {
+        channels
+            .into_iter()
+            .flatten()
+            .fold(ChannelMask::EMPTY, ChannelMask::with)
+    }
+
     /// The channels in the set, lowest first.
     pub fn iter(self) -> impl Iterator<Item = u8> {
         let mut bits = self.0;

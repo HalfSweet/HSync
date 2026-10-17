@@ -6,6 +6,7 @@
 
 #![forbid(unsafe_code)]
 
+pub mod dsl;
 pub mod exec;
 pub mod graph;
 pub mod hex_u64;
