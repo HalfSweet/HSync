@@ -23,7 +23,8 @@ const USAGE: &str = "\
 uiharu — the uiharu decode engine on the command line
 
   uiharu decode [options] <capture>   decode a raw binary capture to NDJSON
-                                      (--graph <file> for a described pipeline)
+                                      (--graph <file> for a described pipeline,
+                                      --ir <file> for decoders interpreted from their IR)
   uiharu gen [options] <output>       write a synthetic SPI NOR capture
   uiharu bench [options]              measure throughput, latency and memory
   uiharu <command> --help             the command's options
