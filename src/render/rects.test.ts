@@ -128,6 +128,31 @@ describe('waveform rectangles', () => {
     ])
   })
 
+  it('give a row made taller the extra height as swing, keeping its margins', () => {
+    const high = CELL_FIRST_HIGH | CELL_LAST_HIGH
+    /** The device-pixel rows of a pulse's high and low lines in a row `height` high. */
+    const levels = (height: number, narrow: boolean) => {
+      const frame: FrameDescriptor = {
+        ...pictureFrame({ cells: Uint8Array.of(0, 0, high, high, high, 0, 0, 0), blocks: [] }),
+        height,
+        dpr: 1,
+      }
+      frame.traces[0] = { ...frame.traces[0]!, height, narrow }
+      const rows = new Set<number>()
+      layoutFrame(frame, tokens, (_x, y, w, h, color) => {
+        if (color === '#000000' && w > h) rows.add(y)
+      })
+      return [...rows].sort((a, b) => a - b)
+    }
+    // At the design's heights the levels sit where they always did.
+    expect(levels(30, false)).toEqual([7, 24])
+    expect(levels(24, false)).toEqual([5, 19])
+    expect(levels(18, true)).toEqual([5, 14])
+    // Taller rows keep those margins.
+    expect(levels(100, false)).toEqual([7, 94])
+    expect(levels(100, true)).toEqual([5, 96])
+  })
+
   it('keep every rectangle on whole device pixels', () => {
     const high = CELL_FIRST_HIGH | CELL_LAST_HIGH
     const frame: FrameDescriptor = {
