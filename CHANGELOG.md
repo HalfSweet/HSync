@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2026-10-17)
+
+### Features
+
+- **timeline:** Resize channel waveforms and zoom with the wheel alone (#39) ([e3ddfbe](https://github.com/HalfSweet/HSync/commit/e3ddfbe2080bccb25dd421bfa03acc27aa8d72f6))
+
 ## 0.2.1 (2026-10-17)
 
 ### Features
