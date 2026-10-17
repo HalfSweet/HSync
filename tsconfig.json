@@ -9,6 +9,9 @@
     },
     {
       "path": "./tsconfig.vitest.json"
+    },
+    {
+      "path": "./uiharu/dsl/tsconfig.json"
     }
   ]
 }

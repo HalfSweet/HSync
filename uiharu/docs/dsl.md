@@ -1,0 +1,309 @@
+# The decoder DSL and its IR
+
+Protocol decoders will be written in a restricted TypeScript, compiled ahead of time — without a JavaScript runtime — through a decoder IR into Rust over the runtime of `uiharu-core`. This document defines the two: what a decoder looks like in the DSL and what the compiler turns it into. It comes from the hand-written decoders of `crates/uiharu-protocols`, which were written in the shape the compiler will emit: §1 says what they have in common, §2 defines the DSL, §3 what the runtime does around a decoder's body, §4 the IR, §5 how the IR maps to Rust, §6 what the examples cover and what is still missing.
+
+Where things are:
+
+| Path                                     | Contents                                                                                                                                                                                                                         |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dsl/src/index.ts`                       | The DSL's API as TypeScript declarations: integer types, provenance, the cursors, the batch, the decoder base classes, `defineLogicDecoder`, `defineStreamDecoder`, `defineBusDecoder`                                           |
+| `dsl/decoders/{pwm,spi,spi-nor,uart}.ts` | The reference decoders in the DSL, one per shape: a line decoder, a framed bus decoder, a decoder on a framed contract, a timed decoder. They type-check (`pnpm typecheck` covers `dsl/`); the compiler is what is still to come |
+| `crates/uiharu-ir`                       | The IR as `serde` data types with its JSON form, and `validate`, the checks of the engine's rules; `tests/fixtures/pwm.json` is `pwm.ts` lowered by hand                                                                         |
+
+## 1. What the decoders have in common
+
+Thirty-seven decoders were written by hand. Three things recur in all of them: the shape of their input, a small vocabulary of runtime operations, and a handful of idioms — the same boilerplate written again and again around protocol-specific code. The DSL keeps the protocol code, the compiler writes the idioms.
+
+### Three shapes of input
+
+| Shape      | Reads                                                             | Decoders                                                                                                                                                                          |
+| ---------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **logic**  | the source's samples through a `SignalCursor`                     | SPI, I²C, UART, CAN, 1-Wire link, I²S, PWM, timing, parallel, WS281x, USB, USB PD, JTAG, SWD, MDIO, Microwire, PS/2, Wiegand, AM230x, NEC, RC-5, RC-6, SIRC                       |
+| **stream** | the events of an unframed lower stream through an `Inbox`         | Modbus RTU, LIN, MIDI, DMX512 (`uart.events`), AVR ISP (`spi.events`), APA102 on a bus without chip select                                                                        |
+| **bus**    | the frames of a framed lower stream through the contract's cursor | SPI NOR, SD card, nRF24L01+, APA102 (`spi.events`), 93Cxx (`microwire.events`), 24xx (`i2c.events`), DS18B20 (`onewire.events`), USB transactions (`usb.packets`), 1-Wire network |
+
+Logic decoders split again by what drives them: **edges** (SPI, I²C, PWM, JTAG, SWD, MDIO, Microwire, I²S, parallel, timing follow `next_change` and never ask what time it is) and **time** (UART, CAN, 1-Wire, USB, USB PD, WS281x, PS/2, Wiegand, AM230x and the infrared decoders turn bit times into ticks, `seek` to sample points and wait for edges with deadlines).
+
+### The vocabulary
+
+Everything a decoder waits for is one of these operations, and nothing else can make it wait:
+
+| Input  | Operations                                                                                                         |
+| ------ | ------------------------------------------------------------------------------------------------------------------ |
+| logic  | `next_change(mask)`, `next_change_before(mask, until)`, `sample()`; and without waiting `seek(tick)`, `position()` |
+| stream | `recv()`                                                                                                           |
+| bus    | `bus.next()` → a frame cursor; on it `item()`, `item_or_end()`, `drain()`, `consumed()`, `id()`, `is_partial()`    |
+| output | `emit(at, event)`, `gap(range)`, `progress(tick)`, `end(tick)`; `progress_sink().hold(from)`                       |
+| time   | `io.time_base()`, `io.input_props(index)`                                                                          |
+
+Every cursor over a framed contract (`spi::SpiBus`, `i2c::I2cBus`, `microwire::MicrowireBus`, `onewire::OneWireBus`, `usb::UsbBus`) has the same shape: `next()` waits for a frame, gap, progress or end; the frame cursor reads one item at a time, returns the normal end only from `item_or_end`, turns every other end into an error naming the cause (`Incomplete`, `Truncated`, `Gap`, `EndOfInput`, plus a line or field that is not there), records what it consumed for the provenance, and passes progress met inside a frame on, held back to what the decoder has not reported. What differs is the item type and which event kinds begin, carry and end a frame. That is a declaration, not code: a contract says how it is framed (§2.3) and the cursor is generated.
+
+### The idioms
+
+| Idiom                 | Where                                                                                                                                                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Pass-through**      | Every decoder passes gaps, progress and the end down after closing what it had open, and forwards progress held back to the start of what it has under way (`min(t, in-flight start)`): SPI's first bit, UART's start edge, NOR's batch, Modbus's oldest unreported byte |
+| **Resync**            | A logic decoder starts where levels are unknown, at the first sample and after every gap: it samples the bus state first, opens a frame found under way as `partial`, and goes back there after a gap                                                                    |
+| **Cut**               | A gap or the end of the samples inside a frame unwinds the code reading it (`Result<_, Cut>` in UART and CAN, `ReadError` in every bus decoder), the frame is closed with the abnormal reason, and the control item is passed on                                         |
+| **Body and recovery** | A bus decoder has a body for one frame and a table around it: which end reason each cut gets, placed over what was read but not reported; a partial frame is drained; what the body did not read is drained for it                                                       |
+| **Bounded batch**     | Data goes out in batches of a declared size (`DATA_BATCH`, 32), with the joined provenance of its items, settled by its last item or by the end that decided it; the batch's start is what the decoder holds progress back to                                            |
+| **Timed read**        | `seek(start + offset)` then `sample()`, progress forwarded held at `start`; a deadline through `next_change_before`, `Quiet` at the deadline                                                                                                                             |
+| **Silence**           | A frame ends when its silence is known to have passed: by the next item, or by a progress tick, acted on by the tick it carries, never by its arrival                                                                                                                    |
+| **Integer time**      | Bit times become ticks in integer arithmetic with a 128-bit intermediate (`rate × position / (200 × baud)`), rounded down or up as the protocol says                                                                                                                     |
+
+The decoder-specific code — what a byte means, how fields are assembled, which line is read, what is reported — is ordinary imperative code over integers, records, enums and tagged unions. It does not need a special language, only a bounded one.
+
+## 2. The DSL
+
+A decoder is a TypeScript module that imports from `uiharu` (`dsl/src/index.ts`), declares its contract, its configuration and a class with the decoding logic, and registers them with `defineLogicDecoder`, `defineStreamDecoder` or `defineBusDecoder`. It is checked by the TypeScript compiler like any module; the uiharu compiler then checks the subset and lowers it. The module never runs as JavaScript, so JavaScript's semantics do not apply to it: integers have widths, records are values, and `===` compares values.
+
+### 2.1 Types
+
+| DSL                                            | Meaning                                                                                                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `u8`, `u16`, `u32`, `u64`                      | Unsigned integers of that width. A literal or a plain `number` fits any width; a narrower value widens on its own; a wider one does not fit a narrower variable (TypeScript reports it). `+`, `-`, `*` are done at the wider operand's width and wrap there; `/` and `%` by zero yield zero; a shift keeps the left operand's width and yields zero when the amount reaches it; `as u8` truncates |
+| `bool`                                         | `boolean`                                                                                                                                                                                                                                                                                                                                                                                         |
+| `Tick`                                         | `u64`: a sample index on the source's clock. Ticks add and subtract like integers                                                                                                                                                                                                                                                                                                                 |
+| `Channel`                                      | `u8`, a channel of the source; a configuration field of this type is offered as a channel by the interface                                                                                                                                                                                                                                                                                        |
+| `'a' \| 'b'`                                   | An enum: a union of string literals, written as text in events and configurations                                                                                                                                                                                                                                                                                                                 |
+| `interface R { … }`                            | A record: fields of these types. Records are values with one owner (a field of `this`, a local, a slot of an array): `const x = this.field` borrows the field, any other `const x = …` copies, and the compiler rejects a copy that is written to                                                                                                                                                 |
+| `{ kind: 'a'; … } \| { kind: 'b'; … }`         | A tagged union on `kind`: events, results, anything with cases. Fields are reached under `switch (x.kind)` or `if (x.kind === 'a')`                                                                                                                                                                                                                                                               |
+| `T \| undefined`                               | An option. It is read under `if (x !== undefined)`, through `x ?? d`, `x?.f`, or — in a bus decoder's body only — `x!`, which cuts the body as `missing` when the value is not there                                                                                                                                                                                                              |
+| `Bounded<T, N>`                                | An array of at most `N` items, read with `for … of` or a constant index below `N`; array literals are bounded by their length                                                                                                                                                                                                                                                                     |
+| `Batch<T>`                                     | `batch<T>(capacity)`: the one buffer a decoder keeps, with the provenance of what it holds (§2.5)                                                                                                                                                                                                                                                                                                 |
+| `Range`, `Provenance`, `Levels`, `ChannelMask` | The runtime's own types: `at`, `one`, `over`, `join` make provenance; `mask(...)`, `.has`, `.with` make and read masks; `levels.high(channel)` reads a level                                                                                                                                                                                                                                      |
+| `string`                                       | Only as the message a configuration check returns                                                                                                                                                                                                                                                                                                                                                 |
+
+Integer helpers: `min`, `max`, `saturatingSub`, `countOnes`, `fromBool`, `mulDiv` (`⌊a × b / c⌋` without overflowing in between) and `mulDivCeil`.
+
+### 2.2 Code
+
+The subset is TypeScript without its dynamic parts: `let`/`const`, assignment and compound assignment, `if`/`else`, `switch` over an enum, a union's `kind` or integers (with `default`), `for (;;)`, `while`, `for (let i = a; i < b; i++)`, `for (const x of array)`, labelled `break`/`continue`, `return`, ternaries, `&&`/`||`/`!`, the arithmetic, bitwise and comparison operators, object literals of records and union variants, calls to the module's own functions and to the runtime's helpers, and `await` on the runtime's operations and the decoder's own `async` methods. Template strings make the messages of configuration checks.
+
+Out: closures, classes other than the decoder's, `this` outside it, `any`, `number` arithmetic at JavaScript's width, floating point, strings beyond messages, exceptions, recursion, unbounded arrays and maps, `Promise` beyond `await`, generators, `new`, and anything from the JavaScript standard library.
+
+Free functions are pure: synchronous, without access to the decoder, over their parameters alone (records are passed by reference). The decoder's methods have `this` and may be `async`; an `async` method is always awaited, a synchronous one never. Every loop waits, breaks or returns on every iteration, so that no loop can spin without yielding to the executor.
+
+### 2.3 Contracts
+
+```ts
+export type SpiEvent =
+  | { kind: 'begin'; tx: TxId; partial: bool }
+  | { kind: 'word'; tx: TxId; mosi: u8 | undefined; miso: u8 | undefined }
+  | { kind: 'end'; tx: TxId; reason: EndReason }
+
+export const spiEvents = eventSchema<SpiEvent>('spi.events', 1).framed({
+  begin: 'begin',
+  item: 'word',
+  end: 'end',
+  id: 'tx',
+  partial: 'partial',
+  reason: 'reason',
+  normal: 'cs-release',
+  unframed: 0,
+})
+```
+
+`eventSchema` ties the event type to the schema name and version. `framed` declares how the stream frames its traffic: the event kinds that begin a frame, carry its items and end it, the field that names the frame on all three, the `begin` field saying the frame was under way, the `end` field saying why it ended and its value for the normal end, and the id of the one frame of a bus that has no framing line. A decoder reading the contract gets a cursor over its frames whose items are the `item` event without `kind` and the id (`ItemOf<typeof spiEvents>` is `{ mosi: u8 | undefined; miso: u8 | undefined }`). The cursor is generated from the declaration (§5); it offers the contract's primitives — the next item, the normal end, draining — and nothing more.
+
+Events carry bus data only, as the contract pages describe them; numbers take the narrowest width that fits, a line that is not connected or a value that could not be seen is `undefined`.
+
+### 2.4 The decoder
+
+```ts
+class Pwm extends LogicDecoder<PwmConfig, PwmEvent> {
+  readonly watch = mask(this.config.channel)
+  leading: Tick | undefined = undefined
+  trailing: Tick | undefined = undefined
+
+  override hold(): Tick | undefined { return this.leading }
+  override onGap(): void { this.leading = undefined; this.trailing = undefined }
+
+  override async run(): Promise<void> {
+    for (;;) {
+      const edge = await this.signal.nextChange(this.watch)
+      …
+      await this.out.emit({ kind: 'cycle', periodTicks, activeTicks }, over(start, edge.tick, edge.tick))
+    }
+  }
+}
+
+export const pwm = defineLogicDecoder({
+  name: 'pwm', category: 'line',
+  config: { defaults: { channel: 0, polarity: 'active-high' }, validate },
+  requires: (config) => ({ channels: atLeast(config.channel + 1) }),
+  output: pwmEvents,
+  props: (config) => ({ polarity: config.polarity }),
+  decoder: Pwm,
+})
+```
+
+The class is the decoder's state and logic. Its fields are the state that lives across frames and gaps, initialized in order with `this.config` and `this.rate` (the source's samples per second) in scope; its methods are the logic; a few method names are **hooks** the runtime calls:
+
+| Hook                          | Kind          | Called                                                                                                                                                                               |
+| ----------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `run()`                       | logic, stream | at the first sample or item, where levels are unknown, and again after every gap. Returning from it means nothing more is decoded: the runtime passes the rest of the stream through |
+| `transaction(tx)`             | bus           | once per frame, with the cursor over its items                                                                                                                                       |
+| `recover(reason, at)`         | bus           | when a read cut the body short, with the reason the declared `recovery` maps the cut to, placed over what was read but not reported                                                  |
+| `hold()`                      | all           | when progress is passed on: the tick from which the decoder holds what it has not reported yet, so that progress is held back to it                                                  |
+| `onGap(range)`, `onEnd(tick)` | all           | when a read meets a gap or the end, before it is passed on: close what is open with the abnormal reason, forget what the lost samples may have changed                               |
+| `onProgress(tick)`            | all           | when a read meets progress, before it is passed on: a decoder framed by silences closes a frame whose silence has passed here, by the tick carried                                   |
+
+The definition names the decoder, its category for the catalog, its configuration (defaults and the check that rejects a configuration with a message), what its input requires of the output it reads (`atLeast`, `atMost`, `within`, `oneOf`, or a value to equal), its output's schema and the properties it declares, and the class. A bus decoder adds `partial` (`'drain'`, the default, or `'read'`: what to do with a frame whose beginning was not seen) and `recovery`: the reason `recover` gets for a frame that ended normally too soon (`incomplete`), for one cut off by the lower decoder (`truncated`), for an item without a value the body required with `!` (`missing`), for a gap and for the end of the stream.
+
+### 2.5 Reading, writing, holding
+
+A logic decoder reads through `this.signal`: `nextChange(mask)` waits for the next edge and returns its tick, the channels that changed and all levels; `nextChangeBefore(mask, until)` gives up at the deadline with `{ kind: 'quiet', tick }`; `sample()` reads the levels at the cursor; `seek(tick)` moves it; `position` says where it stands. A stream decoder reads `this.input.next()`: the event with its provenance. A bus decoder reads the cursor its body is given: `tx.item()`, `tx.itemOrEnd()` (`undefined` at the normal end), `tx.drain()`, `tx.id`, `tx.partial`.
+
+None of these returns a gap, progress or the end: progress is passed on by the runtime (after `onProgress`, held back to `hold()`), a gap or the end cuts the body and reaches the hooks (§3). A bus decoder's body is also cut by the frame's end where an item was expected, by a cut-off frame and by `!` on a missing value; the recovery closes it.
+
+Every event states its provenance — `at(tick)` for a result decided at an instant, `one(tick)` for one covering a tick, `over(start, end, settled)` for one covering several ticks, settled where it became certain — except in a bus decoder, where `emit(event)` without it covers what was read through the cursor since provenance was last taken (`this.consumed()`), which is what the hand-written decoders pass by hand.
+
+A batch (`batch<T>(capacity)`) is the one buffer a decoder keeps: `push(item, at)` joins the item's provenance into the batch's, `isFull` says it must go out, `take()` hands the items and their provenance over, `at` is where the batch starts for `hold()`. Pushing to a full batch is a programming error the compiler will flag where it can see it (a `push` not followed by a check of `isFull`).
+
+## 3. What the runtime does around the body
+
+The runtime's part is the same for every decoder of a kind; this is what the backend emits around the DSL code, in the shape of the hand-written main loops. Every operation of §2.5 is a wrapper over the runtime's call that turns progress into a forward and a gap or the end into a **cut**, an error that unwinds the body:
+
+```text
+nextChange(mask):
+  loop
+    match signal.next_change(mask):
+      At(tick, changed, levels) → return edge
+      Progress(t)               → onProgress(t); out.progress(min(hold() ?? t, t)); continue
+      Gap(range)                → cut Gap(range)
+      End(tick)                 → cut End(tick)
+```
+
+(`sample`, `nextChangeBefore` and a stream's `next` are the same; `nextChangeBefore` returns `quiet` at the deadline.) The main loop of a logic or stream decoder:
+
+```text
+initialize the fields in order, with config and rate in scope
+loop
+  match run():
+    returned        → pass gaps, progress and the end through; stop
+    cut Gap(range)  → onGap(range); out.progress(min(hold() ?? range.start, range.start)); out.gap(range); continue
+    cut End(tick)   → onEnd(tick);  out.progress(min(hold() ?? tick, tick));               out.end(tick);  stop
+```
+
+Entering `run` again after a gap is the resync of the hand-written decoders: its locals are gone, the fields stay (which is what `onGap` is for), and the first read finds the first sample after the gap, which is never an edge. Progress is announced before a gap or the end goes out so that a reader framed by silences learns how long the line was quiet, which UART does by hand today.
+
+A bus decoder's main loop is the hand-written SPI NOR loop with the table filled in from the declaration:
+
+```text
+loop
+  match bus.next():
+    Frame(tx)       → if tx.partial and partial == drain: tx.drain()
+                      else: transaction(tx)
+                      on a cut: recover(recovery[cut], placed)      — placed: the span of what was read but
+                      finish the frame (drain what the body did not read) — not reported, or else the cut's tick;
+                      on a cut there: recover again                   — settled at the cut's tick
+    Gap(range)      → onGap(range); out.gap(range)
+    Progress(t)     → onProgress(t); out.progress(min(hold() ?? t, t))
+    End(tick)       → onEnd(tick); out.end(tick); stop
+```
+
+Progress met inside a frame is forwarded by the cursor, held back to what was consumed since provenance was last taken and to `hold()`. The cuts of a bus body: `incomplete` (the frame ended normally where an item was expected: the frame is whole, the command is not), `truncated` (the lower decoder aborted the frame), `missing` (`!` on a value that was not there), `gap`, `end`; the recovery maps each to a reason of the decoder's own, which `recover` emits for what it had open.
+
+These loops are what makes a DSL decoder deterministic and bounded by construction: the body never sees how the samples were cut, never holds a control item, and every buffer it keeps is declared.
+
+## 4. The IR
+
+The compiler lowers a DSL module to one JSON document per decoder, read by `uiharu-ir` (`Module`). It is self-contained: the contracts it reads are copied into it with the types they need (`imports`), so that the backend needs nothing else.
+
+```json
+{
+  "ir": 1, "name": "pwm",
+  "types":     [ { "name": "PwmEvent",  "type": "union",  "variants": [ { "name": "cycle", "fields": [ … ] } ] },
+                 { "name": "Polarity",  "type": "enum",   "variants": ["active-high", "active-low"] },
+                 { "name": "PwmConfig", "type": "record", "fields": [ { "name": "channel", "type": "u8", "channel": true }, … ] } ],
+  "contracts": [ { "schema": { "name": "pwm.events", "version": 1 }, "event": "PwmEvent" } ],
+  "imports":   [ ],
+  "consts":    [ ],
+  "functions": [ { "name": "isActive", "params": [ … ], "ret": "bool", "body": [ … ] } ],
+  "decoder": {
+    "name": "pwm", "category": "line",
+    "config":   { "type": "PwmConfig", "defaults": { "channel": 0, "polarity": "active-high" }, "validate": "validate" },
+    "input":    { "kind": "logic" },
+    "requires": [ { "key": "channels", "requirement": "at-least", "values": [ … ] } ],
+    "output":   { "schema": { "name": "pwm.events", "version": 1 } },
+    "props":    [ { "key": "polarity", "value": { … } } ],
+    "state":    [ { "name": "leading", "type": { "option": "u64" }, "init": { "expr": "none" } }, … ],
+    "methods":  [ { "name": "run", "async": true, "body": [ … ] }, { "name": "hold", "ret": { "option": "u64" }, "body": [ … ] }, … ]
+  }
+}
+```
+
+**Types** are strings — the primitives `bool`, `u8`, `u16`, `u32`, `u64`, `text`, `mask`, `levels`, `range`, `provenance`, `cursor` (the frame cursor of a bus decoder) or a declared name — or objects: `{ "option": T }`, `{ "array": T, "bound": N }`, `{ "batch": T, "bound": N }`. Declared types are records (fields), enums (variant names as events spell them) and unions (variants with fields, tagged by `kind`). A contract names its schema, its event union and, when framed, its framing (§2.3); an import carries another module's contract with its types.
+
+**The decoder** has its ports: `input` is `{ "kind": "logic" }`, `{ "kind": "stream", "schema": … }` or `{ "kind": "bus", "schema": … }`; `requires` and `props` are evaluated with `config` in scope; `partial` and `recovery` (with the reason enum's name) belong to bus decoders. `state` lists the fields with their initializers; `methods` the functions with `self`, the hooks among them by name.
+
+**Statements** are tagged by `stmt`: `let` (with `mutable` and an optional declared `type`), `let-ref` (a local borrowing a field of `self`), `assign` (with an optional compound `op`), `if`, `if-some` (an option tested and bound), `let-some` (bound, or an `else` that leaves the block), `match` (arms with a `variant` pattern binding fields, a `values` pattern of enum names or integers, or `default`), `loop`, `while`, `for` (a half-open integer range), `for-each` (an array), `break`, `continue`, `return`, `expr`.
+
+**Expressions** are tagged by `expr`: `lit`, `text`, `format`, `none`, `local`, `self` (a field), `field`, `index`, `tag` (a union's kind), `unary`, `binary`, `cast`, `record`, `variant`, `enum`, `array`, `call` (a free function), `method` (a synchronous method), `intrinsic` (a runtime helper), `ternary`, `if-some`, `if-variant`, `required` (`!`) and `await`. An `await` wraps an **operation** tagged by `op`: `next-change`, `next-change-before`, `sample` (logic), `next` (stream), `item`, `item-or-end`, `drain` (bus), `emit` (with `at` optional for bus decoders) and `method` (an async method).
+
+`validate` checks what the compiler enforces and the backend relies on:
+
+- every type, function, method, field, local, variant and intrinsic resolves, and nothing is declared twice or named after a primitive;
+- every array and batch has a bound of at least one item;
+- a free function is synchronous and has no `self`; only an `async` method awaits; an async method is called with `await`, a synchronous one without;
+- nothing recurses: the call graph of functions and methods has no cycle, so that the decoder's state — the future — has a fixed size;
+- every `loop` and `while` waits, breaks or returns on every iteration;
+- the operations match the input: the signal's for a logic decoder, `next` for a stream decoder, the cursor's, `consumed`, `tx-id`, `tx-partial` and `required` for a bus decoder; an event of a logic or stream decoder states its provenance;
+- while a local borrows a field of `self` (`let-ref`), no method of `self` is called — the borrow rule the Rust backend needs, kept simple enough to state;
+- the hooks a decoder's kind calls for are there with the right shape (§2.4), and a bus decoder declares its recovery with variants of its reason enum;
+- a framed contract's framing names variants and fields that exist, and its normal end is a variant of the reason enum;
+- text is made only in free functions: the messages of configuration checks.
+
+Typing is not repeated here: the TypeScript checker types the DSL on the way in and rustc checks the emitted Rust on the way out; the IR carries the declared types so that the backend can emit them.
+
+## 5. From the IR to Rust
+
+The backend emits one Rust module per IR module over `uiharu-core`, in the shape the hand-written decoders have — which is why they were written that way. `rustc`'s `async` lowering is the resumable state machine; the IR needs no state-machine transform.
+
+| IR                                                | Rust                                                                                                                                                                             |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a record, an enum, a union                        | a `struct`, a unit `enum` with `#[serde(rename_all = "kebab-case")]`, an `enum` with `#[serde(tag = "kind", rename_all = "kebab-case", rename_all_fields = "camelCase")]`        |
+| `u8` … `u64`, `bool`, `option<T>`                 | the same; `u64` ticks become `Tick` at the runtime's API                                                                                                                         |
+| `array<T, N>`, `batch<T, N>`                      | `[T; N]` with a length, and the runtime's `Batch<T, N>`                                                                                                                          |
+| a contract                                        | the event enum with `impl EventSchema`, and for a framed one `impl Framed` (which variants begin, carry and end a frame) for the runtime's generic cursor `FramedBus<E>`         |
+| `config`, `requires`, `props`, `validate`         | the `Config` struct with `Default`, `validate()`, `props()`, and `Requires` in `NodeSpec`                                                                                        |
+| `state`, `methods`                                | a `struct` of the fields and an `impl` with the methods; the hooks are methods the generated main loop calls                                                                     |
+| a free function                                   | a `fn`; records as `&mut` parameters                                                                                                                                             |
+| `let-ref`                                         | `let x = &mut self.field;` or `let Some(x) = &mut self.field else { … }`                                                                                                         |
+| `if-some`, `let-some`, `match`, `if-variant`      | `if let Some(x)`, `let Some(x) = … else`, `match`                                                                                                                                |
+| `+`, `-`, `*`, `/`, `%`, shifts, `cast`           | `wrapping_add`/`wrapping_sub`/`wrapping_mul`, `checked_div().unwrap_or(0)`, `checked_shl().unwrap_or(0)`, `as`; `mul-div` through `u128`                                         |
+| an `await` on an operation                        | the generated wrapper of §3 with `?`: `self.next_change(mask).await?`                                                                                                            |
+| a cut                                             | `Err(Cut::Gap(range))`, `Err(Cut::End(tick))`; for a bus body the cursor's `ReadError`                                                                                           |
+| `emit` without `at`                               | `self.out.emit(self.bus.consumed(), event).await`                                                                                                                                |
+| `hold`, `onGap`, `onEnd`, `onProgress`, `recover` | called by the generated main loop and wrappers (§3)                                                                                                                              |
+| the module                                        | `impl Node`: `spec()` from the ports, `start()` binding them and returning `Box::pin(main_loop(…))`; a registry `Kind` and a manifest from the config fields and the event kinds |
+
+Three things the backend needs from the runtime are not in `uiharu-core` yet: the generic cursor `FramedBus<E: Framed>` that the five hand-written cursors are instances of, `Batch<T, const N: usize>` with its provenance, and the `Cut` error with the wrappers of §3. They come with the backend.
+
+## 6. Coverage
+
+The four reference decoders exercise every construct of the DSL and the IR:
+
+| Decoder                   | Shape                       | Exercises                                                                                                                                                                                          |
+| ------------------------- | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dsl/decoders/pwm.ts`     | logic, edges                | the smallest decoder: options, `hold`, `onGap`, provenance over a span; lowered by hand to `crates/uiharu-ir/tests/fixtures/pwm.json`                                                              |
+| `dsl/decoders/spi.ts`     | logic, edges, framed output | a framed contract declared with `framed`, resync (`sample` at every entry of `run`, a `partial` begin), `let-ref` on a record field, an unframed bus (transaction 0), aborting on a gap or the end |
+| `dsl/decoders/spi-nor.ts` | bus                         | a body over the cursor with `item`, `itemOrEnd`, `drain`, `!` and `consumed()`; the recovery table and `recover`; a batch with `hold`; state across frames forgotten on a gap; tables as `switch`  |
+| `dsl/decoders/uart.ts`    | logic, time                 | `rate`, `mulDiv`, `seek` and `sample` at computed points, a bounded array literal, a decoder that returns from `run` when the source is too slow                                                   |
+
+What the DSL does not express yet, and what the remaining decoders would need:
+
+- **A node with several inputs** (`ready_all`, the time-ordered merge of design.md §4): no decoder uses one today; a `defineMergeDecoder` can come with the first that does.
+- **A cursor that is not a frame cursor**: the 1-Wire link layer's `LinkBus` reads "a reset, then bits until something ends them" and names a bad slot among its errors; USB's `UsbBus` names a damaged packet. They are framed contracts with extra end reasons: the framing declaration will take a list of abnormal reasons with the cut each maps to.
+- **Properties of the input**: Modbus RTU and LIN take the baud rate from the UART stream's props (`io.input_props`). A stream decoder's definition will declare which props it reads, typed, as `this.input.props`.
+- **64-bit values in JSON** (`hex_u64`): a field attribute on the contract's type.
+- **Several outputs**: no decoder has them; the IR's `output` can become a list when one does.
+
+The rest of the decoders fit the three shapes and the vocabulary: the edge-driven logic decoders are SPI with other framing rules, the timed ones are UART with other timings and deadlines, the stream decoders are Modbus with other silences, the bus decoders are SPI NOR with other command sets.
+
+## 7. Next
+
+1. The compiler's front end: the TypeScript compiler API parses and types a DSL module, the subset is checked, and the module is lowered to the IR; `pwm.json` is its first expected output.
+2. The backend: Rust from the IR, with `FramedBus`, `Batch` and `Cut` added to `uiharu-core`.
+3. The reference decoders generated from `dsl/decoders/` replace their hand-written counterparts one at a time, each under the integration tests and the acceptance suite the hand-written one passes today — that is the proof that the compiler preserves the engine's properties.

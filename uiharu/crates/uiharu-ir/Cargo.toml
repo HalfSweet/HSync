@@ -1,0 +1,17 @@
+[package]
+name = "uiharu-ir"
+description = "The decoder IR of the uiharu decode engine: what the TypeScript DSL compiles to and the Rust backend emits from, with the checks of the engine's rules"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+authors.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

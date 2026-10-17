@@ -128,6 +128,8 @@ Only `word_or_end` ever returns the normal end; a body that returns before the e
 
 ## 7. From the DSL to the Rust API
 
+The DSL and the IR it compiles to are defined in [dsl.md](dsl.md): the subset of TypeScript, the hooks the runtime calls around a decoder's body, the JSON form of the IR and its checks (`crates/uiharu-ir`), and the reference decoders written in it (`dsl/decoders/`). The table below is the correspondence the hand-written decoders were written to.
+
 | DSL (planned)                            | Phase 1 (Rust)                                                                                |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------- |
 | `eventSchema<SpiEvent>("spi.events", 1)` | `impl EventSchema for SpiEvent { const SCHEMA = SchemaId::new("spi.events", 1) }`             |
@@ -157,4 +159,4 @@ Only `word_or_end` ever returns the normal end; a body that returns before the e
 - `Progress` is generated only by the signal cursor, at the end of a block it used up while the next one was not there; every node passes it down, inside frames through the contract cursors, so that a reader of several streams can take the least of their watermarks.
 - The engine is not wired into HSync: an adapter from `hsync-capture` to `LogicBlock`s, and from exposed streams to the data stream and the timeline, comes with the integration.
 
-Next: the decoder IR extracted from these two decoders, the TypeScript compiler that produces it and emits this Rust, and the performance work the benchmark (`uiharu bench`) is there to measure.
+Next: the compiler from the DSL to the IR of [dsl.md](dsl.md) and the backend that emits this Rust from it, the generated reference decoders replacing the hand-written ones under the same tests, and the performance work the benchmark (`uiharu bench`) is there to measure.

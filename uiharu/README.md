@@ -8,15 +8,17 @@ It replaces the sigrok decoders in [HSync](../README.md) and is meant to be embe
 
 ## Status
 
-The first step of the plan: the runtime and the first layered pipeline, **SPI → SPI NOR**, written by hand in Rust in the shape the TypeScript DSL will take, with the acceptance tests of the design's properties. The DSL, its compiler and the decoder IR come next; the engine is not wired into HSync yet.
+The runtime and the protocol decoders, written by hand in Rust in the shape the TypeScript DSL will take, with the acceptance tests of the design's properties; the engine decodes in HSync through `crates/hsync-uiharu`. The DSL and the decoder IR are defined in [docs/dsl.md](docs/dsl.md), with the reference decoders written in the DSL under `dsl/` and the IR with its checks in `crates/uiharu-ir`; the compiler between the two comes next.
 
-| Crate                     | Contents                                                                                                                                                                                                          |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `crates/uiharu-core`      | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor                                         |
-| `crates/uiharu-protocols` | The protocol decoders, each with its contract, synthesizer and tests: see [Protocols](#protocols)                                                                                                                 |
-| `crates/uiharu-registry`  | The node types by name: build a decoder from its JSON configuration, its manifest for a user interface, the pipeline description and its builder, outputs read as JSON items                                      |
-| `crates/uiharu-cli`       | The `uiharu` command: `decode` a raw capture to NDJSON, `gen` a synthetic capture, `bench` the pipeline                                                                                                           |
-| `docs/`                   | The architecture (`design.md`), how to write a decoder (`writing-decoders.md`), one page per protocol (`protocols/`) and the performance study with the comparison against the sigrok decoders (`performance.md`) |
+| Crate                     | Contents                                                                                                                                                                                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `crates/uiharu-core`      | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor                                                                        |
+| `crates/uiharu-protocols` | The protocol decoders, each with its contract, synthesizer and tests: see [Protocols](#protocols)                                                                                                                                                |
+| `crates/uiharu-registry`  | The node types by name: build a decoder from its JSON configuration, its manifest for a user interface, the pipeline description and its builder, outputs read as JSON items                                                                     |
+| `crates/uiharu-cli`       | The `uiharu` command: `decode` a raw capture to NDJSON, `gen` a synthetic capture, `bench` the pipeline                                                                                                                                          |
+| `crates/uiharu-ir`        | The decoder IR: what the DSL compiles to and the Rust backend emits from, as `serde` types with its JSON form, and the checks of the engine's rules on it                                                                                        |
+| `dsl/`                    | The decoder DSL: its API as TypeScript declarations (`src/index.ts`) and the reference decoders written in it (`decoders/`)                                                                                                                      |
+| `docs/`                   | The architecture (`design.md`), the DSL and its IR (`dsl.md`), how to write a decoder (`writing-decoders.md`), one page per protocol (`protocols/`) and the performance study with the comparison against the sigrok decoders (`performance.md`) |
 
 The crates are members of the repository's Cargo workspace but depend on nothing outside `uiharu/` except `serde`, `serde_json` and `thiserror`.
 
