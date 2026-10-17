@@ -27,7 +27,7 @@ import { BusDecoder, batch, defineBusDecoder, eventSchema, max, at as placedAt, 
 import { spiEvents, type SpiWord, type TxId } from './spi'
 
 /** The most bytes one `data` or `id` event carries. */
-export const DATA_BATCH = 32
+export const DATA_BATCH: u32 = 32
 
 /** An operation on the flash, numbered from 1 by the decoder. */
 export type OpId = u64
