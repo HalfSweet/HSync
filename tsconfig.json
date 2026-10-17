@@ -12,6 +12,9 @@
     },
     {
       "path": "./uiharu/dsl/tsconfig.json"
+    },
+    {
+      "path": "./uiharu/compiler/tsconfig.json"
     }
   ]
 }

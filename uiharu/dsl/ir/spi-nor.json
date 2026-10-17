@@ -1,0 +1,4551 @@
+{
+  "ir": 1,
+  "name": "spi-nor",
+  "types": [
+    {
+      "name": "Command",
+      "type": "enum",
+      "variants": [
+        "write-enable",
+        "write-disable",
+        "volatile-sr-write-enable",
+        "read-status",
+        "read-status-2",
+        "read-status-3",
+        "write-status",
+        "write-status-2",
+        "write-status-3",
+        "read",
+        "fast-read",
+        "read-4b",
+        "fast-read-4b",
+        "page-program",
+        "page-program-4b",
+        "sector-erase",
+        "sector-erase-4b",
+        "block-erase-32k",
+        "block-erase-64k",
+        "block-erase-64k-4b",
+        "chip-erase",
+        "deep-power-down",
+        "release-power-down",
+        "read-manufacturer-device-id",
+        "read-jedec-id",
+        "read-sfdp",
+        "read-unique-id",
+        "enter-4b-mode",
+        "exit-4b-mode",
+        "reset-enable",
+        "reset",
+        "program-erase-suspend",
+        "program-erase-resume",
+        "read-security-register",
+        "program-security-register",
+        "erase-security-register",
+        "block-lock",
+        "block-unlock",
+        "global-block-lock",
+        "global-block-unlock"
+      ]
+    },
+    {
+      "name": "Direction",
+      "type": "enum",
+      "variants": ["in", "out"]
+    },
+    {
+      "name": "IdScheme",
+      "type": "enum",
+      "variants": ["jedec", "manufacturer-device", "unique", "electronic-signature"]
+    },
+    {
+      "name": "NorEnd",
+      "type": "enum",
+      "variants": ["complete", "incomplete", "aborted"]
+    },
+    {
+      "name": "NorEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "begin",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "command",
+              "type": "Command"
+            }
+          ]
+        },
+        {
+          "name": "address",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "address",
+              "type": "u32"
+            },
+            {
+              "name": "bytes",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "dummy",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "bytes",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "data",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "direction",
+              "type": "Direction"
+            },
+            {
+              "name": "offset",
+              "type": "u32"
+            },
+            {
+              "name": "bytes",
+              "type": {
+                "array": "u8",
+                "bound": 32
+              }
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "register",
+              "type": "u8"
+            },
+            {
+              "name": "value",
+              "type": "u8"
+            },
+            {
+              "name": "written",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "id",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "scheme",
+              "type": "IdScheme"
+            },
+            {
+              "name": "bytes",
+              "type": {
+                "array": "u8",
+                "bound": 32
+              }
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "NorEnd"
+            }
+          ]
+        },
+        {
+          "name": "unknown-command",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "opcode",
+              "type": "u8"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "AddressBytes",
+      "type": "enum",
+      "variants": ["three", "four", "auto"]
+    },
+    {
+      "name": "SpiNorConfig",
+      "type": "record",
+      "fields": [
+        {
+          "name": "addressBytes",
+          "type": "AddressBytes"
+        }
+      ]
+    },
+    {
+      "name": "AddressWidth",
+      "type": "enum",
+      "variants": ["none", "three", "four", "mode"]
+    },
+    {
+      "name": "Phase",
+      "type": "union",
+      "variants": [
+        {
+          "name": "none"
+        },
+        {
+          "name": "data-out"
+        },
+        {
+          "name": "data-in"
+        },
+        {
+          "name": "read-status",
+          "fields": [
+            {
+              "name": "register",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "write-status",
+          "fields": [
+            {
+              "name": "first",
+              "type": "u8"
+            },
+            {
+              "name": "last",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "id",
+          "fields": [
+            {
+              "name": "scheme",
+              "type": "IdScheme"
+            },
+            {
+              "name": "len",
+              "type": {
+                "option": "u8"
+              }
+            }
+          ]
+        },
+        {
+          "name": "signature"
+        }
+      ]
+    },
+    {
+      "name": "Layout",
+      "type": "record",
+      "fields": [
+        {
+          "name": "address",
+          "type": "AddressWidth"
+        },
+        {
+          "name": "dummy",
+          "type": "u8"
+        },
+        {
+          "name": "phase",
+          "type": "Phase"
+        }
+      ]
+    },
+    {
+      "name": "BatchOf",
+      "type": "union",
+      "variants": [
+        {
+          "name": "data",
+          "fields": [
+            {
+              "name": "direction",
+              "type": "Direction"
+            }
+          ]
+        },
+        {
+          "name": "id",
+          "fields": [
+            {
+              "name": "scheme",
+              "type": "IdScheme"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "nor.events",
+        "version": 2
+      },
+      "event": "NorEvent"
+    }
+  ],
+  "imports": [
+    {
+      "module": "spi",
+      "contract": {
+        "schema": {
+          "name": "spi.events",
+          "version": 1
+        },
+        "event": "SpiEvent",
+        "framing": {
+          "begin": "begin",
+          "item": "word",
+          "end": "end",
+          "id": "tx",
+          "reason": "reason",
+          "normal": "cs-release",
+          "partial": "partial",
+          "unframed": 0
+        }
+      },
+      "types": [
+        {
+          "name": "EndReason",
+          "type": "enum",
+          "variants": ["cs-release", "aborted"]
+        },
+        {
+          "name": "SpiEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "begin",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "partial",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "word",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "mosi",
+                  "type": {
+                    "option": "u8"
+                  }
+                },
+                {
+                  "name": "miso",
+                  "type": {
+                    "option": "u8"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "end",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "reason",
+                  "type": "EndReason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "consts": [
+    {
+      "name": "DATA_BATCH",
+      "type": "u32",
+      "value": 32
+    }
+  ],
+  "functions": [
+    {
+      "name": "commandOf",
+      "body": [
+        {
+          "stmt": "match",
+          "value": {
+            "expr": "local",
+            "name": "opcode"
+          },
+          "arms": [
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [6]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "write-enable"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [4]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "write-disable"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [80]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "volatile-sr-write-enable"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [5]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-status"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [53]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-status-2"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [21]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-status-3"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [1]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "write-status"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [49]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "write-status-2"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [17]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "write-status-3"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [3]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [11]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "fast-read"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [19]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-4b"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [12]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "fast-read-4b"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [2]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "page-program"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [18]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "page-program-4b"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [32]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "sector-erase"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [33]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "sector-erase-4b"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [82]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "block-erase-32k"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [216]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "block-erase-64k"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [220]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "block-erase-64k-4b"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [199, 96]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "chip-erase"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [185]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "deep-power-down"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [171]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "release-power-down"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [144]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-manufacturer-device-id"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [159]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-jedec-id"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [90]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-sfdp"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [75]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-unique-id"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [183]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "enter-4b-mode"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [233]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "exit-4b-mode"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [102]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "reset-enable"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [153]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "reset"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [117]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "program-erase-suspend"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [122]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "program-erase-resume"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [72]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-security-register"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [66]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "program-security-register"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [68]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "erase-security-register"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [54]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "block-lock"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [57]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "block-unlock"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [126]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "global-block-lock"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [152]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "global-block-unlock"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "default"
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "none"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "name": "opcode",
+          "type": "u8"
+        }
+      ],
+      "ret": {
+        "option": "Command"
+      }
+    },
+    {
+      "name": "bare",
+      "body": [
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "record",
+            "type": "Layout",
+            "fields": {
+              "address": {
+                "expr": "enum",
+                "type": "AddressWidth",
+                "value": "none"
+              },
+              "dummy": {
+                "expr": "lit",
+                "value": 0
+              },
+              "phase": {
+                "expr": "local",
+                "name": "phase"
+              }
+            }
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "phase",
+          "type": "Phase"
+        }
+      ],
+      "ret": "Layout"
+    },
+    {
+      "name": "addressed",
+      "body": [
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "record",
+            "type": "Layout",
+            "fields": {
+              "address": {
+                "expr": "local",
+                "name": "address"
+              },
+              "dummy": {
+                "expr": "local",
+                "name": "dummy"
+              },
+              "phase": {
+                "expr": "local",
+                "name": "phase"
+              }
+            }
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "address",
+          "type": "AddressWidth"
+        },
+        {
+          "name": "dummy",
+          "type": "u8"
+        },
+        {
+          "name": "phase",
+          "type": "Phase"
+        }
+      ],
+      "ret": "Layout"
+    },
+    {
+      "name": "layoutOf",
+      "body": [
+        {
+          "stmt": "match",
+          "value": {
+            "expr": "local",
+            "name": "command"
+          },
+          "arms": [
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [
+                  "write-enable",
+                  "write-disable",
+                  "volatile-sr-write-enable",
+                  "chip-erase",
+                  "deep-power-down",
+                  "enter-4b-mode",
+                  "exit-4b-mode",
+                  "reset-enable",
+                  "reset",
+                  "program-erase-suspend",
+                  "program-erase-resume",
+                  "global-block-lock",
+                  "global-block-unlock"
+                ]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "none"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-status"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "read-status",
+                        "fields": {
+                          "register": {
+                            "expr": "lit",
+                            "value": 1
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-status-2"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "read-status",
+                        "fields": {
+                          "register": {
+                            "expr": "lit",
+                            "value": 2
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-status-3"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "read-status",
+                        "fields": {
+                          "register": {
+                            "expr": "lit",
+                            "value": 3
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["write-status"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "write-status",
+                        "fields": {
+                          "first": {
+                            "expr": "lit",
+                            "value": 1
+                          },
+                          "last": {
+                            "expr": "lit",
+                            "value": 2
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["write-status-2"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "write-status",
+                        "fields": {
+                          "first": {
+                            "expr": "lit",
+                            "value": 2
+                          },
+                          "last": {
+                            "expr": "lit",
+                            "value": 2
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["write-status-3"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "write-status",
+                        "fields": {
+                          "first": {
+                            "expr": "lit",
+                            "value": 3
+                          },
+                          "last": {
+                            "expr": "lit",
+                            "value": 3
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "mode"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-out"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["fast-read", "read-security-register"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "mode"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 1
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-out"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-4b"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "four"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-out"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["fast-read-4b"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "four"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 1
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-out"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["page-program", "program-security-register"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "mode"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-in"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["page-program-4b"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "four"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-in"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [
+                  "sector-erase",
+                  "block-erase-32k",
+                  "block-erase-64k",
+                  "erase-security-register",
+                  "block-lock",
+                  "block-unlock"
+                ]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "mode"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "none"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["sector-erase-4b", "block-erase-64k-4b"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "four"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "none"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["release-power-down"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "signature"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-manufacturer-device-id"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "three"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "id",
+                        "fields": {
+                          "scheme": {
+                            "expr": "enum",
+                            "type": "IdScheme",
+                            "value": "manufacturer-device"
+                          },
+                          "len": {
+                            "expr": "lit",
+                            "value": 2
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-jedec-id"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "id",
+                        "fields": {
+                          "scheme": {
+                            "expr": "enum",
+                            "type": "IdScheme",
+                            "value": "jedec"
+                          },
+                          "len": {
+                            "expr": "none"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-sfdp"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "three"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 1
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-out"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-unique-id"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "none"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 4
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "id",
+                        "fields": {
+                          "scheme": {
+                            "expr": "enum",
+                            "type": "IdScheme",
+                            "value": "unique"
+                          },
+                          "len": {
+                            "expr": "lit",
+                            "value": 8
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "name": "command",
+          "type": "Command"
+        }
+      ],
+      "ret": "Layout"
+    },
+    {
+      "name": "addressWidth",
+      "body": [
+        {
+          "stmt": "match",
+          "value": {
+            "expr": "local",
+            "name": "width"
+          },
+          "arms": [
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["none"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["three"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": 3
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["four"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": 4
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["mode"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "local",
+                    "name": "mode"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "name": "width",
+          "type": "AddressWidth"
+        },
+        {
+          "name": "mode",
+          "type": "u8"
+        }
+      ],
+      "ret": "u8"
+    },
+    {
+      "name": "sameBatch",
+      "body": [
+        {
+          "stmt": "match",
+          "value": {
+            "expr": "local",
+            "name": "a"
+          },
+          "arms": [
+            {
+              "pattern": {
+                "pattern": "variant",
+                "name": "data",
+                "binds": {
+                  "direction": "direction"
+                }
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "if-variant",
+                    "value": {
+                      "expr": "local",
+                      "name": "b"
+                    },
+                    "variant": "data",
+                    "then": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "direction"
+                      },
+                      "right": {
+                        "expr": "local",
+                        "name": "b_direction"
+                      }
+                    },
+                    "else": {
+                      "expr": "lit",
+                      "value": false
+                    },
+                    "binds": {
+                      "direction": "b_direction"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "variant",
+                "name": "id",
+                "binds": {
+                  "scheme": "scheme"
+                }
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "if-variant",
+                    "value": {
+                      "expr": "local",
+                      "name": "b"
+                    },
+                    "variant": "id",
+                    "then": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "scheme"
+                      },
+                      "right": {
+                        "expr": "local",
+                        "name": "b_scheme"
+                      }
+                    },
+                    "else": {
+                      "expr": "lit",
+                      "value": false
+                    },
+                    "binds": {
+                      "scheme": "b_scheme"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "name": "a",
+          "type": "BatchOf"
+        },
+        {
+          "name": "b",
+          "type": "BatchOf"
+        }
+      ],
+      "ret": "bool"
+    }
+  ],
+  "decoder": {
+    "name": "spi-nor",
+    "category": "device",
+    "config": {
+      "type": "SpiNorConfig",
+      "defaults": {
+        "addressBytes": "three"
+      }
+    },
+    "input": {
+      "kind": "bus",
+      "schema": {
+        "name": "spi.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "nor.events",
+        "version": 2
+      }
+    },
+    "methods": [
+      {
+        "name": "hold",
+        "body": [
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "if-some",
+              "value": {
+                "expr": "intrinsic",
+                "name": "batch-at",
+                "args": [
+                  {
+                    "expr": "self",
+                    "field": "batch"
+                  }
+                ]
+              },
+              "bind": "at",
+              "some": {
+                "expr": "field",
+                "of": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "at"
+                  },
+                  "name": "span"
+                },
+                "name": "start"
+              },
+              "none": {
+                "expr": "none"
+              }
+            }
+          }
+        ],
+        "ret": {
+          "option": "u64"
+        }
+      },
+      {
+        "name": "onGap",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "fourByte"
+            },
+            "value": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "self",
+                  "field": "config"
+                },
+                "name": "addressBytes"
+              },
+              "right": {
+                "expr": "enum",
+                "type": "AddressBytes",
+                "value": "four"
+              }
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "resetEnabled"
+            },
+            "value": {
+              "expr": "lit",
+              "value": false
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "range",
+            "type": "range"
+          }
+        ]
+      },
+      {
+        "name": "addressBytes",
+        "body": [
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "ternary",
+              "cond": {
+                "expr": "self",
+                "field": "fourByte"
+              },
+              "then": {
+                "expr": "lit",
+                "value": 4
+              },
+              "else": {
+                "expr": "lit",
+                "value": 3
+              }
+            }
+          }
+        ],
+        "ret": "u8"
+      },
+      {
+        "name": "completed",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "auto",
+            "value": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "self",
+                  "field": "config"
+                },
+                "name": "addressBytes"
+              },
+              "right": {
+                "expr": "enum",
+                "type": "AddressBytes",
+                "value": "auto"
+              }
+            },
+            "type": "bool"
+          },
+          {
+            "stmt": "match",
+            "value": {
+              "expr": "local",
+              "name": "command"
+            },
+            "arms": [
+              {
+                "pattern": {
+                  "pattern": "values",
+                  "values": ["enter-4b-mode"]
+                },
+                "body": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "local",
+                      "name": "auto"
+                    },
+                    "then": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "fourByte"
+                        },
+                        "value": {
+                          "expr": "lit",
+                          "value": true
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "values",
+                  "values": ["exit-4b-mode"]
+                },
+                "body": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "local",
+                      "name": "auto"
+                    },
+                    "then": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "fourByte"
+                        },
+                        "value": {
+                          "expr": "lit",
+                          "value": false
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "values",
+                  "values": ["reset"]
+                },
+                "body": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "and",
+                      "left": {
+                        "expr": "local",
+                        "name": "auto"
+                      },
+                      "right": {
+                        "expr": "local",
+                        "name": "resetEnabled"
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "fourByte"
+                        },
+                        "value": {
+                          "expr": "lit",
+                          "value": false
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "values",
+                  "values": ["reset-enable"]
+                },
+                "body": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "resetEnabled"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": true
+                    }
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "default"
+                },
+                "body": []
+              }
+            ]
+          }
+        ],
+        "params": [
+          {
+            "name": "command",
+            "type": "Command"
+          },
+          {
+            "name": "resetEnabled",
+            "type": "bool"
+          }
+        ]
+      },
+      {
+        "name": "begin",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "op",
+            "value": {
+              "expr": "self",
+              "field": "nextOp"
+            },
+            "type": "u64"
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "nextOp"
+            },
+            "op": "add",
+            "value": {
+              "expr": "lit",
+              "value": 1
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "local",
+              "name": "op"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "count"
+            },
+            "value": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "NorEvent",
+                  "kind": "begin",
+                  "fields": {
+                    "op": {
+                      "expr": "local",
+                      "name": "op"
+                    },
+                    "tx": {
+                      "expr": "local",
+                      "name": "tx"
+                    },
+                    "command": {
+                      "expr": "local",
+                      "name": "command"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "local",
+              "name": "op"
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "command",
+            "type": "Command"
+          },
+          {
+            "name": "tx",
+            "type": "u64"
+          }
+        ],
+        "ret": "u64"
+      },
+      {
+        "name": "push",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "and",
+              "left": {
+                "expr": "unary",
+                "op": "not",
+                "value": {
+                  "expr": "intrinsic",
+                  "name": "batch-is-empty",
+                  "args": [
+                    {
+                      "expr": "self",
+                      "field": "batch"
+                    }
+                  ]
+                }
+              },
+              "right": {
+                "expr": "unary",
+                "op": "not",
+                "value": {
+                  "expr": "call",
+                  "name": "sameBatch",
+                  "args": [
+                    {
+                      "expr": "self",
+                      "field": "batchOf"
+                    },
+                    {
+                      "expr": "local",
+                      "name": "of"
+                    }
+                  ]
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "flush",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "op"
+                      },
+                      {
+                        "expr": "none"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "intrinsic",
+              "name": "batch-is-empty",
+              "args": [
+                {
+                  "expr": "self",
+                  "field": "batch"
+                }
+              ]
+            },
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "batchOf"
+                },
+                "value": {
+                  "expr": "local",
+                  "name": "of"
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "batchOffset"
+                },
+                "value": {
+                  "expr": "self",
+                  "field": "count"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "intrinsic",
+              "name": "batch-push",
+              "args": [
+                {
+                  "expr": "self",
+                  "field": "batch"
+                },
+                {
+                  "expr": "local",
+                  "name": "byte"
+                },
+                {
+                  "expr": "local",
+                  "name": "where"
+                }
+              ]
+            }
+          },
+          {
+            "stmt": "match",
+            "value": {
+              "expr": "local",
+              "name": "of"
+            },
+            "arms": [
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "data"
+                },
+                "body": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "count"
+                    },
+                    "op": "add",
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "default"
+                },
+                "body": []
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "intrinsic",
+              "name": "batch-is-full",
+              "args": [
+                {
+                  "expr": "self",
+                  "field": "batch"
+                }
+              ]
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "flush",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "op"
+                      },
+                      {
+                        "expr": "none"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "op",
+            "type": "u64"
+          },
+          {
+            "name": "of",
+            "type": "BatchOf"
+          },
+          {
+            "name": "byte",
+            "type": "u8"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "flush",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "intrinsic",
+              "name": "batch-is-empty",
+              "args": [
+                {
+                  "expr": "self",
+                  "field": "batch"
+                }
+              ]
+            },
+            "then": [
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "taken",
+            "value": {
+              "expr": "intrinsic",
+              "name": "batch-take",
+              "args": [
+                {
+                  "expr": "self",
+                  "field": "batch"
+                }
+              ]
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "where",
+            "value": {
+              "expr": "intrinsic",
+              "name": "unwrap-or",
+              "args": [
+                {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "taken"
+                  },
+                  "name": "at"
+                },
+                {
+                  "expr": "intrinsic",
+                  "name": "at",
+                  "args": [
+                    {
+                      "expr": "intrinsic",
+                      "name": "unwrap-or",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "decided"
+                        },
+                        {
+                          "expr": "lit",
+                          "value": 0
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            "mutable": true,
+            "type": "provenance"
+          },
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "local",
+              "name": "decided"
+            },
+            "bind": "decided",
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "where"
+                },
+                "value": {
+                  "expr": "intrinsic",
+                  "name": "over",
+                  "args": [
+                    {
+                      "expr": "field",
+                      "of": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "where"
+                        },
+                        "name": "span"
+                      },
+                      "name": "start"
+                    },
+                    {
+                      "expr": "field",
+                      "of": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "where"
+                        },
+                        "name": "span"
+                      },
+                      "name": "end"
+                    },
+                    {
+                      "expr": "intrinsic",
+                      "name": "max",
+                      "args": [
+                        {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "where"
+                          },
+                          "name": "settled"
+                        },
+                        {
+                          "expr": "local",
+                          "name": "decided"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "of",
+            "value": {
+              "expr": "self",
+              "field": "batchOf"
+            },
+            "type": "BatchOf"
+          },
+          {
+            "stmt": "match",
+            "value": {
+              "expr": "local",
+              "name": "of"
+            },
+            "arms": [
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "data",
+                  "binds": {
+                    "direction": "direction"
+                  }
+                },
+                "body": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "NorEvent",
+                          "kind": "data",
+                          "fields": {
+                            "op": {
+                              "expr": "local",
+                              "name": "op"
+                            },
+                            "direction": {
+                              "expr": "local",
+                              "name": "direction"
+                            },
+                            "offset": {
+                              "expr": "self",
+                              "field": "batchOffset"
+                            },
+                            "bytes": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "taken"
+                              },
+                              "name": "items"
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "where"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "id",
+                  "binds": {
+                    "scheme": "scheme"
+                  }
+                },
+                "body": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "NorEvent",
+                          "kind": "id",
+                          "fields": {
+                            "op": {
+                              "expr": "local",
+                              "name": "op"
+                            },
+                            "scheme": {
+                              "expr": "local",
+                              "name": "scheme"
+                            },
+                            "bytes": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "taken"
+                              },
+                              "name": "items"
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "where"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "op",
+            "type": "u64"
+          },
+          {
+            "name": "decided",
+            "type": {
+              "option": "u64"
+            }
+          }
+        ]
+      },
+      {
+        "name": "end",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "flush",
+                "args": [
+                  {
+                    "expr": "local",
+                    "name": "op"
+                  },
+                  {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "where"
+                    },
+                    "name": "settled"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "NorEvent",
+                  "kind": "end",
+                  "fields": {
+                    "op": {
+                      "expr": "local",
+                      "name": "op"
+                    },
+                    "reason": {
+                      "expr": "local",
+                      "name": "reason"
+                    }
+                  }
+                },
+                "at": {
+                  "expr": "local",
+                  "name": "where"
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "op",
+            "type": "u64"
+          },
+          {
+            "name": "reason",
+            "type": "NorEnd"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "recover",
+        "body": [
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "self",
+              "field": "open"
+            },
+            "bind": "open",
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "end",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "open"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "reason"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "where"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "reason",
+            "type": "NorEnd"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "transaction",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "opcode",
+            "value": {
+              "expr": "required",
+              "value": {
+                "expr": "field",
+                "of": {
+                  "expr": "await",
+                  "op": {
+                    "op": "item"
+                  }
+                },
+                "name": "mosi"
+              }
+            },
+            "type": "u8"
+          },
+          {
+            "stmt": "let",
+            "name": "resetEnabled",
+            "value": {
+              "expr": "self",
+              "field": "resetEnabled"
+            },
+            "type": "bool"
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "resetEnabled"
+            },
+            "value": {
+              "expr": "lit",
+              "value": false
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "command",
+            "value": {
+              "expr": "call",
+              "name": "commandOf",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "opcode"
+                }
+              ]
+            },
+            "type": {
+              "option": "Command"
+            }
+          },
+          {
+            "stmt": "let-some",
+            "bind": "command",
+            "value": {
+              "expr": "local",
+              "name": "command"
+            },
+            "else": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "NorEvent",
+                      "kind": "unknown-command",
+                      "fields": {
+                        "tx": {
+                          "expr": "intrinsic",
+                          "name": "tx-id",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "tx"
+                            }
+                          ]
+                        },
+                        "opcode": {
+                          "expr": "local",
+                          "name": "opcode"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "drain"
+                  }
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "op",
+            "value": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "begin",
+                "args": [
+                  {
+                    "expr": "local",
+                    "name": "command"
+                  },
+                  {
+                    "expr": "intrinsic",
+                    "name": "tx-id",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "tx"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "type": "u64"
+          },
+          {
+            "stmt": "let",
+            "name": "layout",
+            "value": {
+              "expr": "call",
+              "name": "layoutOf",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "command"
+                }
+              ]
+            },
+            "type": "Layout"
+          },
+          {
+            "stmt": "let",
+            "name": "width",
+            "value": {
+              "expr": "call",
+              "name": "addressWidth",
+              "args": [
+                {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "layout"
+                  },
+                  "name": "address"
+                },
+                {
+                  "expr": "method",
+                  "name": "addressBytes",
+                  "args": []
+                }
+              ]
+            },
+            "type": "u8"
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "gt",
+              "left": {
+                "expr": "local",
+                "name": "width"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 0
+              }
+            },
+            "then": [
+              {
+                "stmt": "let",
+                "name": "address",
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                },
+                "mutable": true,
+                "type": "u32"
+              },
+              {
+                "stmt": "for",
+                "var": "i",
+                "from": {
+                  "expr": "lit",
+                  "value": 0
+                },
+                "to": {
+                  "expr": "local",
+                  "name": "width"
+                },
+                "body": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "local",
+                      "name": "address"
+                    },
+                    "value": {
+                      "expr": "binary",
+                      "op": "bit-or",
+                      "left": {
+                        "expr": "binary",
+                        "op": "shl",
+                        "left": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 8
+                        }
+                      },
+                      "right": {
+                        "expr": "required",
+                        "value": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "await",
+                            "op": {
+                              "op": "item"
+                            }
+                          },
+                          "name": "mosi"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "NorEvent",
+                      "kind": "address",
+                      "fields": {
+                        "op": {
+                          "expr": "local",
+                          "name": "op"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "bytes": {
+                          "expr": "local",
+                          "name": "width"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "gt",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "layout"
+                },
+                "name": "dummy"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 0
+              }
+            },
+            "then": [
+              {
+                "stmt": "for",
+                "var": "i",
+                "from": {
+                  "expr": "lit",
+                  "value": 0
+                },
+                "to": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "layout"
+                  },
+                  "name": "dummy"
+                },
+                "body": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "item"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "NorEvent",
+                      "kind": "dummy",
+                      "fields": {
+                        "op": {
+                          "expr": "local",
+                          "name": "op"
+                        },
+                        "bytes": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "layout"
+                          },
+                          "name": "dummy"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "unary",
+              "op": "not",
+              "value": {
+                "expr": "await",
+                "op": {
+                  "op": "method",
+                  "name": "phase",
+                  "args": [
+                    {
+                      "expr": "local",
+                      "name": "tx"
+                    },
+                    {
+                      "expr": "local",
+                      "name": "op"
+                    },
+                    {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "layout"
+                      },
+                      "name": "phase"
+                    }
+                  ]
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "drain"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "end",
+                "args": [
+                  {
+                    "expr": "local",
+                    "name": "op"
+                  },
+                  {
+                    "expr": "enum",
+                    "type": "NorEnd",
+                    "value": "complete"
+                  },
+                  {
+                    "expr": "intrinsic",
+                    "name": "consumed",
+                    "args": []
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "method",
+              "name": "completed",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "command"
+                },
+                {
+                  "expr": "local",
+                  "name": "resetEnabled"
+                }
+              ]
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tx",
+            "type": "cursor"
+          }
+        ]
+      },
+      {
+        "name": "phase",
+        "body": [
+          {
+            "stmt": "match",
+            "value": {
+              "expr": "local",
+              "name": "phase"
+            },
+            "arms": [
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "none"
+                },
+                "body": [
+                  {
+                    "stmt": "return",
+                    "value": {
+                      "expr": "lit",
+                      "value": false
+                    }
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "data-out"
+                },
+                "body": [
+                  {
+                    "stmt": "loop",
+                    "body": [
+                      {
+                        "stmt": "let",
+                        "name": "word",
+                        "value": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item-or-end"
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "let-some",
+                        "bind": "word",
+                        "value": {
+                          "expr": "local",
+                          "name": "word"
+                        },
+                        "else": [
+                          {
+                            "stmt": "return",
+                            "value": {
+                              "expr": "lit",
+                              "value": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "push",
+                            "args": [
+                              {
+                                "expr": "local",
+                                "name": "op"
+                              },
+                              {
+                                "expr": "variant",
+                                "type": "BatchOf",
+                                "kind": "data",
+                                "fields": {
+                                  "direction": {
+                                    "expr": "enum",
+                                    "type": "Direction",
+                                    "value": "out"
+                                  }
+                                }
+                              },
+                              {
+                                "expr": "required",
+                                "value": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "word"
+                                  },
+                                  "name": "miso"
+                                }
+                              },
+                              {
+                                "expr": "intrinsic",
+                                "name": "consumed",
+                                "args": []
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "data-in"
+                },
+                "body": [
+                  {
+                    "stmt": "let",
+                    "name": "data",
+                    "value": {
+                      "expr": "variant",
+                      "type": "BatchOf",
+                      "kind": "data",
+                      "fields": {
+                        "direction": {
+                          "expr": "enum",
+                          "type": "Direction",
+                          "value": "in"
+                        }
+                      }
+                    },
+                    "type": "BatchOf"
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "first",
+                    "value": {
+                      "expr": "required",
+                      "value": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item"
+                          }
+                        },
+                        "name": "mosi"
+                      }
+                    },
+                    "type": "u8"
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "method",
+                        "name": "push",
+                        "args": [
+                          {
+                            "expr": "local",
+                            "name": "op"
+                          },
+                          {
+                            "expr": "local",
+                            "name": "data"
+                          },
+                          {
+                            "expr": "local",
+                            "name": "first"
+                          },
+                          {
+                            "expr": "intrinsic",
+                            "name": "consumed",
+                            "args": []
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "loop",
+                    "body": [
+                      {
+                        "stmt": "let",
+                        "name": "word",
+                        "value": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item-or-end"
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "let-some",
+                        "bind": "word",
+                        "value": {
+                          "expr": "local",
+                          "name": "word"
+                        },
+                        "else": [
+                          {
+                            "stmt": "return",
+                            "value": {
+                              "expr": "lit",
+                              "value": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "push",
+                            "args": [
+                              {
+                                "expr": "local",
+                                "name": "op"
+                              },
+                              {
+                                "expr": "local",
+                                "name": "data"
+                              },
+                              {
+                                "expr": "required",
+                                "value": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "word"
+                                  },
+                                  "name": "mosi"
+                                }
+                              },
+                              {
+                                "expr": "intrinsic",
+                                "name": "consumed",
+                                "args": []
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "read-status",
+                  "binds": {
+                    "register": "register"
+                  }
+                },
+                "body": [
+                  {
+                    "stmt": "loop",
+                    "body": [
+                      {
+                        "stmt": "let",
+                        "name": "word",
+                        "value": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item-or-end"
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "let-some",
+                        "bind": "word",
+                        "value": {
+                          "expr": "local",
+                          "name": "word"
+                        },
+                        "else": [
+                          {
+                            "stmt": "return",
+                            "value": {
+                              "expr": "lit",
+                              "value": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "let",
+                        "name": "value",
+                        "value": {
+                          "expr": "required",
+                          "value": {
+                            "expr": "field",
+                            "of": {
+                              "expr": "local",
+                              "name": "word"
+                            },
+                            "name": "miso"
+                          }
+                        },
+                        "type": "u8"
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "NorEvent",
+                              "kind": "status",
+                              "fields": {
+                                "op": {
+                                  "expr": "local",
+                                  "name": "op"
+                                },
+                                "register": {
+                                  "expr": "local",
+                                  "name": "register"
+                                },
+                                "value": {
+                                  "expr": "local",
+                                  "name": "value"
+                                },
+                                "written": {
+                                  "expr": "lit",
+                                  "value": false
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "write-status",
+                  "binds": {
+                    "first": "first",
+                    "last": "last"
+                  }
+                },
+                "body": [
+                  {
+                    "stmt": "let",
+                    "name": "value",
+                    "value": {
+                      "expr": "required",
+                      "value": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item"
+                          }
+                        },
+                        "name": "mosi"
+                      }
+                    },
+                    "type": "u8"
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "NorEvent",
+                          "kind": "status",
+                          "fields": {
+                            "op": {
+                              "expr": "local",
+                              "name": "op"
+                            },
+                            "register": {
+                              "expr": "local",
+                              "name": "first"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "written": {
+                              "expr": "lit",
+                              "value": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "for",
+                    "var": "register",
+                    "from": {
+                      "expr": "binary",
+                      "op": "add",
+                      "left": {
+                        "expr": "local",
+                        "name": "first"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 1
+                      }
+                    },
+                    "to": {
+                      "expr": "binary",
+                      "op": "add",
+                      "left": {
+                        "expr": "local",
+                        "name": "last"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 1
+                      }
+                    },
+                    "body": [
+                      {
+                        "stmt": "let",
+                        "name": "word",
+                        "value": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item-or-end"
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "let-some",
+                        "bind": "word",
+                        "value": {
+                          "expr": "local",
+                          "name": "word"
+                        },
+                        "else": [
+                          {
+                            "stmt": "return",
+                            "value": {
+                              "expr": "lit",
+                              "value": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "NorEvent",
+                              "kind": "status",
+                              "fields": {
+                                "op": {
+                                  "expr": "local",
+                                  "name": "op"
+                                },
+                                "register": {
+                                  "expr": "local",
+                                  "name": "register"
+                                },
+                                "value": {
+                                  "expr": "required",
+                                  "value": {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "local",
+                                      "name": "word"
+                                    },
+                                    "name": "mosi"
+                                  }
+                                },
+                                "written": {
+                                  "expr": "lit",
+                                  "value": true
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "return",
+                    "value": {
+                      "expr": "lit",
+                      "value": false
+                    }
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "id",
+                  "binds": {
+                    "len": "len",
+                    "scheme": "scheme"
+                  }
+                },
+                "body": [
+                  {
+                    "stmt": "let",
+                    "name": "left",
+                    "value": {
+                      "expr": "local",
+                      "name": "len"
+                    },
+                    "mutable": true,
+                    "type": {
+                      "option": "u8"
+                    }
+                  },
+                  {
+                    "stmt": "loop",
+                    "body": [
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "if-some",
+                          "value": {
+                            "expr": "local",
+                            "name": "left"
+                          },
+                          "bind": "left_2",
+                          "some": {
+                            "expr": "binary",
+                            "op": "eq",
+                            "left": {
+                              "expr": "local",
+                              "name": "left_2"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 0
+                            }
+                          },
+                          "none": {
+                            "expr": "lit",
+                            "value": false
+                          }
+                        },
+                        "then": [
+                          {
+                            "stmt": "expr",
+                            "expr": {
+                              "expr": "await",
+                              "op": {
+                                "op": "method",
+                                "name": "flush",
+                                "args": [
+                                  {
+                                    "expr": "local",
+                                    "name": "op"
+                                  },
+                                  {
+                                    "expr": "none"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "stmt": "return",
+                            "value": {
+                              "expr": "lit",
+                              "value": false
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "let",
+                        "name": "word",
+                        "value": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item-or-end"
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "let-some",
+                        "bind": "word",
+                        "value": {
+                          "expr": "local",
+                          "name": "word"
+                        },
+                        "else": [
+                          {
+                            "stmt": "return",
+                            "value": {
+                              "expr": "lit",
+                              "value": true
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "push",
+                            "args": [
+                              {
+                                "expr": "local",
+                                "name": "op"
+                              },
+                              {
+                                "expr": "variant",
+                                "type": "BatchOf",
+                                "kind": "id",
+                                "fields": {
+                                  "scheme": {
+                                    "expr": "local",
+                                    "name": "scheme"
+                                  }
+                                }
+                              },
+                              {
+                                "expr": "required",
+                                "value": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "word"
+                                  },
+                                  "name": "miso"
+                                }
+                              },
+                              {
+                                "expr": "intrinsic",
+                                "name": "consumed",
+                                "args": []
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "if-some",
+                        "value": {
+                          "expr": "local",
+                          "name": "left"
+                        },
+                        "bind": "left",
+                        "then": [
+                          {
+                            "stmt": "assign",
+                            "target": {
+                              "expr": "local",
+                              "name": "left"
+                            },
+                            "op": "sub",
+                            "value": {
+                              "expr": "lit",
+                              "value": 1
+                            }
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "pattern": {
+                  "pattern": "variant",
+                  "name": "signature"
+                },
+                "body": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "await",
+                        "op": {
+                          "op": "item-or-end"
+                        }
+                      },
+                      "right": {
+                        "expr": "none"
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "return",
+                        "value": {
+                          "expr": "lit",
+                          "value": true
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "for",
+                    "var": "i",
+                    "from": {
+                      "expr": "lit",
+                      "value": 1
+                    },
+                    "to": {
+                      "expr": "lit",
+                      "value": 3
+                    },
+                    "body": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item"
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "NorEvent",
+                          "kind": "dummy",
+                          "fields": {
+                            "op": {
+                              "expr": "local",
+                              "name": "op"
+                            },
+                            "bytes": {
+                              "expr": "lit",
+                              "value": 3
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "word",
+                    "value": {
+                      "expr": "await",
+                      "op": {
+                        "op": "item-or-end"
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "let-some",
+                    "bind": "word",
+                    "value": {
+                      "expr": "local",
+                      "name": "word"
+                    },
+                    "else": [
+                      {
+                        "stmt": "return",
+                        "value": {
+                          "expr": "lit",
+                          "value": true
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "id",
+                    "value": {
+                      "expr": "variant",
+                      "type": "BatchOf",
+                      "kind": "id",
+                      "fields": {
+                        "scheme": {
+                          "expr": "enum",
+                          "type": "IdScheme",
+                          "value": "electronic-signature"
+                        }
+                      }
+                    },
+                    "type": "BatchOf"
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "method",
+                        "name": "push",
+                        "args": [
+                          {
+                            "expr": "local",
+                            "name": "op"
+                          },
+                          {
+                            "expr": "local",
+                            "name": "id"
+                          },
+                          {
+                            "expr": "required",
+                            "value": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "word"
+                              },
+                              "name": "miso"
+                            }
+                          },
+                          {
+                            "expr": "intrinsic",
+                            "name": "consumed",
+                            "args": []
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "method",
+                        "name": "flush",
+                        "args": [
+                          {
+                            "expr": "local",
+                            "name": "op"
+                          },
+                          {
+                            "expr": "none"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "return",
+                    "value": {
+                      "expr": "lit",
+                      "value": false
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tx",
+            "type": "cursor"
+          },
+          {
+            "name": "op",
+            "type": "u64"
+          },
+          {
+            "name": "phase",
+            "type": "Phase"
+          }
+        ],
+        "ret": "bool"
+      }
+    ],
+    "requires": [
+      {
+        "key": "wordBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "key": "bitOrder",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "msb-first"
+          }
+        ]
+      },
+      {
+        "key": "cs",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "mosi",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "miso",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "props": [
+      {
+        "key": "addressBytes",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "addressBytes"
+        }
+      }
+    ],
+    "partial": "drain",
+    "recovery": {
+      "reason": "NorEnd",
+      "incomplete": "incomplete",
+      "truncated": "aborted",
+      "missing": "aborted",
+      "gap": "aborted",
+      "end": "aborted"
+    },
+    "state": [
+      {
+        "name": "fourByte",
+        "type": "bool",
+        "init": {
+          "expr": "binary",
+          "op": "eq",
+          "left": {
+            "expr": "field",
+            "of": {
+              "expr": "self",
+              "field": "config"
+            },
+            "name": "addressBytes"
+          },
+          "right": {
+            "expr": "enum",
+            "type": "AddressBytes",
+            "value": "four"
+          }
+        }
+      },
+      {
+        "name": "resetEnabled",
+        "type": "bool",
+        "init": {
+          "expr": "lit",
+          "value": false
+        }
+      },
+      {
+        "name": "nextOp",
+        "type": "u64",
+        "init": {
+          "expr": "lit",
+          "value": 1
+        }
+      },
+      {
+        "name": "open",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "batch",
+        "type": {
+          "batch": "u8",
+          "bound": 32
+        },
+        "init": {
+          "expr": "intrinsic",
+          "name": "batch",
+          "args": [
+            {
+              "expr": "local",
+              "name": "DATA_BATCH"
+            }
+          ]
+        },
+        "readonly": true
+      },
+      {
+        "name": "batchOf",
+        "type": "BatchOf",
+        "init": {
+          "expr": "variant",
+          "type": "BatchOf",
+          "kind": "data",
+          "fields": {
+            "direction": {
+              "expr": "enum",
+              "type": "Direction",
+              "value": "out"
+            }
+          }
+        }
+      },
+      {
+        "name": "batchOffset",
+        "type": "u32",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "count",
+        "type": "u32",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      }
+    ]
+  }
+}

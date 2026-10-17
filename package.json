@@ -23,7 +23,9 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "bindings": "cargo test --workspace export_bindings"
+    "bindings": "cargo test --workspace export_bindings",
+    "dsl:compile": "node uiharu/compiler/src/main.ts",
+    "dsl:check": "node uiharu/compiler/src/main.ts --check"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
