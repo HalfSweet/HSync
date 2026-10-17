@@ -56,13 +56,14 @@ Click the sample rate │ duration │ channels button in the top bar:
 
 ## Viewing waveforms
 
-- **Zoom**: Ctrl (⌘ on macOS) + wheel zooms around the pointer. You can also use the −, + and **Zoom to fit** buttons in the status bar, or the `+`, `-` and `Home` keys.
+- **Zoom**: Ctrl (⌘ on macOS) + wheel zooms around the pointer; to zoom with the wheel alone, turn on **Zoom the waveform with the wheel alone** in the settings (over the channel labels on the left, the wheel then still scrolls the channels). You can also use the −, + and **Zoom to fit** buttons in the status bar, or the `+`, `-` and `Home` keys.
 - **Pan**: drag in the waveform area; use Shift + wheel or swipe sideways on a trackpad; or press `←` and `→` (with Shift, half a screen at a time). If you let go after a quick drag, the waveform keeps gliding for a moment (you can turn this off in the settings).
 - **Overview strip**: click to centre the view there, drag to move the view, and use the wheel to zoom.
 - **Hover readout**: rest the pointer on a waveform and the pulse under it is shaded, while the status bar shows its channel and width, plus the period, frequency and duty cycle it makes with the next pulse. Data lines a decoder uses, such as SDA or MOSI, show only the width; UART lines show roughly how many bits the pulse spans instead.
 - **Edge measurement**: click an edge on a waveform to start measuring. When the pointer comes near another edge, on the same channel or another, it snaps to it, and the status bar shows the time between the two edges, the number of samples and 1/Δt as you move. Click again to finish; the measurement stays on the waveform and its result in the status bar. Click another edge to start a new measurement, or click an empty spot or press `Esc` to clear it. While measuring you can still drag, pan with the wheel and zoom, so if the end point is off screen, move there first and then click.
 - **Segment**: drag along the ruler to set points A and B, or click a decode block to make its start and end the segment. The status bar shows the segment's duration; click it to see each channel's rising edges, falling edges and edge count within the segment. Press `Esc` to clear the segment.
 - **Channels**: click a channel's colour dot, double-click its name or right-click it to rename it or change its colour.
+- **Waveform height**: drag the bottom edge of a channel's label to make its waveform taller or shorter; double-click the edge to give it back its default height. Like colours, heights are saved in sessions and `.hsync` files.
 - The arrow at the start of a group header expands or collapses the group.
 
 ## Protocol decoding
@@ -81,9 +82,9 @@ Press `/` to focus the search box in the top bar:
 
 ## Files
 
-- **Open**: **Open file…** in the device menu, or ⌘O / Ctrl+O, reads HSync's own `.hsync` captures, which come back with the decoders, channel names, colours and view they were saved with, and DSView `.dsl` files (all versions). Choosing a VCD, FST or GHW waveform instead, as simulators and FPGA logic analyzers (Vivado's ILA, Quartus' Signal Tap, …) export them, opens the **Import waveform** dialog.
+- **Open**: **Open file…** in the device menu, or ⌘O / Ctrl+O, reads HSync's own `.hsync` captures, which come back with the decoders, channel names, colours, heights and view they were saved with, and DSView `.dsl` files (all versions). Choosing a VCD, FST or GHW waveform instead, as simulators and FPGA logic analyzers (Vivado's ILA, Quartus' Signal Tap, …) export them, opens the **Import waveform** dialog.
 - **Import**: the dialog lists the file's scopes and signals as a tree; tick the signals to import (search them by name), and click **Import**. Every bit becomes a channel, so a vector `data[7:0]` gives `data[0]` to `data[7]`; signals without a logic level (reals, strings) cannot be imported, and unknown (`x`) or high-impedance (`z`) values read as low. The **Sample rate** starts as the file's timestamps give it: the coarsest grid every timestamp falls on, which gives a logic analyzer export its sampling clock back when enough signals change; type the clock the file was sampled at if you know it, such as `25 MHz`. A line under the tree shows the sample rate, the number of samples and channels, and the memory the import needs. An imported capture has no decoders; add them as usual. **Save capture…** writes it as an `.hsync` file.
-- **Save**: **Save capture…** in the export menu (the download icon in the top bar), or ⌘S / Ctrl+S, saves an `.hsync` file: HSync's own format, holding the samples (compressed), the channel names, the decoders, the channel colours and the view, which all come back when the file is opened; the device settings of the moment are stored in it too. To give a capture to DSView, export it as a DSView capture: the `.dsl` file opens in DSView with its channel names and keeps HSync's decoders for HSync, and the decoders a DSView file lists are taken over when both know the protocol (I²C with a 24xx EEPROM, UART, SPI, CAN).
+- **Save**: **Save capture…** in the export menu (the download icon in the top bar), or ⌘S / Ctrl+S, saves an `.hsync` file: HSync's own format, holding the samples (compressed), the channel names, the decoders, the channel colours and heights and the view, which all come back when the file is opened; the device settings of the moment are stored in it too. To give a capture to DSView, export it as a DSView capture: the `.dsl` file opens in DSView with its channel names and keeps HSync's decoders for HSync, and the decoders a DSView file lists are taken over when both know the protocol (I²C with a 24xx EEPROM, UART, SPI, CAN).
 - **Export**: **Export…** in the export menu writes an HSync `.hsync` or DSView `.dsl` capture, CSV, VCD, FST, sigrok `.sr` or raw binary. You can export just the segment, or only some of the channels. You can cancel a save or an export while it runs.
 - **Sessions**: **Save session…** in the export menu stores the device settings, channels, triggers, decoders and capture mode as `.hsync-session.json`; **Load session…** in the device menu also reads DSView `.dsc` sessions. A session loaded before anything was captured keeps its channel names and decoders for the first capture.
 
@@ -92,7 +93,7 @@ Press `/` to focus the search box in the top bar:
 The **Settings** button at the right end of the top bar (or ⌘, / Ctrl+,) opens the settings page; pick a section on the left:
 
 - **Appearance**: **Theme** (**System**, **Light** or **Dark**), **Density** (**Comfortable** or **Compact**), **Language** (**System**, **简体中文** or **English**) and **Graphics acceleration**: with **Auto (WebGPU)**, waveforms are drawn with WebGPU, falling back to Canvas2D automatically where WebGPU is unavailable; the page shows which one is in use.
-- **Behaviour**: **Centre the view on the trigger**, **Follow the latest data while capturing**, **Keep scrolling after a quick drag**, **Show the latest data when a repeat stops** and **Check for updates at startup**. The first three have no effect while the view is zoomed to fit.
+- **Behaviour**: **Centre the view on the trigger**, **Follow the latest data while capturing**, **Keep scrolling after a quick drag**, **Zoom the waveform with the wheel alone**, **Show the latest data when a repeat stops** and **Check for updates at startup**. The first three have no effect while the view is zoomed to fit.
 - **Diagnostics**: the **Log level**, whether to **Write a log file**, and **Show in folder**, which opens the folder that holds the log.
 - **About** (at the foot of the side bar): the version and license, and updates. Click **Check for updates**; when a new version is available, click **Download and restart**, and once the download finishes the app restarts into the new version. With **Check for updates at startup** on, a small dot appears on the settings button and on **About** when a new version is found.
 
@@ -112,4 +113,5 @@ Opening menus and panels, switching options, and adding or removing list items a
 | ⌘S / Ctrl+S                   | Save the capture                                         |
 | ⌘, / Ctrl+,                   | Open or close the settings                               |
 | Ctrl / ⌘ + wheel              | Zoom around the pointer                                  |
+| Wheel                         | Scroll the channels, or zoom with the wheel setting on   |
 | Shift + wheel                 | Pan                                                      |
