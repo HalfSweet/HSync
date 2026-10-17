@@ -222,4 +222,48 @@ export type Event = { kind: 'tick'; at: u64 }
     expect(ok).toBe(false)
     expect(diagnostics[0]?.message).toContain('nowhere')
   })
+
+  test('marks the configuration fields that name channels, left out or listed too', () => {
+    const text = `
+import type { Bounded, Channel, Tick, u8, u64 } from 'uiharu'
+import { LogicDecoder, atLeast, defineLogicDecoder, eventSchema, mask, over } from 'uiharu'
+
+export type Event = { kind: 'tick'; at: u64 }
+export const events = eventSchema<Event>('test.events', 1)
+export interface Config {
+  clk: Channel
+  cs: Channel | undefined
+  lines: Bounded<Channel, 2>
+  mode: u8
+}
+
+class Test extends LogicDecoder<Config, Event> {
+  readonly watch = mask(this.config.clk, this.config.cs)
+  last: Tick | undefined = undefined
+  ${RUN}
+}
+
+export const test = defineLogicDecoder({
+  name: 'test',
+  category: 'line',
+  config: { defaults: { clk: 0, cs: 1, lines: [2, 3], mode: 0 } },
+  requires: (config) => ({ channels: atLeast(config.clk + 1) }),
+  output: events,
+  decoder: Test,
+})
+`
+    const project = loadProject(config, { [virtualFile]: text })
+    const file = project.program.getSourceFile(virtualFile)
+    if (!file) throw new Error('the virtual file is in the program')
+    const { module, diagnostics } = lowerModule(project, file)
+    expect(diagnostics).toEqual([])
+    const record = module?.types?.find((def) => def.name === 'Config')
+    const fields = record?.type === 'record' ? record.fields : []
+    expect(fields.map((field) => [field.name, field.channel ?? false])).toEqual([
+      ['clk', true],
+      ['cs', true],
+      ['lines', true],
+      ['mode', false],
+    ])
+  })
 })

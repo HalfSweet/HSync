@@ -12,10 +12,10 @@ use crate::Failure;
 use crate::args::{Args, UsageError};
 use crate::ndjson::Writer;
 use crate::setup::{self, Setup};
-use uiharu_registry::Description;
+use uiharu_registry::{Catalog, Description};
 
 /// The options of the command, beyond the shared ones.
-pub const OPTIONS: &[&str] = &["graph", "chunk", "stream", "progress", "stats"];
+pub const OPTIONS: &[&str] = &["graph", "ir", "chunk", "stream", "progress", "stats"];
 
 /// The flags among [`OPTIONS`].
 pub const FLAGS: &[&str] = &["progress", "stats"];
@@ -30,6 +30,9 @@ uiharu decode [options] <capture>
       --graph <file>            the pipeline described in a JSON file (source, nodes,
                                 connections, exposed outputs; see the README); the bus options
                                 below are not used then
+      --ir <file>               a decoder module to run interpreted from its IR (the JSON
+                                `pnpm dsl:compile` writes), under the module's name, in place
+                                of the decoder of that name built in; may be repeated
       --chunk <SAMPLES>         samples per block fed to the pipeline (default 65536)
       --stream <name>           write only this exposed output; may be repeated (default: all)
       --progress                also write progress lines
@@ -86,6 +89,20 @@ fn description(args: &Args) -> Result<Description, Failure> {
     }
 }
 
+/// The node types the pipeline may name: the engine's, and the modules `--ir` loads.
+fn catalog(args: &Args) -> Result<Catalog, Failure> {
+    let mut catalog = Catalog::new();
+    for path in args.values("ir") {
+        let file = File::open(path).map_err(|error| Failure::Io(format!("{path}: {error}")))?;
+        let module = serde_json::from_reader(BufReader::new(file))
+            .map_err(|error| Failure::Usage(format!("{path}: {error}")))?;
+        catalog
+            .load(&module)
+            .map_err(|error| Failure::Usage(format!("{path}: {error}")))?;
+    }
+    Ok(catalog)
+}
+
 pub fn run(args: &Args) -> Result<(), Failure> {
     let mut known: Vec<&str> = setup::OPTIONS.to_vec();
     known.extend(OPTIONS);
@@ -111,15 +128,14 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     }
     let wanted = |name: &str| streams.is_empty() || streams.contains(&name);
 
-    let built = uiharu_registry::build(&description)?;
-    let mut pipeline = built.pipeline;
+    let catalog = catalog(args)?;
+    let mut built = uiharu_registry::build_with(&description, &catalog)?;
     let source = built.source;
     let channels = built.channels;
     let mut output = Output {
         out: Box::new(BufWriter::new(io::stdout().lock())),
         progress: args.flag("progress"),
-        writers: built
-            .streams
+        writers: std::mem::take(&mut built.streams)
             .into_iter()
             .map(|stream| {
                 let written = wanted(&stream.name);
@@ -127,6 +143,7 @@ pub fn run(args: &Args) -> Result<(), Failure> {
             })
             .collect(),
     };
+    let pipeline = &mut built.pipeline;
 
     let mut reader: Box<dyn Read> = if path == "-" {
         Box::new(BufReader::new(io::stdin().lock()))
@@ -169,17 +186,13 @@ pub fn run(args: &Args) -> Result<(), Failure> {
         }
         let block = LogicBlock::from_interleaved(start, channels, &buffer[..samples * unit])
             .map_err(|error| Failure::Io(error.to_string()))?;
-        push(
-            &mut pipeline,
-            &mut output,
-            SignalItem::Data(Arc::new(block)),
-        )?;
+        push(pipeline, &mut output, SignalItem::Data(Arc::new(block)))?;
         start = start.offset(samples as u64);
         if read < buffer.len() {
             break;
         }
     }
-    push(&mut pipeline, &mut output, SignalItem::End(start))?;
+    push(pipeline, &mut output, SignalItem::End(start))?;
     loop {
         pipeline.run();
         output.drain()?;
@@ -202,6 +215,14 @@ pub fn run(args: &Args) -> Result<(), Failure> {
                 queue.name, queue.high_water, queue.capacity
             );
         }
+    }
+    // An interpreted decoder that faulted stopped decoding; what it emitted before is out.
+    let faults = built.faults();
+    if let Some(fault) = faults.first() {
+        return Err(Failure::Io(format!(
+            "{}: stopped decoding: {}",
+            fault.node, fault.message
+        )));
     }
     Ok(())
 }

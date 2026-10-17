@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::exec::Pipeline;
 use crate::node::{Node, NodeSpec};
-use crate::schema::{EventSchema, InputSpec, OutputSpec, Props, SchemaId};
+use crate::schema::{InputSpec, OutputSpec, Props, SchemaId};
 use crate::signal::{LogicBlock, MAX_CHANNELS};
 use crate::time::TimeBase;
 
@@ -492,16 +492,12 @@ impl Graph {
 
     /// Connects an output to an input, checking that they carry the same schema and that the
     /// output satisfies what the input requires.
-    pub fn connect<T: EventSchema>(
-        &mut self,
-        from: OutputRef<T>,
-        to: InputRef<T>,
-    ) -> Result<(), GraphError> {
+    pub fn connect<T>(&mut self, from: OutputRef<T>, to: InputRef<T>) -> Result<(), GraphError> {
         self.connect_keys(from.key, to.node, to.index)
     }
 
     /// Exposes an output under `name`, to be read from the pipeline.
-    pub fn expose<T: EventSchema>(
+    pub fn expose<T>(
         &mut self,
         name: impl Into<String>,
         from: OutputRef<T>,
@@ -596,6 +592,11 @@ impl Graph {
     /// The schema of the output behind a port named at run time.
     pub fn schema_of(&self, output: DynOutput) -> Result<SchemaId, GraphError> {
         self.output_spec(output.key).map(|spec| spec.schema)
+    }
+
+    /// The properties the output behind a port named at run time declares.
+    pub fn props_of(&self, output: DynOutput) -> Result<Props, GraphError> {
+        self.output_spec(output.key).map(|spec| spec.props)
     }
 
     fn connect_keys(&mut self, from: PortKey, node: usize, index: usize) -> Result<(), GraphError> {

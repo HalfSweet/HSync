@@ -238,9 +238,16 @@ pub struct OutputSpec {
 impl OutputSpec {
     /// A port named `name` carrying `T` events with `props`.
     pub fn new<T: EventSchema>(name: &'static str, props: Props) -> Self {
+        Self::with_schema::<T>(name, T::SCHEMA, props)
+    }
+
+    /// A port named `name` carrying `schema` events as `T` values with `props`: for a node
+    /// whose contract is known only at run time, such as a decoder interpreted from its IR,
+    /// whose queue holds a payload type shared by every such contract.
+    pub fn with_schema<T: 'static>(name: &'static str, schema: SchemaId, props: Props) -> Self {
         Self {
             name,
-            schema: T::SCHEMA,
+            schema,
             props,
             factory: make_queue::<T>,
         }
@@ -265,9 +272,16 @@ pub struct InputSpec {
 impl InputSpec {
     /// A port named `name` reading `T` events from an output that satisfies `requires`.
     pub fn new<T: EventSchema>(name: &'static str, requires: Requires) -> Self {
+        Self::with_schema(name, T::SCHEMA, requires)
+    }
+
+    /// A port named `name` reading `schema` events from an output that satisfies `requires`:
+    /// for a node whose contract is known only at run time. The node binds the port to the
+    /// payload type the schema's queues hold.
+    pub fn with_schema(name: &'static str, schema: SchemaId, requires: Requires) -> Self {
         Self {
             name,
-            schema: T::SCHEMA,
+            schema,
             requires,
         }
     }

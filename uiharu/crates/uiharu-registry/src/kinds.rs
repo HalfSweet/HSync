@@ -5,7 +5,8 @@
 
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use uiharu_core::{DynExposedRef, EventSchema, Node, Pipeline};
+use uiharu_core::{DynExposedRef, EventSchema, Node, Pipeline, Props, SchemaId};
+use uiharu_interp::{FromDyn, ToDyn};
 use uiharu_protocols::am230x::{Am230x, Am230xConfig, Am230xEvent};
 use uiharu_protocols::apa102::{Apa102, Apa102Event};
 use uiharu_protocols::avr_isp::{AvrIsp, IspEvent};
@@ -59,6 +60,40 @@ pub struct Kind {
     /// The `kind` tags of the events the node's output carries, in the order its contract
     /// declares them: the kinds its manifest describes.
     pub kinds: fn() -> Vec<String>,
+    /// How the node's contract is bridged to and from the streams of interpreted decoders.
+    pub bridge: fn() -> Bridge,
+}
+
+/// The bridges of a contract's Rust type: between its typed streams and the streams of
+/// decoders interpreted from their IR, which carry the contract as JSON.
+#[derive(Clone, Copy)]
+pub struct Bridge {
+    /// The schema the contract implements.
+    pub schema: SchemaId,
+    /// A node reading the typed stream and writing it as JSON events, declaring `props`.
+    pub to_dyn: fn(Props) -> Box<dyn Node>,
+    /// A node reading JSON events and writing the typed stream, declaring `props`.
+    pub from_dyn: fn(Props) -> Box<dyn Node>,
+}
+
+impl std::fmt::Debug for Bridge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Bridge")
+            .field("schema", &self.schema)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The bridges of the contract `T` implements.
+fn bridge_of<T>() -> Bridge
+where
+    T: Serialize + DeserializeOwned + EventSchema + Clone + 'static,
+{
+    Bridge {
+        schema: T::SCHEMA,
+        to_dyn: |props| Box::new(ToDyn::<T>::new(props)),
+        from_dyn: |props| Box::new(FromDyn::<T>::new(props)),
+    }
 }
 
 impl std::fmt::Debug for Kind {
@@ -323,6 +358,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<SpiConfig>,
         open: open_as::<SpiEvent>,
         kinds: kinds_of::<SpiEvent>,
+        bridge: bridge_of::<SpiEvent>,
     },
     Kind {
         name: "spi-nor",
@@ -331,6 +367,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<SpiNorConfig>,
         open: open_as::<NorEvent>,
         kinds: kinds_of::<NorEvent>,
+        bridge: bridge_of::<NorEvent>,
     },
     Kind {
         name: "i2s",
@@ -339,6 +376,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<I2sConfig>,
         open: open_as::<I2sEvent>,
         kinds: kinds_of::<I2sEvent>,
+        bridge: bridge_of::<I2sEvent>,
     },
     Kind {
         name: "pwm",
@@ -347,6 +385,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<PwmConfig>,
         open: open_as::<PwmEvent>,
         kinds: kinds_of::<PwmEvent>,
+        bridge: bridge_of::<PwmEvent>,
     },
     Kind {
         name: "timing",
@@ -355,6 +394,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<TimingConfig>,
         open: open_as::<TimingEvent>,
         kinds: kinds_of::<TimingEvent>,
+        bridge: bridge_of::<TimingEvent>,
     },
     Kind {
         name: "parallel",
@@ -363,6 +403,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<ParallelConfig>,
         open: open_as::<ParallelEvent>,
         kinds: kinds_of::<ParallelEvent>,
+        bridge: bridge_of::<ParallelEvent>,
     },
     Kind {
         name: "uart",
@@ -371,6 +412,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<UartConfig>,
         open: open_as::<UartEvent>,
         kinds: kinds_of::<UartEvent>,
+        bridge: bridge_of::<UartEvent>,
     },
     Kind {
         name: "modbus-rtu",
@@ -379,6 +421,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<ModbusEvent>,
         kinds: kinds_of::<ModbusEvent>,
+        bridge: bridge_of::<ModbusEvent>,
     },
     Kind {
         name: "i2c",
@@ -387,6 +430,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<I2cConfig>,
         open: open_as::<I2cEvent>,
         kinds: kinds_of::<I2cEvent>,
+        bridge: bridge_of::<I2cEvent>,
     },
     Kind {
         name: "eeprom24xx",
@@ -395,6 +439,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<Eeprom24xxConfig>,
         open: open_as::<EepromEvent>,
         kinds: kinds_of::<EepromEvent>,
+        bridge: bridge_of::<EepromEvent>,
     },
     Kind {
         name: "jtag",
@@ -403,6 +448,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<JtagConfig>,
         open: open_as::<JtagEvent>,
         kinds: kinds_of::<JtagEvent>,
+        bridge: bridge_of::<JtagEvent>,
     },
     Kind {
         name: "swd",
@@ -411,6 +457,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<SwdConfig>,
         open: open_as::<SwdEvent>,
         kinds: kinds_of::<SwdEvent>,
+        bridge: bridge_of::<SwdEvent>,
     },
     Kind {
         name: "sdcard-spi",
@@ -419,6 +466,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<SdCardSpiConfig>,
         open: open_as::<SdEvent>,
         kinds: kinds_of::<SdEvent>,
+        bridge: bridge_of::<SdEvent>,
     },
     Kind {
         name: "can",
@@ -427,6 +475,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<CanConfig>,
         open: open_as::<CanEvent>,
         kinds: kinds_of::<CanEvent>,
+        bridge: bridge_of::<CanEvent>,
     },
     Kind {
         name: "onewire-link",
@@ -435,6 +484,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<LinkConfig>,
         open: open_as::<LinkEvent>,
         kinds: kinds_of::<LinkEvent>,
+        bridge: bridge_of::<LinkEvent>,
     },
     Kind {
         name: "onewire",
@@ -443,6 +493,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<OneWireEvent>,
         kinds: kinds_of::<OneWireEvent>,
+        bridge: bridge_of::<OneWireEvent>,
     },
     Kind {
         name: "ds18b20",
@@ -451,6 +502,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<Ds18b20Event>,
         kinds: kinds_of::<Ds18b20Event>,
+        bridge: bridge_of::<Ds18b20Event>,
     },
     Kind {
         name: "usb",
@@ -459,6 +511,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<UsbConfig>,
         open: open_as::<UsbEvent>,
         kinds: kinds_of::<UsbEvent>,
+        bridge: bridge_of::<UsbEvent>,
     },
     Kind {
         name: "usb-transactions",
@@ -467,6 +520,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<TransactionEvent>,
         kinds: kinds_of::<TransactionEvent>,
+        bridge: bridge_of::<TransactionEvent>,
     },
     Kind {
         name: "lin",
@@ -475,6 +529,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<LinConfig>,
         open: open_as::<LinEvent>,
         kinds: kinds_of::<LinEvent>,
+        bridge: bridge_of::<LinEvent>,
     },
     Kind {
         name: "midi",
@@ -483,6 +538,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<MidiEvent>,
         kinds: kinds_of::<MidiEvent>,
+        bridge: bridge_of::<MidiEvent>,
     },
     Kind {
         name: "ws281x",
@@ -491,6 +547,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<Ws281xConfig>,
         open: open_as::<Ws281xEvent>,
         kinds: kinds_of::<Ws281xEvent>,
+        bridge: bridge_of::<Ws281xEvent>,
     },
     Kind {
         name: "dmx512",
@@ -499,6 +556,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<Dmx512Event>,
         kinds: kinds_of::<Dmx512Event>,
+        bridge: bridge_of::<Dmx512Event>,
     },
     Kind {
         name: "apa102",
@@ -507,6 +565,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<Apa102Event>,
         kinds: kinds_of::<Apa102Event>,
+        bridge: bridge_of::<Apa102Event>,
     },
     Kind {
         name: "mdio",
@@ -515,6 +574,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<MdioConfig>,
         open: open_as::<MdioEvent>,
         kinds: kinds_of::<MdioEvent>,
+        bridge: bridge_of::<MdioEvent>,
     },
     Kind {
         name: "avr-isp",
@@ -523,6 +583,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<IspEvent>,
         kinds: kinds_of::<IspEvent>,
+        bridge: bridge_of::<IspEvent>,
     },
     Kind {
         name: "nrf24l01",
@@ -531,6 +592,7 @@ pub const KINDS: &[Kind] = &[
         defaults: no_defaults,
         open: open_as::<Nrf24Event>,
         kinds: kinds_of::<Nrf24Event>,
+        bridge: bridge_of::<Nrf24Event>,
     },
     Kind {
         name: "usb-pd",
@@ -539,6 +601,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<UsbPdConfig>,
         open: open_as::<UsbPdEvent>,
         kinds: kinds_of::<UsbPdEvent>,
+        bridge: bridge_of::<UsbPdEvent>,
     },
     Kind {
         name: "ir-nec",
@@ -547,6 +610,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<NecConfig>,
         open: open_as::<NecEvent>,
         kinds: kinds_of::<NecEvent>,
+        bridge: bridge_of::<NecEvent>,
     },
     Kind {
         name: "ir-rc5",
@@ -555,6 +619,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<Rc5Config>,
         open: open_as::<Rc5Event>,
         kinds: kinds_of::<Rc5Event>,
+        bridge: bridge_of::<Rc5Event>,
     },
     Kind {
         name: "ir-rc6",
@@ -563,6 +628,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<Rc6Config>,
         open: open_as::<Rc6Event>,
         kinds: kinds_of::<Rc6Event>,
+        bridge: bridge_of::<Rc6Event>,
     },
     Kind {
         name: "ir-sirc",
@@ -571,6 +637,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<SircConfig>,
         open: open_as::<SircEvent>,
         kinds: kinds_of::<SircEvent>,
+        bridge: bridge_of::<SircEvent>,
     },
     Kind {
         name: "wiegand",
@@ -579,6 +646,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<WiegandConfig>,
         open: open_as::<WiegandEvent>,
         kinds: kinds_of::<WiegandEvent>,
+        bridge: bridge_of::<WiegandEvent>,
     },
     Kind {
         name: "ps2",
@@ -587,6 +655,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<Ps2Config>,
         open: open_as::<Ps2Event>,
         kinds: kinds_of::<Ps2Event>,
+        bridge: bridge_of::<Ps2Event>,
     },
     Kind {
         name: "am230x",
@@ -595,6 +664,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<Am230xConfig>,
         open: open_as::<Am230xEvent>,
         kinds: kinds_of::<Am230xEvent>,
+        bridge: bridge_of::<Am230xEvent>,
     },
     Kind {
         name: "microwire",
@@ -603,6 +673,7 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<MicrowireConfig>,
         open: open_as::<MicrowireEvent>,
         kinds: kinds_of::<MicrowireEvent>,
+        bridge: bridge_of::<MicrowireEvent>,
     },
     Kind {
         name: "eeprom93xx",
@@ -611,5 +682,6 @@ pub const KINDS: &[Kind] = &[
         defaults: defaults_of::<Eeprom93xxConfig>,
         open: open_as::<Eeprom93xxEvent>,
         kinds: kinds_of::<Eeprom93xxEvent>,
+        bridge: bridge_of::<Eeprom93xxEvent>,
     },
 ];

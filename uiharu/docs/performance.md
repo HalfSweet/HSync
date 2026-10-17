@@ -140,3 +140,16 @@ Not implemented here, either because they change public APIs that other work bui
 | The acceptance suite sets `cases: 64` explicitly, which overrides `PROPTEST_CASES`; reading the variable when it is set would let `PROPTEST_CASES=2000` mean 2000 cases                                                                                                                                                                                                                   | Test workflow                                                                                                                                                                                      | The suite takes 0.3 s at 64 cases; `LogicBlock::slice` and `LogicBlockBuilder::push_repeated` are sample-by-sample but no longer worth speeding up for it                                                                                                                                                                               |
 
 No `unsafe` was introduced; the uiharu crates keep `#![forbid(unsafe_code)]`.
+
+## 8. The interpreter
+
+`uiharu-interp` ([dsl.md](dsl.md) §8) runs a decoder's IR on the same runtime without generating its Rust, for a decoder under work or one a user brings. Measured on the synthetic capture of `uiharu gen --reads 3000 --bytes 256` (40 233 640 samples, 632 400 SPI words, 28 200 NOR events), `uiharu decode` writing every stream, release build, on the machine of section 1:
+
+| Pipeline                          |   Time | Ratio |
+| --------------------------------- | -----: | ----: |
+| SPI and SPI NOR compiled          | 0.47 s |     1 |
+| SPI compiled, SPI NOR interpreted | 1.16 s |  2.5× |
+| SPI interpreted, SPI NOR compiled | 6.13 s |   13× |
+| SPI and SPI NOR interpreted       | 6.58 s |   14× |
+
+The output is the same to the byte in every row. The edge-driven bus decoder is where the cost is: about 600 ns per clock edge against 15 compiled — one dispatch per instruction (some fifty per edge), every value on a stack and every record behind a reference count, the `Edge` record made for each `next_change`, the decoder's fields behind a `RefCell`, and the JSON of every event on the way out. A device decoder over a compiled bus pays the bridge (serde to JSON and back once per word) and its interpreted body, about 1 µs per word. None of it is optimized: the interpreter is for trying a decoder; a decoder that is kept is generated.
