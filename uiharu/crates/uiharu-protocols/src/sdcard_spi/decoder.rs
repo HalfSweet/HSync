@@ -15,7 +15,7 @@ use super::commands::{
 };
 use super::crc::{Crc7, Crc16};
 use super::events::{DATA_BATCH, OpId, ResponseFormat, SdEnd, SdEvent, Token};
-use crate::spi::{Next, Read, ReadError, SpiBus, SpiEvent, Transaction, TxId};
+use crate::spi::{Cut, Next, Read, SpiBus, SpiEvent, Transaction, TxId, required};
 
 /// What a line carries when nothing is sent on it.
 const FILL: u8 = 0xff;
@@ -402,11 +402,7 @@ enum After {
 }
 
 /// The body of the decoder: the operations of one transaction.
-async fn transaction(
-    mut tx: Transaction<'_>,
-    out: &mut SdOut,
-    card: &mut Card,
-) -> Result<(), ReadError> {
+async fn transaction(mut tx: Transaction<'_>, out: &mut SdOut, card: &mut Card) -> Result<(), Cut> {
     // The assertion of chip select belongs to no event.
     tx.consumed();
     let mut first = true;
@@ -414,9 +410,9 @@ async fn transaction(
     loop {
         let (byte, at) = match next.take() {
             Some(started) => started,
-            None => match tx.word_or_end().await? {
+            None => match tx.item_or_end().await? {
                 Read::End => return Ok(()),
-                Read::Word(word) => (word.mosi()?, tx.consumed()),
+                Read::Item(word) => (required(word.mosi)?, tx.consumed()),
             },
         };
         if starts_command(byte) {
@@ -442,18 +438,18 @@ async fn operation(
     card: &mut Card,
     first: u8,
     first_at: Provenance,
-) -> Result<After, ReadError> {
+) -> Result<After, Cut> {
     // The frame: the argument, most significant byte first, then the CRC7 and the end bit.
     out.hold(first_at);
     let mut crc = Crc7::new();
     crc.update(first);
     let mut argument = 0u32;
     for _ in 0..4 {
-        let byte = tx.word().await?.mosi()?;
+        let byte = required(tx.item().await?.mosi)?;
         crc.update(byte);
         argument = (argument << 8) | u32::from(byte);
     }
-    let last = tx.word().await?.mosi()?;
+    let last = required(tx.item().await?.mosi)?;
     let at = out.take_held(tx.consumed());
     let frame = Frame {
         index: first & 0x3f,
@@ -472,15 +468,15 @@ async fn operation(
     // CMD12 the first byte is a stuff byte, which may still carry bits of the stopped block.
     let mut stuff = index == 12;
     let (r1, r1_at) = loop {
-        let word = tx.word().await?;
+        let word = tx.item().await?;
         let at = tx.consumed();
-        let mosi = word.mosi()?;
+        let mosi = required(word.mosi)?;
         if starts_command(mosi) {
             // The host gave up on the response.
             out.end_at(op, SdEnd::Incomplete, at.settled).await;
             return Ok(After::Command(mosi, at));
         }
-        let miso = word.miso()?;
+        let miso = required(word.miso)?;
         if !std::mem::take(&mut stuff) && miso & 0x80 == 0 {
             break (miso, at);
         }
@@ -503,14 +499,14 @@ async fn operation(
     let mut bytes = [r1, 0, 0, 0, 0];
     let len = if refused { 1 } else { 1 + tail(shape.format) };
     for byte in &mut bytes[1..len] {
-        let word = tx.word().await?;
+        let word = tx.item().await?;
         let at = tx.consumed();
-        let mosi = word.mosi()?;
+        let mosi = required(word.mosi)?;
         if starts_command(mosi) {
             out.end_at(op, SdEnd::Incomplete, at.settled).await;
             return Ok(After::Command(mosi, at));
         }
-        *byte = word.miso()?;
+        *byte = required(word.miso)?;
         out.hold(at);
     }
     let format = if refused {
@@ -555,23 +551,23 @@ async fn operation(
 
 /// The busy bytes after an R1b response, until the card turns ready. The host may release
 /// chip select or send its next command meanwhile; the response is whole all the same.
-async fn busy(tx: &mut Transaction<'_>, out: &mut SdOut, op: OpId) -> Result<After, ReadError> {
+async fn busy(tx: &mut Transaction<'_>, out: &mut SdOut, op: OpId) -> Result<After, Cut> {
     loop {
-        let word = match tx.word_or_end().await? {
+        let word = match tx.item_or_end().await? {
             Read::End => {
                 let at = tx.consumed();
                 out.end_at(op, SdEnd::Complete, at.settled).await;
                 return Ok(After::Released);
             }
-            Read::Word(word) => word,
+            Read::Item(word) => word,
         };
         let at = tx.consumed();
-        let mosi = word.mosi()?;
+        let mosi = required(word.mosi)?;
         if starts_command(mosi) {
             out.end_at(op, SdEnd::Complete, at.settled).await;
             return Ok(After::Command(mosi, at));
         }
-        if word.miso()? != BUSY {
+        if required(word.miso)? != BUSY {
             out.end_at(op, SdEnd::Complete, at.settled).await;
             return Ok(After::Done);
         }
@@ -590,7 +586,7 @@ async fn read(
     op: OpId,
     length: u16,
     multiple: bool,
-) -> Result<After, ReadError> {
+) -> Result<After, Cut> {
     // The host stopping a multiple read is its normal end; a single block it gave up on is
     // not whole.
     let stopped = if multiple {
@@ -600,14 +596,14 @@ async fn read(
     };
     loop {
         loop {
-            let word = tx.word().await?;
+            let word = tx.item().await?;
             let at = tx.consumed();
-            let mosi = word.mosi()?;
+            let mosi = required(word.mosi)?;
             if starts_command(mosi) {
                 out.end_at(op, stopped, at.settled).await;
                 return Ok(After::Command(mosi, at));
             }
-            let miso = word.miso()?;
+            let miso = required(word.miso)?;
             if miso == START_BLOCK {
                 out.token(op, Token::StartBlock, miso, at).await;
                 break;
@@ -622,14 +618,14 @@ async fn read(
         }
         let mut crc = Crc16::new();
         for _ in 0..length {
-            let word = tx.word().await?;
+            let word = tx.item().await?;
             let at = tx.consumed();
-            let mosi = word.mosi()?;
+            let mosi = required(word.mosi)?;
             if starts_command(mosi) {
                 out.end_at(op, stopped, at.settled).await;
                 return Ok(After::Command(mosi, at));
             }
-            let byte = word.miso()?;
+            let byte = required(word.miso)?;
             crc.update(byte);
             out.data(op, byte, at).await;
         }
@@ -638,14 +634,14 @@ async fn read(
         let mut sent = 0u16;
         let mut last = Provenance::at(Tick::ZERO);
         for _ in 0..2 {
-            let word = tx.word().await?;
+            let word = tx.item().await?;
             let at = tx.consumed();
-            let mosi = word.mosi()?;
+            let mosi = required(word.mosi)?;
             if starts_command(mosi) {
                 out.end_at(op, stopped, at.settled).await;
                 return Ok(After::Command(mosi, at));
             }
-            sent = (sent << 8) | u16::from(word.miso()?);
+            sent = (sent << 8) | u16::from(required(word.miso)?);
             out.hold(at);
             last = at;
         }
@@ -667,7 +663,7 @@ async fn write(
     op: OpId,
     length: u16,
     multiple: bool,
-) -> Result<After, ReadError> {
+) -> Result<After, Cut> {
     // A multiple write the host stops with a command (CMD12 after an error) has ended; a
     // single block that never came is not whole.
     let stopped = if multiple {
@@ -678,9 +674,9 @@ async fn write(
     loop {
         // The host's token; MOSI carries fill before it, whatever MISO says.
         loop {
-            let word = tx.word().await?;
+            let word = tx.item().await?;
             let at = tx.consumed();
-            match word.mosi()? {
+            match required(word.mosi)? {
                 START_BLOCK => {
                     out.token(op, Token::StartBlock, START_BLOCK, at).await;
                     break;
@@ -705,28 +701,28 @@ async fn write(
         // The block from the host: every byte is data here, whatever it looks like.
         let mut crc = Crc16::new();
         for _ in 0..length {
-            let byte = tx.word().await?.mosi()?;
+            let byte = required(tx.item().await?.mosi)?;
             crc.update(byte);
             out.data(op, byte, tx.consumed()).await;
         }
         out.flush(op, None).await;
         let mut sent = 0u16;
         for _ in 0..2 {
-            sent = (sent << 8) | u16::from(tx.word().await?.mosi()?);
+            sent = (sent << 8) | u16::from(required(tx.item().await?.mosi)?);
         }
         let at = tx.consumed();
         out.block_end(op, sent, sent == crc.value(), length, at)
             .await;
         // The card's data response.
         loop {
-            let word = tx.word().await?;
+            let word = tx.item().await?;
             let at = tx.consumed();
-            let mosi = word.mosi()?;
+            let mosi = required(word.mosi)?;
             if starts_command(mosi) {
                 out.end_at(op, SdEnd::Incomplete, at.settled).await;
                 return Ok(After::Command(mosi, at));
             }
-            let miso = word.miso()?;
+            let miso = required(word.miso)?;
             if is_data_response(miso) {
                 out.token(op, Token::DataResponse, miso, at).await;
                 if !multiple {
@@ -742,7 +738,7 @@ async fn write(
 /// Closes what the body left open, as the transaction's end calls for. The end covers the
 /// words read toward an event that never came, and the transaction's end when the stream
 /// carried one; a gap or the end of the stream only places it.
-async fn recover(error: ReadError, bus: &mut SpiBus, out: &mut SdOut) {
+async fn recover(error: Cut, bus: &mut SpiBus, out: &mut SdOut) {
     let consumed = bus.consumed();
     let unreported = out.take_held(consumed);
     let placed = |tick: Tick| Provenance {
@@ -754,10 +750,10 @@ async fn recover(error: ReadError, bus: &mut SpiBus, out: &mut SdOut) {
         settled: tick,
     };
     let (reason, at) = match error {
-        ReadError::Incomplete => (SdEnd::Incomplete, unreported),
-        ReadError::Truncated | ReadError::MissingLine(_) => (SdEnd::Aborted, unreported),
-        ReadError::Gap(range) => (SdEnd::Aborted, placed(range.start)),
-        ReadError::EndOfInput(tick) => (SdEnd::Aborted, placed(tick)),
+        Cut::Incomplete => (SdEnd::Incomplete, unreported),
+        Cut::Truncated | Cut::Missing => (SdEnd::Aborted, unreported),
+        Cut::Gap(range) => (SdEnd::Aborted, placed(range.start)),
+        Cut::End(tick) => (SdEnd::Aborted, placed(tick)),
     };
     out.close_open(reason, at).await;
 }
@@ -770,7 +766,7 @@ async fn run(mut bus: SpiBus, mut out: SdOut, mut card: Card) {
                 // not be aligned on bytes.
                 let result = if tx.is_partial() {
                     let mut tx = tx;
-                    tx.drain().await
+                    tx.drain().await.map_err(Cut::from)
                 } else {
                     transaction(tx, &mut out, &mut card).await
                 };
@@ -778,7 +774,7 @@ async fn run(mut bus: SpiBus, mut out: SdOut, mut card: Card) {
                     recover(error, &mut bus, &mut out).await;
                 }
                 if let Err(error) = bus.finish().await {
-                    recover(error, &mut bus, &mut out).await;
+                    recover(Cut::from(error), &mut bus, &mut out).await;
                 }
                 bus.consumed();
             }

@@ -12,6 +12,7 @@ publish = false
 serde.workspace = true
 thiserror.workspace = true
 uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
+uiharu-dsl-protocols = { path = "../uiharu-dsl-protocols", version = "0.1.0" }
 
 [dev-dependencies]
 proptest.workspace = true

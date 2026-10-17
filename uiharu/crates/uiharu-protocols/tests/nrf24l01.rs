@@ -111,7 +111,7 @@ fn describe(items: &[Item<Nrf24Event>], ticks: bool) -> Vec<String> {
                     } => format!(
                         "command op{} tx{} {} reg={} {} pipe={} status={status:02x}",
                         op.0,
-                        tx.0,
+                        tx,
                         name(command),
                         register.map_or("--".to_owned(), |register| format!("{register:02x}")),
                         register_name.map_or("-".to_owned(), |register| name(&register)),
@@ -134,7 +134,7 @@ fn describe(items: &[Item<Nrf24Event>], ticks: bool) -> Vec<String> {
                         tx,
                         command,
                         status,
-                    } => format!("unknown tx{} {command:02x} status={status:02x}", tx.0),
+                    } => format!("unknown tx{} {command:02x} status={status:02x}", tx),
                 };
                 if ticks {
                     format!("{what} {}", at(event.span, event.settled))

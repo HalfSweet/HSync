@@ -189,7 +189,8 @@ fn uiharu(source: &Source, chunk: u64, nor: bool) -> Result<Measured, String> {
         .expose("spi", Spi::events(spi))
         .map_err(|error| error.to_string())?;
     let nor_out = if nor {
-        let node = graph.add(SpiNor::new(SpiNorConfig::default()));
+        let node =
+            graph.add(SpiNor::new(SpiNorConfig::default()).map_err(|error| error.to_string())?);
         graph
             .connect(Spi::events(spi), SpiNor::input(node))
             .map_err(|error| error.to_string())?;

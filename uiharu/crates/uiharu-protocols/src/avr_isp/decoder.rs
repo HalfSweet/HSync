@@ -91,7 +91,7 @@ impl Instructions {
         Self {
             // Only a transaction seen to begin, or Programming Enable, tells.
             aligned: false,
-            tx: TxId(0),
+            tx: 0,
             mosi: [0; INSTRUCTION_BYTES],
             miso: [0; INSTRUCTION_BYTES],
             len: 0,
@@ -296,7 +296,7 @@ mod tests {
     fn four_words_make_an_instruction() {
         let mut instructions = Instructions::new();
         instructions.begin(false);
-        let tx = TxId(1);
+        let tx = 1;
         assert_eq!(instructions.word(tx, 0x30, 0xff, at(0)), None);
         assert_eq!(instructions.hold(Tick(5)), Tick(0));
         assert_eq!(instructions.word(tx, 0x00, 0x30, at(10)), None);
@@ -328,7 +328,7 @@ mod tests {
     fn the_grouping_is_taken_up_at_programming_enable_answered_in_sync() {
         let mut instructions = Instructions::new();
         instructions.begin(true);
-        let tx = TxId(2);
+        let tx = 2;
         // A read, AC alone, AC 53 without the echo, then AC AC 53 and the echo.
         let words = [
             (0x30, 0x00),
@@ -368,7 +368,7 @@ mod tests {
     fn a_cut_instruction_is_an_error_and_a_lone_ac_is_not() {
         let mut instructions = Instructions::new();
         instructions.begin(false);
-        let tx = TxId(3);
+        let tx = 3;
         instructions.word(tx, 0xac, 0xff, at(0));
         instructions.word(tx, 0x80, 0xac, at(10));
         let (provenance, event) = instructions

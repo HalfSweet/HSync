@@ -43,15 +43,15 @@ impl Lister {
         loop {
             match bus.next().await {
                 Next::Transaction(mut tx) => {
-                    let id = tx.id().0;
+                    let id = tx.id();
                     let partial = tx.is_partial();
                     // Transaction 0 opens at its first word, so the opening is reported
                     // with that word's provenance, after reading it.
                     let mut opened = false;
                     let mut cut_at = None;
                     let outcome = loop {
-                        match tx.word_or_end().await {
-                            Ok(Read::Word(word)) => {
+                        match tx.item_or_end().await {
+                            Ok(Read::Item(word)) => {
                                 let at = tx.consumed();
                                 if !opened {
                                     opened = true;

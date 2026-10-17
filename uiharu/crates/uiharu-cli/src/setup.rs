@@ -103,7 +103,12 @@ impl Setup {
         };
         spi.validate()
             .map_err(|error: SpiConfigError| UsageError(error.to_string()))?;
-        if let Some(channel) = spi.channels().find(|channel| *channel >= channels) {
+        let lines = [Some(spi.clk), spi.cs, spi.mosi, spi.miso];
+        if let Some(channel) = lines
+            .into_iter()
+            .flatten()
+            .find(|channel| *channel >= channels)
+        {
             return Err(UsageError(format!(
                 "channel {channel} is used but the capture has {channels} channels"
             )));
@@ -128,7 +133,7 @@ impl Setup {
             "spi".to_owned(),
             NodeDescription {
                 kind: "spi".into(),
-                config: serde_json::to_value(&self.spi).unwrap_or(serde_json::Value::Null),
+                config: serde_json::to_value(self.spi).unwrap_or(serde_json::Value::Null),
             },
         );
         let mut connections = vec![Connection {
@@ -173,22 +178,27 @@ impl Setup {
             self.channels,
             TimeBase::new(self.rate_hz),
         ))?;
-        let spi =
-            graph.add(
-                Spi::new(self.spi.clone()).map_err(|error| GraphError::Requirement {
-                    from: "logic".into(),
-                    to: "spi".into(),
-                    key: "config",
-                    requirement: error.to_string(),
-                    found: String::new(),
-                })?,
-            );
+        let spi = graph.add(Spi::new(self.spi).map_err(|error| GraphError::Requirement {
+            from: "logic".into(),
+            to: "spi".into(),
+            key: "config",
+            requirement: error.to_string(),
+            found: String::new(),
+        })?);
         graph.connect(source.samples, Spi::input(spi))?;
         let spi_out = graph.expose("spi", Spi::events(spi))?;
         let nor_out = match self.kind {
             Kind::Spi => None,
             Kind::SpiNor => {
-                let nor = graph.add(SpiNor::new(SpiNorConfig::default()));
+                let nor = graph.add(SpiNor::new(SpiNorConfig::default()).map_err(|error| {
+                    GraphError::Requirement {
+                        from: "spi".into(),
+                        to: "flash".into(),
+                        key: "config",
+                        requirement: error.to_string(),
+                        found: String::new(),
+                    }
+                })?);
                 graph.connect(Spi::events(spi), SpiNor::input(nor))?;
                 Some(graph.expose("nor", SpiNor::events(nor))?)
             }

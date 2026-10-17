@@ -4,7 +4,7 @@
 
 use uiharu_core::{Levels, LogicBlock, LogicBlockBuilder, Tick};
 
-use super::decoder::{Polarity, PwmConfig};
+use super::{Polarity, PwmConfig};
 
 /// Builds a pulse-width modulated line cycle by cycle; the other channels stay low.
 #[derive(Debug)]

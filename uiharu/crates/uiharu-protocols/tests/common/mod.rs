@@ -53,7 +53,7 @@ impl Harness {
                 let spi = graph.add(Spi::new(config).expect("a valid configuration"));
                 graph.connect(source.samples, Spi::input(spi))?;
                 if let Some(nor) = nor {
-                    let nor = graph.add(SpiNor::new(nor));
+                    let nor = graph.add(SpiNor::new(nor).expect("a valid configuration"));
                     graph.connect(Spi::events(spi), SpiNor::input(nor))?;
                     nor_ref = Some(graph.expose("nor", SpiNor::events(nor))?);
                 }
@@ -157,12 +157,12 @@ pub fn describe_spi(items: &[Item<SpiEvent>]) -> Vec<String> {
             Item::Event(event) => {
                 let what = match event.payload {
                     SpiEvent::Begin { tx, partial } => {
-                        format!("begin tx{}{}", tx.0, if partial { " partial" } else { "" })
+                        format!("begin tx{}{}", tx, if partial { " partial" } else { "" })
                     }
                     SpiEvent::Word { tx, mosi, miso } => {
-                        format!("word tx{} {}/{}", tx.0, hex(mosi), hex(miso))
+                        format!("word tx{} {}/{}", tx, hex(mosi), hex(miso))
                     }
-                    SpiEvent::End { tx, reason } => format!("end tx{} {reason:?}", tx.0),
+                    SpiEvent::End { tx, reason } => format!("end tx{} {reason:?}", tx),
                 };
                 format!("{} {}", what, at(event.span, event.settled))
             }
@@ -180,13 +180,13 @@ pub fn describe_nor(items: &[Item<NorEvent>]) -> Vec<String> {
             Item::Event(event) => {
                 let what = match &event.payload {
                     NorEvent::Begin { op, tx, command } => {
-                        format!("begin op{} tx{} {command:?}", op.0, tx.0)
+                        format!("begin op{} tx{} {command:?}", op, tx)
                     }
                     NorEvent::Address { op, address, bytes } => {
                         let digits = 2 * usize::from(*bytes);
-                        format!("address op{} {address:0digits$x}", op.0)
+                        format!("address op{} {address:0digits$x}", op)
                     }
-                    NorEvent::Dummy { op, bytes } => format!("dummy op{} {bytes}", op.0),
+                    NorEvent::Dummy { op, bytes } => format!("dummy op{} {bytes}", op),
                     NorEvent::Data {
                         op,
                         direction,
@@ -197,7 +197,7 @@ pub fn describe_nor(items: &[Item<NorEvent>]) -> Vec<String> {
                             Direction::In => "in",
                             Direction::Out => "out",
                         };
-                        format!("data op{} {direction} +{offset} {}", op.0, hex_bytes(bytes))
+                        format!("data op{} {direction} +{offset} {}", op, hex_bytes(bytes))
                     }
                     NorEvent::Status {
                         op,
@@ -206,14 +206,14 @@ pub fn describe_nor(items: &[Item<NorEvent>]) -> Vec<String> {
                         written,
                     } => {
                         let how = if *written { "write" } else { "read" };
-                        format!("status op{} {how} sr{register} {value:02x}", op.0)
+                        format!("status op{} {how} sr{register} {value:02x}", op)
                     }
                     NorEvent::Id { op, scheme, bytes } => {
-                        format!("id op{} {scheme:?} {}", op.0, hex_bytes(bytes))
+                        format!("id op{} {scheme:?} {}", op, hex_bytes(bytes))
                     }
-                    NorEvent::End { op, reason } => format!("end op{} {reason:?}", op.0),
+                    NorEvent::End { op, reason } => format!("end op{} {reason:?}", op),
                     NorEvent::UnknownCommand { tx, opcode } => {
-                        format!("unknown tx{} {opcode:02x}", tx.0)
+                        format!("unknown tx{} {opcode:02x}", tx)
                     }
                 };
                 format!("{} {}", what, at(event.span, event.settled))

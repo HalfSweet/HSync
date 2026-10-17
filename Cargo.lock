@@ -5006,11 +5006,9 @@ dependencies = [
 name = "uiharu-dsl-protocols"
 version = "0.1.0"
 dependencies = [
- "proptest",
  "serde",
  "serde_json",
  "uiharu-core",
- "uiharu-protocols",
 ]
 
 [[package]]
@@ -5031,6 +5029,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "uiharu-core",
+ "uiharu-dsl-protocols",
 ]
 
 [[package]]

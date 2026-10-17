@@ -231,7 +231,7 @@ pub fn spi(source: &Source, capture: &LogicCapture, chunk: u64) -> Result<Report
         single(
             graph,
             logic,
-            Spi::new(config.clone()).map_err(|error| error.to_string())?,
+            Spi::new(config).map_err(|error| error.to_string())?,
             Spi::input,
             Spi::events,
         )

@@ -149,7 +149,7 @@ mod tests {
         assert_eq!(
             json(&IspEvent::Instruction {
                 op: OpId(2),
-                tx: TxId(1),
+                tx: 1,
                 command: Command::ReadProgramMemoryHigh,
                 address: Some(0x0123),
                 data_in: None,
@@ -161,14 +161,14 @@ mod tests {
         );
         assert_eq!(
             json(&IspEvent::Unknown {
-                tx: TxId(0),
+                tx: 0,
                 bytes: [0xff, 0, 0, 0],
             }),
             r#"{"kind":"unknown","tx":0,"bytes":[255,0,0,0]}"#
         );
         assert_eq!(
             json(&IspEvent::Error {
-                tx: TxId(3),
+                tx: 3,
                 reason: ErrorReason::Incomplete,
                 bytes: vec![0xac, 0x53],
             }),

@@ -116,7 +116,7 @@ fn describe(items: &[Item<IspEvent>], ticks: bool) -> Vec<String> {
                     } => format!(
                         "instruction op{} tx{} {} addr={} in={} out={} sync={} {}",
                         op.0,
-                        tx.0,
+                        tx,
                         name(command),
                         address.map_or("----".to_owned(), |address| format!("{address:04x}")),
                         data_in.map_or("--".to_owned(), |byte| format!("{byte:02x}")),
@@ -124,9 +124,9 @@ fn describe(items: &[Item<IspEvent>], ticks: bool) -> Vec<String> {
                         in_sync.map_or("-", |sync| if sync { "yes" } else { "no" }),
                         hex(bytes)
                     ),
-                    IspEvent::Unknown { tx, bytes } => format!("unknown tx{} {}", tx.0, hex(bytes)),
+                    IspEvent::Unknown { tx, bytes } => format!("unknown tx{} {}", tx, hex(bytes)),
                     IspEvent::Error { tx, reason, bytes } => {
-                        format!("error tx{} {} {}", tx.0, name(reason), hex(bytes))
+                        format!("error tx{} {} {}", tx, name(reason), hex(bytes))
                     }
                 };
                 if ticks {
@@ -610,7 +610,7 @@ fn rich_waveform(spi: SpiConfig) -> (LogicBlock, Vec<(Tick, Tick)>) {
 #[test]
 fn every_cut_and_pause_yields_the_same_events() {
     for spi in [framed(), unframed()] {
-        let (block, sessions) = rich_waveform(spi.clone());
+        let (block, sessions) = rich_waveform(spi);
         let gaps = [
             // Inside the first session's instructions.
             TickRange::new(sessions[0].0.offset(2000), sessions[0].0.offset(2003)),
@@ -625,7 +625,7 @@ fn every_cut_and_pause_yields_the_same_events() {
             TickRange::new(Tick(block.end().get() - 5), Tick(block.end().get() - 2)),
         ];
         let reference = {
-            let mut harness = harness(spi.clone());
+            let mut harness = harness(spi);
             harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
             harness.end();
             describe(&harness.items, true)
@@ -646,20 +646,16 @@ fn every_cut_and_pause_yields_the_same_events() {
                 "{what}: {reference:?}"
             );
         }
-        assert_block_invariant(
-            |graph| build(spi.clone(), graph).expect("builds"),
-            &block,
-            &gaps,
-        );
+        assert_block_invariant(|graph| build(spi, graph).expect("builds"), &block, &gaps);
     }
 }
 
 #[test]
 fn progress_never_passes_an_instruction_under_way() {
     for spi in [framed(), unframed()] {
-        let (block, _) = rich_waveform(spi.clone());
+        let (block, _) = rich_waveform(spi);
         for sizes in [&[1u64][..], &[5], &[7, 64], &[97]] {
-            let mut harness = harness(spi.clone());
+            let mut harness = harness(spi);
             harness.feed_cut(&block, &[], sizes, &[1]);
             harness.end();
             let mut seen = Tick::ZERO;
@@ -759,7 +755,7 @@ proptest! {
         gap in prop::option::of((0.05f64..0.95, 1u64..300)),
     ) {
         let spi = if with_reset { framed() } else { unframed() };
-        let block = sessions_waveform(spi.clone(), &sessions);
+        let block = sessions_waveform(spi, &sessions);
         let gaps: Vec<TickRange> = gap
             .map(|(at, len)| {
                 let start = ((block.len() as f64) * at) as u64;
@@ -769,7 +765,7 @@ proptest! {
             .filter(|gap| !gap.is_empty())
             .collect();
         let reference = {
-            let mut harness = harness(spi.clone());
+            let mut harness = harness(spi);
             harness.feed_with_gaps(&block, &gaps, &[u64::MAX]);
             harness.end();
             harness.without_progress()

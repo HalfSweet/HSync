@@ -14,7 +14,7 @@ use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig};
 const HALF: u64 = 5;
 
 fn waveform(config: &SpiConfig) -> SpiWaveform {
-    let mut waveform = SpiWaveform::new(config.clone(), CHANNELS, HALF, Tick::ZERO);
+    let mut waveform = SpiWaveform::new(*config, CHANNELS, HALF, Tick::ZERO);
     waveform.idle(20);
     waveform
 }
@@ -241,12 +241,12 @@ fn blocks_of_any_size_decode_alike() {
         waveform.idle(u64::from(n) * 3 + 1);
     }
     let block = waveform.finish();
-    let mut whole = Harness::spi(config.clone());
+    let mut whole = Harness::spi(config);
     whole.run_all(&block);
     let reference = common::without_progress(whole.spi_items());
     assert!(reference.len() > 100);
     for sizes in [&[1u64][..], &[2, 3, 5, 7], &[64], &[63, 65, 1], &[1000, 1]] {
-        let mut harness = Harness::spi(config.clone());
+        let mut harness = Harness::spi(config);
         harness.feed_sizes(&block, sizes);
         harness.end();
         assert_eq!(
@@ -277,7 +277,7 @@ fn every_cut_and_pause_yields_the_same_events() {
             TimeBase::new(1_000_000),
             graph_config,
             |graph, source| {
-                let spi = graph.add(Spi::new(config.clone()).expect("a valid configuration"));
+                let spi = graph.add(Spi::new(config).expect("a valid configuration"));
                 graph.connect(source.samples, Spi::input(spi))?;
                 Ok(Spi::events(spi))
             },
