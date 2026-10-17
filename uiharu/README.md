@@ -8,7 +8,7 @@ It replaces the sigrok decoders in [HSync](../README.md) and is meant to be embe
 
 ## Status
 
-The runtime, the protocol decoders and the acceptance tests of the design's properties; the engine decodes in HSync through `crates/hsync-uiharu`. Decoders are written in the TypeScript DSL of [docs/dsl.md](docs/dsl.md) or by hand in Rust, as convenient: PWM, SPI, SPI NOR and UART are DSL modules under `dsl/decoders/`, lowered to the IR (`compiler/`, `crates/uiharu-ir`) and emitted as Rust (`crates/uiharu-codegen`) into `crates/uiharu-dsl-protocols`, which `crates/uiharu-protocols` re-exports beside the hand-written decoders; both kinds read each other's contracts, and a hand-written decoder's contract can be declared in the DSL as well (`dsl/contracts/`; I²C's is).
+The runtime, the protocol decoders and the acceptance tests of the design's properties; the engine decodes in HSync through `crates/hsync-uiharu`. Decoders are written in the TypeScript DSL of [docs/dsl.md](docs/dsl.md) or by hand in Rust, as convenient: PWM, SPI, SPI NOR and UART are DSL modules under `dsl/decoders/`, lowered to the IR (`compiler/`, `crates/uiharu-ir`) and emitted as Rust (`crates/uiharu-codegen`) into `crates/uiharu-dsl-protocols`, which `crates/uiharu-protocols` re-exports beside the hand-written decoders; both kinds read each other's contracts, and a hand-written decoder's contract can be declared in the DSL as well (`dsl/contracts/`; I²C's is). A module's IR also runs as it is, interpreted by `crates/uiharu-interp` with the same events as the generated decoder, for a decoder loaded at run time: under work, or brought by a user.
 
 | Crate                         | Contents                                                                                                                                                                                                                                         |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -21,6 +21,7 @@ The runtime, the protocol decoders and the acceptance tests of the design's prop
 | `compiler/`                   | The compiler's front end: checks the DSL subset and lowers decoder modules to the IR (`pnpm dsl:compile`, `pnpm dsl:check`)                                                                                                                      |
 | `crates/uiharu-codegen`       | The backend: emits Rust over `uiharu_core::dsl` from the IR (`cargo run -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src`)                                                                                              |
 | `crates/uiharu-dsl-protocols` | The decoders and contracts generated from the IR, checked in: the engine's PWM, SPI, SPI NOR and UART, and the I²C contract                                                                                                                      |
+| `crates/uiharu-interp`        | The interpreter of the IR: runs a decoder module loaded at run time as the Rust generated from it would run, bridged to the compiled decoders on either side                                                                                     |
 | `docs/`                       | The architecture (`design.md`), the DSL and its IR (`dsl.md`), how to write a decoder (`writing-decoders.md`), one page per protocol (`protocols/`) and the performance study with the comparison against the sigrok decoders (`performance.md`) |
 
 The crates are members of the repository's Cargo workspace but depend on nothing outside `uiharu/` except `serde`, `serde_json` and `thiserror`.
@@ -100,6 +101,8 @@ Any pipeline can be described in a JSON file instead — the source, the nodes w
 
 A configuration may leave fields out (they take the node's defaults); a connection the decoders cannot accept is refused with the graph's diagnostic, such as `flash#1.bus requires wordBits = 8 of spi#0.events, which declares 4`. The node types are listed in `crates/uiharu-registry`, with a manifest each (`manifests/<type>.json`: ports, configuration fields, event kinds); each protocol page in `docs/protocols/` names its type, ports and configuration.
 
+A decoder written in the DSL runs without being built into the engine: `uiharu decode --ir uiharu/dsl/ir/spi-nor.json flash.bin` interprets the module's IR (the JSON `pnpm dsl:compile` writes) under the module's name, in place of the decoder of that name built in, and emits the same events; `--ir` may be repeated. A connection between an interpreted decoder and a compiled one is bridged by the registry, so that a decoder under work stacks on the engine's buses as it is.
+
 Every event is one line of JSON: the stream it belongs to, its number in that stream, the ticks it covers, the tick at which it became certain, and the event itself as the stream's contract spells it. Gaps and the end of each stream are lines too.
 
 ```json
@@ -139,6 +142,8 @@ while let Some(item) = operations.next() { /* events, gaps, progress, the end */
 ```
 
 A source that cannot hold its samples back announces what it lost with `SignalItem::Gap`; the engine never drops samples itself. `pipeline.stats()` reports every queue's size and high-water mark.
+
+A program that names its decoders rather than their types builds the pipeline from a `uiharu_registry::Description` with `build`, or with `build_with` and a `Catalog` into which decoder modules are loaded at run time (`catalog.load(&module)`, the module read from the IR's JSON): a loaded module is a node type like the engine's, with a manifest for a user interface, and connections between it and the engine's decoders are bridged. `Built::faults()` says whether an interpreted decoder stopped and why.
 
 ## License
 
