@@ -9,7 +9,7 @@ export default mergeConfig(
   defineConfig({
     test: {
       environment: 'jsdom',
-      include: ['src/**/*.test.ts'],
+      include: ['src/**/*.test.ts', 'uiharu/compiler/src/**/*.test.ts'],
       exclude: [...configDefaults.exclude, 'src-tauri/**', 'crates/**'],
       root: fileURLToPath(new URL('./', import.meta.url)),
       passWithNoTests: true,
