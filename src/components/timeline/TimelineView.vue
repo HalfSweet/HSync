@@ -42,7 +42,7 @@ import {
   type MeasureEnd,
 } from '@/timeline/measure'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
-import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
+import { clampTraceHeight, collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
 import { sampleToX, viewportEnd, xToSample } from '@/timeline/viewport'
@@ -54,6 +54,7 @@ import GroupLabel from './GroupLabel.vue'
 import MeasureOverlay from './MeasureOverlay.vue'
 import TimelineRuler from './TimelineRuler.vue'
 import ChannelMenu from './ChannelMenu.vue'
+import TraceGrip from './TraceGrip.vue'
 import TriggerMenu from './TriggerMenu.vue'
 
 /** Rows are never narrower than this, label column included; narrower windows scroll. */
@@ -83,10 +84,22 @@ const layout = computed(() =>
     metrics.value,
     (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
     (group) => decode.statusOf(group.decoder)?.streams.length ?? 1,
+    (channel) => channels.heights[channel.index],
   ),
 )
 
 const isTrace = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow'
+
+/** Channel rows, whose bottom edge in the label column can be dragged (DESIGN.md §6.1). */
+const resizable = computed(() => layout.value.rows.filter((row) => isTrace(row) && row.channel))
+
+function resizeRow(row: Row, height: number | null): void {
+  if (!row.channel) return
+  channels.setHeight(
+    row.channel.index,
+    height === null ? null : clampTraceHeight(height, metrics.value),
+  )
+}
 
 /** The decoder's stream a row shows: the first on the group's title row, each further one (a
  * decoder stacked on the bus) on a lane of its own. */
@@ -746,6 +759,20 @@ function onWheel(event: WheelEvent): void {
     >
       <div ref="rows" class="relative flex min-h-full min-w-[860px] flex-col overflow-x-clip">
         <TimelineRuler class="sticky top-0 z-[5]" />
+
+        <!-- The channel rows' bottom edges, across the boundary with the row below: over the
+             labels, under the ruler. -->
+        <div class="sticky left-0 z-[4] h-0 w-(--lab) flex-none">
+          <TraceGrip
+            v-for="row in resizable"
+            :key="row.key"
+            :channel="row.channel?.label ?? ''"
+            :height="row.height"
+            :style="{ top: `${row.top + row.height - 3}px` }"
+            @resize="(height) => resizeRow(row, height)"
+            @reset="resizeRow(row, null)"
+          />
+        </div>
 
         <div
           v-for="row in layout.rows"

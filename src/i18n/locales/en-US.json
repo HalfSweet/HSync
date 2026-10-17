@@ -252,6 +252,10 @@
     },
     "tip": "Click the dot or double-click the name to rename or recolour; right-click works too"
   },
+  "channelRow": {
+    "resize": "Drag to resize the waveform of {channel}",
+    "resizeTip": "Drag to resize, double-click to reset"
+  },
   "triggerPanel": {
     "title": "Trigger settings",
     "mode": "Type",
