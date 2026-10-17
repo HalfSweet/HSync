@@ -13,6 +13,8 @@ fn pwm() -> Module {
 fn method_mut<'a>(module: &'a mut Module, name: &str) -> &'a mut Function {
     module
         .decoder
+        .as_mut()
+        .expect("a decoder")
         .methods
         .iter_mut()
         .find(|method| method.name == name)
@@ -39,7 +41,7 @@ fn the_pwm_module_passes_the_checks() {
     let module = pwm();
     assert_eq!(validate(&module), Vec::new());
     assert_eq!(module.name, "pwm");
-    assert_eq!(module.decoder.methods.len(), 3);
+    assert_eq!(module.decoder.as_ref().expect("a decoder").methods.len(), 3);
 }
 
 #[test]
@@ -221,26 +223,31 @@ fn locals_must_be_in_scope() {
 #[test]
 fn a_borrowed_field_keeps_self_out_of_reach() {
     let mut module = pwm();
-    module.decoder.methods.push(Function {
-        name: "touch".into(),
-        is_async: false,
-        params: Vec::new(),
-        ret: None,
-        body: vec![
-            Stmt::LetRef {
-                name: "leading".into(),
-                place: Expr::SelfField {
-                    field: "leading".into(),
+    module
+        .decoder
+        .as_mut()
+        .expect("a decoder")
+        .methods
+        .push(Function {
+            name: "touch".into(),
+            is_async: false,
+            params: Vec::new(),
+            ret: None,
+            body: vec![
+                Stmt::LetRef {
+                    name: "leading".into(),
+                    place: Expr::SelfField {
+                        field: "leading".into(),
+                    },
                 },
-            },
-            Stmt::Expr {
-                expr: Expr::Method {
-                    name: "hold".into(),
-                    args: Vec::new(),
+                Stmt::Expr {
+                    expr: Expr::Method {
+                        name: "hold".into(),
+                        args: Vec::new(),
+                    },
                 },
-            },
-        ],
-    });
+            ],
+        });
     assert_reports(
         &module,
         "no method of self is called while a local borrows a field of self",

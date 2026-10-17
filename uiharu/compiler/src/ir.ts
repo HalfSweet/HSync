@@ -139,7 +139,7 @@ export interface Module {
   imports?: Import[]
   consts?: Const[]
   functions?: Function[]
-  decoder: Decoder
+  decoder?: Decoder
 }
 
 export type BinaryOp =

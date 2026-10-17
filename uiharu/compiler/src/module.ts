@@ -116,7 +116,7 @@ class ModuleLowerer {
   lower(): Module {
     this.scan()
     const definition = this.definition
-    if (!definition) throw new CompileError(this.file, 'a decoder module defines its decoder')
+    if (!definition) return this.contractModule()
     const output = this.schemaOf(definition.output)
     const input = definition.input ? this.schemaOf(definition.input) : undefined
     const functions = this.freeFunctions()
@@ -140,6 +140,23 @@ class ModuleLowerer {
     // The decoder comes last in the JSON, after what it is made of.
     delete (module as Partial<Module>).decoder
     module.decoder = decoder
+    return module
+  }
+
+  /** A module without a decoder: the contracts of decoders written by hand, with the types
+   * they are made of and the functions that go with them. */
+  private contractModule(): Module {
+    if (!this.contracts.length) {
+      throw new CompileError(this.file, 'a module declares a decoder or a contract')
+    }
+    const functions = this.freeFunctions()
+    this.mutableParams(functions, [])
+    const module: Module = { ir: 1, name: path.basename(this.file.fileName, '.ts') }
+    if (this.typeDefs.length) module.types = this.typeDefs
+    module.contracts = this.contracts
+    if (this.imports.length) module.imports = this.imports
+    if (this.consts.length) module.consts = this.consts
+    if (functions.length) module.functions = functions
     return module
   }
 

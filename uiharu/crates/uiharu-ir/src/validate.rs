@@ -150,18 +150,19 @@ struct Checker<'a> {
     methods: BTreeMap<&'a str, &'a Function>,
     consts: BTreeSet<&'a str>,
     state: BTreeSet<&'a str>,
-    input: InputClass,
+    /// What the decoder reads; `None` for a module without a decoder.
+    input: Option<InputClass>,
     diagnostics: Vec<Diagnostic>,
     calls: Calls,
 }
 
 impl<'a> Checker<'a> {
     fn new(module: &'a Module) -> Self {
-        let input = match module.decoder.input {
+        let input = module.decoder.as_ref().map(|decoder| match decoder.input {
             Input::Logic => InputClass::Logic,
             Input::Stream { .. } => InputClass::Stream,
             Input::Bus { .. } => InputClass::Bus,
-        };
+        });
         Self {
             module,
             types: BTreeMap::new(),
@@ -230,23 +231,27 @@ impl<'a> Checker<'a> {
                 self.report(path, format!("{} is declared twice", function.name));
             }
         }
-        for (index, method) in module.decoder.methods.iter().enumerate() {
-            if self.methods.insert(&method.name, method).is_some() {
-                self.report(
-                    format!("decoder.methods[{index}]"),
-                    format!("{} is declared twice", method.name),
-                );
+        if let Some(decoder) = &module.decoder {
+            for (index, method) in decoder.methods.iter().enumerate() {
+                if self.methods.insert(&method.name, method).is_some() {
+                    self.report(
+                        format!("decoder.methods[{index}]"),
+                        format!("{} is declared twice", method.name),
+                    );
+                }
             }
-        }
-        for (index, field) in module.decoder.state.iter().enumerate() {
-            if ["config", "rate", "signal", "input", "out"].contains(&field.name.as_str())
-                || !self.state.insert(&field.name)
-            {
-                self.report(
-                    format!("decoder.state[{index}]"),
-                    format!("{} is declared twice or reserved", field.name),
-                );
+            for (index, field) in decoder.state.iter().enumerate() {
+                if ["config", "rate", "signal", "input", "out"].contains(&field.name.as_str())
+                    || !self.state.insert(&field.name)
+                {
+                    self.report(
+                        format!("decoder.state[{index}]"),
+                        format!("{} is declared twice or reserved", field.name),
+                    );
+                }
             }
+        } else if module.contracts.is_empty() {
+            self.report("decoder", "a module declares a decoder or a contract");
         }
         for (index, contract) in module.contracts.iter().enumerate() {
             self.contract(&format!("contracts[{index}]"), contract);
@@ -257,7 +262,9 @@ impl<'a> Checker<'a> {
         for (index, function) in module.functions.iter().enumerate() {
             self.function(&format!("functions[{index}]"), function, false);
         }
-        self.decoder(&module.decoder);
+        if let Some(decoder) = &module.decoder {
+            self.decoder(decoder);
+        }
     }
 
     fn type_def(&mut self, path: &str, def: &TypeDef) {
@@ -501,7 +508,7 @@ impl<'a> Checker<'a> {
             config_cx.path = format!("{path}.props[{index}]");
             self.expr(&mut config_cx, &prop.value);
         }
-        if self.input == InputClass::Bus {
+        if self.input == Some(InputClass::Bus) {
             match &decoder.recovery {
                 Some(recovery) => {
                     let names = [
@@ -559,7 +566,7 @@ impl<'a> Checker<'a> {
     /// Checks that the hooks the decoder's kind calls for are there with the right shape.
     fn hooks(&mut self, path: &str, decoder: &Decoder) {
         match self.input {
-            InputClass::Logic | InputClass::Stream => {
+            Some(InputClass::Logic | InputClass::Stream) => {
                 self.hook(path, "run", Some(true), &[], None, true);
                 for name in ["transaction", "recover"] {
                     if self.methods.contains_key(name) {
@@ -570,7 +577,7 @@ impl<'a> Checker<'a> {
                     }
                 }
             }
-            InputClass::Bus => {
+            Some(InputClass::Bus) => {
                 self.hook(path, "transaction", Some(true), &["cursor"], None, true);
                 let reason = decoder
                     .recovery
@@ -592,6 +599,7 @@ impl<'a> Checker<'a> {
                     );
                 }
             }
+            None => {}
         }
         self.hook(
             path,
@@ -662,7 +670,7 @@ impl<'a> Checker<'a> {
         let mut cx = Cx::new(path.to_owned(), owner, is_method, function.is_async);
         for (index, param) in function.params.iter().enumerate() {
             self.type_ref(&format!("{path}.params[{index}]"), &param.ty);
-            if param.ty.is("cursor") && self.input != InputClass::Bus {
+            if param.ty.is("cursor") && self.input != Some(InputClass::Bus) {
                 self.report(
                     format!("{path}.params[{index}]"),
                     "only a bus decoder has a cursor",
@@ -953,10 +961,10 @@ impl<'a> Checker<'a> {
             Expr::Intrinsic { name, args } => {
                 let bus_only = ["consumed", "tx-id", "tx-partial"];
                 let logic_only = ["position", "seek"];
-                if bus_only.contains(&name.as_str()) && self.input != InputClass::Bus {
+                if bus_only.contains(&name.as_str()) && self.input != Some(InputClass::Bus) {
                     self.report(path.clone(), format!("{name} is for bus decoders"));
                 }
-                if logic_only.contains(&name.as_str()) && self.input != InputClass::Logic {
+                if logic_only.contains(&name.as_str()) && self.input != Some(InputClass::Logic) {
                     self.report(path.clone(), format!("{name} is for logic decoders"));
                 }
                 if !INTRINSICS.contains(&name.as_str()) {
@@ -1005,7 +1013,7 @@ impl<'a> Checker<'a> {
                 self.expr(cx, otherwise);
             }
             Expr::Required { value } => {
-                if self.input != InputClass::Bus {
+                if self.input != Some(InputClass::Bus) {
                     self.report(path.clone(), "a required value (`!`) is for bus decoders, whose recovery closes a missing one");
                 }
                 self.expr(cx, value);
@@ -1046,7 +1054,7 @@ impl<'a> Checker<'a> {
     fn op(&mut self, cx: &mut Cx, path: &str, op: &Op) {
         let input = self.input;
         let wrong = |this: &mut Self, what: &str, class: InputClass| {
-            if input != class {
+            if input != Some(class) {
                 let kind = match class {
                     InputClass::Logic => "logic",
                     InputClass::Stream => "stream",
@@ -1074,7 +1082,7 @@ impl<'a> Checker<'a> {
                 self.expr(cx, event);
                 match at {
                     Some(at) => self.expr(cx, at),
-                    None if input != InputClass::Bus => {
+                    None if input != Some(InputClass::Bus) => {
                         self.report(path, "an event states its provenance; only a bus decoder may leave it to the cursor");
                     }
                     None => {}

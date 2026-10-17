@@ -29,8 +29,10 @@ pub struct Module {
     /// Free functions: pure, synchronous, without access to the decoder's state.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub functions: Vec<Function>,
-    /// The decoder.
-    pub decoder: Decoder,
+    /// The decoder; none for a module that only declares contracts, for decoders written by
+    /// hand.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decoder: Option<Decoder>,
 }
 
 /// A contract another module declares, as this one reads it.

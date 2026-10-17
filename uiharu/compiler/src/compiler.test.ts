@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
 import { lowerModule } from './module.ts'
-import { decoderFiles, loadProject, type Diagnostic } from './program.ts'
+import { loadProject, moduleFiles, type Diagnostic } from './program.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const dsl = path.resolve(here, '..', '..', 'dsl')
@@ -35,11 +35,11 @@ function read(file: string): unknown {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
 }
 
-describe('the reference decoders', () => {
+describe('the modules', () => {
   const project = loadProject(config)
-  const files = decoderFiles(project)
+  const files = moduleFiles(project)
 
-  test('are four', () => {
+  test('are the contracts and the decoders', () => {
     expect(files.map((file) => path.basename(file.fileName))).toEqual([
       'pwm.ts',
       'spi-nor.ts',
@@ -181,6 +181,18 @@ describe('the subset', () => {
     expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(message)
     expect(diagnostics[0]?.file).toBe(virtualFile)
     expect(diagnostics[0]?.line).toBeGreaterThan(0)
+  })
+
+  test('reports a module with neither a decoder nor a contract', () => {
+    const { ok, diagnostics } = compileSnippet(`
+import type { u64 } from 'uiharu'
+
+export type Event = { kind: 'tick'; at: u64 }
+`)
+    expect(ok).toBe(false)
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'a module declares a decoder or a contract',
+    )
   })
 
   test('reports TypeScript errors first', () => {

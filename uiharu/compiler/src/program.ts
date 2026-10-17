@@ -109,11 +109,12 @@ export function typeErrors(project: Project, file: ts.SourceFile): Diagnostic[] 
     })
 }
 
-/** The decoder modules of the project: every source file under `decoders/`. */
-export function decoderFiles(project: Project): ts.SourceFile[] {
-  const dir = path.join(project.root, 'decoders') + path.sep
+/** The modules of the project: every source file under `contracts/` (contracts of decoders
+ * written by hand) and `decoders/`. */
+export function moduleFiles(project: Project): ts.SourceFile[] {
+  const dirs = ['contracts', 'decoders'].map((dir) => path.join(project.root, dir) + path.sep)
   return project.program
     .getSourceFiles()
-    .filter((file) => path.resolve(file.fileName).startsWith(dir))
+    .filter((file) => dirs.some((dir) => path.resolve(file.fileName).startsWith(dir)))
     .sort((a, b) => a.fileName.localeCompare(b.fileName))
 }
