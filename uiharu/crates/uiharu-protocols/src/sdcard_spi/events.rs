@@ -167,7 +167,7 @@ mod tests {
         assert_eq!(
             json(&SdEvent::Command {
                 op,
-                tx: TxId(1),
+                tx: 1,
                 index: 8,
                 acmd: false,
                 argument: 0x1aa,
@@ -218,10 +218,7 @@ mod tests {
             r#"{"kind":"end","op":2,"reason":"incomplete"}"#
         );
         assert_eq!(
-            json(&SdEvent::UnknownCommand {
-                tx: TxId(5),
-                byte: 0xfe,
-            }),
+            json(&SdEvent::UnknownCommand { tx: 5, byte: 0xfe }),
             r#"{"kind":"unknown-command","tx":5,"byte":254}"#
         );
     }

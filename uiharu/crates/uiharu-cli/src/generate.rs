@@ -93,7 +93,7 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     let idle: u64 = args.parsed("idle", 40)?;
     let seed: u64 = args.parsed("seed", 1)?;
 
-    let mut waveform = SpiWaveform::new(setup.spi.clone(), setup.channels, half_period, Tick::ZERO);
+    let mut waveform = SpiWaveform::new(setup.spi, setup.channels, half_period, Tick::ZERO);
     waveform.idle(idle);
     traffic(&mut waveform, &mut Rng::new(seed), reads, bytes, idle);
     let block = waveform.finish();

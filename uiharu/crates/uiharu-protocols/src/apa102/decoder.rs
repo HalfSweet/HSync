@@ -67,7 +67,7 @@ use uiharu_core::{
 };
 
 use super::events::{Apa102Event, EndReason, ErrorReason, FrameId};
-use crate::spi::{Next, Read, ReadError, SpiBus, SpiEvent, Transaction};
+use crate::spi::{Cut, Next, Read, SpiBus, SpiEvent, Transaction, required};
 
 /// The bits of an LED frame's first byte that say it is one.
 const HEADER_MASK: u8 = 0b1110_0000;
@@ -530,14 +530,14 @@ impl Frames {
 }
 
 /// The body for one transaction of a bus with chip select: its words, read on their own.
-async fn transaction(mut tx: Transaction<'_>, frames: &mut Frames) -> Result<(), ReadError> {
+async fn transaction(mut tx: Transaction<'_>, frames: &mut Frames) -> Result<(), Cut> {
     frames.forget();
     // The begin's ticks are no byte's.
     tx.consumed();
     loop {
-        match tx.word_or_end().await? {
-            Read::Word(word) => {
-                let value = word.mosi()?;
+        match tx.item_or_end().await? {
+            Read::Item(word) => {
+                let value = required(word.mosi)?;
                 frames.byte(value, tx.consumed()).await;
             }
             Read::End => {
@@ -549,14 +549,12 @@ async fn transaction(mut tx: Transaction<'_>, frames: &mut Frames) -> Result<(),
 }
 
 /// Ends the frame the body left open, as the transaction's end calls for.
-async fn recover(error: ReadError, bus: &mut SpiBus, frames: &mut Frames) {
+async fn recover(error: Cut, bus: &mut SpiBus, frames: &mut Frames) {
     let tick = match error {
-        ReadError::Gap(range) => range.start,
-        ReadError::EndOfInput(tick) => tick,
+        Cut::Gap(range) => range.start,
+        Cut::End(tick) => tick,
         // Cut off: the stream's aborted end was consumed, and says where.
-        ReadError::Truncated | ReadError::Incomplete | ReadError::MissingLine(_) => {
-            bus.consumed().settled
-        }
+        Cut::Truncated | Cut::Incomplete | Cut::Missing => bus.consumed().settled,
     };
     frames.abort(tick).await;
 }
@@ -570,7 +568,7 @@ async fn framed_run(mut bus: SpiBus, mut frames: Frames) {
                     recover(error, &mut bus, &mut frames).await;
                 }
                 if let Err(error) = bus.finish().await {
-                    recover(error, &mut bus, &mut frames).await;
+                    recover(Cut::from(error), &mut bus, &mut frames).await;
                 }
                 bus.consumed();
             }
@@ -625,19 +623,19 @@ mod tests {
             miso: None,
             ..SpiConfig::default()
         };
-        assert_eq!(spi(bus.clone()), None);
+        assert_eq!(spi(bus), None);
         assert_eq!(spi(SpiConfig::default()), None);
         assert_eq!(
             spi(SpiConfig {
                 word_bits: 4,
-                ..bus.clone()
+                ..bus
             }),
             Some("wordBits")
         );
         assert_eq!(
             spi(SpiConfig {
                 bit_order: BitOrder::LsbFirst,
-                ..bus.clone()
+                ..bus
             }),
             Some("bitOrder")
         );

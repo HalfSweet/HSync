@@ -9,7 +9,7 @@ use uiharu_core::testing::assert_progress_promise;
 use uiharu_core::{GraphConfig, GraphError, Item, Tick, TickRange, TimeBase};
 use uiharu_protocols::spi::synth::{SpiWaveform, nor_read_words};
 use uiharu_protocols::spi::{Spi, SpiConfig};
-use uiharu_protocols::spi_nor::{AddressBytes, Command, NorEvent, SpiNor, SpiNorConfig, synth};
+use uiharu_protocols::spi_nor::{AddressBytes, NorEvent, SpiNor, SpiNorConfig, command_of, synth};
 
 const HALF: u64 = 3;
 
@@ -338,7 +338,8 @@ fn the_bus_must_meet_the_decoders_requirements() {
         })
     ));
     assert!(
-        SpiNor::requires()
+        SpiNorConfig::default()
+            .requires()
             .unmet(&SpiConfig::default().props())
             .is_none()
     );
@@ -570,7 +571,7 @@ fn commands_without_operands_skip_what_follows() {
     let lines = decode(SpiNorConfig::default(), &transactions);
     let mut expected = Vec::new();
     for (n, opcode) in opcodes.iter().enumerate() {
-        let command = Command::from_opcode(*opcode).expect("a known opcode");
+        let command = command_of(*opcode).expect("a known opcode");
         expected.push(format!("begin op{0} tx{0} {command:?}", n + 1));
         expected.push(format!("end op{} Complete", n + 1));
     }
@@ -1007,7 +1008,7 @@ fn a_long_mixed_waveform_decodes_alike_however_it_is_cut() {
             |graph, source| {
                 let spi = graph.add(Spi::new(SpiConfig::default()).expect("a valid configuration"));
                 graph.connect(source.samples, Spi::input(spi))?;
-                let nor = graph.add(SpiNor::new(auto()));
+                let nor = graph.add(SpiNor::new(auto()).expect("a valid configuration"));
                 graph.connect(Spi::events(spi), SpiNor::input(nor))?;
                 Ok(SpiNor::events(nor))
             },

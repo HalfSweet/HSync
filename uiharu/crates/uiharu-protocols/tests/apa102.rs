@@ -499,7 +499,7 @@ fn the_spi_stream_must_carry_bytes_on_mosi_msb_first() {
         ..bus(false)
     };
     assert_eq!(
-        try_build(four_bits.clone(), GraphConfig::default())
+        try_build(four_bits, GraphConfig::default())
             .err()
             .map(|error| error.to_string()),
         Some("apa102#1.bus requires wordBits = 8 of spi#0.events, which declares 4".to_owned())

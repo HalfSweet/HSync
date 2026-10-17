@@ -10,7 +10,7 @@ use uiharu_core::{
 
 use super::commands::{ACTIVATE, ACTIVATE_KEY, Decoded, Payload, decode};
 use super::events::{Command, DATA_BATCH, Direction, EndReason, Nrf24Event, OpId, Register};
-use crate::spi::{Next, Read, ReadError, SpiBus, SpiEvent, Transaction, TxId};
+use crate::spi::{Cut, Next, Read, SpiBus, SpiEvent, Transaction, TxId, required};
 
 /// The nRF24L01+ decoder node: `spi.events` in, `nrf24l01.events` out.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -182,9 +182,9 @@ impl Out {
 /// The body of the decoder: the command one transaction carries. The first word is the
 /// command byte on MOSI and STATUS on MISO; the words after it are the command's data, in
 /// the direction the command says.
-async fn transaction(mut tx: Transaction<'_>, out: &mut Out) -> Result<(), ReadError> {
-    let first = tx.word().await?;
-    let (byte, status) = (first.mosi()?, first.miso()?);
+async fn transaction(mut tx: Transaction<'_>, out: &mut Out) -> Result<(), Cut> {
+    let first = tx.item().await?;
+    let (byte, status) = (required(first.mosi)?, required(first.miso)?);
     // Chip select's assertion through the command byte.
     let head = tx.consumed();
     if byte == ACTIVATE {
@@ -192,7 +192,7 @@ async fn transaction(mut tx: Transaction<'_>, out: &mut Out) -> Result<(), ReadE
     }
     let Some(decoded) = decode(byte) else {
         out.unknown(tx.id(), byte, status, head).await;
-        return tx.drain().await;
+        return tx.drain().await.map_err(Cut::from);
     };
     let op = out.command(tx.id(), decoded, status, head).await;
     let payload = decoded.command.payload(decoded.register);
@@ -206,15 +206,15 @@ async fn activate(
     out: &mut Out,
     status: u8,
     head: Provenance,
-) -> Result<(), ReadError> {
+) -> Result<(), Cut> {
     // The command byte's ticks are held until the next word says what the command was.
     out.sink.hold(Some(head.span.start));
-    let next = tx.word_or_end().await?;
+    let next = tx.item_or_end().await?;
     let at = tx.consumed();
     out.sink.hold(None);
     let decided = Provenance::over(head.span, at.settled);
     match next {
-        Read::Word(word) if word.mosi()? == ACTIVATE_KEY => {
+        Read::Item(word) if required(word.mosi)? == ACTIVATE_KEY => {
             let decoded = Decoded {
                 command: Command::Activate,
                 register: None,
@@ -226,9 +226,9 @@ async fn activate(
             out.flush(op, None).await;
             data(&mut tx, out, op, payload, 1).await
         }
-        Read::Word(_) => {
+        Read::Item(_) => {
             out.unknown(tx.id(), ACTIVATE, status, decided).await;
-            tx.drain().await
+            tx.drain().await.map_err(Cut::from)
         }
         Read::End => {
             out.unknown(tx.id(), ACTIVATE, status, decided).await;
@@ -247,10 +247,10 @@ async fn data(
     op: OpId,
     payload: Payload,
     read: u8,
-) -> Result<(), ReadError> {
+) -> Result<(), Cut> {
     let mut count = read;
     loop {
-        let word = match tx.word_or_end().await? {
+        let word = match tx.item_or_end().await? {
             Read::End => {
                 let reason = if count < payload.min {
                     EndReason::Incomplete
@@ -260,19 +260,19 @@ async fn data(
                 out.end(op, reason, tx.consumed()).await;
                 return Ok(());
             }
-            Read::Word(word) => word,
+            Read::Item(word) => word,
         };
         let direction = match payload.direction {
             Some(direction) if count < payload.max => direction,
             _ => {
                 // The command takes no more: the rest of the transaction is skipped.
                 out.end(op, EndReason::TooLong, tx.consumed()).await;
-                return tx.drain().await;
+                return tx.drain().await.map_err(Cut::from);
             }
         };
         let byte = match direction {
-            Direction::In => word.mosi()?,
-            Direction::Out => word.miso()?,
+            Direction::In => required(word.mosi)?,
+            Direction::Out => required(word.miso)?,
         };
         out.push(op, direction, byte, tx.consumed()).await;
         count += 1;
@@ -285,7 +285,7 @@ async fn data(
 /// Closes what the body left open, as the transaction's end calls for. The end covers the
 /// words the body read without reporting them, and the transaction's end when the stream
 /// carried one; a gap or the end of the stream only places it.
-async fn recover(error: ReadError, bus: &mut SpiBus, out: &mut Out) {
+async fn recover(error: Cut, bus: &mut SpiBus, out: &mut Out) {
     let unreported = bus.consumed();
     let placed = |tick: Tick| Provenance {
         span: if unreported.span.is_empty() {
@@ -296,10 +296,10 @@ async fn recover(error: ReadError, bus: &mut SpiBus, out: &mut Out) {
         settled: tick,
     };
     let (reason, at) = match error {
-        ReadError::Incomplete => (EndReason::Incomplete, unreported),
-        ReadError::Truncated | ReadError::MissingLine(_) => (EndReason::Aborted, unreported),
-        ReadError::Gap(range) => (EndReason::Aborted, placed(range.start)),
-        ReadError::EndOfInput(tick) => (EndReason::Aborted, placed(tick)),
+        Cut::Incomplete => (EndReason::Incomplete, unreported),
+        Cut::Truncated | Cut::Missing => (EndReason::Aborted, unreported),
+        Cut::Gap(range) => (EndReason::Aborted, placed(range.start)),
+        Cut::End(tick) => (EndReason::Aborted, placed(tick)),
     };
     out.close_open(reason, at).await;
 }
@@ -312,7 +312,7 @@ async fn run(mut bus: SpiBus, mut out: Out) {
                 // is not the command, and its words may not be aligned on bytes.
                 let result = if tx.is_partial() {
                     let mut tx = tx;
-                    tx.drain().await
+                    tx.drain().await.map_err(Cut::from)
                 } else {
                     transaction(tx, &mut out).await
                 };
@@ -320,7 +320,7 @@ async fn run(mut bus: SpiBus, mut out: Out) {
                     recover(error, &mut bus, &mut out).await;
                 }
                 if let Err(error) = bus.finish().await {
-                    recover(error, &mut bus, &mut out).await;
+                    recover(Cut::from(error), &mut bus, &mut out).await;
                 }
                 bus.consumed();
             }

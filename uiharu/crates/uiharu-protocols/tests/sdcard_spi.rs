@@ -103,7 +103,7 @@ fn describe(items: &[Item<SdEvent>], ticks: bool) -> Vec<String> {
                         };
                         format!(
                             "command op{} tx{} {name}{index} {argument:08x} {crc}",
-                            op.0, tx.0
+                            op.0, tx
                         )
                     }
                     SdEvent::Response {
@@ -136,7 +136,7 @@ fn describe(items: &[Item<SdEvent>], ticks: bool) -> Vec<String> {
                     }
                     SdEvent::End { op, reason } => format!("end op{} {reason:?}", op.0),
                     SdEvent::UnknownCommand { tx, byte } => {
-                        format!("unknown tx{} {byte:02x}", tx.0)
+                        format!("unknown tx{} {byte:02x}", tx)
                     }
                 };
                 if ticks {
@@ -1249,7 +1249,7 @@ proptest! {
             .into_iter()
             .collect();
         let spi = SpiConfig { mode, ..SpiConfig::default() };
-        let mut reference = build(spi.clone(), blocks_of(16), GraphConfig::default())
+        let mut reference = build(spi, blocks_of(16), GraphConfig::default())
             .expect("builds");
         reference.feed_with_gaps(&samples, &gaps, &[u64::MAX]);
         reference.end();

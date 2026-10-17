@@ -162,8 +162,7 @@ fn no_config(value: &serde_json::Value) -> Result<(), String> {
 }
 
 fn build_spi_nor(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
-    let config: SpiNorConfig = config(value)?;
-    Ok(Box::new(SpiNor::new(config)))
+    build_node(value, SpiNor::new)
 }
 
 fn build_sdcard_spi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {

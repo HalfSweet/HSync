@@ -7,7 +7,7 @@ use uiharu_core::testing::{Harness, assert_block_invariant};
 use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::uart::synth::{Faults, UartWaveform};
 use uiharu_protocols::uart::{
-    BitOrder, Parity, ParityCheck, StopBits, Uart, UartConfig, UartEvent,
+    BitOrder, Parity, ParityCheck, StopBits, Uart, UartConfig, UartEvent, half_bits,
 };
 
 const CHANNELS: u8 = 2;
@@ -125,7 +125,7 @@ impl Expect {
             StopBits::OneAndAHalf => self.at(start, 200 * (whole + 1) + sample_point),
             StopBits::Two => self.at(start, 200 * (whole + 1) + 2 * sample_point),
         };
-        let stop = 100 * u64::from(self.config.stop_bits.half_bits());
+        let stop = 100 * u64::from(half_bits(self.config.stop_bits));
         let end = self.at(start, 200 * whole + stop);
         format!(
             "{} [{start},{end})@{settled}",

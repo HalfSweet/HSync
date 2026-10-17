@@ -210,7 +210,7 @@ mod tests {
         assert_eq!(
             json(&Nrf24Event::Command {
                 op,
-                tx: TxId(2),
+                tx: 2,
                 command: Command::WRegister,
                 register: Some(0x0a),
                 register_name: Some(Register::RxAddrP0),
@@ -237,7 +237,7 @@ mod tests {
         );
         assert_eq!(
             json(&Nrf24Event::Unknown {
-                tx: TxId(4),
+                tx: 4,
                 command: 0x50,
                 status: 0x0e,
             }),

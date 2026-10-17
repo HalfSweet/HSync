@@ -7,7 +7,7 @@ use uiharu_core::{
     GraphConfig, Item, Levels, LogicBlock, LogicBlockBuilder, Tick, TickRange, TimeBase,
 };
 use uiharu_protocols::pwm::synth::PwmWaveform;
-use uiharu_protocols::pwm::{Polarity, Pwm, PwmConfig, PwmEvent};
+use uiharu_protocols::pwm::{Polarity, Pwm, PwmConfig, PwmEvent, is_active};
 
 const CHANNELS: u8 = 2;
 
@@ -17,7 +17,7 @@ fn harness(config: &PwmConfig, graph_config: GraphConfig) -> Harness<PwmEvent> {
         TimeBase::new(1_000_000),
         graph_config,
         |graph, source| {
-            let pwm = graph.add(Pwm::new(config.clone()).expect("a valid configuration"));
+            let pwm = graph.add(Pwm::new(*config).expect("a valid configuration"));
             graph.connect(source.samples, Pwm::input(pwm))?;
             Ok(Pwm::events(pwm))
         },
@@ -270,7 +270,7 @@ fn naive(config: &PwmConfig, block: &LogicBlock, gaps: &[TickRange]) -> Vec<Stri
             continue;
         }
         let high = block.level(config.channel, tick).expect("in the block");
-        let active = config.polarity.is_active(high);
+        let active = is_active(config.polarity, high);
         match was_active {
             Some(false) if active => {
                 if let (Some(start), Some(end)) = (leading, trailing) {

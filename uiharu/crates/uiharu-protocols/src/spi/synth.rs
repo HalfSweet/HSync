@@ -4,7 +4,7 @@
 
 use uiharu_core::{Levels, LogicBlock, LogicBlockBuilder, Tick};
 
-use super::decoder::{BitOrder, SpiConfig};
+use super::{BitOrder, SpiConfig, cpha, cpol};
 
 /// Builds the samples of an SPI bus one transaction at a time.
 #[derive(Debug)]
@@ -22,7 +22,7 @@ impl SpiWaveform {
     /// `half_period` samples per half period, starting at `start` with the bus idle.
     pub fn new(config: SpiConfig, channels: u8, half_period: u64, start: Tick) -> Self {
         let mut levels = Levels(0);
-        if config.cpol() {
+        if cpol(&config) {
             levels.0 |= 1 << config.clk;
         }
         if let Some(cs) = config.cs
@@ -85,8 +85,8 @@ impl SpiWaveform {
     /// Clocks `bits` bits of a word on both lines, the most or least significant first as
     /// configured, with the clock edges the mode calls for.
     pub fn partial_word(&mut self, mosi: u8, miso: u8, bits: u8) {
-        let idle = self.config.cpol();
-        let (clk, cpha) = (self.config.clk, self.config.cpha());
+        let idle = cpol(&self.config);
+        let (clk, cpha) = (self.config.clk, cpha(&self.config));
         let word_bits = self.config.word_bits;
         for i in 0..bits.min(word_bits) {
             let shift = match self.config.bit_order {

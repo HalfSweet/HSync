@@ -134,7 +134,7 @@ pub fn run(args: &Args) -> Result<(), Failure> {
     let half_period: u64 = args.parsed("half-period", 2)?;
 
     // One block's worth of traffic, replayed at successive positions.
-    let mut waveform = SpiWaveform::new(setup.spi.clone(), setup.channels, half_period, Tick::ZERO);
+    let mut waveform = SpiWaveform::new(setup.spi, setup.channels, half_period, Tick::ZERO);
     let mut rng = Rng::new(7);
     waveform.idle(8);
     while waveform.position().get() < chunk.max(1) {

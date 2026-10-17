@@ -4,7 +4,7 @@
 
 use uiharu_core::{Levels, LogicBlock, LogicBlockBuilder, Tick};
 
-use super::decoder::{BitOrder, UartConfig};
+use super::{BitOrder, UartConfig, half_bits, parity_bit};
 
 /// Errors [`UartWaveform::frame`] builds into a character.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -112,10 +112,10 @@ impl UartWaveform {
             };
             cells.push(((value >> shift) & 1 != 0, 2));
         }
-        if let Some(bit) = config.parity.bit(value) {
+        if let Some(bit) = parity_bit(config.parity, value) {
             cells.push((bit != faults.parity, 2));
         }
-        cells.push((!faults.framing, u64::from(config.stop_bits.half_bits())));
+        cells.push((!faults.framing, u64::from(half_bits(config.stop_bits))));
         let mut at = 0;
         for (mark, half_bits) in cells {
             let samples = self.samples(at + half_bits) - self.samples(at);
@@ -171,7 +171,7 @@ impl UartWaveform {
 mod tests {
     use uiharu_core::TickRange;
 
-    use super::super::decoder::{Parity, StopBits};
+    use super::super::{Parity, StopBits};
     use super::*;
 
     fn levels(block: &LogicBlock, line: u8) -> String {
