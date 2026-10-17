@@ -8,15 +8,26 @@ import { binStart } from '@/ipc/bins'
 import { sampleToX } from '@/timeline/viewport'
 
 import { lineWidth, traceShape } from './shape'
-import type { FrameDescriptor, RenderTokens } from './types'
+import type { FrameDescriptor, RenderTokens, TraceDraw } from './types'
 
 /** Floats per rectangle: x, y, width, height in device pixels, then premultiplied RGBA. */
 export const RECT_FLOATS = 8
 
-/** Where the high and low levels sit within a row, as fractions of its height (DESIGN.md §6.2). */
-const LEVELS = {
-  wide: { high: 6.5 / 30, low: 23.5 / 30 },
-  narrow: { high: 4.5 / 18, low: 13.5 / 18 },
+/**
+ * The room above the high level and below the low one (DESIGN.md §6.2): a share of the row's
+ * height, up to what a row of the design's height leaves, so that a row made taller gives the
+ * extra to the swing between the levels.
+ */
+const MARGINS = {
+  wide: { share: 6.5 / 30, most: 6.5 },
+  narrow: { share: 4.5 / 18, most: 4.5 },
+}
+
+/** Where the high and low levels of a trace sit, in CSS pixels. */
+function levelsOf(trace: TraceDraw): { high: number; low: number } {
+  const margin = trace.narrow ? MARGINS.narrow : MARGINS.wide
+  const room = Math.min(trace.height * margin.share, margin.most)
+  return { high: trace.top + room, low: trace.top + trace.height - room }
 }
 
 export type Rgba = [number, number, number, number]
@@ -76,9 +87,9 @@ export function layoutFrame(frame: FrameDescriptor, tokens: RenderTokens, sink: 
   const bins = frame.bins
   if (!bins) return
   for (const trace of frame.traces) {
-    const levels = trace.narrow ? LEVELS.narrow : LEVELS.wide
-    const high = device(trace.top + trace.height * levels.high) - half
-    const low = device(trace.top + trace.height * levels.low) - half
+    const levels = levelsOf(trace)
+    const high = device(levels.high) - half
+    const low = device(levels.low) - half
     const shape = traceShape(
       trace.cells,
       (column) => device(frame.trackLeft + sampleToX(frame.view, binStart(bins, column))),

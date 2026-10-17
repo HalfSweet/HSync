@@ -252,6 +252,10 @@
     },
     "tip": "Click the dot or double-click the name to rename or recolour; right-click works too"
   },
+  "channelRow": {
+    "resize": "Drag to resize the waveform of {channel}",
+    "resizeTip": "Drag to resize, double-click to reset"
+  },
   "triggerPanel": {
     "title": "Trigger settings",
     "mode": "Type",
@@ -1572,6 +1576,7 @@
       "centerTrigger": "Centre the view on the trigger",
       "followLatest": "Follow the latest data while capturing",
       "quickScroll": "Keep scrolling after a quick drag",
+      "wheelZoom": "Zoom the waveform with the wheel alone",
       "keepStopped": "Show the latest data when a repeat stops",
       "checkUpdates": "Check for updates at startup"
     },

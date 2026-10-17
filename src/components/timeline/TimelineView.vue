@@ -42,10 +42,11 @@ import {
   type MeasureEnd,
 } from '@/timeline/measure'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
-import { collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
+import { clampTraceHeight, collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
 import { sampleToX, viewportEnd, xToSample } from '@/timeline/viewport'
+import { wheelAction } from '@/timeline/wheel'
 import { formatCount, formatFrequency, formatSampled, formatTime } from '@/utils/units'
 
 import ChannelLabel from './ChannelLabel.vue'
@@ -54,6 +55,7 @@ import GroupLabel from './GroupLabel.vue'
 import MeasureOverlay from './MeasureOverlay.vue'
 import TimelineRuler from './TimelineRuler.vue'
 import ChannelMenu from './ChannelMenu.vue'
+import TraceGrip from './TraceGrip.vue'
 import TriggerMenu from './TriggerMenu.vue'
 
 /** Rows are never narrower than this, label column included; narrower windows scroll. */
@@ -83,10 +85,22 @@ const layout = computed(() =>
     metrics.value,
     (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
     (group) => decode.statusOf(group.decoder)?.streams.length ?? 1,
+    (channel) => channels.heights[channel.index],
   ),
 )
 
 const isTrace = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow'
+
+/** Channel rows, whose bottom edge in the label column can be dragged (DESIGN.md §6.1). */
+const resizable = computed(() => layout.value.rows.filter((row) => isTrace(row) && row.channel))
+
+function resizeRow(row: Row, height: number | null): void {
+  if (!row.channel) return
+  channels.setHeight(
+    row.channel.index,
+    height === null ? null : clampTraceHeight(height, metrics.value),
+  )
+}
 
 /** The decoder's stream a row shows: the first on the group's title row, each further one (a
  * decoder stacked on the bus) on a lane of its own. */
@@ -668,7 +682,6 @@ watch([readout, measured], ([pulse, measure]) =>
 )
 onBeforeUnmount(() => view.setReadouts({ pulse: null, measure: null }))
 
-// Ctrl/⌘ + wheel zooms around the pointer; shift + wheel and horizontal swipes pan.
 // Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §10).
 useEventListener(document, 'keydown', (event: KeyboardEvent) => {
   if (event.defaultPrevented || keyTakenElsewhere(event.target)) return
@@ -706,24 +719,27 @@ function applyWheel(): void {
 }
 onBeforeUnmount(() => cancelAnimationFrame(wheel.frame))
 
+// The wheel zooms around the pointer or pans (DESIGN.md §10); what it leaves alone scrolls the
+// rows.
 function onWheel(event: WheelEvent): void {
   stopFling()
   const rows = rowsElement.value?.getBoundingClientRect()
-  if (!rows) return
-  const x = Math.min(
-    Math.max(event.clientX - rows.left - metrics.value.label, 0),
-    view.viewport.width,
-  )
-  const scale = event.deltaMode === 1 ? 16 : 1
-  if (event.ctrlKey || event.metaKey) {
-    event.preventDefault()
-    wheel.zoom *= Math.exp(-event.deltaY * scale * 0.002)
-    wheel.anchor = x
-  } else if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-    event.preventDefault()
-    wheel.pan += (event.shiftKey && event.deltaX === 0 ? event.deltaY : event.deltaX) * scale
+  const visible = scroller.value?.getBoundingClientRect()
+  if (!rows || !visible) return
+  const action = wheelAction(event, {
+    wheelZoom: preferences.wheelZoom,
+    overLabels: event.clientX - visible.left < metrics.value.label,
+  })
+  if (!action) return
+  event.preventDefault()
+  if (action.kind === 'zoom') {
+    wheel.zoom *= action.factor
+    wheel.anchor = Math.min(
+      Math.max(event.clientX - rows.left - metrics.value.label, 0),
+      view.viewport.width,
+    )
   } else {
-    return
+    wheel.pan += action.dx
   }
   wheel.frame ||= requestAnimationFrame(applyWheel)
 }
@@ -746,6 +762,20 @@ function onWheel(event: WheelEvent): void {
     >
       <div ref="rows" class="relative flex min-h-full min-w-[860px] flex-col overflow-x-clip">
         <TimelineRuler class="sticky top-0 z-[5]" />
+
+        <!-- The channel rows' bottom edges, across the boundary with the row below: over the
+             labels, under the ruler. -->
+        <div class="sticky left-0 z-[4] h-0 w-(--lab) flex-none">
+          <TraceGrip
+            v-for="row in resizable"
+            :key="row.key"
+            :channel="row.channel?.label ?? ''"
+            :height="row.height"
+            :style="{ top: `${row.top + row.height - 3}px` }"
+            @resize="(height) => resizeRow(row, height)"
+            @reset="resizeRow(row, null)"
+          />
+        </div>
 
         <div
           v-for="row in layout.rows"

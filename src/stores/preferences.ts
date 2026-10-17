@@ -39,6 +39,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const followLatest = useStorage('hsync.followLatest', true)
   /** A quick drag on the tracks keeps the waveform moving after release. */
   const quickScroll = useStorage('hsync.quickScroll', true)
+  /** The wheel alone zooms the waveforms, as Ctrl/⌘ + wheel does; over the labels it scrolls. */
+  const wheelZoom = useStorage('hsync.wheelZoom', false)
   /** A repeat stopped early shows what it caught instead of the last complete capture. */
   const keepStopped = useStorage('hsync.keepStopped', false)
 
@@ -90,6 +92,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     centerTrigger,
     followLatest,
     quickScroll,
+    wheelZoom,
     keepStopped,
     checkUpdates,
     logLevel,

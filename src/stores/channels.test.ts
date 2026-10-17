@@ -19,6 +19,15 @@ describe('channels store', () => {
     expect(channels.armed).toHaveLength(1)
   })
 
+  it('keeps the row heights dragged and gives a channel back its default', () => {
+    const channels = useChannelsStore()
+    channels.setHeight(3, 60)
+    channels.setHeight(5, 42)
+    expect(channels.heights).toEqual({ 3: 60, 5: 42 })
+    channels.setHeight(3, null)
+    expect(channels.heights).toEqual({ 5: 42 })
+  })
+
   it('toggles groups from their default state', () => {
     const channels = useChannelsStore()
     expect(channels.isCollapsed('can', true)).toBe(true)

@@ -8,6 +8,7 @@ import { uiError } from '@/ipc/mock/mockDevice'
 import { SESSION_FORMAT, SESSION_VERSION, type Session } from '@/session/session'
 
 import { useCaptureStore } from './capture'
+import { useChannelsStore } from './channels'
 import { useDeviceStore } from './device'
 import { useSessionStore } from './session'
 
@@ -92,6 +93,7 @@ function session(patch: Partial<Session>): Session {
     enabledChannels: null,
     channelNames: {},
     colours: {},
+    heights: {},
     triggers: {},
     trigger: null,
     decoders: null,
@@ -199,6 +201,19 @@ describe('session store', () => {
     expect(device.enabledChannels).toEqual([0, 1, 2])
     expect(device.samplerate).toBe(FAST)
     expect(device.error).toBeNull()
+  })
+
+  it('keeps the channel colours and heights with a capture and brings them back', async () => {
+    const sessions = useSessionStore()
+    const channels = useChannelsStore()
+    channels.setColour(2, 6)
+    channels.setHeight(2, 72)
+    const document: unknown = JSON.parse(JSON.stringify(sessions.captureDocument()))
+    channels.colours = {}
+    channels.heights = {}
+    await sessions.applyCaptureDocument(document)
+    expect(channels.colours).toEqual({ 2: 6 })
+    expect(channels.heights).toEqual({ 2: 72 })
   })
 
   it('gives a session loaded before any capture to the first capture', async () => {

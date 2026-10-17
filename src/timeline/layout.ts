@@ -37,6 +37,14 @@ export const COMFORTABLE_METRICS: RowMetrics = { lane: 26, trace: 30, traceNarro
 const CAN_HEADER = 28
 const CAN_GAP = 6
 
+/** The most a channel row grows to, however far its edge is dragged (DESIGN.md §6.1). */
+export const MAX_TRACE_HEIGHT = 200
+
+/** A height given to a channel row, in whole pixels from the narrow row's height to the most. */
+export function clampTraceHeight(height: number, metrics: RowMetrics): number {
+  return Math.min(MAX_TRACE_HEIGHT, Math.max(metrics.traceNarrow, Math.round(height)))
+}
+
 /** Groups collapsed until the user opens them: the design starts with CAN-FD closed. */
 export function collapsedByDefault(group: ChannelGroup): boolean {
   return group.kind === 'can'
@@ -45,13 +53,15 @@ export function collapsedByDefault(group: ChannelGroup): boolean {
 /**
  * Lays out the rows: for each group its title row, which carries the decoder's first stream,
  * a lane row for each further stream (`streamsOf` says how many a decoder has), then its
- * channels.
+ * channels, each as high as `heightOf` says (the user dragged its edge) or else its kind's
+ * height.
  */
 export function layoutRows(
   groups: ChannelGroup[],
   metrics: RowMetrics,
   isCollapsed: (group: ChannelGroup) => boolean,
   streamsOf: (group: ChannelGroup) => number = () => 1,
+  heightOf: (channel: ChannelRef) => number | undefined = () => undefined,
 ): { rows: Row[]; height: number } {
   const rows: Row[] = []
   let top = 0
@@ -85,10 +95,14 @@ export function layoutRows(
       }
       for (const channel of group.channels) {
         const wide = group.kind === 'i2c' || group.kind === 'uart'
+        const own = heightOf(channel)
         push({
           key: `${group.key}:trace:${channel.index}`,
           kind: wide ? 'trace' : 'trace-narrow',
-          height: wide ? metrics.trace : metrics.traceNarrow,
+          height:
+            own === undefined
+              ? metrics[wide ? 'trace' : 'traceNarrow']
+              : clampTraceHeight(own, metrics),
           group,
           channel,
           labeled: true,

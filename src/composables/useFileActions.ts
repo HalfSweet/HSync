@@ -59,7 +59,8 @@ export function useFileActions() {
 
   /**
    * Opens an `.hsync` or `.dsl` capture, or reads a waveform file for the import dialog. An
-   * `.hsync` capture comes back with the colours and the view it was saved with.
+   * `.hsync` capture comes back with the channel colours and heights and the view it was saved
+   * with.
    */
   async function open(): Promise<void> {
     if (!idle()) return

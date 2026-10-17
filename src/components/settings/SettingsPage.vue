@@ -18,6 +18,7 @@ import {
   Stethoscope,
   Sun,
   SunMoon,
+  ZoomIn,
 } from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
 import {
@@ -64,11 +65,12 @@ const tablist = useTemplateRef<HTMLElement>('tablist')
 /** Languages are named in their own language. */
 const LANGUAGE_NAMES: Record<string, string> = { 'zh-CN': '简体中文', 'en-US': 'English' }
 
-/** DSView's display options, and whether to look for updates. */
+/** DSView's display options, how the wheel works, and whether to look for updates. */
 const BEHAVIOURS = [
   'centerTrigger',
   'followLatest',
   'quickScroll',
+  'wheelZoom',
   'keepStopped',
   'checkUpdates',
 ] as const
@@ -86,6 +88,7 @@ const BEHAVIOUR_ICONS: Record<(typeof BEHAVIOURS)[number], Component> = {
   centerTrigger: Crosshair,
   followLatest: ArrowRightToLine,
   quickScroll: MoveHorizontal,
+  wheelZoom: ZoomIn,
   keepStopped: Repeat,
   checkUpdates: RefreshCw,
 }

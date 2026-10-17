@@ -17,6 +17,7 @@ describe('sessions', () => {
         enabledChannels: [0, 1],
         channelNames: { 0: 'SDA' },
         colours: { 0: 5 },
+        heights: { 0: 64, 1: 'tall' },
         triggers: { 1: 'fall', 2: 'sideways' },
         trigger: null,
         decoders: [{ id: '1:i2c' }],
@@ -26,8 +27,13 @@ describe('sessions', () => {
     expect(session?.options).toEqual([['samplerate', { type: 'integer', value: 25_000_000 }]])
     expect(session?.triggers).toEqual({ 1: 'fall' })
     expect(session?.channelNames).toEqual({ 0: 'SDA' })
+    expect(session?.heights).toEqual({ 0: 64 })
     expect(session?.decoders).toEqual([{ id: '1:i2c' }])
     expect(session?.view).toBeNull()
+    // Sessions from before row heights have none.
+    expect(parseSession(JSON.stringify({ format: 'hsync-session', version: 1 }))?.heights).toEqual(
+      {},
+    )
   })
 
   it('read the view stored with an .hsync capture', () => {

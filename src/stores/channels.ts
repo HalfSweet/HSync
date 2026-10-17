@@ -3,12 +3,17 @@ import { computed, ref } from 'vue'
 
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 
-/** Per-channel settings the user makes on the timeline: trigger conditions and open groups. */
+/**
+ * Per-channel settings the user makes on the timeline: trigger conditions, colours, row heights
+ * and open groups.
+ */
 export const useChannelsStore = defineStore('channels', () => {
   /** Trigger condition by channel index; channels without one are absent. */
   const triggers = ref<Record<number, TriggerCondition>>({})
   /** Wire colour (0..7) the user chose by channel index; others take their number's. */
   const colours = ref<Partial<Record<number, number>>>({})
+  /** Row height in CSS pixels the user dragged by channel index; others take their kind's. */
+  const heights = ref<Partial<Record<number, number>>>({})
   /** Collapsed state by group key; groups not listed use their default. */
   const collapsed = ref<Record<string, boolean>>({})
 
@@ -43,6 +48,14 @@ export const useChannelsStore = defineStore('channels', () => {
     colours.value = next
   }
 
+  /** Sets a channel's row height, or with `null` gives it back its kind's. */
+  function setHeight(index: number, height: number | null): void {
+    const next = { ...heights.value }
+    if (height === null) delete next[index]
+    else next[index] = height
+    heights.value = next
+  }
+
   function isCollapsed(key: string, fallback = false): boolean {
     return collapsed.value[key] ?? fallback
   }
@@ -59,6 +72,8 @@ export const useChannelsStore = defineStore('channels', () => {
     clearTriggers,
     colours,
     setColour,
+    heights,
+    setHeight,
     collapsed,
     isCollapsed,
     toggleGroup,

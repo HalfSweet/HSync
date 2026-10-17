@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { i18n } from '@/i18n'
 import type { AvailableUpdate } from '@/ipc/backend'
+import { usePreferencesStore } from '@/stores/preferences'
 import { useSettingsStore } from '@/stores/settings'
 import { useUpdateStore } from '@/stores/update'
 
@@ -49,7 +50,21 @@ describe('settings page', () => {
 
     await tab(wrapper, 'Behaviour')?.trigger('click')
     expect(settings.section).toBe('behaviour')
-    expect(wrapper.findAll('[role="tabpanel"] input[type="checkbox"]')).toHaveLength(5)
+    expect(wrapper.findAll('[role="tabpanel"] input[type="checkbox"]')).toHaveLength(6)
+    wrapper.unmount()
+  })
+
+  it('turns on zooming with the wheel alone from Behaviour', async () => {
+    localStorage.clear()
+    const { wrapper, settings } = await page()
+    settings.section = 'behaviour'
+    await flushPromises()
+    const option = wrapper
+      .findAll('[role="tabpanel"] label')
+      .find((one) => one.text() === 'Zoom the waveform with the wheel alone')
+    expect(usePreferencesStore().wheelZoom).toBe(false)
+    await option?.find('input').setValue(true)
+    expect(usePreferencesStore().wheelZoom).toBe(true)
     wrapper.unmount()
   })
 
