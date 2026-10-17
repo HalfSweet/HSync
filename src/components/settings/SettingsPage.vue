@@ -10,6 +10,7 @@ import {
   Moon,
   MoveHorizontal,
   Palette,
+  Puzzle,
   RefreshCw,
   Repeat,
   Rows3,
@@ -35,9 +36,11 @@ import { useI18n } from 'vue-i18n'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useBackendText } from '@/composables/useBackendText'
 import { getBackend } from '@/ipc/backend'
+import { pickFile } from '@/ipc/dialogs'
 import { toUiError, type UiError } from '@/ipc/errors'
 import { LOG_LEVELS } from '@/ipc/logLevels'
 import { vIndicator } from '@/motion/indicator'
+import { useDecodeStore } from '@/stores/decode'
 import {
   DENSITIES,
   GRAPHICS,
@@ -56,11 +59,13 @@ import AboutSection from './AboutSection.vue'
  * The settings page (DESIGN.md §11): centred over the blurred interface, with the sections in a
  * side bar and About at its foot.
  */
-const { t } = useI18n()
+const i18n = useI18n()
+const { t } = i18n
 const text = useBackendText()
 const preferences = usePreferencesStore()
 const settings = useSettingsStore()
 const update = useUpdateStore()
+const decode = useDecodeStore()
 const dialog = useTemplateRef<HTMLElement>('dialog')
 const tablist = useTemplateRef<HTMLElement>('tablist')
 
@@ -80,6 +85,7 @@ const BEHAVIOURS = [
 const SECTION_ICONS: Record<SettingsSection, Component> = {
   appearance: Palette,
   behaviour: SlidersHorizontal,
+  decoders: Puzzle,
   diagnostics: Stethoscope,
   about: Info,
 }
@@ -150,6 +156,17 @@ async function revealLog(): Promise<void> {
   } catch (error) {
     revealError.value = toUiError(error)
   }
+}
+
+// Decoder modules: the names follow the catalog, so their keys are checked at run time.
+const typeName = (type: string) =>
+  i18n.te(`decoder.${type}.name`) ? t(`decoder.${type}.name` as never) : type
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
+
+/** Asks for a module file and loads it. */
+async function loadModule(): Promise<void> {
+  const path = await pickFile([{ name: t('settings.decoders.filter'), extensions: ['json'] }])
+  if (path) await decode.loadModule(path)
 }
 </script>
 
@@ -346,6 +363,53 @@ async function revealLog(): Promise<void> {
               <component :is="BEHAVIOUR_ICONS[behaviour]" class="text-ink-3" />
               <span>{{ t(`settings.behaviour.${behaviour}`) }}</span>
             </label>
+          </div>
+
+          <div v-else-if="settings.section === 'decoders'" class="flex flex-col gap-3">
+            <p class="text-ink-3">{{ t('settings.decoders.intro') }}</p>
+            <ul
+              v-if="decode.modules.length > 0"
+              class="flex flex-col gap-1.5"
+              :aria-label="t('settings.sections.decoders')"
+            >
+              <li
+                v-for="entry in decode.modules"
+                :key="entry.path"
+                class="flex items-start gap-3 rounded-6 bg-control px-3 py-2"
+              >
+                <Puzzle class="mt-0.5 flex-none text-ink-3" />
+                <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span class="font-medium">
+                    {{ entry.info ? typeName(entry.info.name) : fileName(entry.path) }}
+                  </span>
+                  <span class="truncate text-caption text-ink-3" :title="entry.path">
+                    {{ entry.path }}
+                  </span>
+                  <span v-if="entry.info?.shadows" class="text-caption text-ink-3">
+                    {{ t('settings.decoders.replaces', { name: typeName(entry.info.name) }) }}
+                  </span>
+                  <span v-if="entry.error" role="alert" class="text-caption text-alert">
+                    {{ text.error(entry.error) }}
+                  </span>
+                  <span v-else-if="entry.loading" class="text-caption text-ink-3">
+                    {{ t('settings.decoders.loading') }}
+                  </span>
+                </div>
+                <button
+                  class="btn-ghost h-[22px] flex-none text-alert"
+                  @click="decode.unloadModule(entry.path)"
+                >
+                  {{ t('settings.decoders.remove') }}
+                </button>
+              </li>
+            </ul>
+            <p v-else class="text-ink-3">{{ t('settings.decoders.empty') }}</p>
+            <div>
+              <button class="btn-ghost h-[22px]" @click="loadModule">
+                <FolderOpen :size="14" />
+                {{ t('settings.decoders.load') }}
+              </button>
+            </div>
           </div>
 
           <div

@@ -53,7 +53,13 @@ function named(key: string, fallback: string): string {
   return i18n.te(key) ? t(key as never) : fallback
 }
 const typeName = (type: string) => named(`decoder.${type}.name`, type)
-const typeSummary = (type: string) => named(`decoder.${type}.summary`, '')
+/** The decoder's one-line summary; for a loaded module without copy, the file it came from. */
+function typeSummary(type: string): string {
+  const summary = named(`decoder.${type}.summary`, '')
+  if (summary) return summary
+  const file = typeOf(type, decode.catalog)?.module?.split(/[\\/]/).pop()
+  return file ? t('decoderDialog.loadedFrom', { file }) : ''
+}
 const categoryName = (category: string) => named(`decoder.category.${category}`, category)
 const fieldLabel = (type: CatalogEntry, field: CatalogField) =>
   named(`decoder.${type.name}.field.${field.name}`, field.name)
