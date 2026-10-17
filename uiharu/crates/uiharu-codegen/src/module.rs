@@ -13,7 +13,7 @@ use uiharu_ir::{
 
 use crate::emit::{Emitter, Env, ParamSig, Sig, named};
 use crate::names::{pascal, plain_literal, snake};
-use crate::types::{Defs, Ty, emit_types};
+use crate::types::{Defs, Ty, emit_types, item_def};
 use crate::{GenError, Kind};
 
 /// The crate root listing the generated modules.
@@ -29,7 +29,32 @@ pub fn generate_lib(modules: &[String]) -> String {
 
 /// The Rust source of one module.
 pub fn generate(module: &Module) -> Result<String, GenError> {
-    Generator::new(module)?.generate()
+    // The item types of the framed contracts, declared here or imported, as types of their own.
+    let mut items = Vec::new();
+    let contracts = module
+        .contracts
+        .iter()
+        .chain(module.imports.iter().map(|import| &import.contract));
+    let types: Vec<&uiharu_ir::TypeDef> = module
+        .types
+        .iter()
+        .chain(module.imports.iter().flat_map(|import| import.types.iter()))
+        .collect();
+    for contract in contracts {
+        let Some(framing) = &contract.framing else {
+            continue;
+        };
+        let variants = types
+            .iter()
+            .find(|def| def.name == contract.event)
+            .and_then(|def| match &def.kind {
+                TypeKind::Union { variants } => Some(variants),
+                _ => None,
+            })
+            .ok_or_else(|| GenError::new(format!("{} is not a union", contract.event)))?;
+        items.push(item_def(&contract.event, variants, framing).map_err(GenError::new)?);
+    }
+    Generator::new(module, &items)?.generate()
 }
 
 struct Generator<'a> {
@@ -37,19 +62,22 @@ struct Generator<'a> {
     decoder: &'a Decoder,
     kind: Kind,
     defs: Defs<'a>,
+    /// The item types of the framed contracts in scope.
+    items: &'a [uiharu_ir::TypeDef],
     /// The lower contract, for stream and bus decoders.
     lower: Option<&'a Contract>,
     event: String,
 }
 
 impl<'a> Generator<'a> {
-    fn new(module: &'a Module) -> Result<Self, GenError> {
-        let decoder = &module.decoder;
+    fn new(module: &'a Module, items: &'a [uiharu_ir::TypeDef]) -> Result<Self, GenError> {
         let all_types = module
             .types
             .iter()
-            .chain(module.imports.iter().flat_map(|import| import.types.iter()));
+            .chain(module.imports.iter().flat_map(|import| import.types.iter()))
+            .chain(items.iter());
         let defs = Defs::new(all_types);
+        let decoder = &module.decoder;
         let (kind, schema) = match &decoder.input {
             Input::Logic => (Kind::Logic, None),
             Input::Stream { schema } => (Kind::Stream, Some(schema)),
@@ -78,6 +106,7 @@ impl<'a> Generator<'a> {
             decoder,
             kind,
             defs,
+            items,
             lower,
             event,
         })
@@ -97,26 +126,6 @@ impl<'a> Generator<'a> {
             ),
             Kind::Bus => format!("BusIo<{}>", self.event),
         }
-    }
-
-    /// The fields of a bus decoder's items: the item event's fields without the frame's id.
-    fn item_fields(&self) -> HashMap<String, Ty> {
-        let Some(contract) = self.lower else {
-            return HashMap::new();
-        };
-        let Some(framing) = &contract.framing else {
-            return HashMap::new();
-        };
-        self.defs
-            .variant_fields(&contract.event, &framing.item)
-            .map(|fields| {
-                fields
-                    .iter()
-                    .filter(|field| field.name != framing.id)
-                    .map(|field| (field.name.clone(), Ty::from_ir(&field.ty)))
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 
     fn generate(&self) -> Result<String, GenError> {
@@ -184,7 +193,7 @@ impl<'a> Generator<'a> {
         out.push('\n');
     }
 
-    /// `impl EventSchema`, and for a framed contract the item struct and `impl Framed`.
+    /// `impl EventSchema`, and for a framed contract the item type and `impl Framed`.
     fn contract(&self, out: &mut String, contract: &Contract) -> Result<(), GenError> {
         let _ = writeln!(
             out,
@@ -200,46 +209,35 @@ impl<'a> Generator<'a> {
             Some(TypeKind::Union { variants }) => variants,
             _ => return Err(GenError::new(format!("{} is not a union", contract.event))),
         };
-        let item_variant = variants
+        let item_name = format!("{}Item", contract.event);
+        let item = self
+            .items
             .iter()
-            .find(|variant| variant.name == framing.item)
-            .ok_or_else(|| GenError::new(format!("no variant {}", framing.item)))?;
-        let item_fields: Vec<_> = item_variant
-            .fields
+            .find(|def| def.name == item_name)
+            .ok_or_else(|| GenError::new(format!("no item type for {}", contract.event)))?;
+        let _ = writeln!(
+            out,
+            "/// One item of a frame of `{}`, as the cursor hands it out.",
+            contract.schema.name
+        );
+        out.push_str(&emit_types(
+            &self.defs,
+            std::slice::from_ref(item),
+            "",
+            None,
+        ));
+        let begin_variant = variants
             .iter()
-            .filter(|field| field.name != framing.id)
-            .collect();
-        let id_type = item_variant
+            .find(|variant| variant.name == framing.begin)
+            .ok_or_else(|| GenError::new(format!("no variant {}", framing.begin)))?;
+        let id_type = begin_variant
             .fields
             .iter()
             .find(|field| field.name == framing.id)
             .map(|field| Ty::from_ir(&field.ty))
             .ok_or_else(|| {
-                GenError::new(format!("{} has no field {}", framing.item, framing.id))
+                GenError::new(format!("{} has no field {}", framing.begin, framing.id))
             })?;
-        let item_name = format!("{}Item", contract.event);
-        let copy = item_fields
-            .iter()
-            .all(|field| self.defs.is_copy(&Ty::from_ir(&field.ty)));
-        let derives = if copy {
-            "Clone, Copy, Debug, PartialEq, Eq"
-        } else {
-            "Clone, Debug, PartialEq, Eq"
-        };
-        let _ = writeln!(
-            out,
-            "/// One item of a frame of `{}`.\n#[derive({derives})]\npub struct {item_name} {{",
-            contract.schema.name
-        );
-        for field in &item_fields {
-            let _ = writeln!(
-                out,
-                "    pub {}: {},",
-                snake(&field.name),
-                Ty::from_ir(&field.ty).rust(None)
-            );
-        }
-        out.push_str("}\n\n");
         let end_variant = variants
             .iter()
             .find(|variant| variant.name == framing.end)
@@ -271,38 +269,69 @@ impl<'a> Generator<'a> {
                 .as_ref()
                 .map_or("false".to_owned(), |p| format!("*{p}"))
         );
-        let item_binds: Vec<String> = item_fields.iter().map(|field| snake(&field.name)).collect();
-        let item_inits: Vec<String> = item_fields
+        let single = framing.items.len() == 1;
+        for kind in &framing.items {
+            let variant = variants
+                .iter()
+                .find(|variant| &variant.name == kind)
+                .ok_or_else(|| GenError::new(format!("no variant {kind}")))?;
+            let fields: Vec<_> = variant
+                .fields
+                .iter()
+                .filter(|field| field.name != framing.id)
+                .collect();
+            let binds: Vec<String> = fields.iter().map(|field| snake(&field.name)).collect();
+            let inits: Vec<String> = fields
+                .iter()
+                .map(|field| {
+                    let name = snake(&field.name);
+                    if self.defs.is_copy(&Ty::from_ir(&field.ty)) {
+                        format!("{name}: *{name}")
+                    } else {
+                        format!("{name}: {name}.clone()")
+                    }
+                })
+                .collect();
+            let item = if single {
+                format!("{item_name} {{ {} }}", inits.join(", "))
+            } else if inits.is_empty() {
+                format!("{item_name}::{}", pascal(kind))
+            } else {
+                format!("{item_name}::{} {{ {} }}", pascal(kind), inits.join(", "))
+            };
+            let pattern = if binds.is_empty() {
+                String::new()
+            } else {
+                format!(", {}", binds.join(", "))
+            };
+            let _ = writeln!(
+                out,
+                "            {}::{} {{ {id}{pattern} }} => Frame::Item {{ id: *{id}, item: {item} }},",
+                contract.event,
+                pascal(kind)
+            );
+        }
+        let reason = snake(&framing.reason);
+        let normal: Vec<String> = framing
+            .normal
             .iter()
-            .map(|field| {
-                let name = snake(&field.name);
-                if self.defs.is_copy(&Ty::from_ir(&field.ty)) {
-                    format!("{name}: *{name}")
-                } else {
-                    format!("{name}: {name}.clone()")
-                }
-            })
+            .map(|value| format!("{reason_enum}::{}", pascal(value)))
             .collect();
         let _ = writeln!(
             out,
-            "            {}::{} {{ {id}, {} }} => Frame::Item {{ id: *{id}, item: {item_name} {{ {} }} }},",
-            contract.event,
-            pascal(&framing.item),
-            item_binds.join(", "),
-            item_inits.join(", ")
-        );
-        let reason = snake(&framing.reason);
-        let _ = writeln!(
-            out,
-            "            {}::{} {{ {id}, {reason}, .. }} => Frame::End {{ id: *{id}, normal: *{reason} == {reason_enum}::{} }},",
+            "            {}::{} {{ {id}, {reason}, .. }} => Frame::End {{ id: *{id}, normal: matches!({reason}, {}) }},",
             contract.event,
             pascal(&framing.end),
-            pascal(&framing.normal)
+            normal.join(" | ")
         );
         let others: Vec<&str> = variants
             .iter()
             .map(|variant| variant.name.as_str())
-            .filter(|name| *name != framing.begin && *name != framing.item && *name != framing.end)
+            .filter(|name| {
+                *name != framing.begin
+                    && *name != framing.end
+                    && !framing.items.iter().any(|item| item == name)
+            })
             .collect();
         if !others.is_empty() {
             return Err(GenError::new(format!(
@@ -508,7 +537,6 @@ impl<'a> Generator<'a> {
             state,
             kind: self.kind,
             lower: self.lower_event(),
-            item: self.item_fields(),
         })
     }
 

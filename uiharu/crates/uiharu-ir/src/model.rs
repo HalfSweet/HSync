@@ -169,19 +169,22 @@ pub struct SchemaRef {
 }
 
 /// How a framed contract frames its traffic: the event kinds that begin a frame, carry its
-/// items and end it, the field naming the frame on all three, the `begin` field saying the
-/// frame was under way, the `end` field saying why it ended and its value for the normal end.
+/// items and end it, the field naming the frame on all of them, the `begin` field saying the
+/// frame was under way, the `end` field saying why it ended and its values for a normal end.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Framing {
     pub begin: String,
-    pub item: String,
+    /// The kinds of event that carry a frame's items: one, and the cursor hands out its
+    /// fields; several, and it hands out their union, tagged by kind.
+    pub items: Vec<String>,
     pub end: String,
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub partial: Option<String>,
     pub reason: String,
-    pub normal: String,
+    /// The values of `reason` for a normal end.
+    pub normal: Vec<String>,
     /// The id of the one frame of a bus without a framing line, which never begins or ends.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unframed: Option<u64>,

@@ -120,6 +120,19 @@ export class Types {
     return this.isUser(bare.aliasSymbol) ? bare.aliasSymbol?.name : undefined
   }
 
+  /** Whether a type is object types tagged by `kind`, declared under a name or not (the items
+   * a frame cursor hands out are such a union without a name). */
+  isTaggedUnion(type: ts.Type): boolean {
+    const bare = this.checker.getNonNullableType(type)
+    const members = bare.isUnion() ? bare.types : [bare]
+    return members.every(
+      (member) =>
+        member.flags & ts.TypeFlags.Object &&
+        member.getProperty('kind') !== undefined &&
+        !this.isLib(member.symbol),
+    )
+  }
+
   /** The name of the union a type is: object types tagged by `kind`, declared under a name. */
   unionOf(type: ts.Type): string | undefined {
     const bare = this.checker.getNonNullableType(type)

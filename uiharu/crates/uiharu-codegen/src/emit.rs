@@ -39,8 +39,6 @@ pub struct Env<'a> {
     pub kind: Kind,
     /// The lower event type, for stream and bus decoders.
     pub lower: Option<String>,
-    /// A bus decoder's item fields.
-    pub item: HashMap<String, Ty>,
 }
 
 #[derive(Clone, Debug)]
@@ -884,15 +882,6 @@ impl<'a> Emitter<'a> {
                 "at" => Ok(Val::new(code, Ty::Option(Box::new(Ty::Provenance)))),
                 _ => Err(GenError::new(format!("a batch's items have no {name}"))),
             },
-            Ty::Item => {
-                let ty = self
-                    .env
-                    .item
-                    .get(name)
-                    .cloned()
-                    .ok_or_else(|| GenError::new(format!("an item has no {name}")))?;
-                Ok(Val::new(code, ty))
-            }
             Ty::Provenance => match name {
                 "span" => Ok(Val::new(code, Ty::Range)),
                 "settled" => Ok(Val::new(format!("{code}.0"), Ty::U64)),
@@ -905,6 +894,16 @@ impl<'a> Emitter<'a> {
             Ty::Timed => Err(GenError::new("a timed result is read through a match")),
             other => Err(GenError::new(format!("{other:?} has no field {name}"))),
         }
+    }
+
+    /// The type of the items the lower contract's cursor hands out.
+    fn item_type(&self) -> Result<Ty, GenError> {
+        let lower = self
+            .env
+            .lower
+            .clone()
+            .ok_or_else(|| GenError::new("a frame cursor needs a lower contract"))?;
+        Ok(Ty::Named(format!("{lower}Item")))
     }
 
     fn arguments(&mut self, sig: &Sig, args: &[Expr]) -> Result<Vec<String>, GenError> {
@@ -1334,7 +1333,7 @@ impl<'a> Emitter<'a> {
                     .ok_or_else(|| GenError::new("item needs the transaction cursor"))?;
                 Ok(Val::new(
                     format!("{{ io.sink.hold(self.hold().map(Tick)); {tx}.item().await? }}"),
-                    Ty::Item,
+                    self.item_type()?,
                 ))
             }
             Op::ItemOrEnd => {
@@ -1346,7 +1345,7 @@ impl<'a> Emitter<'a> {
                     format!(
                         "{{ io.sink.hold(self.hold().map(Tick)); match {tx}.item_or_end().await? {{ Read::Item(item) => Some(item), Read::End => None }} }}"
                     ),
-                    Ty::Option(Box::new(Ty::Item)),
+                    Ty::Option(Box::new(self.item_type()?)),
                 ))
             }
             Op::Drain => {

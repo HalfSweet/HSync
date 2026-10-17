@@ -59,12 +59,12 @@ export type SpiEvent =
  * words. */
 export const spiEvents = eventSchema<SpiEvent>('spi.events', 1).framed({
   begin: 'begin',
-  item: 'word',
+  items: ['word'],
   end: 'end',
   id: 'tx',
   partial: 'partial',
   reason: 'reason',
-  normal: 'cs-release',
+  normal: ['cs-release'],
   unframed: 0,
 })
 

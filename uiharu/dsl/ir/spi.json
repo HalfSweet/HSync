@@ -146,11 +146,11 @@
       "event": "SpiEvent",
       "framing": {
         "begin": "begin",
-        "item": "word",
+        "items": ["word"],
         "end": "end",
         "id": "tx",
         "reason": "reason",
-        "normal": "cs-release",
+        "normal": ["cs-release"],
         "partial": "partial",
         "unframed": 0
       }

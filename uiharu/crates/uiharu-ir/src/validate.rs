@@ -337,11 +337,16 @@ impl<'a> Checker<'a> {
 
     fn framing(&mut self, path: &str, framing: &Framing, variants: &[crate::model::UnionVariant]) {
         let find = |name: &str| variants.iter().find(|variant| variant.name == name);
-        for (what, name) in [
-            ("begin", &framing.begin),
-            ("item", &framing.item),
-            ("end", &framing.end),
-        ] {
+        if framing.items.is_empty() {
+            self.report(
+                path,
+                "framing.items: a frame carries at least one kind of item",
+            );
+        }
+        let mut framed: Vec<(&str, &String)> = vec![("begin", &framing.begin)];
+        framed.extend(framing.items.iter().map(|item| ("items", item)));
+        framed.push(("end", &framing.end));
+        for (what, name) in framed {
             let Some(variant) = find(name) else {
                 self.report(path, format!("framing.{what}: {name} is not a variant"));
                 continue;
@@ -376,11 +381,19 @@ impl<'a> Checker<'a> {
                         _ => None,
                     };
                     match variants {
-                        Some(variants) if variants.iter().any(|v| v.0 == framing.normal) => {}
-                        Some(_) => self.report(
-                            path,
-                            format!("framing.normal: {} is not a reason", framing.normal),
-                        ),
+                        Some(variants) => {
+                            if framing.normal.is_empty() {
+                                self.report(path, "framing.normal: a frame has a normal end");
+                            }
+                            for normal in &framing.normal {
+                                if !variants.iter().any(|v| &v.0 == normal) {
+                                    self.report(
+                                        path,
+                                        format!("framing.normal: {normal} is not a reason"),
+                                    );
+                                }
+                            }
+                        }
                         None => self.report(path, "framing.reason: the field is not an enum"),
                     }
                 }
