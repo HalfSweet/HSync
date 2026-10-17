@@ -46,6 +46,7 @@ import { clampTraceHeight, collapsedByDefault, layoutRows, type Row } from '@/ti
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
 import { sampleToX, viewportEnd, xToSample } from '@/timeline/viewport'
+import { wheelAction } from '@/timeline/wheel'
 import { formatCount, formatFrequency, formatSampled, formatTime } from '@/utils/units'
 
 import ChannelLabel from './ChannelLabel.vue'
@@ -681,7 +682,6 @@ watch([readout, measured], ([pulse, measure]) =>
 )
 onBeforeUnmount(() => view.setReadouts({ pulse: null, measure: null }))
 
-// Ctrl/⌘ + wheel zooms around the pointer; shift + wheel and horizontal swipes pan.
 // Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §10).
 useEventListener(document, 'keydown', (event: KeyboardEvent) => {
   if (event.defaultPrevented || keyTakenElsewhere(event.target)) return
@@ -719,24 +719,27 @@ function applyWheel(): void {
 }
 onBeforeUnmount(() => cancelAnimationFrame(wheel.frame))
 
+// The wheel zooms around the pointer or pans (DESIGN.md §10); what it leaves alone scrolls the
+// rows.
 function onWheel(event: WheelEvent): void {
   stopFling()
   const rows = rowsElement.value?.getBoundingClientRect()
-  if (!rows) return
-  const x = Math.min(
-    Math.max(event.clientX - rows.left - metrics.value.label, 0),
-    view.viewport.width,
-  )
-  const scale = event.deltaMode === 1 ? 16 : 1
-  if (event.ctrlKey || event.metaKey) {
-    event.preventDefault()
-    wheel.zoom *= Math.exp(-event.deltaY * scale * 0.002)
-    wheel.anchor = x
-  } else if (event.shiftKey || Math.abs(event.deltaX) > Math.abs(event.deltaY)) {
-    event.preventDefault()
-    wheel.pan += (event.shiftKey && event.deltaX === 0 ? event.deltaY : event.deltaX) * scale
+  const visible = scroller.value?.getBoundingClientRect()
+  if (!rows || !visible) return
+  const action = wheelAction(event, {
+    wheelZoom: preferences.wheelZoom,
+    overLabels: event.clientX - visible.left < metrics.value.label,
+  })
+  if (!action) return
+  event.preventDefault()
+  if (action.kind === 'zoom') {
+    wheel.zoom *= action.factor
+    wheel.anchor = Math.min(
+      Math.max(event.clientX - rows.left - metrics.value.label, 0),
+      view.viewport.width,
+    )
   } else {
-    return
+    wheel.pan += action.dx
   }
   wheel.frame ||= requestAnimationFrame(applyWheel)
 }

@@ -1576,6 +1576,7 @@
       "centerTrigger": "Centre the view on the trigger",
       "followLatest": "Follow the latest data while capturing",
       "quickScroll": "Keep scrolling after a quick drag",
+      "wheelZoom": "Zoom the waveform with the wheel alone",
       "keepStopped": "Show the latest data when a repeat stops",
       "checkUpdates": "Check for updates at startup"
     },
