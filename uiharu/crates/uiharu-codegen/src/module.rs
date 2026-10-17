@@ -13,13 +13,13 @@ use uiharu_ir::{
 
 use crate::emit::{Emitter, Env, ParamSig, Sig, named};
 use crate::names::{pascal, plain_literal, snake};
-use crate::types::{Defs, Ty, emit_types};
+use crate::types::{Defs, Ty, emit_types, item_def};
 use crate::{GenError, Kind};
 
 /// The crate root listing the generated modules.
 pub fn generate_lib(modules: &[String]) -> String {
     let mut out = String::from(
-        "// SPDX-License-Identifier: Apache-2.0\n\n//! The protocol decoders generated from the decoder DSL (`uiharu/dsl/decoders/`), by\n//! `uiharu-codegen` from `uiharu/dsl/ir/`; do not edit. Each module is one decoder: its\n//! contract's types, its configuration and its node.\n\n#![forbid(unsafe_code)]\n\n",
+        "// SPDX-License-Identifier: Apache-2.0\n\n//! The protocol decoders generated from the decoder DSL (`uiharu/dsl/decoders/`) and the\n//! contracts of decoders written by hand (`uiharu/dsl/contracts/`), by `uiharu-codegen` from\n//! `uiharu/dsl/ir/`; do not edit. A module is one decoder — its contract's types, its\n//! configuration and its node — or one contract: its types alone.\n\n#![forbid(unsafe_code)]\n\n",
     );
     for module in modules {
         let _ = writeln!(out, "pub mod {module};");
@@ -29,27 +29,67 @@ pub fn generate_lib(modules: &[String]) -> String {
 
 /// The Rust source of one module.
 pub fn generate(module: &Module) -> Result<String, GenError> {
-    Generator::new(module)?.generate()
+    // The item types of the framed contracts, declared here or imported, as types of their own.
+    let mut items = Vec::new();
+    let contracts = module
+        .contracts
+        .iter()
+        .chain(module.imports.iter().map(|import| &import.contract));
+    let types: Vec<&uiharu_ir::TypeDef> = module
+        .types
+        .iter()
+        .chain(module.imports.iter().flat_map(|import| import.types.iter()))
+        .collect();
+    for contract in contracts {
+        let Some(framing) = &contract.framing else {
+            continue;
+        };
+        let variants = types
+            .iter()
+            .find(|def| def.name == contract.event)
+            .and_then(|def| match &def.kind {
+                TypeKind::Union { variants } => Some(variants),
+                _ => None,
+            })
+            .ok_or_else(|| GenError::new(format!("{} is not a union", contract.event)))?;
+        items.push(item_def(&contract.event, variants, framing).map_err(GenError::new)?);
+    }
+    Generator::new(module, &items)?.generate()
 }
 
 struct Generator<'a> {
     module: &'a Module,
-    decoder: &'a Decoder,
+    /// The decoder; none for a module that only declares contracts.
+    decoder: Option<&'a Decoder>,
     kind: Kind,
     defs: Defs<'a>,
+    /// The item types of the framed contracts in scope.
+    items: &'a [uiharu_ir::TypeDef],
     /// The lower contract, for stream and bus decoders.
     lower: Option<&'a Contract>,
+    /// The event type of the output; empty for a module without a decoder.
     event: String,
 }
 
 impl<'a> Generator<'a> {
-    fn new(module: &'a Module) -> Result<Self, GenError> {
-        let decoder = &module.decoder;
+    fn new(module: &'a Module, items: &'a [uiharu_ir::TypeDef]) -> Result<Self, GenError> {
         let all_types = module
             .types
             .iter()
-            .chain(module.imports.iter().flat_map(|import| import.types.iter()));
+            .chain(module.imports.iter().flat_map(|import| import.types.iter()))
+            .chain(items.iter());
         let defs = Defs::new(all_types);
+        let Some(decoder) = module.decoder.as_ref() else {
+            return Ok(Self {
+                module,
+                decoder: None,
+                kind: Kind::Logic,
+                defs,
+                items,
+                lower: None,
+                event: String::new(),
+            });
+        };
         let (kind, schema) = match &decoder.input {
             Input::Logic => (Kind::Logic, None),
             Input::Stream { schema } => (Kind::Stream, Some(schema)),
@@ -75,12 +115,18 @@ impl<'a> Generator<'a> {
             .ok_or_else(|| GenError::new("the output's contract is not declared here"))?;
         Ok(Self {
             module,
-            decoder,
+            decoder: Some(decoder),
             kind,
             defs,
+            items,
             lower,
             event,
         })
+    }
+
+    fn decoder(&self) -> Result<&'a Decoder, GenError> {
+        self.decoder
+            .ok_or_else(|| GenError::new("the module has no decoder"))
     }
 
     fn lower_event(&self) -> Option<String> {
@@ -97,26 +143,6 @@ impl<'a> Generator<'a> {
             ),
             Kind::Bus => format!("BusIo<{}>", self.event),
         }
-    }
-
-    /// The fields of a bus decoder's items: the item event's fields without the frame's id.
-    fn item_fields(&self) -> HashMap<String, Ty> {
-        let Some(contract) = self.lower else {
-            return HashMap::new();
-        };
-        let Some(framing) = &contract.framing else {
-            return HashMap::new();
-        };
-        self.defs
-            .variant_fields(&contract.event, &framing.item)
-            .map(|fields| {
-                fields
-                    .iter()
-                    .filter(|field| field.name != framing.id)
-                    .map(|field| (field.name.clone(), Ty::from_ir(&field.ty)))
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 
     fn generate(&self) -> Result<String, GenError> {
@@ -138,14 +164,26 @@ impl<'a> Generator<'a> {
             );
         }
         let lower = self.lower_event();
+        let config = self
+            .decoder
+            .map_or("", |decoder| decoder.config.ty.as_str());
         out.push_str(&emit_types(
             &self.defs,
             &self.module.types,
-            &self.decoder.config.ty,
+            config,
             lower.as_deref(),
         ));
         for contract in &self.module.contracts {
             self.contract(&mut out, contract)?;
+        }
+        if self.decoder.is_none() {
+            // A module of contracts for decoders written by hand: its types, and the functions
+            // that go with them.
+            let env = self.env()?;
+            for function in &self.module.functions {
+                out.push_str(&self.function(&env, function, false)?);
+            }
+            return Ok(out);
         }
         self.config(&mut out)?;
         let env = self.env()?;
@@ -158,9 +196,14 @@ impl<'a> Generator<'a> {
     }
 
     fn header(&self, out: &mut String) {
+        let (what, dir) = if self.decoder.is_some() {
+            ("decoder", "decoders")
+        } else {
+            ("contract", "contracts")
+        };
         let _ = writeln!(
             out,
-            "// SPDX-License-Identifier: Apache-2.0\n\n//! The `{}` decoder, generated by `uiharu-codegen` from `uiharu/dsl/ir/{}.json`; do not\n//! edit. The source is `uiharu/dsl/decoders/{}.ts`.\n\n#![allow(\n    dead_code,\n    unused_imports,\n    unused_mut,\n    unused_variables,\n    unused_parens,\n    clippy::style,\n    clippy::complexity,\n    clippy::needless_return\n)]\n",
+            "// SPDX-License-Identifier: Apache-2.0\n\n//! The `{}` {what}, generated by `uiharu-codegen` from `uiharu/dsl/ir/{}.json`; do not\n//! edit. The source is `uiharu/dsl/{dir}/{}.ts`.\n\n#![allow(\n    dead_code,\n    unused_imports,\n    unused_mut,\n    unused_variables,\n    unused_parens,\n    clippy::style,\n    clippy::complexity,\n    clippy::needless_return\n)]\n",
             self.module.name, self.module.name, self.module.name
         );
     }
@@ -184,7 +227,7 @@ impl<'a> Generator<'a> {
         out.push('\n');
     }
 
-    /// `impl EventSchema`, and for a framed contract the item struct and `impl Framed`.
+    /// `impl EventSchema`, and for a framed contract the item type and `impl Framed`.
     fn contract(&self, out: &mut String, contract: &Contract) -> Result<(), GenError> {
         let _ = writeln!(
             out,
@@ -200,46 +243,35 @@ impl<'a> Generator<'a> {
             Some(TypeKind::Union { variants }) => variants,
             _ => return Err(GenError::new(format!("{} is not a union", contract.event))),
         };
-        let item_variant = variants
+        let item_name = format!("{}Item", contract.event);
+        let item = self
+            .items
             .iter()
-            .find(|variant| variant.name == framing.item)
-            .ok_or_else(|| GenError::new(format!("no variant {}", framing.item)))?;
-        let item_fields: Vec<_> = item_variant
-            .fields
+            .find(|def| def.name == item_name)
+            .ok_or_else(|| GenError::new(format!("no item type for {}", contract.event)))?;
+        let _ = writeln!(
+            out,
+            "/// One item of a frame of `{}`, as the cursor hands it out.",
+            contract.schema.name
+        );
+        out.push_str(&emit_types(
+            &self.defs,
+            std::slice::from_ref(item),
+            "",
+            None,
+        ));
+        let begin_variant = variants
             .iter()
-            .filter(|field| field.name != framing.id)
-            .collect();
-        let id_type = item_variant
+            .find(|variant| variant.name == framing.begin)
+            .ok_or_else(|| GenError::new(format!("no variant {}", framing.begin)))?;
+        let id_type = begin_variant
             .fields
             .iter()
             .find(|field| field.name == framing.id)
             .map(|field| Ty::from_ir(&field.ty))
             .ok_or_else(|| {
-                GenError::new(format!("{} has no field {}", framing.item, framing.id))
+                GenError::new(format!("{} has no field {}", framing.begin, framing.id))
             })?;
-        let item_name = format!("{}Item", contract.event);
-        let copy = item_fields
-            .iter()
-            .all(|field| self.defs.is_copy(&Ty::from_ir(&field.ty)));
-        let derives = if copy {
-            "Clone, Copy, Debug, PartialEq, Eq"
-        } else {
-            "Clone, Debug, PartialEq, Eq"
-        };
-        let _ = writeln!(
-            out,
-            "/// One item of a frame of `{}`.\n#[derive({derives})]\npub struct {item_name} {{",
-            contract.schema.name
-        );
-        for field in &item_fields {
-            let _ = writeln!(
-                out,
-                "    pub {}: {},",
-                snake(&field.name),
-                Ty::from_ir(&field.ty).rust(None)
-            );
-        }
-        out.push_str("}\n\n");
         let end_variant = variants
             .iter()
             .find(|variant| variant.name == framing.end)
@@ -271,38 +303,69 @@ impl<'a> Generator<'a> {
                 .as_ref()
                 .map_or("false".to_owned(), |p| format!("*{p}"))
         );
-        let item_binds: Vec<String> = item_fields.iter().map(|field| snake(&field.name)).collect();
-        let item_inits: Vec<String> = item_fields
+        let single = framing.items.len() == 1;
+        for kind in &framing.items {
+            let variant = variants
+                .iter()
+                .find(|variant| &variant.name == kind)
+                .ok_or_else(|| GenError::new(format!("no variant {kind}")))?;
+            let fields: Vec<_> = variant
+                .fields
+                .iter()
+                .filter(|field| field.name != framing.id)
+                .collect();
+            let binds: Vec<String> = fields.iter().map(|field| snake(&field.name)).collect();
+            let inits: Vec<String> = fields
+                .iter()
+                .map(|field| {
+                    let name = snake(&field.name);
+                    if self.defs.is_copy(&Ty::from_ir(&field.ty)) {
+                        format!("{name}: *{name}")
+                    } else {
+                        format!("{name}: {name}.clone()")
+                    }
+                })
+                .collect();
+            let item = if single {
+                format!("{item_name} {{ {} }}", inits.join(", "))
+            } else if inits.is_empty() {
+                format!("{item_name}::{}", pascal(kind))
+            } else {
+                format!("{item_name}::{} {{ {} }}", pascal(kind), inits.join(", "))
+            };
+            let pattern = if binds.is_empty() {
+                String::new()
+            } else {
+                format!(", {}", binds.join(", "))
+            };
+            let _ = writeln!(
+                out,
+                "            {}::{} {{ {id}{pattern} }} => Frame::Item {{ id: *{id}, item: {item} }},",
+                contract.event,
+                pascal(kind)
+            );
+        }
+        let reason = snake(&framing.reason);
+        let normal: Vec<String> = framing
+            .normal
             .iter()
-            .map(|field| {
-                let name = snake(&field.name);
-                if self.defs.is_copy(&Ty::from_ir(&field.ty)) {
-                    format!("{name}: *{name}")
-                } else {
-                    format!("{name}: {name}.clone()")
-                }
-            })
+            .map(|value| format!("{reason_enum}::{}", pascal(value)))
             .collect();
         let _ = writeln!(
             out,
-            "            {}::{} {{ {id}, {} }} => Frame::Item {{ id: *{id}, item: {item_name} {{ {} }} }},",
-            contract.event,
-            pascal(&framing.item),
-            item_binds.join(", "),
-            item_inits.join(", ")
-        );
-        let reason = snake(&framing.reason);
-        let _ = writeln!(
-            out,
-            "            {}::{} {{ {id}, {reason}, .. }} => Frame::End {{ id: *{id}, normal: *{reason} == {reason_enum}::{} }},",
+            "            {}::{} {{ {id}, {reason}, .. }} => Frame::End {{ id: *{id}, normal: matches!({reason}, {}) }},",
             contract.event,
             pascal(&framing.end),
-            pascal(&framing.normal)
+            normal.join(" | ")
         );
         let others: Vec<&str> = variants
             .iter()
             .map(|variant| variant.name.as_str())
-            .filter(|name| *name != framing.begin && *name != framing.item && *name != framing.end)
+            .filter(|name| {
+                *name != framing.begin
+                    && *name != framing.end
+                    && !framing.items.iter().any(|item| item == name)
+            })
             .collect();
         if !others.is_empty() {
             return Err(GenError::new(format!(
@@ -324,7 +387,7 @@ impl<'a> Generator<'a> {
 
     /// `Default`, `validate`, `props` and `requires` on the configuration.
     fn config(&self, out: &mut String) -> Result<(), GenError> {
-        let config = &self.decoder.config;
+        let config = &self.decoder()?.config;
         let fields = self
             .defs
             .record_fields(&config.ty)
@@ -366,7 +429,7 @@ impl<'a> Generator<'a> {
         let env = self.env()?;
         let config_ty = Ty::Named(config.ty.clone());
         out.push_str("    /// What the decoder's output port declares.\n    pub fn props(&self) -> Props {\n        let config = self;\n        Props::new()");
-        for prop in &self.decoder.props {
+        for prop in &self.decoder()?.props {
             let val = Emitter::new(&env).with_config(config_ty.clone(), &prop.value)?;
             let _ = write!(
                 out,
@@ -377,7 +440,7 @@ impl<'a> Generator<'a> {
         }
         out.push_str("\n    }\n\n");
         out.push_str("    /// What the decoder's input requires of the output it reads.\n    pub fn requires(&self) -> Requires {\n        let config = self;\n        Requires::new()");
-        for require in &self.decoder.requires {
+        for require in &self.decoder()?.requires {
             let values: Vec<_> = require
                 .values
                 .iter()
@@ -478,23 +541,23 @@ impl<'a> Generator<'a> {
                 self.signature(function, false, false),
             );
         }
-        let mutating = self.mutating_methods();
         let mut methods = HashMap::new();
-        for method in &self.decoder.methods {
-            methods.insert(
-                method.name.clone(),
-                self.signature(method, true, mutating.contains(&method.name)),
-            );
+        let mut state: HashMap<String, Ty> = HashMap::new();
+        if let Some(decoder) = self.decoder {
+            let mutating = self.mutating_methods();
+            for method in &decoder.methods {
+                methods.insert(
+                    method.name.clone(),
+                    self.signature(method, true, mutating.contains(&method.name)),
+                );
+            }
+            for field in &decoder.state {
+                state.insert(field.name.clone(), Ty::from_ir(&field.ty));
+            }
+            state.insert("config".into(), Ty::Named(decoder.config.ty.clone()));
+            state.insert("rate".into(), Ty::U64);
+            state.insert("#event".into(), Ty::Named(self.event.clone()));
         }
-        let mut state: HashMap<String, Ty> = self
-            .decoder
-            .state
-            .iter()
-            .map(|field| (field.name.clone(), Ty::from_ir(&field.ty)))
-            .collect();
-        state.insert("config".into(), Ty::Named(self.decoder.config.ty.clone()));
-        state.insert("rate".into(), Ty::U64);
-        state.insert("#event".into(), Ty::Named(self.event.clone()));
         Ok(Env {
             defs: &self.defs,
             consts: self
@@ -508,7 +571,6 @@ impl<'a> Generator<'a> {
             state,
             kind: self.kind,
             lower: self.lower_event(),
-            item: self.item_fields(),
         })
     }
 
@@ -531,8 +593,10 @@ impl<'a> Generator<'a> {
 
     /// The methods that change the state, directly or through the methods they call.
     fn mutating_methods(&self) -> std::collections::HashSet<String> {
-        let mut mutating: std::collections::HashSet<String> = self
-            .decoder
+        let Some(decoder) = self.decoder else {
+            return std::collections::HashSet::new();
+        };
+        let mut mutating: std::collections::HashSet<String> = decoder
             .methods
             .iter()
             .filter(|method| method.is_async || writes_self(&method.body))
@@ -540,7 +604,7 @@ impl<'a> Generator<'a> {
             .collect();
         loop {
             let before = mutating.len();
-            for method in &self.decoder.methods {
+            for method in &decoder.methods {
                 if !mutating.contains(&method.name) && calls_any(&method.body, &mutating) {
                     mutating.insert(method.name.clone());
                 }
@@ -622,7 +686,7 @@ impl<'a> Generator<'a> {
 
     fn node(&self, out: &mut String) -> Result<(), GenError> {
         let name = pascal(&self.module.name);
-        let config = &self.decoder.config.ty;
+        let config = &self.decoder()?.config.ty;
         let event = &self.event;
         let (input_ty, input_port) = match self.kind {
             Kind::Logic => ("Arc<LogicBlock>".to_owned(), "logic"),
@@ -649,10 +713,10 @@ impl<'a> Generator<'a> {
 
     fn state(&self, out: &mut String, env: &Env<'_>) -> Result<(), GenError> {
         let lower = self.lower_event();
-        let config = &self.decoder.config.ty;
+        let config = &self.decoder()?.config.ty;
         out.push_str("/// The decoder's state: its configuration, the source's rate and its fields.\nstruct State {\n");
         let _ = writeln!(out, "    config: {config},\n    rate: u64,");
-        for field in &self.decoder.state {
+        for field in &self.decoder()?.state {
             let _ = writeln!(
                 out,
                 "    {}: {},",
@@ -667,7 +731,7 @@ impl<'a> Generator<'a> {
             ("rate".into(), Ty::U64),
         ];
         let mut names = vec!["config".to_owned(), "rate".to_owned()];
-        for field in &self.decoder.state {
+        for field in &self.decoder()?.state {
             let ty = Ty::from_ir(&field.ty);
             let code = Emitter::new(env).initializer(&so_far, &field.init, &ty)?;
             let _ = writeln!(
@@ -681,14 +745,14 @@ impl<'a> Generator<'a> {
         }
         let _ = writeln!(out, "        Self {{ {} }}\n    }}\n", names.join(", "));
         if !self
-            .decoder
+            .decoder()?
             .methods
             .iter()
             .any(|method| method.name == "hold")
         {
             out.push_str("    fn hold(&self) -> Option<u64> {\n        None\n    }\n\n");
         }
-        for method in &self.decoder.methods {
+        for method in &self.decoder()?.methods {
             let text = self.function(env, method, true)?;
             for line in text.lines() {
                 if line.is_empty() {
@@ -740,11 +804,11 @@ impl<'a> Generator<'a> {
             Kind::Bus => {
                 let lower = self.lower_event().unwrap_or_default();
                 let recovery = self
-                    .decoder
+                    .decoder()?
                     .recovery
                     .as_ref()
                     .ok_or_else(|| GenError::new("a bus decoder has a recovery"))?;
-                let partial = match self.decoder.partial {
+                let partial = match self.decoder()?.partial {
                     Some(uiharu_ir::Partial::Read) => "Partial::Read",
                     _ => "Partial::Drain",
                 };

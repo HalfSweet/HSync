@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'vitest'
 
 import { lowerModule } from './module.ts'
-import { decoderFiles, loadProject, type Diagnostic } from './program.ts'
+import { loadProject, moduleFiles, type Diagnostic } from './program.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const dsl = path.resolve(here, '..', '..', 'dsl')
@@ -35,12 +35,13 @@ function read(file: string): unknown {
   return JSON.parse(fs.readFileSync(file, 'utf8')) as unknown
 }
 
-describe('the reference decoders', () => {
+describe('the modules', () => {
   const project = loadProject(config)
-  const files = decoderFiles(project)
+  const files = moduleFiles(project)
 
-  test('are four', () => {
+  test('are the contracts and the decoders', () => {
     expect(files.map((file) => path.basename(file.fileName))).toEqual([
+      'i2c.ts',
       'pwm.ts',
       'spi-nor.ts',
       'spi.ts',
@@ -54,6 +55,25 @@ describe('the reference decoders', () => {
     const { module, diagnostics } = lowerModule(project, file)
     expect(diagnostics).toEqual([])
     expect(module).toEqual(read(fixture))
+  })
+
+  test('i2c declares a contract and no decoder', () => {
+    const file = files.find((candidate) => candidate.fileName.endsWith('i2c.ts'))
+    if (!file) throw new Error('i2c.ts is a contract module')
+    const { module, diagnostics } = lowerModule(project, file)
+    expect(diagnostics).toEqual([])
+    expect(module?.decoder).toBeUndefined()
+    expect(module?.contracts?.map((contract) => contract.framing)).toEqual([
+      {
+        begin: 'begin',
+        items: ['address', 'data', 'restart'],
+        end: 'end',
+        id: 'tx',
+        partial: 'partial',
+        reason: 'reason',
+        normal: ['stop', 'restart'],
+      },
+    ])
   })
 
   test.each(files.map((file) => [path.basename(file.fileName, '.ts'), file] as const))(
@@ -181,6 +201,18 @@ describe('the subset', () => {
     expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(message)
     expect(diagnostics[0]?.file).toBe(virtualFile)
     expect(diagnostics[0]?.line).toBeGreaterThan(0)
+  })
+
+  test('reports a module with neither a decoder nor a contract', () => {
+    const { ok, diagnostics } = compileSnippet(`
+import type { u64 } from 'uiharu'
+
+export type Event = { kind: 'tick'; at: u64 }
+`)
+    expect(ok).toBe(false)
+    expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
+      'a module declares a decoder or a contract',
+    )
   })
 
   test('reports TypeScript errors first', () => {

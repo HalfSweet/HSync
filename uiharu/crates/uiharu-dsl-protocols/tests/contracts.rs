@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! The generated contracts serialize as their pages spell them: a `kind` tag in kebab-case,
-//! fields in camelCase, enums by their names, a line that is not connected as `null`.
+//! fields in camelCase, enums by their names, a line that is not connected as `null`; and a
+//! framed contract frames its events as its declaration says.
 
+use uiharu_core::dsl::{Frame, Framed};
+use uiharu_dsl_protocols::i2c::{EndReason as I2cEnd, I2cEvent, I2cEventItem};
 use uiharu_dsl_protocols::pwm::PwmEvent;
 use uiharu_dsl_protocols::spi::{EndReason, SpiEvent};
 use uiharu_dsl_protocols::spi_nor::{Command, Direction, IdScheme, NorEnd, NorEvent};
@@ -138,4 +141,131 @@ fn nor_events_serialize_as_the_contract_spells_them() {
     );
     assert_eq!(Command::ReadStatus2.name(), "read-status-2");
     assert_eq!(Command::Enter4bMode.name(), "enter-4b-mode");
+}
+
+#[test]
+fn i2c_events_serialize_as_the_contract_spells_them() {
+    assert_eq!(
+        json(&I2cEvent::Begin {
+            tx: 3,
+            partial: true
+        }),
+        r#"{"kind":"begin","tx":3,"partial":true}"#
+    );
+    assert_eq!(
+        json(&I2cEvent::Address {
+            tx: 3,
+            address: 0x2a5,
+            ten_bit: true,
+            read: false,
+            ack: true
+        }),
+        r#"{"kind":"address","tx":3,"address":677,"tenBit":true,"read":false,"ack":true}"#
+    );
+    assert_eq!(
+        json(&I2cEvent::Data {
+            tx: 3,
+            byte: 0x12,
+            ack: false
+        }),
+        r#"{"kind":"data","tx":3,"byte":18,"ack":false}"#
+    );
+    assert_eq!(
+        json(&I2cEvent::Restart {
+            tx: 3,
+            dropped_bits: 0
+        }),
+        r#"{"kind":"restart","tx":3,"droppedBits":0}"#
+    );
+    assert_eq!(
+        json(&I2cEvent::End {
+            tx: 3,
+            reason: I2cEnd::Stop,
+            dropped_bits: 2
+        }),
+        r#"{"kind":"end","tx":3,"reason":"stop","droppedBits":2}"#
+    );
+    for (reason, name) in [
+        (I2cEnd::Stop, "stop"),
+        (I2cEnd::Restart, "restart"),
+        (I2cEnd::Aborted, "aborted"),
+    ] {
+        assert_eq!(reason.name(), name);
+    }
+}
+
+#[test]
+fn i2c_frames_carry_three_kinds_of_item() {
+    assert_eq!(
+        I2cEvent::Begin {
+            tx: 3,
+            partial: false
+        }
+        .frame(),
+        Frame::Begin {
+            id: 3,
+            partial: false
+        }
+    );
+    assert_eq!(
+        I2cEvent::Address {
+            tx: 3,
+            address: 0x50,
+            ten_bit: false,
+            read: true,
+            ack: true
+        }
+        .frame(),
+        Frame::Item {
+            id: 3,
+            item: I2cEventItem::Address {
+                address: 0x50,
+                ten_bit: false,
+                read: true,
+                ack: true
+            }
+        }
+    );
+    assert_eq!(
+        I2cEvent::Data {
+            tx: 3,
+            byte: 7,
+            ack: false
+        }
+        .frame(),
+        Frame::Item {
+            id: 3,
+            item: I2cEventItem::Data {
+                byte: 7,
+                ack: false
+            }
+        }
+    );
+    assert_eq!(
+        I2cEvent::Restart {
+            tx: 3,
+            dropped_bits: 1
+        }
+        .frame(),
+        Frame::Item {
+            id: 3,
+            item: I2cEventItem::Restart { dropped_bits: 1 }
+        }
+    );
+    // A STOP ends a transaction normally, and so does the START that ends a partial one.
+    for (reason, normal) in [
+        (I2cEnd::Stop, true),
+        (I2cEnd::Restart, true),
+        (I2cEnd::Aborted, false),
+    ] {
+        assert_eq!(
+            I2cEvent::End {
+                tx: 3,
+                reason,
+                dropped_bits: 0
+            }
+            .frame(),
+            Frame::End { id: 3, normal }
+        );
+    }
 }

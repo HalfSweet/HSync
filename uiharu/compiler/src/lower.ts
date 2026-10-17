@@ -403,7 +403,7 @@ export class Lowerer {
           ts.isPropertyAccessExpression(left) &&
           left.name.text === 'kind' &&
           ts.isStringLiteral(right) &&
-          this.types.unionOf(this.types.declaredType(left.expression)) !== undefined
+          this.types.isTaggedUnion(this.types.declaredType(left.expression))
         ) {
           return { kind: 'variant', place: left.expression, name: right.text, is: equal }
         }
@@ -510,7 +510,7 @@ export class Lowerer {
     const onKind =
       ts.isPropertyAccessExpression(subject) &&
       subject.name.text === 'kind' &&
-      this.types.unionOf(this.types.declaredType(subject.expression)) !== undefined
+      this.types.isTaggedUnion(this.types.declaredType(subject.expression))
         ? subject.expression
         : undefined
     const value = this.expr(onKind ?? subject)

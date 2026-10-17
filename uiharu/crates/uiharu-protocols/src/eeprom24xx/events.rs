@@ -135,7 +135,7 @@ mod tests {
         assert_eq!(
             json(&EepromEvent::Begin {
                 op: OpId(1),
-                tx: TxId(2),
+                tx: 2,
                 device: 0x50,
                 command: Command::CurrentAddressRead,
             }),
@@ -166,7 +166,7 @@ mod tests {
         );
         assert_eq!(
             json(&EepromEvent::AckPoll {
-                tx: TxId(3),
+                tx: 3,
                 device: 0x57,
                 acked: false,
             }),
@@ -174,7 +174,7 @@ mod tests {
         );
         assert_eq!(
             json(&EepromEvent::Unknown {
-                tx: TxId(4),
+                tx: 4,
                 device: 0x51,
             }),
             r#"{"kind":"unknown","tx":4,"device":81}"#

@@ -56,7 +56,7 @@ use uiharu_core::{
     Sample, SignalCursor, Tick, TickRange,
 };
 
-use super::events::{EndReason, I2cEvent, TxId};
+use super::{EndReason, I2cEvent, TxId};
 
 /// How the bus is wired.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -375,7 +375,7 @@ impl Decoder {
     }
 
     fn new_tx(&mut self) -> TxId {
-        let tx = TxId(self.next_tx);
+        let tx = self.next_tx;
         self.next_tx += 1;
         tx
     }
@@ -646,12 +646,12 @@ mod tests {
 
     #[test]
     fn ten_bit_reads_refer_back_to_the_last_write_address() {
-        let mut transfer = Transfer::new(TxId(1));
+        let mut transfer = Transfer::new(1);
         assert_eq!(address(&mut transfer, 0, 0b1111_0100, true), None);
         assert_eq!(
             address(&mut transfer, 10, 0xa5, false),
             Some(I2cEvent::Address {
-                tx: TxId(1),
+                tx: 1,
                 address: 0x2a5,
                 ten_bit: true,
                 read: false,
@@ -662,7 +662,7 @@ mod tests {
         assert_eq!(
             address(&mut transfer, 20, 0b1111_0101, true),
             Some(I2cEvent::Address {
-                tx: TxId(1),
+                tx: 1,
                 address: 0x2a5,
                 ten_bit: true,
                 read: true,
@@ -675,7 +675,7 @@ mod tests {
         assert_eq!(
             address(&mut transfer, 30, 0b1111_0011, true),
             Some(I2cEvent::Address {
-                tx: TxId(1),
+                tx: 1,
                 address: 0x79,
                 ten_bit: false,
                 read: true,
@@ -686,7 +686,7 @@ mod tests {
         assert_eq!(
             address(&mut transfer, 40, 0b1111_0101, true),
             Some(I2cEvent::Address {
-                tx: TxId(1),
+                tx: 1,
                 address: 0x7a,
                 ten_bit: false,
                 read: true,

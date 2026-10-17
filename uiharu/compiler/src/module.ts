@@ -116,7 +116,7 @@ class ModuleLowerer {
   lower(): Module {
     this.scan()
     const definition = this.definition
-    if (!definition) throw new CompileError(this.file, 'a decoder module defines its decoder')
+    if (!definition) return this.contractModule()
     const output = this.schemaOf(definition.output)
     const input = definition.input ? this.schemaOf(definition.input) : undefined
     const functions = this.freeFunctions()
@@ -140,6 +140,23 @@ class ModuleLowerer {
     // The decoder comes last in the JSON, after what it is made of.
     delete (module as Partial<Module>).decoder
     module.decoder = decoder
+    return module
+  }
+
+  /** A module without a decoder: the contracts of decoders written by hand, with the types
+   * they are made of and the functions that go with them. */
+  private contractModule(): Module {
+    if (!this.contracts.length) {
+      throw new CompileError(this.file, 'a module declares a decoder or a contract')
+    }
+    const functions = this.freeFunctions()
+    this.mutableParams(functions, [])
+    const module: Module = { ir: 1, name: path.basename(this.file.fileName, '.ts') }
+    if (this.typeDefs.length) module.types = this.typeDefs
+    module.contracts = this.contracts
+    if (this.imports.length) module.imports = this.imports
+    if (this.consts.length) module.consts = this.consts
+    if (functions.length) module.functions = functions
     return module
   }
 
@@ -245,25 +262,45 @@ class ModuleLowerer {
   }
 
   private framingOf(node: ts.ObjectLiteralExpression): Framing {
-    const values = literalObject(node)
+    const properties = new Map<string, ts.Expression>()
+    for (const property of node.properties) {
+      if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) {
+        throw new CompileError(property, 'the framing has named properties')
+      }
+      properties.set(property.name.text, property.initializer)
+    }
     const text = (key: string): string => {
-      const value = values[key]
-      if (typeof value !== 'string') throw new CompileError(node, `framing.${key} is a literal`)
-      return value
+      const value = properties.get(key)
+      if (!value || !ts.isStringLiteral(value)) {
+        throw new CompileError(node, `framing.${key} is a literal`)
+      }
+      return value.text
+    }
+    const list = (key: string): string[] => {
+      const value = properties.get(key)
+      if (!value || !ts.isArrayLiteralExpression(value) || value.elements.length === 0) {
+        throw new CompileError(node, `framing.${key} is a list of literals`)
+      }
+      return value.elements.map((element) => {
+        if (!ts.isStringLiteral(element))
+          throw new CompileError(element, `framing.${key} is a list of literals`)
+        return element.text
+      })
     }
     const framing: Framing = {
       begin: text('begin'),
-      item: text('item'),
+      items: list('items'),
       end: text('end'),
       id: text('id'),
       reason: text('reason'),
-      normal: text('normal'),
+      normal: list('normal'),
     }
-    if ('partial' in values) framing.partial = text('partial')
-    if ('unframed' in values) {
-      const unframed = values['unframed']
-      if (typeof unframed !== 'number') throw new CompileError(node, 'framing.unframed is a number')
-      framing.unframed = unframed
+    if (properties.has('partial')) framing.partial = text('partial')
+    const unframed = properties.get('unframed')
+    if (unframed) {
+      if (!ts.isNumericLiteral(unframed))
+        throw new CompileError(unframed, 'framing.unframed is a number')
+      framing.unframed = Number(unframed.text.replace(/_/g, ''))
     }
     return framing
   }

@@ -55,7 +55,7 @@ use uiharu_core::{
 };
 
 use super::events::{Command, DATA_BATCH, EepromEnd, EepromEvent, OpId};
-use crate::i2c::{Address, I2cBus, I2cEvent, Next, Read, ReadError, Transaction, TxEvent, TxId};
+use crate::i2c::{Address, Cut, I2cBus, I2cEvent, Next, Read, Transaction, TxEvent, TxId};
 
 /// The bits of a 7-bit address that select a 24xx EEPROM, `1010 xxx`.
 const DEVICE_MASK: u8 = 0b111_1000;
@@ -517,13 +517,24 @@ enum Step {
 }
 
 /// Reads the next event of a segment.
-async fn step(tx: &mut Transaction<'_>) -> Result<Step, ReadError> {
-    Ok(match tx.event_or_end().await? {
-        Read::Event(TxEvent::Data { byte, .. }) => Step::Data(byte, tx.consumed()),
+async fn step(tx: &mut Transaction<'_>) -> Result<Step, Cut> {
+    Ok(match tx.item_or_end().await? {
+        Read::Item(TxEvent::Data { byte, .. }) => Step::Data(byte, tx.consumed()),
         Read::End => Step::Ended(Boundary::End, tx.consumed()),
-        Read::Event(TxEvent::Restart { .. }) => Step::Ended(Boundary::Restart, tx.consumed()),
-        Read::Event(TxEvent::Address(address)) => {
+        Read::Item(TxEvent::Restart { .. }) => Step::Ended(Boundary::Restart, tx.consumed()),
+        Read::Item(TxEvent::Address {
+            address,
+            ten_bit,
+            read,
+            ack,
+        }) => {
             // The address belongs to the next segment; this one ends where it begins.
+            let address = Address {
+                address,
+                ten_bit,
+                read,
+                ack,
+            };
             let at = tx.consumed();
             Step::Ended(
                 Boundary::Address(address, at),
@@ -534,7 +545,7 @@ async fn step(tx: &mut Transaction<'_>) -> Result<Step, ReadError> {
 }
 
 /// Skips the rest of a segment.
-async fn skip(tx: &mut Transaction<'_>) -> Result<Boundary, ReadError> {
+async fn skip(tx: &mut Transaction<'_>) -> Result<Boundary, Cut> {
     loop {
         if let Step::Ended(boundary, _) = step(tx).await? {
             return Ok(boundary);
@@ -543,7 +554,7 @@ async fn skip(tx: &mut Transaction<'_>) -> Result<Boundary, ReadError> {
 }
 
 /// The data bytes of a read, up to the end of its segment.
-async fn read(tx: &mut Transaction<'_>, out: &mut EepromOut) -> Result<Boundary, ReadError> {
+async fn read(tx: &mut Transaction<'_>, out: &mut EepromOut) -> Result<Boundary, Cut> {
     loop {
         match step(tx).await? {
             Step::Data(byte, at) => out.data(byte, at).await,
@@ -557,7 +568,7 @@ async fn read(tx: &mut Transaction<'_>, out: &mut EepromOut) -> Result<Boundary,
 
 /// A write whose control byte was acknowledged: its word address and data, up to the end of
 /// its segment.
-async fn write(tx: &mut Transaction<'_>, out: &mut EepromOut) -> Result<Boundary, ReadError> {
+async fn write(tx: &mut Transaction<'_>, out: &mut EepromOut) -> Result<Boundary, Cut> {
     let (first, mut word_at) = match step(tx).await? {
         Step::Data(byte, at) => (byte, at),
         Step::Ended(boundary, at) => {
@@ -569,7 +580,7 @@ async fn write(tx: &mut Transaction<'_>, out: &mut EepromOut) -> Result<Boundary
     // error the recovery reports: the word address is not whole.
     let mut word = u16::from(first);
     for _ in 1..out.config.address_bytes {
-        match tx.event().await? {
+        match tx.item().await? {
             TxEvent::Data { byte, .. } => {
                 word = (word << 8) | u16::from(byte);
                 word_at = word_at.join(tx.consumed());
@@ -578,7 +589,18 @@ async fn write(tx: &mut Transaction<'_>, out: &mut EepromOut) -> Result<Boundary
                 out.short_address(tx.consumed()).await;
                 return Ok(Boundary::Restart);
             }
-            TxEvent::Address(address) => {
+            TxEvent::Address {
+                address,
+                ten_bit,
+                read,
+                ack,
+            } => {
+                let address = Address {
+                    address,
+                    ten_bit,
+                    read,
+                    ack,
+                };
                 let at = tx.consumed();
                 out.short_address(Provenance::at(at.span.start)).await;
                 return Ok(Boundary::Address(address, at));
@@ -603,7 +625,7 @@ async fn segment(
     out: &mut EepromOut,
     address: Address,
     at: Provenance,
-) -> Result<Boundary, ReadError> {
+) -> Result<Boundary, Cut> {
     let device = out.device(&address);
     if let Some(device) = device
         && address.read
@@ -632,7 +654,7 @@ async fn segment(
 }
 
 /// The body of the decoder: one I²C transaction, segment by segment.
-async fn transaction(mut tx: Transaction<'_>, out: &mut EepromOut) -> Result<(), ReadError> {
+async fn transaction(mut tx: Transaction<'_>, out: &mut EepromOut) -> Result<(), Cut> {
     // The START: an address comes next.
     let mut boundary = Boundary::Restart;
     loop {
@@ -643,19 +665,32 @@ async fn transaction(mut tx: Transaction<'_>, out: &mut EepromOut) -> Result<(),
                 out.settle(decided).await;
                 return Ok(());
             }
-            Boundary::Restart => match tx.event_or_end().await? {
-                Read::Event(TxEvent::Address(address)) => (address, tx.consumed()),
+            Boundary::Restart => match tx.item_or_end().await? {
+                Read::Item(TxEvent::Address {
+                    address,
+                    ten_bit,
+                    read,
+                    ack,
+                }) => (
+                    Address {
+                        address,
+                        ten_bit,
+                        read,
+                        ack,
+                    },
+                    tx.consumed(),
+                ),
                 Read::End => {
                     boundary = Boundary::End;
                     continue;
                 }
-                Read::Event(TxEvent::Restart { .. }) => {
+                Read::Item(TxEvent::Restart { .. }) => {
                     let decided = tx.consumed().settled;
                     out.settle(decided).await;
                     continue;
                 }
                 // A byte with no address before it is no one's to read.
-                Read::Event(TxEvent::Data { .. }) => {
+                Read::Item(TxEvent::Data { .. }) => {
                     tx.consumed();
                     boundary = skip(&mut tx).await?;
                     continue;
@@ -669,7 +704,7 @@ async fn transaction(mut tx: Transaction<'_>, out: &mut EepromOut) -> Result<(),
 /// Closes what the body left open, as the transaction's end calls for. The end covers what
 /// the body read without reporting it, and the transaction's end when the stream carried one;
 /// a gap or the end of the stream only places it.
-async fn recover(error: ReadError, bus: &mut I2cBus, out: &mut EepromOut) {
+async fn recover(error: Cut, bus: &mut I2cBus, out: &mut EepromOut) {
     let unreported = bus.consumed();
     let placed = |tick: Tick| Provenance {
         span: if unreported.span.is_empty() {
@@ -680,10 +715,10 @@ async fn recover(error: ReadError, bus: &mut I2cBus, out: &mut EepromOut) {
         settled: tick,
     };
     let (reason, at) = match error {
-        ReadError::Incomplete => (EepromEnd::Incomplete, unreported),
-        ReadError::Truncated => (EepromEnd::Aborted, unreported),
-        ReadError::Gap(range) => (EepromEnd::Aborted, placed(range.start)),
-        ReadError::EndOfInput(tick) => (EepromEnd::Aborted, placed(tick)),
+        Cut::Incomplete => (EepromEnd::Incomplete, unreported),
+        Cut::Truncated | Cut::Missing => (EepromEnd::Aborted, unreported),
+        Cut::Gap(range) => (EepromEnd::Aborted, placed(range.start)),
+        Cut::End(tick) => (EepromEnd::Aborted, placed(tick)),
     };
     out.close(reason, at).await;
 }
@@ -695,7 +730,7 @@ async fn run(mut bus: I2cBus, mut out: EepromOut) {
                 // A transaction whose beginning was not seen carries no bytes to read.
                 let result = if tx.is_partial() {
                     let mut tx = tx;
-                    tx.drain().await
+                    tx.drain().await.map_err(Cut::from)
                 } else {
                     transaction(tx, &mut out).await
                 };
@@ -703,7 +738,7 @@ async fn run(mut bus: I2cBus, mut out: EepromOut) {
                     recover(error, &mut bus, &mut out).await;
                 }
                 if let Err(error) = bus.finish().await {
-                    recover(error, &mut bus, &mut out).await;
+                    recover(Cut::from(error), &mut bus, &mut out).await;
                 }
                 bus.consumed();
             }

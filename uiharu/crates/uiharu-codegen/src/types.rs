@@ -37,8 +37,6 @@ pub enum Ty {
     Received(String),
     /// What `batch-take` returns.
     Taken(Box<Ty>),
-    /// What a frame cursor's `item` returns.
-    Item,
     /// An integer literal, of whatever width its context has.
     IntLit,
     Unit,
@@ -113,7 +111,6 @@ impl Ty {
             Ty::Timed => "Timed".into(),
             Ty::Received(event) => format!("Received<{event}>"),
             Ty::Taken(item) => format!("Taken<{}>", item.rust(lower)),
-            Ty::Item => format!("{}Item", lower.unwrap_or("")),
             Ty::Unit => "()".into(),
         }
     }
@@ -180,8 +177,7 @@ impl<'a> Defs<'a> {
             | Ty::Batch(..)
             | Ty::Edge
             | Ty::Timed
-            | Ty::Received(_)
-            | Ty::Item => false,
+            | Ty::Received(_) => false,
             Ty::Named(name) => match self.get(name).map(|def| &def.kind) {
                 Some(TypeKind::Enum { .. }) => true,
                 Some(TypeKind::Record { fields }) => {
@@ -217,8 +213,7 @@ impl<'a> Defs<'a> {
             | Ty::Array(..)
             | Ty::Batch(..)
             | Ty::Received(_)
-            | Ty::Taken(_)
-            | Ty::Item => false,
+            | Ty::Taken(_) => false,
             Ty::Named(name) => match self.get(name).map(|def| &def.kind) {
                 Some(TypeKind::Enum { .. }) => true,
                 Some(TypeKind::Record { fields }) => {
@@ -231,6 +226,39 @@ impl<'a> Defs<'a> {
             },
         }
     }
+}
+
+/// The item type of a framed contract, as the cursor hands it out: the fields of the one item
+/// kind without the frame's id, or a union of the item kinds without it.
+pub fn item_def(
+    event: &str,
+    variants: &[uiharu_ir::UnionVariant],
+    framing: &uiharu_ir::Framing,
+) -> Result<TypeDef, String> {
+    let name = format!("{event}Item");
+    let mut items = Vec::new();
+    for kind in &framing.items {
+        let variant = variants
+            .iter()
+            .find(|variant| &variant.name == kind)
+            .ok_or_else(|| format!("{event} has no variant {kind}"))?;
+        items.push(uiharu_ir::UnionVariant {
+            name: kind.clone(),
+            fields: variant
+                .fields
+                .iter()
+                .filter(|field| field.name != framing.id)
+                .cloned()
+                .collect(),
+        });
+    }
+    let kind = match items.as_slice() {
+        [single] => TypeKind::Record {
+            fields: single.fields.clone(),
+        },
+        _ => TypeKind::Union { variants: items },
+    };
+    Ok(TypeDef { name, kind })
 }
 
 /// The declarations of a module's types. `config` names the record that is the configuration,

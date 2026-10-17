@@ -230,21 +230,39 @@ export interface Tagged {
 
 /**
  * How a contract frames its traffic, for the cursor consumers read it through: which event
- * begins a frame, which carries its items, which ends it, the field that names the frame on all
- * three, the `begin` field that says the frame was already under way, the `end` field that says
- * why it ended and its value for the normal end. `unframed` is the id of the one frame of a bus
- * that has no framing line (SPI without chip select): it never begins or ends.
+ * begins a frame, which carry its items, which ends it, the field that names the frame on all
+ * of them, the `begin` field that says the frame was already under way, the `end` field that
+ * says why it ended and its values for a normal end. `unframed` is the id of the one frame of
+ * a bus that has no framing line (SPI without chip select): it never begins or ends.
  */
-export interface Framing<E extends Tagged, I extends E['kind'], Id extends string> {
+export interface Framing<E extends Tagged, K extends E['kind'], Id extends string> {
   readonly begin: E['kind']
-  readonly item: I
+  /** The kinds of event that carry a frame's items: one, and the cursor hands out its fields;
+   * several, and it hands out their union, tagged by `kind`. */
+  readonly items: readonly K[]
   readonly end: E['kind']
   readonly id: Id
   readonly partial?: string
   readonly reason: string
-  readonly normal: string
+  /** The values of `reason` for a normal end. */
+  readonly normal: readonly string[]
   readonly unframed?: u64
 }
+
+type UnionToIntersection<U> = (U extends unknown ? (x: U) => void : never) extends (
+  x: infer I,
+) => void
+  ? I
+  : never
+type IsUnion<T> = [T] extends [UnionToIntersection<T>] ? false : true
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
+
+/** What a framed schema's cursor hands out: the item event without the frame's id — and
+ * without its kind when there is one kind of item. */
+export type Item<E extends Tagged, K extends E['kind'], Id extends string> =
+  IsUnion<K> extends true
+    ? DistributiveOmit<Extract<E, { kind: K }>, Id>
+    : Omit<Extract<E, { kind: K }>, 'kind' | Id>
 
 /** The identity of an event stream's contract: its name and version, tied to the event type
  * and, for a framed contract, to the item type its cursor hands out. */
@@ -258,11 +276,11 @@ export interface Schema<E extends Tagged, I> {
 /** The contract of a stream as `eventSchema` declares it: unframed, unless `framed` says how
  * it frames its traffic. */
 export interface UnframedSchema<E extends Tagged> extends Schema<E, never> {
-  /** Declares the framing: `item` is the kind of event that carries a frame's items, and the
-   * cursor hands them out without the `kind` and the frame's id. */
-  framed<I extends E['kind'], Id extends string>(
-    framing: Framing<E, I, Id>,
-  ): Schema<E, Omit<Extract<E, { kind: I }>, 'kind' | Id>>
+  /** Declares the framing: `items` are the kinds of event that carry a frame's items, which
+   * the cursor hands out without the frame's id (see `Item`). */
+  framed<K extends E['kind'], Id extends string>(
+    framing: Framing<E, K, Id>,
+  ): Schema<E, Item<E, K, Id>>
 }
 
 /** The item a framed schema's cursor hands out. */

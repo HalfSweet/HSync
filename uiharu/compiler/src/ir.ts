@@ -32,12 +32,12 @@ export interface SchemaRef {
 
 export interface Framing {
   begin: string
-  item: string
+  items: string[]
   end: string
   id: string
   partial?: string
   reason: string
-  normal: string
+  normal: string[]
   unframed?: number
 }
 
@@ -139,7 +139,7 @@ export interface Module {
   imports?: Import[]
   consts?: Const[]
   functions?: Function[]
-  decoder: Decoder
+  decoder?: Decoder
 }
 
 export type BinaryOp =

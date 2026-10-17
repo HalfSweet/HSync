@@ -19,7 +19,7 @@ use uiharu_core::{
 use uiharu_protocols::i2c::synth::{
     I2cWaveform, Symbol, read_7bit, read_10bit, write_7bit, write_10bit,
 };
-use uiharu_protocols::i2c::{EndReason, I2c, I2cBus, I2cConfig, I2cEvent, Next, Read, TxId};
+use uiharu_protocols::i2c::{EndReason, I2c, I2cBus, I2cConfig, I2cEvent, Next, Read};
 
 const CHANNELS: u8 = 2;
 const Q: u64 = 2;
@@ -83,7 +83,7 @@ fn describe(items: &[Item<I2cEvent>]) -> Vec<String> {
             Item::Event(event) => {
                 let what = match event.payload {
                     I2cEvent::Begin { tx, partial } => {
-                        format!("begin tx{}{}", tx.0, if partial { " partial" } else { "" })
+                        format!("begin tx{}{}", tx, if partial { " partial" } else { "" })
                     }
                     I2cEvent::Address {
                         tx,
@@ -98,21 +98,21 @@ fn describe(items: &[Item<I2cEvent>]) -> Vec<String> {
                             format!("{address:02x}")
                         };
                         let direction = if read { "R" } else { "W" };
-                        format!("address tx{} {address} {direction} {}", tx.0, ack(acked))
+                        format!("address tx{} {address} {direction} {}", tx, ack(acked))
                     }
                     I2cEvent::Data {
                         tx,
                         byte,
                         ack: acked,
-                    } => format!("data tx{} {byte:02x} {}", tx.0, ack(acked)),
+                    } => format!("data tx{} {byte:02x} {}", tx, ack(acked)),
                     I2cEvent::Restart { tx, dropped_bits } => {
-                        format!("restart tx{}{}", tx.0, dropped(dropped_bits))
+                        format!("restart tx{}{}", tx, dropped(dropped_bits))
                     }
                     I2cEvent::End {
                         tx,
                         reason,
                         dropped_bits,
-                    } => format!("end tx{} {reason:?}{}", tx.0, dropped(dropped_bits)),
+                    } => format!("end tx{} {reason:?}{}", tx, dropped(dropped_bits)),
                 };
                 format!("{what} {}", at(event.span, event.settled))
             }
@@ -708,7 +708,7 @@ impl EventSchema for Seen {
 
 /// A decoder built on I²C that reads every transaction through the cursor and says what each
 /// read found: the first `strict` reads of a transaction with `event()`, the others with
-/// `event_or_end()`, until the transaction ends.
+/// `item_or_end()`, until the transaction ends.
 struct Reader {
     strict: usize,
 }
@@ -744,25 +744,25 @@ async fn read_through_the_cursor(mut bus: I2cBus, mut out: Outbox<Seen>, strict:
             Next::Transaction(mut tx) => {
                 let begin = format!(
                     "tx{}{}",
-                    tx.id().0,
+                    tx.id(),
                     if tx.is_partial() { " partial" } else { "" }
                 );
                 let at = tx.consumed();
                 out.emit(at, Seen(begin)).await;
                 for reads in 0.. {
                     let found = if reads < strict {
-                        tx.event().await.map(Read::Event)
+                        tx.item().await.map(Read::Item)
                     } else {
-                        tx.event_or_end().await
+                        tx.item_or_end().await
                     };
                     let line = match found {
-                        Ok(Read::Event(event)) => format!("{event:?}"),
+                        Ok(Read::Item(event)) => format!("{event:?}"),
                         Ok(Read::End) => "end".to_owned(),
                         Err(error) => format!("{error:?}"),
                     };
                     let at = tx.consumed();
                     out.emit(at, Seen(line)).await;
-                    if !matches!(found, Ok(Read::Event(_))) {
+                    if !matches!(found, Ok(Read::Item(_))) {
                         break;
                     }
                 }
@@ -826,13 +826,13 @@ fn the_cursor_reads_a_transaction_event_by_event() {
         vec![
             "tx1 [10,11)@10".to_owned(),
             format!(
-                "Address(Address {{ address: 80, ten_bit: false, read: false, ack: true }}) {}",
+                "Address {{ address: 80, ten_bit: false, read: false, ack: true }} {}",
                 byte_at(14)
             ),
             format!("Data {{ byte: 18, ack: true }} {}", byte_at(86)),
             format!("Restart {{ dropped_bits: 0 }} {}", one(162)),
             format!(
-                "Address(Address {{ address: 80, ten_bit: false, read: true, ack: true }}) {}",
+                "Address {{ address: 80, ten_bit: false, read: true, ack: true }} {}",
                 byte_at(166)
             ),
             format!("Data {{ byte: 52, ack: false }} {}", byte_at(238)),
@@ -861,7 +861,7 @@ fn the_cursor_says_how_a_transaction_ended() {
         [
             "tx1 [10,11)@10".to_owned(),
             format!(
-                "Address(Address {{ address: 80, ten_bit: false, read: false, ack: true }}) {}",
+                "Address {{ address: 80, ten_bit: false, read: false, ack: true }} {}",
                 byte_at(14)
             ),
             "Truncated @120".to_owned(),
@@ -952,7 +952,7 @@ fn synthesize(transactions: &[Vec<Segment>], idle: u64) -> LogicBlock {
 fn model(transactions: &[Vec<Segment>]) -> Vec<I2cEvent> {
     let mut events = Vec::new();
     for (n, segments) in transactions.iter().enumerate() {
-        let tx = TxId(n as u64 + 1);
+        let tx = n as u64 + 1;
         events.push(I2cEvent::Begin { tx, partial: false });
         let mut remembered: Option<u16> = None;
         for (i, segment) in segments.iter().enumerate() {

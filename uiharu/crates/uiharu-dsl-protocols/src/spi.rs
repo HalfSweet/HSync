@@ -105,8 +105,8 @@ impl EventSchema for SpiEvent {
     const SCHEMA: SchemaId = SchemaId::new("spi.events", 1);
 }
 
-/// One item of a frame of `spi.events`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// One item of a frame of `spi.events`, as the cursor hands it out.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpiEventItem {
     pub mosi: Option<u8>,
     pub miso: Option<u8>,
@@ -131,7 +131,7 @@ impl Framed for SpiEvent {
             },
             SpiEvent::End { tx, reason, .. } => Frame::End {
                 id: *tx,
-                normal: *reason == EndReason::CsRelease,
+                normal: matches!(reason, EndReason::CsRelease),
             },
         }
     }

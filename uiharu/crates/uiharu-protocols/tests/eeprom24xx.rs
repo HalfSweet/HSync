@@ -92,7 +92,7 @@ fn describe(items: &[Item<EepromEvent>]) -> Vec<String> {
                         tx,
                         device,
                         command,
-                    } => format!("begin op{} tx{} {device:02x} {command:?}", op.0, tx.0),
+                    } => format!("begin op{} tx{} {device:02x} {command:?}", op.0, tx),
                     EepromEvent::Address { op, word_address } => {
                         format!("address op{} {word_address:04x}", op.0)
                     }
@@ -104,11 +104,11 @@ fn describe(items: &[Item<EepromEvent>]) -> Vec<String> {
                     }
                     EepromEvent::AckPoll { tx, device, acked } => format!(
                         "ack-poll tx{} {device:02x} {}",
-                        tx.0,
+                        tx,
                         if *acked { "ready" } else { "busy" }
                     ),
                     EepromEvent::Unknown { tx, device } => {
-                        format!("unknown tx{} {device:02x}", tx.0)
+                        format!("unknown tx{} {device:02x}", tx)
                     }
                 };
                 format!("{what} {}", at(event.span, event.settled))
@@ -752,7 +752,7 @@ fn script_events(node: NodeId) -> OutputRef<I2cEvent> {
 
 #[test]
 fn shapes_this_i2c_decoder_never_sends_are_read_gracefully() {
-    let tx = TxId(1);
+    let tx = 1;
     let address = |address: u16, read: bool| I2cEvent::Address {
         tx,
         address,
@@ -1025,7 +1025,7 @@ impl Model {
     fn of(cmds: &[Cmd]) -> Vec<EepromEvent> {
         let mut model = Model::default();
         for (n, cmd) in cmds.iter().enumerate() {
-            let (tx, device) = (TxId(n as u64 + 1), cmd.device());
+            let (tx, device) = (n as u64 + 1, cmd.device());
             if !(0x50..=0x57).contains(&device) {
                 continue;
             }

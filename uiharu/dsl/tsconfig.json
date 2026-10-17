@@ -1,6 +1,6 @@
 {
   "extends": "@vue/tsconfig/tsconfig.json",
-  "include": ["src/**/*", "decoders/**/*"],
+  "include": ["src/**/*", "contracts/**/*", "decoders/**/*"],
   "compilerOptions": {
     "tsBuildInfoFile": "../../node_modules/.tmp/tsconfig.uiharu-dsl.tsbuildinfo",
     "lib": ["ES2023"],

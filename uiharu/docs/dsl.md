@@ -8,6 +8,7 @@ Where things are:
 | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `dsl/src/index.ts`                       | The DSL's API as TypeScript declarations: integer types, provenance, the cursors, the batch, the decoder base classes, `defineLogicDecoder`, `defineStreamDecoder`, `defineBusDecoder`                                                                                                     |
 | `dsl/decoders/{pwm,spi,spi-nor,uart}.ts` | The reference decoders in the DSL, one per shape: a line decoder, a framed bus decoder, a decoder on a framed contract, a timed decoder. They type-check (`pnpm typecheck` covers `dsl/`) and compile to `dsl/ir/`                                                                         |
+| `dsl/contracts/i2c.ts`                   | A contract declared without a decoder: the types of `i2c.events` and its framing, for the hand-written I²C decoder and for DSL decoders built on I²C                                                                                                                                       |
 | `crates/uiharu-ir`                       | The IR as `serde` data types with its JSON form, and `validate`, the checks of the engine's rules; `tests/fixtures/pwm.json` is `pwm.ts` lowered by hand                                                                                                                                   |
 | `compiler/src/`                          | The compiler's front end: loads the `dsl/` project through the TypeScript compiler API, checks the subset and lowers each decoder module to the IR (`pnpm dsl:compile` writes `dsl/ir/<name>.json`; `pnpm dsl:check` says whether they are up to date); `compiler.test.ts` holds its tests |
 | `crates/uiharu-codegen`                  | The backend: Rust from the IR, over `uiharu_core::dsl` (`cargo run -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src`, `--check` to compare); its test regenerates the generated crate and demands no difference                                                   |
@@ -99,17 +100,19 @@ export type SpiEvent =
 
 export const spiEvents = eventSchema<SpiEvent>('spi.events', 1).framed({
   begin: 'begin',
-  item: 'word',
+  items: ['word'],
   end: 'end',
   id: 'tx',
   partial: 'partial',
   reason: 'reason',
-  normal: 'cs-release',
+  normal: ['cs-release'],
   unframed: 0,
 })
 ```
 
-`eventSchema` ties the event type to the schema name and version. `framed` declares how the stream frames its traffic: the event kinds that begin a frame, carry its items and end it, the field that names the frame on all three, the `begin` field saying the frame was under way, the `end` field saying why it ended and its value for the normal end, and the id of the one frame of a bus that has no framing line. A decoder reading the contract gets a cursor over its frames whose items are the `item` event without `kind` and the id (`ItemOf<typeof spiEvents>` is `{ mosi: u8 | undefined; miso: u8 | undefined }`). The cursor is generated from the declaration (§5); it offers the contract's primitives — the next item, the normal end, draining — and nothing more.
+`eventSchema` ties the event type to the schema name and version. `framed` declares how the stream frames its traffic: the event kind that begins a frame, the kinds that carry its items, the kind that ends it, the field that names the frame on all of them, the `begin` field saying the frame was under way, the `end` field saying why it ended and its values for a normal end, and the id of the one frame of a bus that has no framing line. A decoder reading the contract gets a cursor over its frames whose items are the item events without the frame's id: with one kind of item, its fields alone (`ItemOf<typeof spiEvents>` is `{ mosi: u8 | undefined; miso: u8 | undefined }`); with several — I²C's addresses, data bytes and repeated STARTs — their union tagged by `kind`, read with `switch (item.kind)`. The cursor is generated from the declaration (§5); it offers the contract's primitives — the next item, the normal end, draining — and nothing more.
+
+A contract can be declared without a decoder: a module under `dsl/contracts/` with the event type, its enums and the `eventSchema` call, for a decoder that stays hand-written. Its Rust types are generated like any other's, the hand-written decoder emits them, and a decoder written in the DSL can stack on it. `contracts/i2c.ts` is one: the hand-written I²C decoder of `crates/uiharu-protocols` emits its types, and the 24xx EEPROM decoder reads them through `FramedBus`.
 
 Events carry bus data only, as the contract pages describe them; numbers take the narrowest width that fits, a line that is not connected or a value that could not be seen is `undefined`.
 
@@ -239,7 +242,7 @@ The compiler lowers a DSL module to one JSON document per decoder, read by `uiha
 }
 ```
 
-**Types** are strings — the primitives `bool`, `u8`, `u16`, `u32`, `u64`, `text`, `mask`, `levels`, `range`, `provenance`, `cursor` (the frame cursor of a bus decoder) or a declared name — or objects: `{ "option": T }`, `{ "array": T, "bound": N }`, `{ "batch": T, "bound": N }`. Declared types are records (fields), enums (variant names as events spell them) and unions (variants with fields, tagged by `kind`). A contract names its schema, its event union and, when framed, its framing (§2.3); an import carries another module's contract with its types.
+**Types** are strings — the primitives `bool`, `u8`, `u16`, `u32`, `u64`, `text`, `mask`, `levels`, `range`, `provenance`, `cursor` (the frame cursor of a bus decoder) or a declared name — or objects: `{ "option": T }`, `{ "array": T, "bound": N }`, `{ "batch": T, "bound": N }`. Declared types are records (fields), enums (variant names as events spell them) and unions (variants with fields, tagged by `kind`). A contract names its schema, its event union and, when framed, its framing (§2.3: `items`, the kinds that carry a frame's items, and `normal`, the reasons of a normal end, are lists); an import carries another module's contract with its types. A module without a `decoder` declares contracts only.
 
 **The decoder** has its ports: `input` is `{ "kind": "logic" }`, `{ "kind": "stream", "schema": … }` or `{ "kind": "bus", "schema": … }`; `requires` and `props` are evaluated with `config` in scope; `partial` and `recovery` (with the reason enum's name) belong to bus decoders. `state` lists the fields with their initializers; `methods` the functions with `self`, the hooks among them by name.
 
@@ -257,7 +260,7 @@ The compiler lowers a DSL module to one JSON document per decoder, read by `uiha
 - the operations match the input: the signal's for a logic decoder, `next` for a stream decoder, the cursor's, `consumed`, `tx-id`, `tx-partial` and `required` for a bus decoder; an event of a logic or stream decoder states its provenance;
 - while a local borrows a field of `self` (`let-ref`, or an `if-some`/`let-some` marked `borrow` because its binding is written through), no method of `self` is called — the borrow rule the Rust backend needs, kept simple enough to state;
 - the hooks a decoder's kind calls for are there with the right shape (§2.4), and a bus decoder declares its recovery with variants of its reason enum;
-- a framed contract's framing names variants and fields that exist, and its normal end is a variant of the reason enum;
+- a framed contract's framing names variants and fields that exist, and its normal ends are variants of the reason enum;
 - text is made only in free functions: the messages of configuration checks.
 
 Typing is not repeated here: the TypeScript checker types the DSL on the way in and rustc checks the emitted Rust on the way out; the IR carries the declared types so that the backend can emit them.
@@ -266,23 +269,23 @@ Typing is not repeated here: the TypeScript checker types the DSL on the way in 
 
 The backend emits one Rust module per IR module over `uiharu-core`, in the shape the hand-written decoders have — which is why they were written that way. `rustc`'s `async` lowering is the resumable state machine; the IR needs no state-machine transform.
 
-| IR                                                | Rust                                                                                                                                                                             |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| a record, an enum, a union                        | a `struct`, a unit `enum` with `#[serde(rename_all = "kebab-case")]`, an `enum` with `#[serde(tag = "kind", rename_all = "kebab-case", rename_all_fields = "camelCase")]`        |
-| `u8` … `u64`, `bool`, `option<T>`                 | the same; `u64` ticks become `Tick` at the runtime's API                                                                                                                         |
-| `array<T, N>`, `batch<T, N>`                      | `[T; N]` with a length, and the runtime's `Batch<T, N>`                                                                                                                          |
-| a contract                                        | the event enum with `impl EventSchema`, and for a framed one `impl Framed` (which variants begin, carry and end a frame) for the runtime's generic cursor `FramedBus<E>`         |
-| `config`, `requires`, `props`, `validate`         | the `Config` struct with `Default`, `validate()`, `props()`, and `Requires` in `NodeSpec`                                                                                        |
-| `state`, `methods`                                | a `struct` of the fields and an `impl` with the methods; the hooks are methods the generated main loop calls                                                                     |
-| a free function                                   | a `fn`; records as `&mut` parameters                                                                                                                                             |
-| `let-ref`                                         | `let x = &mut self.field;` or `let Some(x) = &mut self.field else { … }`                                                                                                         |
-| `if-some`, `let-some`, `match`, `if-variant`      | `if let Some(x)`, `let Some(x) = … else`, `match`                                                                                                                                |
-| `+`, `-`, `*`, `/`, `%`, shifts, `cast`           | `wrapping_add`/`wrapping_sub`/`wrapping_mul`, `checked_div().unwrap_or(0)`, `checked_shl().unwrap_or(0)`, `as`; `mul-div` through `u128`                                         |
-| an `await` on an operation                        | the generated wrapper of §3 with `?`: `self.next_change(mask).await?`                                                                                                            |
-| a cut                                             | `Err(Cut::Gap(range))`, `Err(Cut::End(tick))`; for a bus body the cursor's `ReadError`                                                                                           |
-| `emit` without `at`                               | `self.out.emit(self.bus.consumed(), event).await`                                                                                                                                |
-| `hold`, `onGap`, `onEnd`, `onProgress`, `recover` | called by the generated main loop and wrappers (§3)                                                                                                                              |
-| the module                                        | `impl Node`: `spec()` from the ports, `start()` binding them and returning `Box::pin(main_loop(…))`; a registry `Kind` and a manifest from the config fields and the event kinds |
+| IR                                                | Rust                                                                                                                                                                                                                                            |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| a record, an enum, a union                        | a `struct`, a unit `enum` with `#[serde(rename_all = "kebab-case")]`, an `enum` with `#[serde(tag = "kind", rename_all = "kebab-case", rename_all_fields = "camelCase")]`                                                                       |
+| `u8` … `u64`, `bool`, `option<T>`                 | the same; `u64` ticks become `Tick` at the runtime's API                                                                                                                                                                                        |
+| `array<T, N>`, `batch<T, N>`                      | `[T; N]` with a length, and the runtime's `Batch<T, N>`                                                                                                                                                                                         |
+| a contract                                        | the event enum with `impl EventSchema`, and for a framed one the item type (a struct for one kind of item, an enum for several) and `impl Framed` (which variants begin, carry and end a frame) for the runtime's generic cursor `FramedBus<E>` |
+| `config`, `requires`, `props`, `validate`         | the `Config` struct with `Default`, `validate()`, `props()`, and `Requires` in `NodeSpec`                                                                                                                                                       |
+| `state`, `methods`                                | a `struct` of the fields and an `impl` with the methods; the hooks are methods the generated main loop calls                                                                                                                                    |
+| a free function                                   | a `fn`; records as `&mut` parameters                                                                                                                                                                                                            |
+| `let-ref`                                         | `let x = &mut self.field;` or `let Some(x) = &mut self.field else { … }`                                                                                                                                                                        |
+| `if-some`, `let-some`, `match`, `if-variant`      | `if let Some(x)`, `let Some(x) = … else`, `match`                                                                                                                                                                                               |
+| `+`, `-`, `*`, `/`, `%`, shifts, `cast`           | `wrapping_add`/`wrapping_sub`/`wrapping_mul`, `checked_div().unwrap_or(0)`, `checked_shl().unwrap_or(0)`, `as`; `mul-div` through `u128`                                                                                                        |
+| an `await` on an operation                        | the generated wrapper of §3 with `?`: `self.next_change(mask).await?`                                                                                                                                                                           |
+| a cut                                             | `Err(Cut::Gap(range))`, `Err(Cut::End(tick))`; for a bus body the cursor's `ReadError`                                                                                                                                                          |
+| `emit` without `at`                               | `self.out.emit(self.bus.consumed(), event).await`                                                                                                                                                                                               |
+| `hold`, `onGap`, `onEnd`, `onProgress`, `recover` | called by the generated main loop and wrappers (§3)                                                                                                                                                                                             |
+| the module                                        | `impl Node`: `spec()` from the ports, `start()` binding them and returning `Box::pin(main_loop(…))`; a registry `Kind` and a manifest from the config fields and the event kinds                                                                |
 
 The runtime side of this is `uiharu_core::dsl`: the generic cursor `FramedBus<E: Framed>` that the five hand-written cursors are instances of (a contract's `impl Framed`, generated from its framing, says which events begin, carry and end a frame), `Batch<T, const N: usize>` with its provenance, the `Cut` error, the `Int` arithmetic, and the decoder traits `LogicDecoder`, `StreamDecoder` and `BusDecoder` whose default methods are the operation wrappers of §3 and whose main loops (`run_logic`, `run_stream`, `run_bus`) drive the generated state. The backend is `crates/uiharu-codegen`: one IR module becomes one Rust module — the contract's types with their serde attributes and `impl EventSchema`, the configuration with `Default`, `validate`, `props` and `requires`, the free functions, the node (`impl Node`, `new`, `input`, `events`) and a private `State` with the decoder's fields and methods, plus the trait impl that adapts the hooks. The emitter types every expression as it goes, so that widths are reconciled (§2.1), options wrapped, records passed by reference and the arguments of a call on `self` that themselves await evaluated first. The generated sources are formatted with `rustfmt` and checked in as `crates/uiharu-dsl-protocols`; a test regenerates them and demands no difference.
 
@@ -319,8 +322,8 @@ TypeScript's narrowing is what the IR's binding constructs come from: `if (x !==
 
 ## 8. Next
 
-Decoders are written in the DSL or by hand as convenient; the four reference protocols are the DSL's, the rest stay hand-written until there is a reason to move one. Still to come:
+Decoders are written in the DSL or by hand as convenient; the four reference protocols are the DSL's, the rest stay hand-written until there is a reason to move one, and their contracts move to `dsl/contracts/` as the need arises — I²C's has. Still to come:
 
-1. Contracts declared in the DSL for decoders that stay hand-written (a `contracts/` module with types and framing but no decoder), so that a DSL decoder can stack on a hand-written bus; and the hand-written cursors as instances of `FramedBus`.
+1. The other hand-written contracts declared in `dsl/contracts/`, their cursors becoming instances of `FramedBus`: Microwire, 1-Wire, USB, SWD, JTAG, CAN, USB PD.
 2. The subset grows with the decoders that need it (§6): typed input properties, cursors with extra abnormal reasons, nodes with several inputs.
 3. Manifests for the interface, generated from the configuration record and the event kinds.
