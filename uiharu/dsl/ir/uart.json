@@ -1,0 +1,2297 @@
+{
+  "ir": 1,
+  "name": "uart",
+  "types": [
+    {
+      "name": "ParityCheck",
+      "type": "enum",
+      "variants": ["ok", "error"]
+    },
+    {
+      "name": "UartEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "frame",
+          "fields": [
+            {
+              "name": "value",
+              "type": "u16"
+            },
+            {
+              "name": "parity",
+              "type": {
+                "option": "ParityCheck"
+              }
+            },
+            {
+              "name": "framingOk",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "break",
+          "fields": [
+            {
+              "name": "ticks",
+              "type": "u64"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Parity",
+      "type": "enum",
+      "variants": ["none", "even", "odd", "mark", "space"]
+    },
+    {
+      "name": "StopBits",
+      "type": "enum",
+      "variants": ["one", "one-and-a-half", "two"]
+    },
+    {
+      "name": "BitOrder",
+      "type": "enum",
+      "variants": ["lsb-first", "msb-first"]
+    },
+    {
+      "name": "UartConfig",
+      "type": "record",
+      "fields": [
+        {
+          "name": "line",
+          "type": "u8",
+          "channel": true
+        },
+        {
+          "name": "baud",
+          "type": "u32"
+        },
+        {
+          "name": "dataBits",
+          "type": "u8"
+        },
+        {
+          "name": "parity",
+          "type": "Parity"
+        },
+        {
+          "name": "stopBits",
+          "type": "StopBits"
+        },
+        {
+          "name": "bitOrder",
+          "type": "BitOrder"
+        },
+        {
+          "name": "inverted",
+          "type": "bool"
+        },
+        {
+          "name": "samplePoint",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "Timing",
+      "type": "record",
+      "fields": [
+        {
+          "name": "rate",
+          "type": "u64"
+        },
+        {
+          "name": "baud",
+          "type": "u64"
+        },
+        {
+          "name": "samplePoint",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "Found",
+      "type": "record",
+      "fields": [
+        {
+          "name": "at",
+          "type": "provenance"
+        },
+        {
+          "name": "event",
+          "type": "UartEvent"
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "uart.events",
+        "version": 1
+      },
+      "event": "UartEvent"
+    }
+  ],
+  "functions": [
+    {
+      "name": "parityBit",
+      "body": [
+        {
+          "stmt": "let",
+          "name": "oddOnes",
+          "value": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "binary",
+              "op": "rem",
+              "left": {
+                "expr": "intrinsic",
+                "name": "count-ones",
+                "args": [
+                  {
+                    "expr": "local",
+                    "name": "value"
+                  }
+                ]
+              },
+              "right": {
+                "expr": "lit",
+                "value": 2
+              }
+            },
+            "right": {
+              "expr": "lit",
+              "value": 1
+            }
+          },
+          "type": "bool"
+        },
+        {
+          "stmt": "match",
+          "value": {
+            "expr": "local",
+            "name": "parity"
+          },
+          "arms": [
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["none"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "none"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["even"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "local",
+                    "name": "oddOnes"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["odd"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "unary",
+                    "op": "not",
+                    "value": {
+                      "expr": "local",
+                      "name": "oddOnes"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["mark"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": true
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["space"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": false
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "name": "parity",
+          "type": "Parity"
+        },
+        {
+          "name": "value",
+          "type": "u16"
+        }
+      ],
+      "ret": {
+        "option": "bool"
+      }
+    },
+    {
+      "name": "halfBits",
+      "body": [
+        {
+          "stmt": "match",
+          "value": {
+            "expr": "local",
+            "name": "stopBits"
+          },
+          "arms": [
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["one"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": 2
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["one-and-a-half"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": 3
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["two"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "lit",
+                    "value": 4
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "name": "stopBits",
+          "type": "StopBits"
+        }
+      ],
+      "ret": "u8"
+    },
+    {
+      "name": "length",
+      "body": [
+        {
+          "stmt": "let",
+          "name": "whole",
+          "value": {
+            "expr": "binary",
+            "op": "add",
+            "left": {
+              "expr": "binary",
+              "op": "add",
+              "left": {
+                "expr": "lit",
+                "value": 1
+              },
+              "right": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "config"
+                },
+                "name": "dataBits"
+              }
+            },
+            "right": {
+              "expr": "intrinsic",
+              "name": "from-bool",
+              "args": [
+                {
+                  "expr": "binary",
+                  "op": "ne",
+                  "left": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "config"
+                    },
+                    "name": "parity"
+                  },
+                  "right": {
+                    "expr": "enum",
+                    "type": "Parity",
+                    "value": "none"
+                  }
+                }
+              ]
+            }
+          },
+          "type": "u64"
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "binary",
+            "op": "add",
+            "left": {
+              "expr": "binary",
+              "op": "mul",
+              "left": {
+                "expr": "lit",
+                "value": 200
+              },
+              "right": {
+                "expr": "local",
+                "name": "whole"
+              }
+            },
+            "right": {
+              "expr": "binary",
+              "op": "mul",
+              "left": {
+                "expr": "lit",
+                "value": 100
+              },
+              "right": {
+                "expr": "call",
+                "name": "halfBits",
+                "args": [
+                  {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "config"
+                    },
+                    "name": "stopBits"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "config",
+          "type": "UartConfig"
+        }
+      ],
+      "ret": "u64"
+    },
+    {
+      "name": "validate",
+      "body": [
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "field",
+              "of": {
+                "expr": "local",
+                "name": "config"
+              },
+              "name": "baud"
+            },
+            "right": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "text",
+                "value": "the baud rate must be above zero"
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "or",
+            "left": {
+              "expr": "binary",
+              "op": "lt",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "config"
+                },
+                "name": "dataBits"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 5
+              }
+            },
+            "right": {
+              "expr": "binary",
+              "op": "gt",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "config"
+                },
+                "name": "dataBits"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 9
+              }
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "format",
+                "parts": [
+                  {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "config"
+                    },
+                    "name": "dataBits"
+                  },
+                  {
+                    "expr": "text",
+                    "value": " data bits; 5 to 9 are supported"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "or",
+            "left": {
+              "expr": "binary",
+              "op": "lt",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "config"
+                },
+                "name": "samplePoint"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 1
+              }
+            },
+            "right": {
+              "expr": "binary",
+              "op": "gt",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "config"
+                },
+                "name": "samplePoint"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 99
+              }
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "format",
+                "parts": [
+                  {
+                    "expr": "text",
+                    "value": "a sample point at "
+                  },
+                  {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "config"
+                    },
+                    "name": "samplePoint"
+                  },
+                  {
+                    "expr": "text",
+                    "value": "% of the bit; 1% to 99% are supported"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "ge",
+            "left": {
+              "expr": "field",
+              "of": {
+                "expr": "local",
+                "name": "config"
+              },
+              "name": "line"
+            },
+            "right": {
+              "expr": "intrinsic",
+              "name": "max-channels",
+              "args": []
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "format",
+                "parts": [
+                  {
+                    "expr": "text",
+                    "value": "channel "
+                  },
+                  {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "config"
+                    },
+                    "name": "line"
+                  },
+                  {
+                    "expr": "text",
+                    "value": " is out of range; channels are 0 to "
+                  },
+                  {
+                    "expr": "binary",
+                    "op": "sub",
+                    "left": {
+                      "expr": "intrinsic",
+                      "name": "max-channels",
+                      "args": []
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "none"
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "config",
+          "type": "UartConfig"
+        }
+      ],
+      "ret": {
+        "option": "text"
+      }
+    },
+    {
+      "name": "timingOf",
+      "body": [
+        {
+          "stmt": "let",
+          "name": "baud",
+          "value": {
+            "expr": "field",
+            "of": {
+              "expr": "local",
+              "name": "config"
+            },
+            "name": "baud"
+          },
+          "type": "u64"
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "and",
+            "left": {
+              "expr": "binary",
+              "op": "gt",
+              "left": {
+                "expr": "local",
+                "name": "baud"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 0
+              }
+            },
+            "right": {
+              "expr": "binary",
+              "op": "ge",
+              "left": {
+                "expr": "binary",
+                "op": "div",
+                "left": {
+                  "expr": "local",
+                  "name": "rate"
+                },
+                "right": {
+                  "expr": "local",
+                  "name": "baud"
+                }
+              },
+              "right": {
+                "expr": "lit",
+                "value": 2
+              }
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "record",
+                "type": "Timing",
+                "fields": {
+                  "rate": {
+                    "expr": "local",
+                    "name": "rate"
+                  },
+                  "baud": {
+                    "expr": "local",
+                    "name": "baud"
+                  },
+                  "samplePoint": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "config"
+                    },
+                    "name": "samplePoint"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "none"
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "config",
+          "type": "UartConfig"
+        },
+        {
+          "name": "rate",
+          "type": "u64"
+        }
+      ],
+      "ret": {
+        "option": "Timing"
+      }
+    },
+    {
+      "name": "ticks",
+      "body": [
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "intrinsic",
+            "name": "mul-div",
+            "args": [
+              {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "timing"
+                },
+                "name": "rate"
+              },
+              {
+                "expr": "local",
+                "name": "position"
+              },
+              {
+                "expr": "binary",
+                "op": "mul",
+                "left": {
+                  "expr": "lit",
+                  "value": 200
+                },
+                "right": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "timing"
+                  },
+                  "name": "baud"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "timing",
+          "type": "Timing"
+        },
+        {
+          "name": "position",
+          "type": "u64"
+        }
+      ],
+      "ret": "u64"
+    },
+    {
+      "name": "bitPoint",
+      "body": [
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "call",
+            "name": "ticks",
+            "args": [
+              {
+                "expr": "local",
+                "name": "timing"
+              },
+              {
+                "expr": "binary",
+                "op": "add",
+                "left": {
+                  "expr": "binary",
+                  "op": "mul",
+                  "left": {
+                    "expr": "lit",
+                    "value": 200
+                  },
+                  "right": {
+                    "expr": "local",
+                    "name": "bit"
+                  }
+                },
+                "right": {
+                  "expr": "binary",
+                  "op": "mul",
+                  "left": {
+                    "expr": "lit",
+                    "value": 2
+                  },
+                  "right": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "timing"
+                    },
+                    "name": "samplePoint"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "timing",
+          "type": "Timing"
+        },
+        {
+          "name": "bit",
+          "type": "u64"
+        }
+      ],
+      "ret": "u64"
+    },
+    {
+      "name": "halfBitPoint",
+      "body": [
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "call",
+            "name": "ticks",
+            "args": [
+              {
+                "expr": "local",
+                "name": "timing"
+              },
+              {
+                "expr": "binary",
+                "op": "add",
+                "left": {
+                  "expr": "binary",
+                  "op": "mul",
+                  "left": {
+                    "expr": "lit",
+                    "value": 200
+                  },
+                  "right": {
+                    "expr": "local",
+                    "name": "bit"
+                  }
+                },
+                "right": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "timing"
+                  },
+                  "name": "samplePoint"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "timing",
+          "type": "Timing"
+        },
+        {
+          "name": "bit",
+          "type": "u64"
+        }
+      ],
+      "ret": "u64"
+    }
+  ],
+  "decoder": {
+    "name": "uart",
+    "category": "bus",
+    "config": {
+      "type": "UartConfig",
+      "defaults": {
+        "line": 0,
+        "baud": 115200,
+        "dataBits": 8,
+        "parity": "none",
+        "stopBits": "one",
+        "bitOrder": "lsb-first",
+        "inverted": false,
+        "samplePoint": 50
+      },
+      "validate": "validate"
+    },
+    "input": {
+      "kind": "logic"
+    },
+    "output": {
+      "schema": {
+        "name": "uart.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "hold",
+        "body": [
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "self",
+              "field": "start"
+            }
+          }
+        ],
+        "ret": {
+          "option": "u64"
+        }
+      },
+      {
+        "name": "onGap",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "start"
+            },
+            "value": {
+              "expr": "none"
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "range",
+            "type": "range"
+          }
+        ]
+      },
+      {
+        "name": "mark",
+        "body": [
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "binary",
+              "op": "ne",
+              "left": {
+                "expr": "intrinsic",
+                "name": "levels-high",
+                "args": [
+                  {
+                    "expr": "local",
+                    "name": "levels"
+                  },
+                  {
+                    "expr": "field",
+                    "of": {
+                      "expr": "self",
+                      "field": "config"
+                    },
+                    "name": "line"
+                  }
+                ]
+              },
+              "right": {
+                "expr": "field",
+                "of": {
+                  "expr": "self",
+                  "field": "config"
+                },
+                "name": "inverted"
+              }
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "levels",
+            "type": "levels"
+          }
+        ],
+        "ret": "bool"
+      },
+      {
+        "name": "read",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "intrinsic",
+              "name": "seek",
+              "args": [
+                {
+                  "expr": "binary",
+                  "op": "add",
+                  "left": {
+                    "expr": "local",
+                    "name": "start"
+                  },
+                  "right": {
+                    "expr": "local",
+                    "name": "offset"
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "method",
+              "name": "mark",
+              "args": [
+                {
+                  "expr": "await",
+                  "op": {
+                    "op": "sample"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "start",
+            "type": "u64"
+          },
+          {
+            "name": "offset",
+            "type": "u64"
+          }
+        ],
+        "ret": "bool"
+      },
+      {
+        "name": "character",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "config",
+            "value": {
+              "expr": "self",
+              "field": "config"
+            },
+            "type": "UartConfig"
+          },
+          {
+            "stmt": "let",
+            "name": "startBit",
+            "value": {
+              "expr": "call",
+              "name": "bitPoint",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "timing"
+                },
+                {
+                  "expr": "lit",
+                  "value": 0
+                }
+              ]
+            },
+            "type": "u64"
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "and",
+              "left": {
+                "expr": "binary",
+                "op": "gt",
+                "left": {
+                  "expr": "local",
+                  "name": "startBit"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              "right": {
+                "expr": "await",
+                "op": {
+                  "op": "method",
+                  "name": "read",
+                  "args": [
+                    {
+                      "expr": "local",
+                      "name": "start"
+                    },
+                    {
+                      "expr": "local",
+                      "name": "startBit"
+                    }
+                  ]
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "none"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "dataBits",
+            "value": {
+              "expr": "field",
+              "of": {
+                "expr": "local",
+                "name": "config"
+              },
+              "name": "dataBits"
+            },
+            "type": "u64"
+          },
+          {
+            "stmt": "let",
+            "name": "value",
+            "value": {
+              "expr": "lit",
+              "value": 0
+            },
+            "mutable": true,
+            "type": "u16"
+          },
+          {
+            "stmt": "for",
+            "var": "i",
+            "from": {
+              "expr": "lit",
+              "value": 0
+            },
+            "to": {
+              "expr": "local",
+              "name": "dataBits"
+            },
+            "body": [
+              {
+                "stmt": "let",
+                "name": "one",
+                "value": {
+                  "expr": "intrinsic",
+                  "name": "from-bool",
+                  "args": [
+                    {
+                      "expr": "await",
+                      "op": {
+                        "op": "method",
+                        "name": "read",
+                        "args": [
+                          {
+                            "expr": "local",
+                            "name": "start"
+                          },
+                          {
+                            "expr": "call",
+                            "name": "bitPoint",
+                            "args": [
+                              {
+                                "expr": "local",
+                                "name": "timing"
+                              },
+                              {
+                                "expr": "binary",
+                                "op": "add",
+                                "left": {
+                                  "expr": "lit",
+                                  "value": 1
+                                },
+                                "right": {
+                                  "expr": "local",
+                                  "name": "i"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                },
+                "type": "u16"
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "value"
+                },
+                "value": {
+                  "expr": "ternary",
+                  "cond": {
+                    "expr": "binary",
+                    "op": "eq",
+                    "left": {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "config"
+                      },
+                      "name": "bitOrder"
+                    },
+                    "right": {
+                      "expr": "enum",
+                      "type": "BitOrder",
+                      "value": "lsb-first"
+                    }
+                  },
+                  "then": {
+                    "expr": "binary",
+                    "op": "bit-or",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "binary",
+                      "op": "shl",
+                      "left": {
+                        "expr": "local",
+                        "name": "one"
+                      },
+                      "right": {
+                        "expr": "local",
+                        "name": "i"
+                      }
+                    }
+                  },
+                  "else": {
+                    "expr": "binary",
+                    "op": "bit-or",
+                    "left": {
+                      "expr": "binary",
+                      "op": "shl",
+                      "left": {
+                        "expr": "local",
+                        "name": "value"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 1
+                      }
+                    },
+                    "right": {
+                      "expr": "local",
+                      "name": "one"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "next",
+            "value": {
+              "expr": "binary",
+              "op": "add",
+              "left": {
+                "expr": "lit",
+                "value": 1
+              },
+              "right": {
+                "expr": "local",
+                "name": "dataBits"
+              }
+            },
+            "mutable": true,
+            "type": "u64"
+          },
+          {
+            "stmt": "let",
+            "name": "allSpace",
+            "value": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "value"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 0
+              }
+            },
+            "mutable": true,
+            "type": "bool"
+          },
+          {
+            "stmt": "let",
+            "name": "parity",
+            "value": {
+              "expr": "none"
+            },
+            "mutable": true,
+            "type": {
+              "option": "ParityCheck"
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "wanted",
+            "value": {
+              "expr": "call",
+              "name": "parityBit",
+              "args": [
+                {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "config"
+                  },
+                  "name": "parity"
+                },
+                {
+                  "expr": "local",
+                  "name": "value"
+                }
+              ]
+            },
+            "type": {
+              "option": "bool"
+            }
+          },
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "local",
+              "name": "wanted"
+            },
+            "bind": "wanted",
+            "then": [
+              {
+                "stmt": "let",
+                "name": "bit",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "read",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "start"
+                      },
+                      {
+                        "expr": "call",
+                        "name": "bitPoint",
+                        "args": [
+                          {
+                            "expr": "local",
+                            "name": "timing"
+                          },
+                          {
+                            "expr": "local",
+                            "name": "next"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "type": "bool"
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "next"
+                },
+                "op": "add",
+                "value": {
+                  "expr": "lit",
+                  "value": 1
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "allSpace"
+                },
+                "value": {
+                  "expr": "binary",
+                  "op": "and",
+                  "left": {
+                    "expr": "local",
+                    "name": "allSpace"
+                  },
+                  "right": {
+                    "expr": "unary",
+                    "op": "not",
+                    "value": {
+                      "expr": "local",
+                      "name": "bit"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "parity"
+                },
+                "value": {
+                  "expr": "ternary",
+                  "cond": {
+                    "expr": "binary",
+                    "op": "eq",
+                    "left": {
+                      "expr": "local",
+                      "name": "bit"
+                    },
+                    "right": {
+                      "expr": "local",
+                      "name": "wanted"
+                    }
+                  },
+                  "then": {
+                    "expr": "enum",
+                    "type": "ParityCheck",
+                    "value": "ok"
+                  },
+                  "else": {
+                    "expr": "enum",
+                    "type": "ParityCheck",
+                    "value": "error"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "second",
+            "value": {
+              "expr": "ternary",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "config"
+                  },
+                  "name": "stopBits"
+                },
+                "right": {
+                  "expr": "enum",
+                  "type": "StopBits",
+                  "value": "one"
+                }
+              },
+              "then": {
+                "expr": "none"
+              },
+              "else": {
+                "expr": "ternary",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "config"
+                    },
+                    "name": "stopBits"
+                  },
+                  "right": {
+                    "expr": "enum",
+                    "type": "StopBits",
+                    "value": "two"
+                  }
+                },
+                "then": {
+                  "expr": "call",
+                  "name": "bitPoint",
+                  "args": [
+                    {
+                      "expr": "local",
+                      "name": "timing"
+                    },
+                    {
+                      "expr": "binary",
+                      "op": "add",
+                      "left": {
+                        "expr": "local",
+                        "name": "next"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 1
+                      }
+                    }
+                  ]
+                },
+                "else": {
+                  "expr": "call",
+                  "name": "halfBitPoint",
+                  "args": [
+                    {
+                      "expr": "local",
+                      "name": "timing"
+                    },
+                    {
+                      "expr": "binary",
+                      "op": "add",
+                      "left": {
+                        "expr": "local",
+                        "name": "next"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 1
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "framingOk",
+            "value": {
+              "expr": "lit",
+              "value": true
+            },
+            "mutable": true,
+            "type": "bool"
+          },
+          {
+            "stmt": "let",
+            "name": "settled",
+            "value": {
+              "expr": "local",
+              "name": "start"
+            },
+            "mutable": true,
+            "type": "u64"
+          },
+          {
+            "stmt": "for-each",
+            "var": "point",
+            "array": {
+              "expr": "array",
+              "items": [
+                {
+                  "expr": "call",
+                  "name": "bitPoint",
+                  "args": [
+                    {
+                      "expr": "local",
+                      "name": "timing"
+                    },
+                    {
+                      "expr": "local",
+                      "name": "next"
+                    }
+                  ]
+                },
+                {
+                  "expr": "local",
+                  "name": "second"
+                }
+              ]
+            },
+            "body": [
+              {
+                "stmt": "let-some",
+                "bind": "point",
+                "value": {
+                  "expr": "local",
+                  "name": "point"
+                },
+                "else": [
+                  {
+                    "stmt": "continue"
+                  }
+                ]
+              },
+              {
+                "stmt": "let",
+                "name": "bit",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "read",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "start"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "point"
+                      }
+                    ]
+                  }
+                },
+                "type": "bool"
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "framingOk"
+                },
+                "value": {
+                  "expr": "binary",
+                  "op": "and",
+                  "left": {
+                    "expr": "local",
+                    "name": "framingOk"
+                  },
+                  "right": {
+                    "expr": "local",
+                    "name": "bit"
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "allSpace"
+                },
+                "value": {
+                  "expr": "binary",
+                  "op": "and",
+                  "left": {
+                    "expr": "local",
+                    "name": "allSpace"
+                  },
+                  "right": {
+                    "expr": "unary",
+                    "op": "not",
+                    "value": {
+                      "expr": "local",
+                      "name": "bit"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "settled"
+                },
+                "value": {
+                  "expr": "binary",
+                  "op": "add",
+                  "left": {
+                    "expr": "local",
+                    "name": "start"
+                  },
+                  "right": {
+                    "expr": "local",
+                    "name": "point"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "local",
+              "name": "allSpace"
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "lineBreak",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "start"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "end",
+            "value": {
+              "expr": "binary",
+              "op": "add",
+              "left": {
+                "expr": "local",
+                "name": "start"
+              },
+              "right": {
+                "expr": "call",
+                "name": "ticks",
+                "args": [
+                  {
+                    "expr": "local",
+                    "name": "timing"
+                  },
+                  {
+                    "expr": "call",
+                    "name": "length",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "config"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "record",
+              "type": "Found",
+              "fields": {
+                "at": {
+                  "expr": "intrinsic",
+                  "name": "over",
+                  "args": [
+                    {
+                      "expr": "local",
+                      "name": "start"
+                    },
+                    {
+                      "expr": "local",
+                      "name": "end"
+                    },
+                    {
+                      "expr": "local",
+                      "name": "settled"
+                    }
+                  ]
+                },
+                "event": {
+                  "expr": "variant",
+                  "type": "UartEvent",
+                  "kind": "frame",
+                  "fields": {
+                    "value": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "parity": {
+                      "expr": "local",
+                      "name": "parity"
+                    },
+                    "framingOk": {
+                      "expr": "local",
+                      "name": "framingOk"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "timing",
+            "type": "Timing"
+          },
+          {
+            "name": "start",
+            "type": "u64"
+          }
+        ],
+        "ret": {
+          "option": "Found"
+        }
+      },
+      {
+        "name": "lineBreak",
+        "body": [
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "edge",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "next-change",
+                    "mask": {
+                      "expr": "self",
+                      "field": "watch"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "method",
+                  "name": "mark",
+                  "args": [
+                    {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "edge"
+                      },
+                      "name": "levels"
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "stmt": "return",
+                    "value": {
+                      "expr": "record",
+                      "type": "Found",
+                      "fields": {
+                        "at": {
+                          "expr": "intrinsic",
+                          "name": "over",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "start"
+                            },
+                            {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "edge"
+                              },
+                              "name": "tick"
+                            },
+                            {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "edge"
+                              },
+                              "name": "tick"
+                            }
+                          ]
+                        },
+                        "event": {
+                          "expr": "variant",
+                          "type": "UartEvent",
+                          "kind": "break",
+                          "fields": {
+                            "ticks": {
+                              "expr": "binary",
+                              "op": "sub",
+                              "left": {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "local",
+                                  "name": "edge"
+                                },
+                                "name": "tick"
+                              },
+                              "right": {
+                                "expr": "local",
+                                "name": "start"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "start",
+            "type": "u64"
+          }
+        ],
+        "ret": "Found"
+      },
+      {
+        "name": "run",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "timing",
+            "value": {
+              "expr": "self",
+              "field": "timing"
+            },
+            "type": {
+              "option": "Timing"
+            }
+          },
+          {
+            "stmt": "let-some",
+            "bind": "timing",
+            "value": {
+              "expr": "local",
+              "name": "timing"
+            },
+            "else": [
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "edge",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "next-change",
+                    "mask": {
+                      "expr": "self",
+                      "field": "watch"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "method",
+                  "name": "mark",
+                  "args": [
+                    {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "edge"
+                      },
+                      "name": "levels"
+                    }
+                  ]
+                },
+                "then": [
+                  {
+                    "stmt": "continue"
+                  }
+                ]
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "start"
+                },
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "edge"
+                  },
+                  "name": "tick"
+                }
+              },
+              {
+                "stmt": "let",
+                "name": "found",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "character",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "timing"
+                      },
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "edge"
+                        },
+                        "name": "tick"
+                      }
+                    ]
+                  }
+                },
+                "type": {
+                  "option": "Found"
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "start"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "if-some",
+                "value": {
+                  "expr": "local",
+                  "name": "found"
+                },
+                "bind": "found",
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "found"
+                          },
+                          "name": "event"
+                        },
+                        "at": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "found"
+                          },
+                          "name": "at"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true
+      }
+    ],
+    "requires": [
+      {
+        "key": "channels",
+        "requirement": "at-least",
+        "values": [
+          {
+            "expr": "binary",
+            "op": "add",
+            "left": {
+              "expr": "field",
+              "of": {
+                "expr": "local",
+                "name": "config"
+              },
+              "name": "line"
+            },
+            "right": {
+              "expr": "lit",
+              "value": 1
+            }
+          }
+        ]
+      },
+      {
+        "key": "rateHz",
+        "requirement": "at-least",
+        "values": [
+          {
+            "expr": "binary",
+            "op": "mul",
+            "left": {
+              "expr": "lit",
+              "value": 2
+            },
+            "right": {
+              "expr": "field",
+              "of": {
+                "expr": "local",
+                "name": "config"
+              },
+              "name": "baud"
+            }
+          }
+        ]
+      }
+    ],
+    "props": [
+      {
+        "key": "baud",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "baud"
+        }
+      },
+      {
+        "key": "dataBits",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "dataBits"
+        }
+      },
+      {
+        "key": "parity",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "parity"
+        }
+      },
+      {
+        "key": "stopBits",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "stopBits"
+        }
+      },
+      {
+        "key": "bitOrder",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "bitOrder"
+        }
+      }
+    ],
+    "state": [
+      {
+        "name": "timing",
+        "type": {
+          "option": "Timing"
+        },
+        "init": {
+          "expr": "call",
+          "name": "timingOf",
+          "args": [
+            {
+              "expr": "self",
+              "field": "config"
+            },
+            {
+              "expr": "self",
+              "field": "rate"
+            }
+          ]
+        },
+        "readonly": true
+      },
+      {
+        "name": "watch",
+        "type": "mask",
+        "init": {
+          "expr": "intrinsic",
+          "name": "mask",
+          "args": [
+            {
+              "expr": "field",
+              "of": {
+                "expr": "self",
+                "field": "config"
+              },
+              "name": "line"
+            }
+          ]
+        },
+        "readonly": true
+      },
+      {
+        "name": "start",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      }
+    ]
+  }
+}
