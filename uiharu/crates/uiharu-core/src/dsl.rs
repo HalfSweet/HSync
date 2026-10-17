@@ -8,12 +8,14 @@
 //! `run` or `transaction`, call its hooks and pass gaps, progress and the end on; the
 //! operation wrappers on the decoder traits turn progress into a forward held back to `hold()`
 //! and a gap or the end into a [`Cut`] that unwinds the body; [`FramedBus`] is the cursor over
-//! any framed contract, generic over how the contract frames its traffic ([`Framed`]);
-//! [`Batch`] is the one buffer a decoder keeps; [`Int`] is the integer arithmetic of the DSL.
+//! any framed contract, generic over how the contract frames its traffic — declared on the
+//! event type ([`Framed`]) or handed over as data ([`Framer`]); [`Batch`] is the one buffer a
+//! decoder keeps; [`Int`] is the integer arithmetic of the DSL.
 
 use std::cell::Cell;
 use std::fmt;
 use std::future::Future;
+use std::marker::PhantomData;
 use std::rc::Rc;
 
 use crate::node::{Inbox, Outbox, ProgressSink, Provenance};
@@ -295,6 +297,70 @@ pub trait Framed: EventSchema + Clone {
     }
 }
 
+/// How a stream of `E` events frames its traffic, as a cursor reads it: the framing a contract
+/// declares on its event type ([`Declared`], over [`Framed`]), or one given as data, for a
+/// contract known only at run time — a decoder interpreted from its IR reads events it has no
+/// Rust type for.
+pub trait Framer<E> {
+    /// What names a frame on its events.
+    type Id: Copy + PartialEq + fmt::Debug;
+    /// What the frame's items carry: the item event without its kind and the frame's id.
+    type Item: Clone + fmt::Debug;
+
+    /// What the event is to the framing.
+    fn frame(&self, event: &E) -> Frame<Self::Id, Self::Item>;
+
+    /// The id of the one frame of a bus without a framing line, which never begins or ends;
+    /// `None` when every frame begins and ends.
+    fn unframed(&self) -> Option<Self::Id> {
+        None
+    }
+}
+
+/// The framing an event type declares itself through [`Framed`]: the framer of every contract
+/// written in Rust or generated from the DSL.
+pub struct Declared<E>(PhantomData<fn() -> E>);
+
+impl<E> Declared<E> {
+    /// The framing `E` declares.
+    pub const fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<E> Default for Declared<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<E> Clone for Declared<E> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<E> Copy for Declared<E> {}
+
+impl<E> fmt::Debug for Declared<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("Declared")
+    }
+}
+
+impl<E: Framed> Framer<E> for Declared<E> {
+    type Id = E::Id;
+    type Item = E::Item;
+
+    fn frame(&self, event: &E) -> Frame<Self::Id, Self::Item> {
+        event.frame()
+    }
+
+    fn unframed(&self) -> Option<Self::Id> {
+        E::unframed()
+    }
+}
+
 /// What an event of a framed contract is to its framing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Frame<I, T> {
@@ -316,10 +382,10 @@ pub enum Read<T> {
 
 /// What [`FramedBus::next`] finds.
 #[derive(Debug)]
-pub enum Next<'a, E: Framed> {
+pub enum Next<'a, E, F: Framer<E> = Declared<E>> {
     /// A frame begins; on a bus without a framing line, the unframed frame continues from
     /// its next item.
-    Transaction(Transaction<'a, E>),
+    Transaction(Transaction<'a, E, F>),
     Gap(TickRange),
     Progress(Tick),
     End(Tick),
@@ -380,16 +446,18 @@ impl Consumed {
 /// [`Transaction::item_or_end`], and running out of items anywhere else is an error naming
 /// how the frame ended. Progress met inside a frame is passed on through the output's
 /// progress sink, held back to what was consumed since the provenance was last taken and to
-/// what the decoder says it still holds.
-pub struct FramedBus<E: Framed> {
+/// what the decoder says it still holds. The framing is the event type's own
+/// ([`Declared`]) unless the cursor is made with another [`Framer`].
+pub struct FramedBus<E, F: Framer<E> = Declared<E>> {
     inbox: Inbox<E>,
     progress: ProgressSink,
-    current: Option<Current<E::Id>>,
+    current: Option<Current<F::Id>>,
     /// The ticks of the items consumed since [`FramedBus::consumed`] last took them.
     consumed: Consumed,
+    framer: F,
 }
 
-impl<E: Framed> fmt::Debug for FramedBus<E> {
+impl<E, F: Framer<E>> fmt::Debug for FramedBus<E, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("FramedBus")
             .field("current", &self.current)
@@ -399,8 +467,8 @@ impl<E: Framed> fmt::Debug for FramedBus<E> {
 }
 
 /// What the next item of the stream means to a reader waiting for a frame.
-enum Start<E: Framed> {
-    Begin(Event<E>, E::Id, bool),
+enum Start<E, F: Framer<E>> {
+    Begin(Event<E>, F::Id, bool),
     Unframed,
     Skip(Event<E>),
     Gap(TickRange),
@@ -409,8 +477,8 @@ enum Start<E: Framed> {
 }
 
 /// What the next item of the stream means to the frame being read.
-enum Peeked<E: Framed> {
-    Item(Event<E>, E::Item),
+enum Peeked<E, F: Framer<E>> {
+    Item(Event<E>, F::Item),
     End(Event<E>, bool),
     Foreign,
     Gap(TickRange),
@@ -426,12 +494,31 @@ impl<E: Framed> FramedBus<E> {
 
     /// A reader whose consumed ticks are shared through `consumed`.
     pub fn sharing(inbox: Inbox<E>, progress: ProgressSink, consumed: Consumed) -> Self {
+        Self::framed_by(inbox, progress, consumed, Declared::new())
+    }
+}
+
+impl<E: Clone, F: Framer<E>> FramedBus<E, F> {
+    /// A reader on `inbox` framed by `framer`, passing progress on through `progress`, with
+    /// its consumed ticks shared through `consumed`.
+    pub fn framed_by(
+        inbox: Inbox<E>,
+        progress: ProgressSink,
+        consumed: Consumed,
+        framer: F,
+    ) -> Self {
         Self {
             inbox,
             progress,
             current: None,
             consumed,
+            framer,
         }
+    }
+
+    /// How the stream is framed.
+    pub fn framer(&self) -> &F {
+        &self.framer
     }
 
     fn consume(&mut self, event: &Event<E>) {
@@ -457,19 +544,26 @@ impl<E: Framed> FramedBus<E> {
     /// skipped: their beginning was consumed by an earlier frame that was not drained, which
     /// [`FramedBus::finish`] prevents. The items of the unframed frame open it at the first
     /// of them, which is left for the frame to read.
-    pub async fn next(&mut self) -> Next<'_, E> {
+    pub async fn next(&mut self) -> Next<'_, E, F> {
         loop {
+            let framer = &self.framer;
             let start = self
                 .inbox
-                .peek_with(|item| match item {
-                    Item::Event(event) => match event.payload.frame() {
-                        Frame::Begin { id, partial } => Start::Begin(event.clone(), id, partial),
-                        Frame::Item { id, .. } if E::unframed() == Some(id) => Start::Unframed,
-                        Frame::Item { .. } | Frame::End { .. } => Start::Skip(event.clone()),
-                    },
-                    Item::Gap(range) => Start::Gap(*range),
-                    Item::Progress(tick) => Start::Progress(*tick),
-                    Item::End(tick) => Start::End(*tick),
+                .peek_with(|item| -> Start<E, F> {
+                    match item {
+                        Item::Event(event) => match framer.frame(&event.payload) {
+                            Frame::Begin { id, partial } => {
+                                Start::Begin(event.clone(), id, partial)
+                            }
+                            Frame::Item { id, .. } if framer.unframed() == Some(id) => {
+                                Start::Unframed
+                            }
+                            Frame::Item { .. } | Frame::End { .. } => Start::Skip(event.clone()),
+                        },
+                        Item::Gap(range) => Start::Gap(*range),
+                        Item::Progress(tick) => Start::Progress(*tick),
+                        Item::End(tick) => Start::End(*tick),
+                    }
                 })
                 .await;
             let (id, partial) = match start {
@@ -477,7 +571,7 @@ impl<E: Framed> FramedBus<E> {
                     self.consume(&event);
                     (id, partial)
                 }
-                Start::Unframed => match E::unframed() {
+                Start::Unframed => match self.framer.unframed() {
                     Some(id) => (id, false),
                     None => continue,
                 },
@@ -512,7 +606,7 @@ impl<E: Framed> FramedBus<E> {
     /// and is simply handed back.
     pub async fn finish(&mut self) -> Result<(), ReadError> {
         let result = match &self.current {
-            Some(current) if !current.ended && E::unframed() != Some(current.id) => {
+            Some(current) if !current.ended && self.framer.unframed() != Some(current.id) => {
                 Transaction { bus: self }.drain().await
             }
             _ => Ok(()),
@@ -522,7 +616,7 @@ impl<E: Framed> FramedBus<E> {
     }
 
     /// Takes the next item of the current frame, or reports how it ended instead.
-    async fn next_item(&mut self) -> Result<Option<E::Item>, ReadError> {
+    async fn next_item(&mut self) -> Result<Option<F::Item>, ReadError> {
         let Some(current) = self.current.as_ref() else {
             return Err(ReadError::Incomplete);
         };
@@ -531,21 +625,24 @@ impl<E: Framed> FramedBus<E> {
         }
         let id = current.id;
         loop {
+            let framer = &self.framer;
             let peeked = self
                 .inbox
-                .peek_with(|item| match item {
-                    Item::Event(event) => match event.payload.frame() {
-                        Frame::Item { id: at, item } if at == id => {
-                            Peeked::Item(event.clone(), item)
-                        }
-                        Frame::End { id: at, normal } if at == id => {
-                            Peeked::End(event.clone(), normal)
-                        }
-                        _ => Peeked::Foreign,
-                    },
-                    Item::Gap(range) => Peeked::Gap(*range),
-                    Item::Progress(tick) => Peeked::Progress(*tick),
-                    Item::End(tick) => Peeked::EndOfInput(*tick),
+                .peek_with(|item| -> Peeked<E, F> {
+                    match item {
+                        Item::Event(event) => match framer.frame(&event.payload) {
+                            Frame::Item { id: at, item } if at == id => {
+                                Peeked::Item(event.clone(), item)
+                            }
+                            Frame::End { id: at, normal } if at == id => {
+                                Peeked::End(event.clone(), normal)
+                            }
+                            _ => Peeked::Foreign,
+                        },
+                        Item::Gap(range) => Peeked::Gap(*range),
+                        Item::Progress(tick) => Peeked::Progress(*tick),
+                        Item::End(tick) => Peeked::EndOfInput(*tick),
+                    }
                 })
                 .await;
             let result = match peeked {
@@ -582,16 +679,23 @@ impl<E: Framed> FramedBus<E> {
 }
 
 /// A cursor over the items of one frame.
-#[derive(Debug)]
-pub struct Transaction<'a, E: Framed> {
-    bus: &'a mut FramedBus<E>,
+pub struct Transaction<'a, E, F: Framer<E> = Declared<E>> {
+    bus: &'a mut FramedBus<E, F>,
 }
 
-impl<E: Framed> Transaction<'_, E> {
+impl<E, F: Framer<E>> fmt::Debug for Transaction<'_, E, F> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Transaction")
+            .field("bus", &self.bus)
+            .finish()
+    }
+}
+
+impl<E: Clone, F: Framer<E>> Transaction<'_, E, F> {
     /// The frame's id.
-    pub fn id(&self) -> E::Id {
+    pub fn id(&self) -> F::Id {
         self.bus.current.as_ref().map_or_else(
-            || E::unframed().expect("a transaction has an id"),
+            || self.bus.framer.unframed().expect("a transaction has an id"),
             |current| current.id,
         )
     }
@@ -618,7 +722,7 @@ impl<E: Framed> Transaction<'_, E> {
     }
 
     /// Reads the next item; the frame's end, normal or not, is an error here.
-    pub async fn item(&mut self) -> Result<E::Item, ReadError> {
+    pub async fn item(&mut self) -> Result<F::Item, ReadError> {
         match self.item_or_end().await? {
             Read::Item(item) => Ok(item),
             Read::End => Err(ReadError::Incomplete),
@@ -626,7 +730,7 @@ impl<E: Framed> Transaction<'_, E> {
     }
 
     /// Reads the next item, or finds the frame's normal end.
-    pub async fn item_or_end(&mut self) -> Result<Read<E::Item>, ReadError> {
+    pub async fn item_or_end(&mut self) -> Result<Read<F::Item>, ReadError> {
         Ok(self.bus.next_item().await?.map_or(Read::End, Read::Item))
     }
 
@@ -955,11 +1059,17 @@ pub async fn run_stream<D: StreamDecoder>(
 /// A compiled decoder of a framed lower stream: a body per frame, and the recovery that closes
 /// a cut-off body.
 pub trait BusDecoder: Sized {
-    type Lower: Framed;
+    type Lower: Clone + 'static;
+    /// How the lower stream is framed: [`Declared`] for a contract that declares its framing
+    /// on its event type.
+    type Framer: Framer<Self::Lower>;
     type Event: 'static;
 
     /// What to do with a frame whose beginning was not seen.
     const PARTIAL: Partial;
+
+    /// The framing of the lower stream.
+    fn framer(&self) -> Self::Framer;
 
     fn hold(&self) -> Option<u64>;
 
@@ -967,7 +1077,7 @@ pub trait BusDecoder: Sized {
     fn transaction(
         &mut self,
         io: &mut BusIo<Self::Event>,
-        tx: &mut Transaction<'_, Self::Lower>,
+        tx: &mut Transaction<'_, Self::Lower, Self::Framer>,
     ) -> impl Future<Output = Result<(), Cut>>;
 
     /// Closes what a cut-off body left open, placed over what was read but not reported.
@@ -990,7 +1100,8 @@ pub trait BusDecoder: Sized {
 pub async fn run_bus<D: BusDecoder>(mut decoder: D, input: Inbox<D::Lower>, out: Outbox<D::Event>) {
     let sink = out.progress_sink();
     let consumed = Consumed::default();
-    let mut bus = FramedBus::sharing(input, sink.clone(), consumed.clone());
+    let framer = decoder.framer();
+    let mut bus = FramedBus::framed_by(input, sink.clone(), consumed.clone(), framer);
     let mut io = BusIo {
         out,
         sink,
@@ -1036,7 +1147,7 @@ pub async fn run_bus<D: BusDecoder>(mut decoder: D, input: Inbox<D::Lower>, out:
 async fn recover<D: BusDecoder>(
     decoder: &mut D,
     io: &mut BusIo<D::Event>,
-    bus: &mut FramedBus<D::Lower>,
+    bus: &mut FramedBus<D::Lower, D::Framer>,
     cut: Cut,
 ) {
     let unreported = bus.consumed();

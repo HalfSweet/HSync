@@ -18,9 +18,9 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 use uiharu_core::dsl::{
-    Batch, BusDecoder, BusIo, ConfigError, Cut, CutKind, Edge, Frame, Framed, Int, LogicDecoder,
-    LogicIo, Partial, Read, Received, StreamDecoder, StreamIo, Taken, Timed, Transaction, mul_div,
-    mul_div_ceil, required, run_bus, run_logic, run_stream,
+    Batch, BusDecoder, BusIo, ConfigError, Cut, CutKind, Declared, Edge, Frame, Framed, Int,
+    LogicDecoder, LogicIo, Partial, Read, Received, StreamDecoder, StreamIo, Taken, Timed,
+    Transaction, mul_div, mul_div_ceil, required, run_bus, run_logic, run_stream,
 };
 use uiharu_core::{
     ChannelMask, EventSchema, InputRef, InputSpec, Io, Levels, LogicBlock, MAX_CHANNELS, Node,
