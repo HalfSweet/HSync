@@ -10,9 +10,11 @@ uiharu is Apache-2.0 and written from scratch. A decoder is implemented from the
 
 ```text
 crates/uiharu-protocols/src/<name>/mod.rs       re-exports
-dsl/contracts/<name>.ts                         the contract: event types, ids, schema id, framing (generated into crates/uiharu-dsl-protocols)
+crates/uiharu-protocols/src/<name>/events.rs    the contract: event types, ids, schema id — or dsl/contracts/<name>.ts, declared
+                                                in the DSL and generated into crates/uiharu-dsl-protocols
 crates/uiharu-protocols/src/<name>/decoder.rs   the node: config, validation, props, the async run loop
-crates/uiharu-protocols/src/<name>/bus.rs       the cursor of an older hand-written contract (a contract declared in the DSL is read through FramedBus)
+crates/uiharu-protocols/src/<name>/bus.rs       the cursor consumers read a framed contract through (one declared in the DSL is
+                                                read through FramedBus instead)
 crates/uiharu-protocols/src/<name>/synth.rs     a waveform builder for tests and tools
 crates/uiharu-protocols/tests/<name>.rs         integration tests on synthesized waveforms
 docs/protocols/<name>.md                        the contract and the decoding rules, for users of the stream
@@ -22,7 +24,7 @@ A decoder built on another contract (SPI NOR on `spi.events`, an EEPROM on `i2c.
 
 ## The contract
 
-The contract is the event stream between layers — what a decoder emits and what decoders built on it read. Design it for the bus, not for the protocols above it. Declare it in the DSL — a module under `uiharu/dsl/contracts/` with the event type, its enums and the `eventSchema` call (`contracts/i2c.ts` is the model, [dsl.md](dsl.md) §2.3 describes the declaration), compiled with `pnpm dsl:compile` and generated with `uiharu-codegen` — and have the hand-written decoder emit the generated types, re-exported from its module as `src/i2c/mod.rs` does. The rules below describe what the contract says; the older contracts still written by hand (`src/microwire/events.rs` …) follow them too, until each moves to `dsl/contracts/`.
+The contract is the event stream between layers — what a decoder emits and what decoders built on it read. Design it for the bus, not for the protocols above it. It is written in Rust (`src/<name>/events.rs`, as `src/microwire/` does) or declared in the DSL — a module under `uiharu/dsl/contracts/` with the event type, its enums and the `eventSchema` call (`contracts/i2c.ts` is the model, [dsl.md](dsl.md) §2.3 describes the declaration), compiled with `pnpm dsl:compile` and generated with `uiharu-codegen`, its types re-exported from the decoder's module as `src/i2c/mod.rs` does — which is what a decoder written in the DSL needs in order to read it. The rules below describe what the contract says, whichever way it is written.
 
 - One schema per contract, `SchemaId::new("<name>.events", 1)`, implemented by the payload enum through `EventSchema`. A change that breaks readers is a new version.
 - The payload is an enum with `#[serde(tag = "kind", rename_all = "kebab-case")]` on the enum and `#[serde(rename_all = "camelCase")]` on its fields (so `period_ticks` is written `periodTicks`, as port properties are; `kind` itself cannot be a field name), fields named as the standard names them, numbers as the narrowest integer that fits (a field that may reach 2^53, such as a 64-bit identifier, is marked `#[serde(with = "uiharu_core::hex_u64")]` so that JSON carries it as a hexadecimal string), `Option` for a line that is not connected or a value that could not be seen — never a made-up zero. Events carry bus data only, no interpretation and no UI text: what a byte means is the next layer's business.
