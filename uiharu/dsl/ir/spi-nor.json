@@ -2712,7 +2712,7 @@
               "expr": "local",
               "name": "decided"
             },
-            "bind": "decided",
+            "bind": "decided_2",
             "then": [
               {
                 "stmt": "assign",
@@ -2762,7 +2762,7 @@
                         },
                         {
                           "expr": "local",
-                          "name": "decided"
+                          "name": "decided_2"
                         }
                       ]
                     }
@@ -3094,7 +3094,7 @@
           },
           {
             "stmt": "let-some",
-            "bind": "command",
+            "bind": "command_2",
             "value": {
               "expr": "local",
               "name": "command"
@@ -3155,7 +3155,7 @@
                 "args": [
                   {
                     "expr": "local",
-                    "name": "command"
+                    "name": "command_2"
                   },
                   {
                     "expr": "intrinsic",
@@ -3181,7 +3181,7 @@
               "args": [
                 {
                   "expr": "local",
-                  "name": "command"
+                  "name": "command_2"
                 }
               ]
             },
@@ -3469,7 +3469,7 @@
               "args": [
                 {
                   "expr": "local",
-                  "name": "command"
+                  "name": "command_2"
                 },
                 {
                   "expr": "local",
@@ -3533,7 +3533,7 @@
                       },
                       {
                         "stmt": "let-some",
-                        "bind": "word",
+                        "bind": "word_2",
                         "value": {
                           "expr": "local",
                           "name": "word"
@@ -3578,7 +3578,7 @@
                                   "expr": "field",
                                   "of": {
                                     "expr": "local",
-                                    "name": "word"
+                                    "name": "word_2"
                                   },
                                   "name": "miso"
                                 }
@@ -3681,7 +3681,7 @@
                       },
                       {
                         "stmt": "let-some",
-                        "bind": "word",
+                        "bind": "word_2",
                         "value": {
                           "expr": "local",
                           "name": "word"
@@ -3718,7 +3718,7 @@
                                   "expr": "field",
                                   "of": {
                                     "expr": "local",
-                                    "name": "word"
+                                    "name": "word_2"
                                   },
                                   "name": "mosi"
                                 }
@@ -3760,7 +3760,7 @@
                       },
                       {
                         "stmt": "let-some",
-                        "bind": "word",
+                        "bind": "word_2",
                         "value": {
                           "expr": "local",
                           "name": "word"
@@ -3784,7 +3784,7 @@
                             "expr": "field",
                             "of": {
                               "expr": "local",
-                              "name": "word"
+                              "name": "word_2"
                             },
                             "name": "miso"
                           }
@@ -3927,7 +3927,7 @@
                       },
                       {
                         "stmt": "let-some",
-                        "bind": "word",
+                        "bind": "word_2",
                         "value": {
                           "expr": "local",
                           "name": "word"
@@ -3967,7 +3967,7 @@
                                     "expr": "field",
                                     "of": {
                                       "expr": "local",
-                                      "name": "word"
+                                      "name": "word_2"
                                     },
                                     "name": "mosi"
                                   }
@@ -4084,7 +4084,7 @@
                       },
                       {
                         "stmt": "let-some",
-                        "bind": "word",
+                        "bind": "word_2",
                         "value": {
                           "expr": "local",
                           "name": "word"
@@ -4128,7 +4128,7 @@
                                   "expr": "field",
                                   "of": {
                                     "expr": "local",
-                                    "name": "word"
+                                    "name": "word_2"
                                   },
                                   "name": "miso"
                                 }
@@ -4148,7 +4148,7 @@
                           "expr": "local",
                           "name": "left"
                         },
-                        "bind": "left",
+                        "bind": "left_2",
                         "then": [
                           {
                             "stmt": "assign",
@@ -4156,10 +4156,17 @@
                               "expr": "local",
                               "name": "left"
                             },
-                            "op": "sub",
                             "value": {
-                              "expr": "lit",
-                              "value": 1
+                              "expr": "binary",
+                              "op": "sub",
+                              "left": {
+                                "expr": "local",
+                                "name": "left_2"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 1
+                              }
                             }
                           }
                         ]
@@ -4258,7 +4265,7 @@
                   },
                   {
                     "stmt": "let-some",
-                    "bind": "word",
+                    "bind": "word_2",
                     "value": {
                       "expr": "local",
                       "name": "word"
@@ -4312,7 +4319,7 @@
                               "expr": "field",
                               "of": {
                                 "expr": "local",
-                                "name": "word"
+                                "name": "word_2"
                               },
                               "name": "miso"
                             }

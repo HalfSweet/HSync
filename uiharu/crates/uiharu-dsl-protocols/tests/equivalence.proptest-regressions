@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc ec6e2b03b87a3df37a428eecda9f83163a62cda36009bd97779e6677fecd04fd # shrinks to config = UartConfig { line: 0, baud: 9600, data_bits: 6, parity: Even, stop_bits: OneAndAHalf, bit_order: LsbFirst, inverted: false, sample_point: 5 }, bit_samples = 2, pieces = [Byte(0, true, true)], cuts = [1], gap_seed = []
