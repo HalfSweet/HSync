@@ -78,19 +78,22 @@
           "name": "cs",
           "type": {
             "option": "u8"
-          }
+          },
+          "channel": true
         },
         {
           "name": "mosi",
           "type": {
             "option": "u8"
-          }
+          },
+          "channel": true
         },
         {
           "name": "miso",
           "type": {
             "option": "u8"
-          }
+          },
+          "channel": true
         },
         {
           "name": "mode",

@@ -206,8 +206,15 @@ export class Types {
   }
 
   /** Whether a type annotation names `Channel`. */
+  /** Whether the type names channels of the source: `Channel`, `Channel | undefined` for a
+   * line that may be left unconnected, or `Bounded<Channel, N>` for a list of them. */
   isChannelNode(node: ts.TypeNode | undefined): boolean {
-    return node !== undefined && this.isChannel(this.checker.getTypeFromTypeNode(node))
+    if (node === undefined) return false
+    let type = this.checker.getNonNullableType(this.checker.getTypeFromTypeNode(node))
+    if (type.aliasSymbol && this.isLib(type.aliasSymbol) && type.aliasSymbol.name === 'Bounded') {
+      type = type.aliasTypeArguments?.[0] ?? type
+    }
+    return this.isChannel(type)
   }
 
   /** The type definitions declared at the top of `file`, in order: interfaces as records,
