@@ -6,6 +6,7 @@
  *   &view=1860-2600      µs after the trigger shown on the timeline, once a capture is complete
  *   &segment=1910-2450   µs after the trigger marked as A–B, likewise
  *   &trig=0:fall,1:high  trigger conditions by channel index
+ *   &heights=0:60,9:90   row heights in CSS pixels by channel index
  *   &autocapture=1       start a capture once a device is open (the app starts without one)
  *   &stream=0            open the data stream on decoder 0
  *   &search=0x4F         search for this and show the first hit
@@ -98,6 +99,10 @@ export function applyDevParams(search = window.location.search): void {
     const [index, condition] = pair.split(':')
     const valid = oneOf(CONDITIONS, condition ?? null)
     if (valid && index !== undefined) channels.setTrigger(Number(index), valid)
+  }
+  for (const pair of (params.get('heights') ?? '').split(',').filter(Boolean)) {
+    const [index, height] = pair.split(':').map(Number)
+    if (Number.isInteger(index) && Number.isFinite(height)) channels.setHeight(index!, height!)
   }
 
   const streamDecoder = params.get('stream')
