@@ -4,7 +4,14 @@ import fixture from '@/ipc/mock/fixtures/protocol-demo.json'
 import decoded from '@/ipc/mock/fixtures/protocol-uiharu.json'
 
 import { groupChannels, uartFormat } from './groups'
-import { collapsedByDefault, COMFORTABLE_METRICS, layoutRows, visibleRows } from './layout'
+import {
+  clampTraceHeight,
+  collapsedByDefault,
+  COMFORTABLE_METRICS,
+  layoutRows,
+  MAX_TRACE_HEIGHT,
+  visibleRows,
+} from './layout'
 
 const channels = fixture.channels.map(({ index, name }) => ({ index, name }))
 const groups = groupChannels(channels, decoded.entries)
@@ -125,6 +132,35 @@ describe('layoutRows', () => {
     // I2C: 8 + 26 + 26 + 30 + 30 + 8 = 128.
     expect(layout.rows.find((row) => row.key === 'decoder:1:before')?.top).toBe(128)
     expect(layout.rows.find((row) => row.key === 'decoder:1:before')?.separator).toBe(true)
+  })
+
+  it('gives channels the heights the user dragged, within bounds', () => {
+    const [sda, scl] = groups[0]?.channels ?? []
+    const [miso, mosi, clk] = groups[2]?.channels ?? []
+    const own = new Map([
+      [sda?.index, 64.4],
+      [miso?.index, 1_000],
+      [mosi?.index, 3],
+    ])
+    const sized = layoutRows(groups, COMFORTABLE_METRICS, collapsedByDefault, streamsOf, (one) =>
+      own.get(one.index),
+    )
+    const row = (index?: number) => sized.rows.find((one) => one.channel?.index === index)
+    expect(row(sda?.index)?.height).toBe(64)
+    expect(row(scl?.index)?.height).toBe(COMFORTABLE_METRICS.trace)
+    expect(row(miso?.index)?.height).toBe(MAX_TRACE_HEIGHT)
+    expect(row(mosi?.index)?.height).toBe(COMFORTABLE_METRICS.traceNarrow)
+    expect(row(clk?.index)?.height).toBe(COMFORTABLE_METRICS.traceNarrow)
+    // A row keeps its kind, and the rows below move down.
+    expect(row(sda?.index)?.kind).toBe('trace')
+    expect(row(scl?.index)?.top).toBe((row(sda?.index)?.top ?? 0) + 64)
+    expect(sized.height).toBe(layout.height + (64 - 30) + (MAX_TRACE_HEIGHT - 18))
+  })
+
+  it('keeps the heights given to channels whole and within bounds', () => {
+    expect(clampTraceHeight(41.6, COMFORTABLE_METRICS)).toBe(42)
+    expect(clampTraceHeight(-20, COMFORTABLE_METRICS)).toBe(COMFORTABLE_METRICS.traceNarrow)
+    expect(clampTraceHeight(Number.POSITIVE_INFINITY, COMFORTABLE_METRICS)).toBe(MAX_TRACE_HEIGHT)
   })
 
   it('finds the rows in view', () => {
