@@ -5012,6 +5012,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "uiharu-interp"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "uiharu-core",
+ "uiharu-ir",
+ "uiharu-protocols",
+]
+
+[[package]]
 name = "uiharu-ir"
 version = "0.1.0"
 dependencies = [

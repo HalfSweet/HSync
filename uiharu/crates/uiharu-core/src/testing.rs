@@ -20,7 +20,6 @@ use crate::exec::{Exposed, Pipeline, PushError, RunReport};
 use crate::graph::{
     ExposedRef, Graph, GraphConfig, GraphError, OutputRef, SourceHandle, SourceId, SourceSpec,
 };
-use crate::schema::EventSchema;
 use crate::signal::{LogicBlock, SignalItem};
 use crate::stream::{Event, Item};
 use crate::time::{Tick, TickRange, TimeBase};
@@ -122,10 +121,7 @@ impl<T: Clone + 'static> Harness<T> {
         time_base: TimeBase,
         config: GraphConfig,
         wire: impl FnOnce(&mut Graph, SourceHandle) -> Result<OutputRef<T>, GraphError>,
-    ) -> Result<Self, GraphError>
-    where
-        T: EventSchema,
-    {
+    ) -> Result<Self, GraphError> {
         let mut graph = Graph::with_config(config);
         let source = graph.source(SourceSpec::new("logic", channels, time_base))?;
         let output = wire(&mut graph, source)?;

@@ -1,0 +1,24 @@
+[package]
+name = "uiharu-interp"
+description = "The interpreter of the uiharu decoder IR: runs a decoder module loaded at run time on the engine's runtime, as the Rust generated from it would run, without generating or compiling anything"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "Apache-2.0"
+authors.workspace = true
+publish = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
+uiharu-ir = { path = "../uiharu-ir", version = "0.1.0" }
+
+[dev-dependencies]
+proptest.workspace = true
+uiharu-core = { path = "../uiharu-core", version = "0.1.0", features = ["testing"] }
+uiharu-protocols = { path = "../uiharu-protocols", version = "0.1.0" }
+
+[lints]
+workspace = true

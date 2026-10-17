@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use crate::exec::Pipeline;
 use crate::node::{Node, NodeSpec};
-use crate::schema::{EventSchema, InputSpec, OutputSpec, Props, SchemaId};
+use crate::schema::{InputSpec, OutputSpec, Props, SchemaId};
 use crate::signal::{LogicBlock, MAX_CHANNELS};
 use crate::time::TimeBase;
 
@@ -492,16 +492,12 @@ impl Graph {
 
     /// Connects an output to an input, checking that they carry the same schema and that the
     /// output satisfies what the input requires.
-    pub fn connect<T: EventSchema>(
-        &mut self,
-        from: OutputRef<T>,
-        to: InputRef<T>,
-    ) -> Result<(), GraphError> {
+    pub fn connect<T>(&mut self, from: OutputRef<T>, to: InputRef<T>) -> Result<(), GraphError> {
         self.connect_keys(from.key, to.node, to.index)
     }
 
     /// Exposes an output under `name`, to be read from the pipeline.
-    pub fn expose<T: EventSchema>(
+    pub fn expose<T>(
         &mut self,
         name: impl Into<String>,
         from: OutputRef<T>,
