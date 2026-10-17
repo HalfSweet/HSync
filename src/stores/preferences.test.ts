@@ -16,6 +16,10 @@ describe('preferences store', () => {
     expect(store.locale).toBe('system')
   })
 
+  it('leaves the wheel alone scrolling the rows until asked to zoom with it', () => {
+    expect(usePreferencesStore().wheelZoom).toBe(false)
+  })
+
   it('resolves explicit choices', () => {
     const store = usePreferencesStore()
     store.theme = 'dark'
