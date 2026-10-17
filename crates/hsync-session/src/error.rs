@@ -37,6 +37,14 @@ pub enum SessionError {
     /// No waveform file was read for the import.
     #[error("no waveform to import")]
     NoWaveform,
+    /// A decoder module could not be loaded.
+    #[error("the decoder module {path} cannot be loaded: {detail}")]
+    Module {
+        /// The file.
+        path: String,
+        /// What is wrong with it.
+        detail: String,
+    },
 }
 
 impl From<&SessionError> for UiError {
@@ -57,6 +65,9 @@ impl From<&SessionError> for UiError {
             SessionError::Device(error) => error.clone(),
             SessionError::NothingToExport => UiError::new("error.session.nothingToExport"),
             SessionError::NoWaveform => UiError::new("error.session.noWaveform"),
+            SessionError::Module { path, detail } => UiError::new("error.decode.module")
+                .with("path", path.as_str())
+                .with("detail", detail.as_str()),
         }
     }
 }
