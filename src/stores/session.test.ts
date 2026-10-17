@@ -92,6 +92,7 @@ function session(patch: Partial<Session>): Session {
     enabledChannels: null,
     channelNames: {},
     colours: {},
+    heights: {},
     triggers: {},
     trigger: null,
     decoders: null,

@@ -89,6 +89,7 @@ export const useSessionStore = defineStore('session', () => {
       enabledChannels: state ? [...state.enabledChannels] : null,
       channelNames: summary ? namesOf(summary) : { ...capture.preset?.channelNames },
       colours: { ...channels.colours } as Record<string, number>,
+      heights: { ...channels.heights } as Record<string, number>,
       triggers: { ...channels.triggers },
       trigger: {
         mode: trigger.mode,
@@ -118,13 +119,15 @@ export const useSessionStore = defineStore('session', () => {
 
   /**
    * Applies what an `.hsync` capture that has just opened stored of the interface: the channel
-   * colours and the timeline as it was. Its channel names and decoders came with the capture;
-   * the device settings it holds stay unapplied, as opening a file must not change the device.
+   * colours and heights, and the timeline as it was. Its channel names and decoders came with
+   * the capture; the device settings it holds stay unapplied, as opening a file must not change
+   * the device.
    */
   async function applyCaptureDocument(document: unknown): Promise<void> {
     const session = readSession(document)
     if (!session) return
     channels.colours = { ...session.colours }
+    channels.heights = { ...session.heights }
     const stored = session.view
     if (!stored) return
     // The view store fits a capture once it opens; the stored view comes after that.
@@ -155,6 +158,7 @@ export const useSessionStore = defineStore('session', () => {
     }
     channels.triggers = { ...session.triggers }
     channels.colours = { ...session.colours }
+    channels.heights = { ...session.heights }
     const settings = session.trigger
     if (settings) {
       if (settings.mode) trigger.mode = settings.mode
@@ -238,6 +242,7 @@ export const useSessionStore = defineStore('session', () => {
         device.state,
         channels.triggers,
         channels.colours,
+        channels.heights,
         trigger.$state,
         capture.summary?.channels,
         capture.summary?.decoders,

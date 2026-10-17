@@ -42,6 +42,8 @@ export interface Session {
   enabledChannels: number[] | null
   channelNames: Record<string, string>
   colours: Record<string, number>
+  /** Row heights in CSS pixels the user gave channels; absent in files from before them. */
+  heights: Record<string, number>
   triggers: Record<string, TriggerCondition>
   trigger: TriggerSettings | null
   /** DSView's decoder entries. */
@@ -160,6 +162,7 @@ function readHsync(data: Record<string, unknown>): Session {
       : null,
     channelNames: strings(data.channelNames),
     colours: numbers(data.colours),
+    heights: numbers(data.heights),
     triggers: conditions(data.triggers),
     trigger: trigger as TriggerSettings | null,
     decoders: Array.isArray(data.decoders) ? data.decoders : null,
@@ -296,6 +299,7 @@ function readDsview(data: Record<string, unknown>): Session {
     enabledChannels: channels.length > 0 ? enabledChannels : null,
     channelNames,
     colours: {},
+    heights: {},
     triggers,
     trigger: Number.isFinite(position) ? ({ mode: 'simple', position } as TriggerSettings) : null,
     decoders: Array.isArray(data.decoder) ? data.decoder : null,
