@@ -1,6 +1,6 @@
 # Writing a decoder
 
-How a protocol is added to `crates/uiharu-protocols`: its contract, its decoder, its synthesizer, its tests and its page. The SPI module (`src/spi/`) and the SPI NOR decoder (`src/spi_nor/`) are the reference for every rule here; [design.md](design.md) explains the runtime they run on.
+How a protocol is added to `crates/uiharu-protocols`: its contract, its decoder, its synthesizer, its tests and its page. The SPI module (`src/spi/`) and the SPI NOR decoder (`src/spi_nor/`) are the reference for every rule here; [design.md](design.md) explains the runtime they run on. Decoders are written by hand in Rust until the DSL compiler exists; [dsl.md](dsl.md) defines the DSL they will be written in and the IR it compiles to, and `dsl/decoders/` holds the reference decoders in that form — a hand-written decoder follows the same shape, so that it can be replaced by a generated one under the same tests.
 
 ## Clean room
 
