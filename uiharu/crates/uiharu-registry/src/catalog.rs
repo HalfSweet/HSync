@@ -69,6 +69,9 @@ impl LoadedKind {
 /// Why a module could not be loaded.
 #[derive(Debug, thiserror::Error)]
 pub enum CatalogError {
+    /// The JSON is not a module.
+    #[error("the module does not parse: {0}")]
+    Json(#[from] serde_json::Error),
     /// The module does not run; see [`LoadError`].
     #[error(transparent)]
     Load(#[from] LoadError),
@@ -219,6 +222,12 @@ impl Catalog {
             .get(&module.name)
             .map(Arc::as_ref)
             .unwrap_or_else(|| unreachable!("just loaded")))
+    }
+
+    /// Loads a module from its JSON, as `pnpm dsl:compile` writes it; see [`Catalog::load`].
+    pub fn load_json(&mut self, json: &str) -> Result<&LoadedKind, CatalogError> {
+        let module: Module = serde_json::from_str(json)?;
+        self.load(&module)
     }
 
     /// Forgets the module `name`; whether there was one.
@@ -479,5 +488,14 @@ mod tests {
         let mut catalog = Catalog::new();
         let error = catalog.load(&module("i2c")).expect_err("refused");
         assert_eq!(error.to_string(), "decoder: the module declares no decoder");
+        let error = catalog.load_json("{\"ir\": 1}").expect_err("refused");
+        assert!(
+            error
+                .to_string()
+                .starts_with("the module does not parse: missing field"),
+            "{error}"
+        );
+        let json = serde_json::to_string(&module("uart")).expect("serializes");
+        assert_eq!(catalog.load_json(&json).expect("loads").name(), "uart");
     }
 }
