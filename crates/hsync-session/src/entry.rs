@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
 use uiharu_registry::{
-    Connection, Description, FieldKind, Manifest, NodeDescription, SourceDescription,
+    Catalog, Connection, Description, FieldKind, KindRef, NodeDescription, SourceDescription,
 };
 
 /// A decoder entry: a pipeline description without its source, which the capture supplies.
@@ -60,17 +60,20 @@ impl DecoderEntry {
         }
     }
 
-    /// The capture channels the pipeline reads.
-    pub fn channels(&self) -> BTreeSet<ChannelIndex> {
-        hsync_uiharu::channels_read(&self.description(64, 1))
+    /// The capture channels the pipeline reads, its node types among those of `catalog`.
+    pub fn channels(&self, catalog: &Catalog) -> BTreeSet<ChannelIndex> {
+        hsync_uiharu::channels_read(&self.description(64, 1), catalog)
     }
 
     /// Channels the source must have: one past the highest channel read, within a block's
     /// 64.
-    pub fn source_channels(&self) -> u8 {
-        self.channels().iter().next_back().map_or(1, |&last| {
-            u8::try_from(last.saturating_add(1)).unwrap_or(64).min(64)
-        })
+    pub fn source_channels(&self, catalog: &Catalog) -> u8 {
+        self.channels(catalog)
+            .iter()
+            .next_back()
+            .map_or(1, |&last| {
+                u8::try_from(last.saturating_add(1)).unwrap_or(64).min(64)
+            })
     }
 
     /// The node types, in the entry's order.
@@ -101,6 +104,25 @@ pub struct CatalogEntry {
     pub outputs: Vec<CatalogPort>,
     pub config: Vec<CatalogField>,
     pub events: Vec<CatalogEvent>,
+    /// The file of the decoder module the type comes from; `None` for one built in.
+    pub module: Option<String>,
+}
+
+/// A decoder module loaded into the app: a decoder written in the DSL, interpreted from the
+/// IR its file holds (see `uiharu/docs/dsl.md` §8).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ModuleInfo {
+    /// The node type the module provides, under the module's name.
+    pub name: String,
+    /// The file it was loaded from.
+    pub path: String,
+    /// `bus`, `line` or `device`.
+    pub category: String,
+    /// Whether a decoder built into the app has the same name, which the module stands in
+    /// for while it is loaded.
+    pub shadows: bool,
 }
 
 /// A port of a node type.
@@ -147,18 +169,16 @@ pub struct CatalogEvent {
     pub fields: Vec<String>,
 }
 
-fn catalog_entry(manifest: &Manifest) -> CatalogEntry {
-    let defaults = uiharu_registry::kind(&manifest.name).map(|kind| (kind.defaults)());
+fn catalog_entry(kind: &KindRef<'_>, module: Option<&str>) -> CatalogEntry {
+    let manifest = kind.manifest();
+    let defaults = Some(kind.defaults());
     let port = |port: &uiharu_registry::Port| CatalogPort {
         port: port.port.clone(),
         schema: port.schema.clone(),
     };
     CatalogEntry {
         name: manifest.name.clone(),
-        category: serde_json::to_value(manifest.category)
-            .ok()
-            .and_then(|value| value.as_str().map(ToOwned::to_owned))
-            .unwrap_or_default(),
+        category: category_name(manifest.category),
         inputs: manifest.inputs.iter().map(port).collect(),
         outputs: manifest.outputs.iter().map(port).collect(),
         config: manifest
@@ -194,14 +214,37 @@ fn catalog_entry(manifest: &Manifest) -> CatalogEntry {
                 fields: event.fields.clone(),
             })
             .collect(),
+        module: module.map(ToOwned::to_owned),
     }
 }
 
-/// Every node type the interface can add, with its manifest and defaults.
+/// `bus`, `line` or `device`, as the manifests spell a category.
+pub(crate) fn category_name(category: uiharu_registry::Category) -> String {
+    serde_json::to_value(category)
+        .ok()
+        .and_then(|value| value.as_str().map(ToOwned::to_owned))
+        .unwrap_or_default()
+}
+
+/// Every node type the interface can add, with its manifest and defaults: the decoders built
+/// in alone.
 pub fn catalog() -> Vec<CatalogEntry> {
-    uiharu_registry::manifests()
+    catalog_of(&Catalog::new(), |_| None)
+}
+
+/// Every node type of `catalog` the interface can add, with its manifest and defaults;
+/// `module_of` names the file a loaded module came from.
+pub fn catalog_of(
+    catalog: &Catalog,
+    module_of: impl Fn(&str) -> Option<String>,
+) -> Vec<CatalogEntry> {
+    catalog
+        .kinds()
         .iter()
-        .map(catalog_entry)
+        .map(|kind| {
+            let module = kind.is_loaded().then(|| module_of(kind.name())).flatten();
+            catalog_entry(kind, module.as_deref())
+        })
         .collect()
 }
 
@@ -226,8 +269,12 @@ mod tests {
             "label": "EEPROM"
         }))
         .expect("parses");
-        assert_eq!(entry.channels().into_iter().collect::<Vec<_>>(), [2, 9]);
-        assert_eq!(entry.source_channels(), 10);
+        let catalog = Catalog::new();
+        assert_eq!(
+            entry.channels(&catalog).into_iter().collect::<Vec<_>>(),
+            [2, 9]
+        );
+        assert_eq!(entry.source_channels(&catalog), 10);
         assert_eq!(entry.kinds(), ["i2c", "eeprom24xx"]);
         assert_eq!(entry.label(), "EEPROM");
         let description = entry.description(10, 25_000_000);
@@ -251,9 +298,10 @@ mod tests {
         }))
         .expect("parses");
         assert_eq!(entry.label(), "uart");
-        assert_eq!(entry.source_channels(), 6);
+        let catalog = Catalog::new();
+        assert_eq!(entry.source_channels(&catalog), 6);
         let empty = DecoderEntry::parse(&json!({ "nodes": {} })).expect("parses");
-        assert_eq!(empty.source_channels(), 1);
+        assert_eq!(empty.source_channels(&catalog), 1);
         assert_eq!(empty.label(), "");
     }
 
@@ -300,5 +348,6 @@ mod tests {
                 .iter()
                 .any(|field| field.name == "device_address" && field.optional)
         );
+        assert!(catalog.iter().all(|entry| entry.module.is_none()));
     }
 }

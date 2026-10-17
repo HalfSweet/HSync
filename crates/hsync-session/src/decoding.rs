@@ -14,6 +14,7 @@ use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
 use serde_json::Value;
 use ts_rs::TS;
+use uiharu_registry::Catalog;
 
 use crate::entry::DecoderEntry;
 use crate::instrument::{EventSink, SessionEvent};
@@ -145,6 +146,8 @@ struct Entry {
 pub struct DecodeSet {
     capture_id: u64,
     capture: Arc<RwLock<LogicCapture>>,
+    /// The node types the entries may name, as they were when the set started.
+    catalog: Catalog,
     entries: RwLock<Vec<Entry>>,
     /// Where the capture has got, as last told.
     position: Mutex<Position>,
@@ -192,9 +195,11 @@ fn failure(error: DecodeError) -> (DecodeState, UiError) {
 
 impl DecodeSet {
     /// Starts decoding `capture`, which stands at `position`, with every entry of `decoders`
-    /// (HSync's entries); `events` hears of progress and ends under `capture_id`.
+    /// (HSync's entries) over the node types of `catalog`; `events` hears of progress and ends
+    /// under `capture_id`.
     pub fn start(
         decoders: Option<&Value>,
+        catalog: &Catalog,
         capture: &Arc<RwLock<LogicCapture>>,
         position: Position,
         capture_id: u64,
@@ -203,6 +208,7 @@ impl DecodeSet {
         let set = Self {
             capture_id,
             capture: Arc::clone(capture),
+            catalog: catalog.clone(),
             entries: RwLock::new(Vec::new()),
             position: Mutex::new(position),
             events,
@@ -238,7 +244,7 @@ impl DecodeSet {
             }
         };
         let rate = self.capture.read().samplerate();
-        let description = entry.description(entry.source_channels(), rate);
+        let description = entry.description(entry.source_channels(&self.catalog), rate);
         let events = self.events.clone();
         let capture_id = self.capture_id;
         let updates: Arc<dyn Fn(Update) + Send + Sync> = Arc::new(move |update| {
@@ -253,14 +259,19 @@ impl DecodeSet {
             }
         });
         let position = *self.position.lock();
-        let (decoder, failure) =
-            match Decoder::start(description, Arc::clone(&self.capture), position, updates) {
-                Ok(decoder) => (Some(decoder), None),
-                Err(error) => {
-                    log::info!("decoder {index} ({}) cannot start: {error}", entry.label());
-                    (None, Some(failure(error)))
-                }
-            };
+        let (decoder, failure) = match Decoder::start(
+            description,
+            &self.catalog,
+            Arc::clone(&self.capture),
+            position,
+            updates,
+        ) {
+            Ok(decoder) => (Some(decoder), None),
+            Err(error) => {
+                log::info!("decoder {index} ({}) cannot start: {error}", entry.label());
+                (None, Some(failure(error)))
+            }
+        };
         Entry {
             label: entry.label(),
             kinds: entry.kinds(),
@@ -282,6 +293,14 @@ impl DecodeSet {
     /// Where the capture stood when the set last heard of it.
     pub fn position(&self) -> Position {
         *self.position.lock()
+    }
+
+    /// Whether an entry names the node type `kind`.
+    pub fn uses(&self, kind: &str) -> bool {
+        self.entries
+            .read()
+            .iter()
+            .any(|entry| entry.kinds.iter().any(|have| have == kind))
     }
 
     /// Stops every decoder; what was decoded stays readable.

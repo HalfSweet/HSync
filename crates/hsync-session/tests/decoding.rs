@@ -1,7 +1,7 @@
 //! Decoding in the workspace: decoders stored with a capture run when it opens, carry over to
 //! captures taken afterwards, and decode those as they are taken.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -452,4 +452,130 @@ fn counts_edges_in_a_segment_as_dsview() {
         );
     }
     assert!(hsync_session::edges(&capture, 0, 10, &[99]).is_err());
+}
+
+/// The IR of the reference decoder `name`, as `pnpm dsl:compile` writes it.
+fn module_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../uiharu/dsl/ir/{name}.json"))
+}
+
+#[test]
+fn a_loaded_decoder_module_stands_in_for_the_decoder_of_its_name() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    assert!(workspace.modules().is_empty());
+    assert!(
+        workspace
+            .catalog()
+            .iter()
+            .all(|entry| entry.module.is_none())
+    );
+
+    // The UART decoder of the demo decodes again, with the module, to the same frames.
+    let path = module_path("uart");
+    let module = workspace.load_module(&path).expect("loads");
+    assert_eq!(module.name, "uart");
+    assert_eq!(module.path, path.to_string_lossy());
+    assert_eq!(module.category, "bus");
+    assert!(module.shadows);
+    assert_eq!(
+        workspace.modules().as_slice(),
+        std::slice::from_ref(&module)
+    );
+    let catalog = workspace.catalog();
+    let uart = catalog
+        .iter()
+        .find(|entry| entry.name == "uart")
+        .expect("uart");
+    assert_eq!(uart.module.as_deref(), Some(module.path.as_str()));
+    assert_eq!(uart.config.len(), 8);
+    assert_eq!(
+        catalog.iter().filter(|entry| entry.name == "uart").count(),
+        1
+    );
+    // Every decoder of the capture starts again, with the node types as they are now.
+    decoded(&events, opened.id, 4);
+    let decoding = workspace.decoding(opened.id).expect("decoders");
+    let statuses = decoding.statuses();
+    assert_eq!(statuses[1].kinds, ["uart"]);
+    assert_eq!(statuses[1].state, DecodeState::Done);
+    assert_eq!(statuses[1].streams[0].progress.events, 47);
+    let page = decoding.stream(1, 0, None, false, 0, 1).expect("page");
+    assert_eq!(page.rows[0].kind, "frame");
+
+    // Unloaded, the decoder built in takes over again.
+    assert!(workspace.unload_module("uart"));
+    assert!(!workspace.unload_module("uart"));
+    assert!(workspace.modules().is_empty());
+    decoded(&events, opened.id, 4);
+    let statuses = workspace.decoding(opened.id).expect("decoders").statuses();
+    assert_eq!(statuses[1].streams[0].progress.events, 47);
+
+    // A file that is no module is refused, naming it.
+    let bogus = std::env::temp_dir().join(format!("hsync-no-module-{}.json", std::process::id()));
+    std::fs::write(&bogus, "{\"nodes\": {}}").expect("writes");
+    let error = workspace
+        .load_module(&bogus)
+        .expect_err("refused")
+        .to_string();
+    let _ = std::fs::remove_file(&bogus);
+    assert!(error.contains("hsync-no-module"), "{error}");
+    assert!(error.contains("does not parse"), "{error}");
+    let missing = workspace
+        .load_module(Path::new("/no/such/module.json"))
+        .expect_err("refused");
+    assert!(matches!(
+        missing,
+        hsync_session::SessionError::Module { .. }
+    ));
+}
+
+#[test]
+fn a_module_that_faults_stops_its_decoder_with_the_fault() {
+    let (mut workspace, events) = workspace();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoded(&events, opened.id, 4);
+    // The PWM module with a `hold` that changes the state, which the interpreter refuses.
+    let mut module: Value = serde_json::from_str(
+        &std::fs::read_to_string(module_path("pwm")).expect("the module reads"),
+    )
+    .expect("the module parses");
+    let methods = module["decoder"]["methods"]
+        .as_array_mut()
+        .expect("methods");
+    let hold = methods
+        .iter_mut()
+        .find(|method| method["name"] == "hold")
+        .expect("hold");
+    hold["body"] = json!([
+        { "stmt": "assign", "target": { "expr": "self", "field": "trailing" }, "value": { "expr": "none" } },
+        { "stmt": "return", "value": { "expr": "none" } }
+    ]);
+    let path = std::env::temp_dir().join(format!("hsync-faulty-pwm-{}.json", std::process::id()));
+    std::fs::write(&path, serde_json::to_string(&module).expect("serializes")).expect("writes");
+    let loaded = workspace.load_module(&path).expect("loads");
+    assert_eq!(loaded.name, "pwm");
+    workspace
+        .set_decoders(
+            opened.id,
+            json!([{
+                "nodes": { "pwm": { "type": "pwm", "config": { "channel": 5 } } },
+                "connections": [{ "from": "source", "to": "pwm.logic" }],
+                "expose": { "pwm": "pwm.events" }
+            }]),
+        )
+        .expect("set");
+    decoded(&events, opened.id, 1);
+    let statuses = workspace.decoding(opened.id).expect("decoders").statuses();
+    assert_eq!(statuses[0].state, DecodeState::Failed);
+    let error = statuses[0].error.as_ref().expect("an error");
+    assert_eq!(error.code, "error.decode.failed");
+    assert!(
+        error.params["detail"].as_str().is_some_and(
+            |detail| detail.contains("the decoder's state is changed outside its body")
+        ),
+        "{error:?}"
+    );
+    let _ = std::fs::remove_file(&path);
 }

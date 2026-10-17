@@ -11,7 +11,7 @@ use hsync_capture::LogicCapture;
 use hsync_core::{ChannelIndex, SampleIndex};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use uiharu_core::{PushError, SchemaId, SignalItem, Tick};
-use uiharu_registry::{BuildError, Description, DynItem, DynReader, FieldKind, Manifest};
+use uiharu_registry::{BuildError, Catalog, Description, DynItem, DynReader, FieldKind};
 
 use crate::feed::{FeedError, Feeder};
 use crate::store::Store;
@@ -132,20 +132,15 @@ impl std::fmt::Debug for Decoder {
 }
 
 /// The channels the nodes of `description` read, from their configuration and the defaults
-/// of their type.
-pub fn channels_read(description: &Description) -> BTreeSet<ChannelIndex> {
+/// of their type, among the node types of `catalog`.
+pub fn channels_read(description: &Description, catalog: &Catalog) -> BTreeSet<ChannelIndex> {
     let mut channels = BTreeSet::new();
     for node in description.nodes.values() {
-        let Some(kind) = uiharu_registry::kind(&node.kind) else {
+        let Some(kind) = catalog.get(&node.kind) else {
             continue;
         };
-        let Some(manifest) = uiharu_registry::manifests()
-            .iter()
-            .find(|manifest: &&Manifest| manifest.name == kind.name)
-        else {
-            continue;
-        };
-        let defaults = (kind.defaults)();
+        let manifest = kind.manifest();
+        let defaults = kind.defaults();
         for field in &manifest.config {
             let value = node
                 .config
@@ -176,17 +171,18 @@ fn channel_of(value: &serde_json::Value) -> Option<ChannelIndex> {
 
 impl Decoder {
     /// Starts decoding `capture`, which stands at `position`, with the pipeline `description`
-    /// describes; `updates` hears how it goes. Fails when the description does not build or
-    /// reads channels the capture lacks.
+    /// describes over the node types of `catalog`; `updates` hears how it goes. Fails when the
+    /// description does not build or reads channels the capture lacks.
     pub fn start(
         description: Description,
+        catalog: &Catalog,
         capture: Arc<RwLock<LogicCapture>>,
         position: Position,
         updates: Arc<dyn Fn(Update) + Send + Sync>,
     ) -> Result<Self, DecodeError> {
         let missing: Vec<ChannelIndex> = {
             let capture = capture.read();
-            channels_read(&description)
+            channels_read(&description, catalog)
                 .into_iter()
                 .filter(|&channel| capture.channel(channel).is_none())
                 .collect()
@@ -196,7 +192,7 @@ impl Decoder {
         }
         // Built once here to check the description and learn its streams; the thread builds
         // its own, as a pipeline stays on the thread that runs it.
-        let built = uiharu_registry::build(&description)?;
+        let built = uiharu_registry::build_with(&description, catalog)?;
         Feeder::new(built.channels, Feeder::DEFAULT_BLOCK)?;
         let streams: Vec<Arc<Stream>> = built
             .streams
@@ -220,6 +216,7 @@ impl Decoder {
         let (control, signals) = crossbeam_channel::unbounded();
         let worker = Worker {
             description,
+            catalog: catalog.clone(),
             capture,
             shared: Arc::clone(&shared),
             signals,
@@ -301,6 +298,7 @@ impl Drop for Decoder {
 /// The thread's side.
 struct Worker {
     description: Description,
+    catalog: Catalog,
     capture: Arc<RwLock<LogicCapture>>,
     shared: Arc<Shared>,
     signals: Receiver<Signal>,
@@ -337,16 +335,16 @@ impl Worker {
 
     /// Decodes until the streams end; `Err(None)` when cancelled.
     fn decode(&mut self) -> Result<(), Option<DecodeError>> {
-        let built = uiharu_registry::build(&self.description).map_err(DecodeError::from)?;
-        let mut pipeline = built.pipeline;
+        let mut built = uiharu_registry::build_with(&self.description, &self.catalog)
+            .map_err(DecodeError::from)?;
         let source = built.source;
-        let mut readers: Vec<Box<dyn DynReader>> = built
-            .streams
+        let mut readers: Vec<Box<dyn DynReader>> = std::mem::take(&mut built.streams)
             .into_iter()
             .map(|stream| stream.reader)
             .collect();
         let mut feeder =
             Feeder::new(built.channels, Feeder::DEFAULT_BLOCK).map_err(DecodeError::from)?;
+        let pipeline = &mut built.pipeline;
         let mut ended = false;
         loop {
             if let Step::Stop = self.take_signals(false)? {
@@ -382,6 +380,14 @@ impl Worker {
                     if ended {
                         if pipeline.is_finished() && readers.iter().all(|reader| reader.is_ended())
                         {
+                            // A decoder interpreted from its module that faulted stopped
+                            // decoding on its own; what it found before is in its store.
+                            if let Some(fault) = built.faults().into_iter().next() {
+                                return Err(Some(DecodeError::Pipeline(format!(
+                                    "{}: {}",
+                                    fault.node, fault.message
+                                ))));
+                            }
                             return Ok(());
                         }
                         if report.ops == 0 && !moved {

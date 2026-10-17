@@ -14,4 +14,8 @@ name: string,
 /**
  * `bus`, `line` or `device`.
  */
-category: string, inputs: Array<CatalogPort>, outputs: Array<CatalogPort>, config: Array<CatalogField>, events: Array<CatalogEvent>, };
+category: string, inputs: Array<CatalogPort>, outputs: Array<CatalogPort>, config: Array<CatalogField>, events: Array<CatalogEvent>, 
+/**
+ * The file of the decoder module the type comes from; `None` for one built in.
+ */
+module: string | null, };
