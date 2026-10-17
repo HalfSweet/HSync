@@ -222,13 +222,17 @@ pub struct Function {
     pub body: Vec<Stmt>,
 }
 
-/// A parameter. Records are passed by mutable reference, everything else by value.
+/// A parameter. Records are passed by reference, everything else by value.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Param {
     pub name: String,
     #[serde(rename = "type")]
     pub ty: Type,
+    /// Whether the function writes through the parameter (a record it changes, or passes on
+    /// to a function that does): a mutable reference in Rust.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub mutable: bool,
 }
 
 /// The decoder: its ports, configuration, state, methods and hooks.
@@ -404,19 +408,25 @@ pub enum Stmt {
         #[serde(default, rename = "else", skip_serializing_if = "Vec::is_empty")]
         otherwise: Vec<Stmt>,
     },
-    /// `if (value !== undefined)`, with the value bound to `bind` in `then`.
+    /// `if (value !== undefined)`, with the value bound to `bind` in `then`. When the value is
+    /// a record field of `self` that `then` writes through, `borrow` says the binding borrows
+    /// it: no method of `self` may be called in `then`.
     IfSome {
         value: Expr,
         bind: String,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        borrow: bool,
         then: Vec<Stmt>,
         #[serde(default, rename = "else", skip_serializing_if = "Vec::is_empty")]
         otherwise: Vec<Stmt>,
     },
     /// Binds `bind` to the value, or runs `else`, which leaves the block (return, break,
-    /// continue).
+    /// continue). `borrow` as for [`Stmt::IfSome`], for the rest of the block.
     LetSome {
         bind: String,
         value: Expr,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        borrow: bool,
         #[serde(rename = "else")]
         otherwise: Vec<Stmt>,
     },

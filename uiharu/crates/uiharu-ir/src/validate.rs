@@ -734,12 +734,19 @@ impl<'a> Checker<'a> {
             Stmt::IfSome {
                 value,
                 bind,
+                borrow,
                 then,
                 otherwise,
             } => {
                 self.expr(cx, value);
+                if *borrow && !is_self_place(value) {
+                    self.report(path, "a borrow binds a field of self");
+                }
                 cx.push_block();
                 cx.declare(bind);
+                if *borrow && let Some(block) = cx.borrows.last_mut() {
+                    block.push(bind.clone());
+                }
                 self.block(cx, &format!("{path}.then"), then);
                 cx.pop_block();
                 self.block(cx, &format!("{path}.else"), otherwise);
@@ -747,14 +754,21 @@ impl<'a> Checker<'a> {
             Stmt::LetSome {
                 bind,
                 value,
+                borrow,
                 otherwise,
             } => {
                 self.expr(cx, value);
+                if *borrow && !is_self_place(value) {
+                    self.report(path, "a borrow binds a field of self");
+                }
                 if !leaves(otherwise) {
                     self.report(path, "the else of a let-some leaves the block");
                 }
                 self.block(cx, &format!("{path}.else"), otherwise);
                 cx.declare(bind);
+                if *borrow && let Some(block) = cx.borrows.last_mut() {
+                    block.push(bind.clone());
+                }
             }
             Stmt::Match { value, arms } => {
                 self.expr(cx, value);
