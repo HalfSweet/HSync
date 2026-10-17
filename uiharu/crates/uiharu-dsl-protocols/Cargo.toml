@@ -1,6 +1,6 @@
 [package]
 name = "uiharu-dsl-protocols"
-description = "The protocol decoders of the uiharu decode engine generated from the decoder DSL: the reference decoders of uiharu/dsl compiled to Rust over uiharu-core's runtime"
+description = "The protocol decoders and contracts of the uiharu decode engine generated from the decoder DSL: the decoders of uiharu/dsl/decoders and the contracts of uiharu/dsl/contracts, compiled to Rust over uiharu-core's runtime"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
