@@ -5,6 +5,7 @@
 
 use serde::Serialize;
 use uiharu_core::{EventSchema, Exposed, Item, SchemaId, Tick, TickRange};
+use uiharu_interp::FaultHandle;
 
 /// An item of a stream with its event, if any, as a JSON value.
 #[derive(Clone, Debug, PartialEq)]
@@ -39,36 +40,63 @@ pub trait DynReader {
     fn pending(&self) -> usize;
     /// Events read so far.
     fn events(&self) -> u64;
+    /// Why the node behind the output stopped decoding, if it did: a fault of an interpreted
+    /// decoder or of a bridge; `None` for a compiled decoder, which has none.
+    fn fault(&self) -> Option<String> {
+        None
+    }
 }
 
 /// The reader of an output whose event type is known: [`DynReader`] over [`Exposed`].
 #[derive(Debug)]
 pub struct TypedReader<T> {
     name: String,
+    schema: SchemaId,
     exposed: Exposed<T>,
     ended: bool,
     events: u64,
+    fault: Option<FaultHandle>,
 }
 
-impl<T> TypedReader<T> {
+impl<T: EventSchema> TypedReader<T> {
     /// A reader named `name` over `exposed`.
     pub fn new(name: impl Into<String>, exposed: Exposed<T>) -> Self {
-        Self {
-            name: name.into(),
-            exposed,
-            ended: false,
-            events: 0,
-        }
+        Self::with_schema(name, exposed, T::SCHEMA)
     }
 }
 
-impl<T: Serialize + EventSchema + Clone> DynReader for TypedReader<T> {
+impl<T> TypedReader<T> {
+    /// A reader named `name` over `exposed`, which carries `schema` events: for an output
+    /// whose contract is known only at run time.
+    pub fn with_schema(name: impl Into<String>, exposed: Exposed<T>, schema: SchemaId) -> Self {
+        Self {
+            name: name.into(),
+            schema,
+            exposed,
+            ended: false,
+            events: 0,
+            fault: None,
+        }
+    }
+
+    /// Reports the faults of `handle` as the output's.
+    pub fn reporting(mut self, handle: FaultHandle) -> Self {
+        self.fault = Some(handle);
+        self
+    }
+}
+
+impl<T: Serialize + Clone> DynReader for TypedReader<T> {
     fn name(&self) -> &str {
         &self.name
     }
 
     fn schema(&self) -> SchemaId {
-        T::SCHEMA
+        self.schema
+    }
+
+    fn fault(&self) -> Option<String> {
+        self.fault.as_ref().and_then(FaultHandle::get)
     }
 
     fn next(&mut self) -> Option<DynItem> {

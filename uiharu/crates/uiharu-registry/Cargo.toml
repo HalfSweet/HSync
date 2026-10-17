@@ -14,6 +14,8 @@ serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
+uiharu-interp = { path = "../uiharu-interp", version = "0.1.0" }
+uiharu-ir = { path = "../uiharu-ir", version = "0.1.0" }
 uiharu-protocols = { path = "../uiharu-protocols", version = "0.1.0" }
 
 [lints]

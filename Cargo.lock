@@ -5054,6 +5054,8 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "uiharu-core",
+ "uiharu-interp",
+ "uiharu-ir",
  "uiharu-protocols",
 ]
 

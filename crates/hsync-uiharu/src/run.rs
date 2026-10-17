@@ -70,7 +70,7 @@ enum Signal {
 /// One exposed output of the pipeline, with its events.
 pub struct Stream {
     name: String,
-    kind: &'static str,
+    kind: String,
     schema: SchemaId,
     store: RwLock<Store>,
 }
@@ -82,8 +82,8 @@ impl Stream {
     }
 
     /// The node type whose output it is.
-    pub fn kind(&self) -> &'static str {
-        self.kind
+    pub fn kind(&self) -> &str {
+        &self.kind
     }
 
     /// The schema of its events.
@@ -204,7 +204,7 @@ impl Decoder {
             .map(|stream| {
                 Arc::new(Stream {
                     name: stream.name.clone(),
-                    kind: stream.kind.name,
+                    kind: stream.kind.clone(),
                     schema: stream.reader.schema(),
                     store: RwLock::new(Store::new()),
                 })
