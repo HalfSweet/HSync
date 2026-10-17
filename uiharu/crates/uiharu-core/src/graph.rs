@@ -598,6 +598,11 @@ impl Graph {
         self.output_spec(output.key).map(|spec| spec.schema)
     }
 
+    /// The properties the output behind a port named at run time declares.
+    pub fn props_of(&self, output: DynOutput) -> Result<Props, GraphError> {
+        self.output_spec(output.key).map(|spec| spec.props)
+    }
+
     fn connect_keys(&mut self, from: PortKey, node: usize, index: usize) -> Result<(), GraphError> {
         let output = self.output_spec(from)?;
         let input = self.input_spec(node, index)?.clone();
