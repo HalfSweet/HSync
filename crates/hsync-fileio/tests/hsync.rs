@@ -47,6 +47,10 @@ fn round_trips_the_demo_capture_with_its_documents() {
     let names = names(&original);
     let decoders = json!([{ "nodes": { "uart": { "type": "uart", "config": { "line": 5 } } } }]);
     let session = json!({ "format": "hsync-session", "version": 1, "colours": { "0": 3 } });
+    let modules = BTreeMap::from([(
+        "uart".to_owned(),
+        "{\n  \"ir\": 1,\n  \"name\": \"uart\"\n}\n".to_owned(),
+    )]);
     let request = HsyncWriteRequest {
         channel_names: &names,
         source: Some(HsyncSource {
@@ -56,6 +60,7 @@ fn round_trips_the_demo_capture_with_its_documents() {
         app_version: "0.1.4",
         decoders: Some(&decoders),
         session: Some(&session),
+        modules: &modules,
     };
     let bytes = write_hsync(Cursor::new(Vec::new()), &original, &request)
         .expect("writes")
@@ -66,6 +71,8 @@ fn round_trips_the_demo_capture_with_its_documents() {
     assert_eq!(document.capture.trigger_sample(), original.trigger_sample());
     assert_eq!(document.decoders, Some(decoders));
     assert_eq!(document.session, Some(session));
+    // A module goes in and comes out as it was written.
+    assert_eq!(document.modules, modules);
     let manifest = &document.manifest;
     assert_eq!(
         (manifest.format.as_str(), manifest.version),
@@ -111,6 +118,7 @@ fn round_trips_multi_block_captures_with_constant_blocks() {
         app_version: "test",
         decoders: None,
         session: None,
+        modules: &BTreeMap::new(),
     };
     let bytes = write_hsync(Cursor::new(Vec::new()), &capture, &request)
         .expect("writes")
@@ -125,6 +133,7 @@ fn round_trips_multi_block_captures_with_constant_blocks() {
     assert_eq!(document.manifest.channels[1].name, "3");
     assert_eq!(document.decoders, None);
     assert_eq!(document.session, None);
+    assert!(document.modules.is_empty());
 }
 
 #[test]
@@ -136,6 +145,7 @@ fn an_empty_capture_round_trips() {
         app_version: "test",
         decoders: None,
         session: None,
+        modules: &BTreeMap::new(),
     };
     let bytes = write_hsync(Cursor::new(Vec::new()), &capture, &request)
         .expect("writes")
@@ -155,6 +165,7 @@ fn stops_when_cancelled_and_refuses_what_it_is_not() {
         app_version: "test",
         decoders: None,
         session: None,
+        modules: &BTreeMap::new(),
     };
     let mut calls = 0;
     let cancelled = write_hsync_with(Cursor::new(Vec::new()), &original, &request, &mut |_| {

@@ -121,6 +121,7 @@ impl ExportSource {
             app_version: env!("CARGO_PKG_VERSION"),
             decoders,
             session,
+            modules: &BTreeMap::new(),
         };
         hsync_fileio::write_hsync_file(path, capture, &request, progress)?;
         Ok(())
