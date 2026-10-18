@@ -128,6 +128,50 @@
         }
       }
     ],
+    "locales": {
+      "en-US": {
+        "name": "PWM",
+        "summary": "Each cycle of a PWM line: its period and its active time",
+        "fields": {
+          "channel": "Signal line",
+          "polarity": "Polarity"
+        },
+        "values": {
+          "polarity": {
+            "active-high": "Active high",
+            "active-low": "Active low"
+          }
+        },
+        "events": {
+          "cycle": "Cycle"
+        },
+        "eventFields": {
+          "periodTicks": "Period (ticks)",
+          "activeTicks": "Active time (ticks)"
+        }
+      },
+      "zh-CN": {
+        "name": "PWM",
+        "summary": "测量 PWM 信号线的每个周期：周期与有效时长",
+        "fields": {
+          "channel": "信号线",
+          "polarity": "极性"
+        },
+        "values": {
+          "polarity": {
+            "active-high": "高电平有效",
+            "active-low": "低电平有效"
+          }
+        },
+        "events": {
+          "cycle": "周期"
+        },
+        "eventFields": {
+          "periodTicks": "周期 (采样点)",
+          "activeTicks": "有效时长 (采样点)"
+        }
+      }
+    },
     "state": [
       {
         "name": "watch",
