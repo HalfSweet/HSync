@@ -8,8 +8,10 @@ import {
   clampTraceHeight,
   collapsedByDefault,
   COMFORTABLE_METRICS,
+  fitRows,
   layoutRows,
   MAX_TRACE_HEIGHT,
+  type Row,
   visibleRows,
 } from './layout'
 
@@ -166,5 +168,100 @@ describe('layoutRows', () => {
   it('finds the rows in view', () => {
     const shown = visibleRows(layout.rows, 0, 40)
     expect(shown.map((row) => row.kind)).toEqual(['gap', 'header', 'lane'])
+  })
+})
+
+describe('fitRows', () => {
+  const metrics = COMFORTABLE_METRICS
+  const layout = layoutRows(groups, metrics, collapsedByDefault)
+  const isChannel = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow'
+  // I²C SDA and SCL and the UART line are wide rows; SPI and the unnamed channels narrow ones.
+  const channelHeight = layout.rows.filter(isChannel).reduce((sum, row) => sum + row.height, 0)
+  const fixed = layout.height - channelHeight
+  const heights = (fitted: { rows: Row[] }) => [
+    ...new Set(fitted.rows.filter(isChannel).map((row) => `${row.kind} ${row.height}`)),
+  ]
+  const stacked = (fitted: { rows: Row[]; height: number }) => {
+    let top = 0
+    for (const row of fitted.rows) {
+      expect(row.top).toBe(top)
+      top += row.height
+    }
+    expect(fitted.height).toBe(top)
+  }
+
+  it('grows the channel rows to fill the room, keeping their proportions', () => {
+    expect(channelHeight).toBe(3 * 30 + 12 * 18)
+    const fitted = fitRows(layout, metrics, layout.height + channelHeight)
+    expect(fitted.scale).toBeCloseTo(2)
+    expect(heights(fitted)).toEqual(['trace 60', 'trace-narrow 36'])
+    expect(fitted.height).toBe(layout.height + channelHeight)
+    // Titles, lanes and gaps keep their heights.
+    const others = (rows: Row[]) => rows.filter((row) => !isChannel(row)).map((row) => row.height)
+    expect(others(fitted.rows)).toEqual(others(layout.rows))
+    stacked(fitted)
+  })
+
+  it('grows them no more than three times, leaving the rest of the room below', () => {
+    const fitted = fitRows(layout, metrics, layout.height + 10_000)
+    expect(fitted.scale).toBe(3)
+    expect(heights(fitted)).toEqual(['trace 90', 'trace-narrow 54'])
+    expect(fitted.height).toBe(fixed + 3 * channelHeight)
+  })
+
+  it('shrinks the wide rows towards the narrow height before the rows scroll', () => {
+    // 3 wide rows of 20 px and 12 narrow ones of 18 px fill 30 px less.
+    const tighter = fitRows(layout, metrics, layout.height - 30)
+    expect(heights(tighter)).toEqual(['trace 20', 'trace-narrow 18'])
+    expect(tighter.height).toBe(layout.height - 30)
+
+    const scrolling = fitRows(layout, metrics, fixed + 100)
+    expect(scrolling.scale).toBe(18 / 30)
+    expect(heights(scrolling)).toEqual(['trace 18', 'trace-narrow 18'])
+    expect(scrolling.height).toBe(fixed + 15 * 18)
+  })
+
+  it('scales the heights the user dragged with the others', () => {
+    const sda = groups[0]?.channels[0]
+    const sized = layoutRows(groups, metrics, collapsedByDefault, undefined, (one) =>
+      one.index === sda?.index ? 60 : undefined,
+    )
+    const fitted = fitRows(sized, metrics, sized.height + channelHeight + 30)
+    expect(fitted.rows.find((row) => row.channel?.index === sda?.index)?.height).toBe(120)
+  })
+
+  it('fills the room in whole pixels', () => {
+    for (const extra of [1, 7, 101, 333]) {
+      const fitted = fitRows(layout, metrics, layout.height + extra)
+      expect(fitted.rows.every((row) => Number.isInteger(row.height))).toBe(true)
+      expect(fitted.height).toBe(layout.height + extra)
+      stacked(fitted)
+    }
+  })
+
+  it('keeps a dragged row at the height the pointer gives it, the others fitting around it', () => {
+    const sda = groups[0]?.channels[0]
+    const pinned = { index: sda?.index ?? 0, height: 100 }
+    const room = layout.height + channelHeight
+    const fitted = fitRows(layout, metrics, room, pinned)
+    const sdaRow = (rows: Row[]) => rows.find((row) => row.channel?.index === sda?.index)
+    expect(sdaRow(fitted.rows)?.height).toBe(100)
+    expect(fitted.height).toBe(room)
+    // The others share what is left: 2 × 306 − 100 px over 276 px of their own heights.
+    expect(fitted.scale).toBeCloseTo((2 * channelHeight - 100) / (channelHeight - 30))
+
+    // Kept as its height before scaling, the row stays where the drag left it.
+    const kept = layoutRows(groups, metrics, collapsedByDefault, undefined, (one) =>
+      one.index === sda?.index ? clampTraceHeight(100 / fitted.scale, metrics) : undefined,
+    )
+    const after = sdaRow(fitRows(kept, metrics, room).rows)?.height ?? 0
+    expect(Math.abs(after - 100)).toBeLessThanOrEqual(1)
+  })
+
+  it('leaves rows without channels as they are', () => {
+    const closed = layoutRows(groups, metrics, () => true)
+    const fitted = fitRows(closed, metrics, closed.height + 500)
+    expect(fitted.rows.map((row) => row.height)).toEqual(closed.rows.map((row) => row.height))
+    expect(fitted.scale).toBe(1)
   })
 })

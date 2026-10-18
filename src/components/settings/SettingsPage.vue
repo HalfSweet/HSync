@@ -20,6 +20,7 @@ import {
   Stethoscope,
   Sun,
   SunMoon,
+  UnfoldVertical,
   ZoomIn,
 } from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
@@ -80,6 +81,7 @@ const BEHAVIOURS = [
   'followLatest',
   'quickScroll',
   'wheelZoom',
+  'fitRows',
   'keepStopped',
   'checkUpdates',
 ] as const
@@ -99,6 +101,7 @@ const BEHAVIOUR_ICONS: Record<(typeof BEHAVIOURS)[number], Component> = {
   followLatest: ArrowRightToLine,
   quickScroll: MoveHorizontal,
   wheelZoom: ZoomIn,
+  fitRows: UnfoldVertical,
   keepStopped: Repeat,
   checkUpdates: RefreshCw,
 }

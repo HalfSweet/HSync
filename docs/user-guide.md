@@ -64,6 +64,7 @@ Click the sample rate │ duration │ channels button in the top bar:
 - **Segment**: drag along the ruler to set points A and B, or click a decode block to make its start and end the segment. The status bar shows the segment's duration; click it to see each channel's rising edges, falling edges and edge count within the segment. Press `Esc` to clear the segment.
 - **Channels**: click a channel's colour dot, double-click its name or right-click it to rename it or change its colour.
 - **Waveform height**: drag the bottom edge of a channel's label to make its waveform taller or shorter; double-click the edge to give it back its default height. Like colours, heights are saved in sessions and `.hsync` files.
+- **Fitting the window**: the waveforms grow and shrink with the window, keeping their proportions, so that they fill the timeline: up to three times their height in a tall window, and in a short one down to the height of the narrow rows before the channels scroll. Dragging an edge then makes that waveform taller while the others make room. To keep fixed heights instead, turn off **Fit waveform heights to the window** in the settings (Behaviour).
 - The arrow at the start of a group header expands or collapses the group.
 
 ## Protocol decoding
