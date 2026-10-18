@@ -490,6 +490,23 @@ fn a_loaded_decoder_module_stands_in_for_the_decoder_of_its_name() {
         .expect("uart");
     assert_eq!(uart.module.as_deref(), Some(module.path.as_str()));
     assert_eq!(uart.config.len(), 8);
+    // The module's copy, under the names the entry uses for its fields.
+    let locales = uart.locales.as_ref().expect("the module carries copy");
+    assert_eq!(locales.keys().collect::<Vec<_>>(), ["en-US", "zh-CN"]);
+    assert_eq!(locales["zh-CN"].name.as_deref(), Some("UART"));
+    assert_eq!(locales["en-US"].fields["data_bits"], "Data bits");
+    assert_eq!(
+        locales["en-US"].values["stop_bits"]["one-and-a-half"],
+        "1.5 bits"
+    );
+    assert_eq!(locales["en-US"].events["break"], "Break");
+    assert_eq!(locales["en-US"].event_fields["framingOk"], "Framing OK");
+    assert!(
+        catalog
+            .iter()
+            .filter(|entry| entry.name != "uart")
+            .all(|entry| entry.locales.is_none())
+    );
     assert_eq!(
         catalog.iter().filter(|entry| entry.name == "uart").count(),
         1

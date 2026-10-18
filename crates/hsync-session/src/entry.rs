@@ -2,7 +2,7 @@
 //! nodes, their connections and the outputs shown as lanes — with a label and the display
 //! settings the interface keeps with it; and the catalog of node types the interface offers.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use hsync_core::ChannelIndex;
 use indexmap::IndexMap;
@@ -106,6 +106,44 @@ pub struct CatalogEntry {
     pub events: Vec<CatalogEvent>,
     /// The file of the decoder module the type comes from; `None` for one built in.
     pub module: Option<String>,
+    /// What a loaded module says of itself, by language tag; none for a type built in, whose
+    /// copy the interface has.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub locales: Option<BTreeMap<String, CatalogLocale>>,
+}
+
+/// What a loaded module shows for itself in one language: its name, a one-line summary and
+/// the labels of its configuration fields, their enumerated values, its event kinds and their
+/// fields, under the names the catalog entry uses; what is left out shows as the interface's
+/// own copy or as the identifier.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct CatalogLocale {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub summary: Option<String>,
+    pub fields: BTreeMap<String, String>,
+    pub values: BTreeMap<String, BTreeMap<String, String>>,
+    pub events: BTreeMap<String, String>,
+    pub event_fields: BTreeMap<String, String>,
+}
+
+impl From<&uiharu_registry::Locale> for CatalogLocale {
+    fn from(locale: &uiharu_registry::Locale) -> Self {
+        Self {
+            name: locale.name.clone(),
+            summary: locale.summary.clone(),
+            fields: locale.fields.clone(),
+            values: locale.values.clone(),
+            events: locale.events.clone(),
+            event_fields: locale.event_fields.clone(),
+        }
+    }
 }
 
 /// A decoder module loaded into the app: a decoder written in the DSL, interpreted from the
@@ -215,6 +253,13 @@ fn catalog_entry(kind: &KindRef<'_>, module: Option<&str>) -> CatalogEntry {
             })
             .collect(),
         module: module.map(ToOwned::to_owned),
+        locales: (!manifest.locales.is_empty()).then(|| {
+            manifest
+                .locales
+                .iter()
+                .map(|(tag, locale)| (tag.clone(), CatalogLocale::from(locale)))
+                .collect()
+        }),
     }
 }
 

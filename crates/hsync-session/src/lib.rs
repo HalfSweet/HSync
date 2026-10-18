@@ -34,8 +34,8 @@ pub use decoding::{
     SearchResult, StreamLanes, StreamPage, StreamStatus,
 };
 pub use entry::{
-    CatalogEntry, CatalogEvent, CatalogField, CatalogFieldKind, CatalogPort, DecoderEntry,
-    ModuleInfo, catalog,
+    CatalogEntry, CatalogEvent, CatalogField, CatalogFieldKind, CatalogLocale, CatalogPort,
+    DecoderEntry, ModuleInfo, catalog,
 };
 pub use error::SessionError;
 pub use files::{ExportKind, ExportRequest, ExportSource, read_text, write_text};
