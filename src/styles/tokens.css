@@ -30,6 +30,8 @@
   --scrim: rgb(25 27 29 / 0.12);
   --hover: rgb(25 27 29 / 0.06);
   --sel: rgb(25 27 29 / 0.12);
+  /* Read-outs floating over the waveforms: the menu fill, thin enough to see the traces through */
+  --float: rgb(233 235 237 / 0.7);
   /* Search hits, and the one shown */
   --find: #fbf4da;
   --find-strong: #ebd696;
@@ -124,6 +126,7 @@
   --scrim: rgb(0 0 0 / 0.45);
   --hover: rgb(234 235 236 / 0.08);
   --sel: rgb(234 235 236 / 0.18);
+  --float: rgb(37 39 41 / 0.7);
   --find: #332e19;
   --find-strong: #5e5225;
   --alert: #f28881;
