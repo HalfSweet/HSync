@@ -52,6 +52,18 @@ describe('trace grip', () => {
     expect(wrapper.emitted('resize')).toHaveLength(2)
   })
 
+  it('says when a drag ends, and only then', async () => {
+    const wrapper = grip()
+    await send(wrapper, 'pointerup', { clientY: 100 })
+    expect(wrapper.emitted('end')).toBeUndefined()
+
+    await send(wrapper, 'pointerdown', { button: 0, clientY: 100 })
+    await send(wrapper, 'pointermove', { clientY: 130 })
+    await send(wrapper, 'pointerup', { clientY: 130 })
+    await send(wrapper, 'pointercancel', { clientY: 130 })
+    expect(wrapper.emitted('end')).toHaveLength(1)
+  })
+
   it('ignores other buttons', async () => {
     const wrapper = grip()
     await send(wrapper, 'pointerdown', { button: 2, clientY: 100 })
