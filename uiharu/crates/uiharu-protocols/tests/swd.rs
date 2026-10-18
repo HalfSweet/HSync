@@ -11,8 +11,8 @@ use uiharu_core::{
 };
 use uiharu_protocols::swd::synth::{SwdPacket, SwdWaveform};
 use uiharu_protocols::swd::{
-    Ack, Data, EndReason, Field, Interface, Next, Read, Request, Swd, SwdBus, SwdConfig, SwdEvent,
-    TxId,
+    ACTIVATE_JTAG_DP, ACTIVATE_SWD, Ack, Data, EndReason, Field, Interface, Next, Read, Request,
+    Swd, SwdBus, SwdConfig, SwdEvent, TxId,
 };
 
 /// SWCLK and SWDIO on channels 0 and 1.
@@ -244,6 +244,12 @@ fn line_reset(from: u64, to: u64) -> String {
     )
 }
 
+/// The line of a switch to `to` whose `bits` bits start with the clock at `from`.
+fn switch_line(to: &str, from: u64, bits: u64) -> String {
+    let last = rise_at(from + (bits - 1) * PERIOD);
+    format!("switch {to} [{},{})@{last}", rise_at(from), last + 1)
+}
+
 /// A debugger connecting at `from`: the lines of its line resets and select sequence.
 fn connect_lines(from: u64) -> Vec<String> {
     let select = from + 56 * PERIOD;
@@ -251,14 +257,15 @@ fn connect_lines(from: u64) -> Vec<String> {
     let idle = second + 56 * PERIOD;
     vec![
         line_reset(from, select),
-        format!(
-            "switch swd [{},{})@{}",
-            rise_at(select),
-            rise_at(second - PERIOD) + 1,
-            rise_at(second - PERIOD)
-        ),
+        switch_line("swd", select, 16),
         line_reset(second, idle),
     ]
+}
+
+/// Bits in a wake: the Selection Alert, the four clocks the target ignores and a code of
+/// `code_bits` bits.
+fn wake_bits(code_bits: u64) -> u64 {
+    128 + 4 + code_bits
 }
 
 #[test]
@@ -555,6 +562,115 @@ fn line_resets_and_both_select_sequences_are_reported() {
 }
 
 #[test]
+fn the_dormant_state_is_entered_and_left_as_adiv6_has_it() {
+    let mut waveform = waveform();
+    waveform.connect();
+    let mut expected = connect_lines(LEAD);
+    // Into the dormant state: a line reset and 0xE3BC. Nothing is decoded there.
+    let reset = waveform.position().get();
+    waveform.line_reset(52);
+    let select = waveform.position().get();
+    waveform.select(Interface::Dormant);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("dormant", select, 16));
+    waveform.idle_cycles(3);
+    waveform.packet(&SwdPacket::read(false, 0x0, 1));
+    // A wake with a code the decoder does not know leaves the port dormant.
+    waveform.wake(0x5a, 8);
+    waveform.packet(&SwdPacket::read(false, 0x0, 1));
+    // The Arm CoreSight SW-DP code wakes the port to SWD, where the target waits for a line
+    // reset in the protocol error state: until it comes, nothing is decoded (this packet's
+    // last bits are low, so that they do not lead into the line reset).
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(u16::from(ACTIVATE_SWD), 8);
+    expected.push(switch_line("swd", alert, wake_bits(8)));
+    waveform.packet(&SwdPacket::read(false, 0x0, 0));
+    let reset = waveform.position().get();
+    waveform.line_reset(56);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, idle));
+    let position = waveform.position().get();
+    let packet = SwdPacket::read(false, 0x0, 0x0bc1_2477);
+    waveform.packet(&packet);
+    expected.extend(packet_lines(1, &packet, position));
+    waveform.idle_cycles(2);
+    // Dormant again, then woken to JTAG by the JTAG-DP code: no packet is decoded until a
+    // line reset and a switch back to SWD.
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let select = waveform.position().get();
+    waveform.select(Interface::Dormant);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("dormant", select, 16));
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(u16::from(ACTIVATE_JTAG_DP), 8);
+    expected.push(switch_line("jtag", alert, wake_bits(8)));
+    waveform.bits(0x0123_4567, 32);
+    waveform.packet(&packet);
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let select = waveform.position().get();
+    waveform.select(Interface::Swd);
+    let second = waveform.position().get();
+    waveform.line_reset(50);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("swd", select, 16));
+    expected.push(line_reset(second, idle));
+    let position = waveform.position().get();
+    waveform.packet(&packet);
+    expected.extend(packet_lines(2, &packet, position));
+    // The JTAG-Serial code, twelve zero bits, wakes to JTAG as well.
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let select = waveform.position().get();
+    waveform.select(Interface::Dormant);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("dormant", select, 16));
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(0, 12);
+    expected.push(switch_line("jtag", alert, wake_bits(12)));
+    waveform.idle(4);
+    let block = waveform.finish();
+    expected.push(format!("eof {}", block.end()));
+    assert_eq!(decode(&block), expected);
+}
+
+#[test]
+fn a_selection_alert_is_recognised_in_swd_mode_as_well() {
+    // A host that takes the port for dormant while the decoder saw it in SWD: the alert's
+    // bits are decoded for what they look like, but the alert and its code are still a
+    // switch, every packet begun ends, and the line reset after it brings packets back.
+    let mut waveform = waveform();
+    waveform.connect();
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(u16::from(ACTIVATE_SWD), 8);
+    let reset = waveform.position().get();
+    waveform.line_reset(56);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    let position = waveform.position().get();
+    let packet = SwdPacket::read(false, 0x0, 0x0bc1_2477);
+    waveform.packet(&packet);
+    waveform.idle(4);
+    let block = waveform.finish();
+    let lines = decode(&block);
+    let switch = switch_line("swd", alert, wake_bits(8));
+    let at = lines
+        .iter()
+        .position(|line| *line == switch)
+        .unwrap_or_else(|| panic!("no {switch} in {lines:?}"));
+    let count = |what: &str| lines[..at].iter().filter(|l| l.starts_with(what)).count();
+    assert_eq!(count("begin "), count("end "), "{lines:?}");
+    let mut tail = vec![line_reset(reset, idle)];
+    tail.extend(packet_lines(count("begin ") as u64 + 1, &packet, position));
+    tail.push(format!("eof {}", block.end()));
+    assert_eq!(lines[at + 1..], tail[..]);
+}
+
+#[test]
 fn a_packet_is_reported_once_it_cannot_be_a_select_sequence() {
     // After a line reset and one idle cycle, an access port read of 0x4 sends 1, 1, 1, 1, 0:
     // the JTAG-to-SWD sequence starts 0, 1, 1, 1, 1, 0 too, and parts from the request only at
@@ -810,6 +926,8 @@ fn rich_waveform() -> LogicBlock {
     for n in 0..5u32 {
         waveform.packet(&SwdPacket::write(true, 0x4, n << 28));
     }
+    waveform.connect_through_dormant();
+    waveform.packet(&SwdPacket::read(false, 0x0, 0x0bc1_2477));
     waveform.idle(6);
     waveform.finish()
 }
@@ -833,6 +951,8 @@ fn every_cut_and_pause_yields_the_same_events() {
         "switch jtag",
         "switch swd",
         "end p31 complete",
+        "switch dormant",
+        "end p32 complete",
     ] {
         assert!(
             lines.iter().any(|line| line.starts_with(what)),
@@ -856,6 +976,30 @@ enum Step {
     Reset(u32, u32),
     /// A line reset, a select sequence, another line reset and idle cycles.
     Switch(Interface, u32, u32),
+    /// A line reset, the SWD-to-dormant sequence, then a wake, then idle cycles; a wake to
+    /// SWD is followed by a line reset first.
+    Dormant(Wake, u32, u32),
+}
+
+/// What a wake from the dormant state asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Wake {
+    Swd,
+    Jtag,
+    JtagSerial,
+    Unrecognized,
+}
+
+impl Wake {
+    /// The activation code and its length in bits.
+    fn code(self) -> (u16, u32) {
+        match self {
+            Wake::Swd => (u16::from(ACTIVATE_SWD), 8),
+            Wake::Jtag => (u16::from(ACTIVATE_JTAG_DP), 8),
+            Wake::JtagSerial => (0, 12),
+            Wake::Unrecognized => (0x5a, 8),
+        }
+    }
 }
 
 fn packet() -> impl Strategy<Value = SwdPacket> {
@@ -905,11 +1049,22 @@ fn step() -> impl Strategy<Value = Step> {
             .prop_map(|(packet, reset, idle)| Step::Broken(packet, reset, idle)),
         1 => (50u32..70, 3u32..8).prop_map(|(reset, idle)| Step::Reset(reset, idle)),
         1 => (
-            prop::sample::select(vec![Interface::Swd, Interface::Jtag]),
+            prop::sample::select(vec![Interface::Swd, Interface::Jtag, Interface::Dormant]),
             50u32..60,
             3u32..6
         )
             .prop_map(|(to, reset, idle)| Step::Switch(to, reset, idle)),
+        1 => (
+            prop::sample::select(vec![
+                Wake::Swd,
+                Wake::Jtag,
+                Wake::JtagSerial,
+                Wake::Unrecognized
+            ]),
+            50u32..60,
+            2u32..6
+        )
+            .prop_map(|(wake, reset, idle)| Step::Dormant(wake, reset, idle)),
     ]
 }
 
@@ -938,6 +1093,16 @@ fn build_on(mut waveform: SwdWaveform, steps: &[Step]) -> LogicBlock {
                 waveform.line_reset(*reset);
                 waveform.select(*to);
                 waveform.line_reset(*reset);
+                waveform.idle_cycles(*idle);
+            }
+            Step::Dormant(wake, reset, idle) => {
+                waveform.line_reset(*reset);
+                waveform.select(Interface::Dormant);
+                let (code, bits) = wake.code();
+                waveform.wake(code, bits);
+                if *wake == Wake::Swd {
+                    waveform.line_reset(*reset);
+                }
                 waveform.idle_cycles(*idle);
             }
         }
@@ -1025,6 +1190,26 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                     Interface::Swd => Mode::Swd,
                     Interface::Jtag => Mode::Jtag,
                     Interface::Dormant => Mode::Dormant,
+                };
+            }
+            Step::Dormant(wake, ..) => {
+                events.push(SwdEvent::LineReset);
+                events.push(SwdEvent::Switch {
+                    to: Interface::Dormant,
+                });
+                mode = match wake {
+                    Wake::Swd => {
+                        events.push(SwdEvent::Switch { to: Interface::Swd });
+                        events.push(SwdEvent::LineReset);
+                        Mode::Swd
+                    }
+                    Wake::Jtag | Wake::JtagSerial => {
+                        events.push(SwdEvent::Switch {
+                            to: Interface::Jtag,
+                        });
+                        Mode::Jtag
+                    }
+                    Wake::Unrecognized => Mode::Dormant,
                 };
             }
         }
