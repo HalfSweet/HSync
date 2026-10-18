@@ -79,16 +79,20 @@ impl SwdPacket {
 /// Builds the samples of an SWD port one clock at a time.
 ///
 /// A clock is half a period with SWCLK low, then half a period with it high, so that SWCLK
-/// rests high between clocks. Whoever drives SWDIO changes it on the falling edge that starts
-/// the low half — the host for requests, idle cycles and written data, the target for the
-/// acknowledge and read data — so it is stable at the rising edge. In a turnaround nobody
-/// drives SWDIO and its pull-up holds it high.
+/// rests high between clocks. The host changes SWDIO on the falling edge that starts the low
+/// half — for requests, idle cycles and written data — so that the target reads it at the
+/// rising edge. The target changes SWDIO on the rising edge, as ADIv6 B4.3.1 has it do, the
+/// change showing [`SwdWaveform::with_target_delay`] samples after the edge: the acknowledge
+/// and read data are therefore read at the falling edge that follows. In a turnaround nobody
+/// drives SWDIO and it keeps its level, which the pull-up holds high after the Park bit.
 #[derive(Debug)]
 pub struct SwdWaveform {
     config: SwdConfig,
     builder: LogicBlockBuilder,
     /// Samples per half SWCLK period.
     half_period: u64,
+    /// Samples after a rising edge at which the target's change of SWDIO shows.
+    target_delay: u64,
     levels: Levels,
 }
 
@@ -100,11 +104,20 @@ impl SwdWaveform {
         let mut waveform = Self {
             builder: LogicBlockBuilder::new(start, channels),
             half_period: half_period.max(1),
+            target_delay: 0,
             levels: Levels(0),
             config,
         };
         waveform.set(waveform.config.swclk, true);
         waveform
+    }
+
+    /// Lets the target's changes of SWDIO show `samples` samples after the rising edge: its
+    /// output delay as the analyzer sees it, less than half a period. With none, the default,
+    /// the change shows in the very sample of the edge.
+    pub fn with_target_delay(mut self, samples: u64) -> Self {
+        self.target_delay = samples.min(self.half_period - 1);
+        self
     }
 
     /// The tick the next sample will have.
@@ -134,11 +147,33 @@ impl SwdWaveform {
         self.hold(samples);
     }
 
-    /// One clock with SWDIO at `high`.
+    /// One clock with the host driving SWDIO at `high` from the falling edge.
     pub fn clock(&mut self, high: bool) {
         let (swclk, swdio) = (self.config.swclk, self.config.swdio);
         self.set(swclk, false);
         self.set(swdio, high);
+        self.hold(self.half_period);
+        self.set(swclk, true);
+        self.hold(self.half_period);
+    }
+
+    /// One clock at whose rising edge the target starts driving SWDIO at `high`; the bit is
+    /// read at the next clock's falling edge.
+    pub fn target_clock(&mut self, high: bool) {
+        let (swclk, swdio) = (self.config.swclk, self.config.swdio);
+        self.set(swclk, false);
+        self.hold(self.half_period);
+        self.set(swclk, true);
+        self.hold(self.target_delay);
+        self.set(swdio, high);
+        self.hold(self.half_period - self.target_delay);
+    }
+
+    /// One clock in which nobody drives SWDIO, which keeps its level: a turnaround, or the
+    /// clock at whose falling edge the target's last bit is read before it releases the line.
+    pub fn turnaround(&mut self) {
+        let swclk = self.config.swclk;
+        self.set(swclk, false);
         self.hold(self.half_period);
         self.set(swclk, true);
         self.hold(self.half_period);
@@ -186,24 +221,42 @@ impl SwdWaveform {
     /// One packet: the request, a turnaround and the acknowledge; after OK, the read data,
     /// its parity and a turnaround, or a turnaround, the written data and its parity; after
     /// WAIT and FAULT, a turnaround; after anything else, nothing.
+    ///
+    /// The target starts driving the first acknowledge bit at the rising edge of the
+    /// turnaround clock after Park, each bit of its at the next, and releases the line at the
+    /// rising edge of the clock at whose falling edge its last bit is read.
     pub fn packet(&mut self, packet: &SwdPacket) {
         self.bits(u64::from(packet.request_bits()), 8);
-        self.clock(true);
-        self.bits(u64::from(packet.ack.bits()), 3);
+        let ack = packet.ack.bits();
+        for i in 0..3 {
+            self.target_clock(ack >> i & 1 != 0);
+        }
         let parity = (packet.data.count_ones() & 1 == 1) != packet.bad_data_parity;
         match packet.ack {
             Ack::Ok if packet.rnw => {
-                self.bits(u64::from(packet.data), 32);
-                self.clock(parity);
-                self.clock(true);
+                for i in 0..32 {
+                    self.target_clock(packet.data >> i & 1 != 0);
+                }
+                self.target_clock(parity);
+                // The parity bit is read and the target releases the line; then the
+                // turnaround back to the host.
+                self.turnaround();
+                self.turnaround();
             }
             Ack::Ok => {
-                self.clock(true);
+                // The last acknowledge bit is read and the target releases the line; then the
+                // turnaround to the host.
+                self.turnaround();
+                self.turnaround();
                 self.bits(u64::from(packet.data), 32);
                 self.clock(parity);
             }
-            Ack::Wait | Ack::Fault => self.clock(true),
-            Ack::Other(_) => {}
+            Ack::Wait | Ack::Fault => {
+                self.turnaround();
+                self.turnaround();
+            }
+            // The last acknowledge bit is read; a host that saw it backs off.
+            Ack::Other(_) => self.turnaround(),
         }
     }
 

@@ -7,8 +7,10 @@
 //! (ARM IHI 0031): its Serial Wire Debug protocol and the switching sequences of the SWJ-DP.
 //! The rules:
 //!
-//! - every bit is read at the tick SWCLK rises: the host drives SWDIO before that edge and the
-//!   target after the falling edge before it, so the one edge reads both directions;
+//! - every bit belongs to a rising edge of SWCLK. The host's bits are read there, where the
+//!   target samples them; the target changes SWDIO on the rising edge (B4.3.1), so its bits —
+//!   the acknowledge, a read's data and parity — are read at the falling edge before, where
+//!   they have settled, whatever the target's output delay;
 //! - a line reset is at least 50 clocks in a row with SWDIO high; it is reported when SWDIO is
 //!   read low again, or where the samples stop, spanning the whole run;
 //! - right after a line reset, the select sequences JTAG-to-SWD (`0xE79E`) and SWD-to-JTAG
@@ -185,11 +187,16 @@ impl Node for Swd {
     }
 }
 
-/// SWDIO as read at a rising edge of SWCLK.
+/// SWDIO around a rising edge of SWCLK: at the edge, where the target samples what the host
+/// drives, and at the falling edge before it, where the host samples what the target drives.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Bit {
     tick: Tick,
+    /// SWDIO at the rising edge: the host's bit.
     high: bool,
+    /// SWDIO at the falling edge before it: the target's bit. Where no falling edge came
+    /// before, since the samples began, the level at the rising edge.
+    target: bool,
 }
 
 /// What the decoder knows about where packets start.
@@ -318,6 +325,13 @@ impl Packet {
         self.request >> 2 & 1 != 0
     }
 
+    /// Whether the target drives the bit at `index`: the acknowledge, and a read's data and
+    /// parity after OK.
+    fn target_drives(&self, index: u8) -> bool {
+        (9..=11).contains(&index)
+            || (self.rnw() && index >= 12 && Ack::from_bits(self.ack) == Ack::Ok)
+    }
+
     /// The indices of the first data bit and of the parity bit after OK: a read's data follows
     /// the acknowledge, a write's comes after a turnaround.
     fn data_bits(&self) -> (u8, u8) {
@@ -426,6 +440,7 @@ impl Decoder {
                 *slot = Bit {
                     tick: *tick,
                     high: true,
+                    target: true,
                 };
             }
             self.replay.put_back(&bits[..=ones]);
@@ -475,7 +490,12 @@ impl Decoder {
         let index = packet.taken;
         packet.taken = packet.taken.saturating_add(1);
         let tx = packet.tx;
-        let level = u8::from(bit.high);
+        let high = if packet.target_drives(index) {
+            bit.target
+        } else {
+            bit.high
+        };
+        let level = u8::from(high);
         match index {
             0 => {
                 packet.start = bit.tick;
@@ -534,7 +554,7 @@ impl Decoder {
                 // The turnaround back to the host ends the packet.
                 Ack::Wait => self.end(EndReason::Wait, bit, out).await,
                 Ack::Fault => self.end(EndReason::Fault, bit, out).await,
-                Ack::Ok => self.data_bit(index, bit, out).await,
+                Ack::Ok => self.data_bit(index, bit, high, out).await,
                 // The packet ended with the acknowledge.
                 Ack::Other(_) => {}
             },
@@ -542,8 +562,8 @@ impl Decoder {
     }
 
     /// A bit of the data phase after OK: a read's data, parity and turnaround from bit 12, or
-    /// a write's turnaround, data and parity.
-    async fn data_bit(&mut self, index: u8, bit: Bit, out: &mut Outbox<SwdEvent>) {
+    /// a write's turnaround, data and parity; `high` is the bit as the side driving it sent it.
+    async fn data_bit(&mut self, index: u8, bit: Bit, high: bool, out: &mut Outbox<SwdEvent>) {
         let now = self.now;
         let Some(packet) = self.packet.as_mut() else {
             return;
@@ -557,7 +577,7 @@ impl Decoder {
             if index == first {
                 packet.data_first = bit.tick;
             }
-            packet.data |= u32::from(bit.high) << (index - first);
+            packet.data |= u32::from(high) << (index - first);
             return;
         }
         if index > parity {
@@ -565,7 +585,7 @@ impl Decoder {
             return;
         }
         let value = packet.data;
-        let parity_ok = (value.count_ones() & 1 == 1) == bit.high;
+        let parity_ok = (value.count_ones() & 1 == 1) == high;
         let span = TickRange::new(packet.data_first, bit.tick.next());
         let event = SwdEvent::Data {
             tx: packet.tx,
@@ -630,6 +650,8 @@ impl Decoder {
 async fn run(mut signal: SignalCursor, mut out: Outbox<SwdEvent>, config: SwdConfig) {
     let mut decoder = Decoder::new();
     let clock = ChannelMask::one(config.swclk);
+    // SWDIO at the last falling edge of SWCLK, where the target's bit is read.
+    let mut fall: Option<bool> = None;
     loop {
         if let Some(bit) = decoder.replay.pop() {
             decoder.bit(bit, &mut out).await;
@@ -637,16 +659,21 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<SwdEvent>, config: SwdCon
         }
         match signal.next_change(clock).await {
             Change::At { tick, levels, .. } => {
+                let swdio = levels.high(config.swdio);
                 if levels.high(config.swclk) {
                     decoder.now = tick;
                     let bit = Bit {
                         tick,
-                        high: levels.high(config.swdio),
+                        high: swdio,
+                        target: fall.take().unwrap_or(swdio),
                     };
                     decoder.bit(bit, &mut out).await;
+                } else {
+                    fall = Some(swdio);
                 }
             }
             Change::Gap(range) => {
+                fall = None;
                 decoder.cut(range.start, &mut out).await;
                 out.gap(range).await;
             }
@@ -700,6 +727,7 @@ mod tests {
             select.bits[i] = Bit {
                 tick: Tick(i as u64),
                 high,
+                target: high,
             };
             select.len = i + 1;
         }
@@ -712,6 +740,7 @@ mod tests {
         let bit = |tick: u64| Bit {
             tick: Tick(tick),
             high: tick.is_multiple_of(2),
+            target: tick.is_multiple_of(2),
         };
         let mut replay = Replay::default();
         replay.put_back(&[bit(5), bit(6), bit(7)]);
