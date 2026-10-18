@@ -27,6 +27,11 @@
       "kind": "integer",
       "min": 1,
       "max": 4
+    },
+    {
+      "name": "overrun_detect",
+      "kind": "enum",
+      "values": ["auto", "on", "off"]
     }
   ],
   "events": [

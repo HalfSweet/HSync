@@ -33,6 +33,9 @@ pub struct SwdPacket {
     pub park: bool,
     /// Sends the data's parity bit inverted.
     pub bad_data_parity: bool,
+    /// Overrun detection is on: WAIT and FAULT carry a data phase, which the target does not
+    /// drive for a read and ignores for a write.
+    pub orundetect: bool,
 }
 
 impl SwdPacket {
@@ -48,6 +51,7 @@ impl SwdPacket {
             stop: false,
             park: true,
             bad_data_parity: false,
+            orundetect: false,
         }
     }
 
@@ -263,9 +267,10 @@ impl SwdWaveform {
 
     /// One packet: the request, a turnaround and the acknowledge; after OK, the read data,
     /// its parity and a turnaround, or a turnaround, the written data and its parity; after
-    /// WAIT and FAULT, a turnaround; after anything else, nothing — except for a TARGETSEL
-    /// write, whose data the host sends whatever the acknowledge bits showed. Turnarounds
-    /// last the clocks the configuration says.
+    /// WAIT and FAULT, a turnaround — or, with overrun detection on, a data phase nobody
+    /// drives (a read) or the host's word (a write); after anything else, nothing — except
+    /// for a TARGETSEL write, whose data the host sends whatever the acknowledge bits showed.
+    /// Turnarounds last the clocks the configuration says.
     ///
     /// The target starts driving the first acknowledge bit at the rising edge of the last
     /// turnaround clock after Park, each bit of its at the next, and releases the line at the
@@ -290,6 +295,14 @@ impl SwdWaveform {
             }
             Ack::Ok => self.write_phase(packet.data, parity),
             _ if packet.is_targetsel() => self.write_phase(packet.data, parity),
+            Ack::Wait | Ack::Fault if packet.orundetect && packet.rnw => {
+                // Nobody drives the line for the 33 cycles of the data phase.
+                for _ in 0..33 {
+                    self.turnaround();
+                }
+                self.release();
+            }
+            Ack::Wait | Ack::Fault if packet.orundetect => self.write_phase(packet.data, parity),
             Ack::Wait | Ack::Fault => self.release(),
             // The last acknowledge bit is read; a host that saw it backs off.
             Ack::Other(_) => self.turnaround(),
@@ -365,6 +378,21 @@ mod tests {
         assert_eq!(
             clocks(SwdPacket::read(false, 0, 1).with_ack(Ack::Other(7)), 1),
             12
+        );
+        let overrun = |packet: SwdPacket| SwdPacket {
+            orundetect: true,
+            ..packet
+        };
+        assert_eq!(
+            clocks(overrun(SwdPacket::read(false, 0, 1).with_ack(Ack::Wait)), 1),
+            46
+        );
+        assert_eq!(
+            clocks(
+                overrun(SwdPacket::write(false, 0, 1).with_ack(Ack::Fault)),
+                1
+            ),
+            46
         );
         // Each turnaround clock more adds to both turnarounds of a packet with a data phase.
         assert_eq!(clocks(SwdPacket::read(false, 0, 1), 4), 52);

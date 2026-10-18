@@ -249,6 +249,13 @@ fn packet_lines_as(tx: u64, packet: &SwdPacket, position: u64, trn: u64) -> Vec<
                 ));
             }
         }
+        // Under overrun detection, a data phase with nothing to report comes first.
+        Ack::Wait if packet.orundetect => {
+            lines.push(one(&format!("end p{tx} wait"), rise(ack_last + 33 + trn)));
+        }
+        Ack::Fault if packet.orundetect => {
+            lines.push(one(&format!("end p{tx} fault"), rise(ack_last + 33 + trn)));
+        }
         Ack::Wait => lines.push(one(&format!("end p{tx} wait"), rise(ack_last + trn))),
         Ack::Fault => lines.push(one(&format!("end p{tx} fault"), rise(ack_last + trn))),
         Ack::Ok | Ack::Other(_) => {
@@ -336,7 +343,7 @@ fn the_targets_bits_are_read_at_the_falling_edge_whatever_its_delay() {
         ),
         Step::Packet(SwdPacket::read(true, 0x0, 0x5555_aaaa), 0),
     ];
-    let expected = model(&steps);
+    let (expected, steps) = simulate(&steps);
     assert!(expected.len() > 20, "{expected:?}");
     let half = 8;
     for delay in [0, 1, half - 1] {
@@ -1178,9 +1185,12 @@ fn build_on(mut waveform: SwdWaveform, steps: &[Step]) -> LogicBlock {
     waveform.finish()
 }
 
-/// The events a scenario must decode to, from the protocol's rules alone: packets count only
-/// between a line reset and a protocol error, in SWD.
-fn model(steps: &[Step]) -> Vec<SwdEvent> {
+/// The events a scenario must decode to, from the protocol's rules alone — packets count only
+/// between a line reset and a protocol error, in SWD — and the steps with each packet told
+/// whether overrun detection is on, as the debug port writes decoded so far have set it: a
+/// write to CTRL/STAT acknowledged OK and whole, in bank 0 of SELECT.DPBANKSEL, which a line
+/// reset puts back to 0.
+fn simulate(steps: &[Step]) -> (Vec<SwdEvent>, Vec<Step>) {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Mode {
         Unaligned,
@@ -1191,13 +1201,31 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
     let mut mode = Mode::Unaligned;
     let mut next = 1;
     let mut events = Vec::new();
+    let mut annotated = Vec::with_capacity(steps.len());
+    let (mut orundetect, mut dpbanksel) = (false, 0u32);
     let after_reset = |mode: Mode| match mode {
         Mode::Jtag | Mode::Dormant => mode,
         Mode::Unaligned | Mode::Swd => Mode::Swd,
     };
     for step in steps {
-        match step {
+        let mut step = step.clone();
+        match &mut step {
             Step::Packet(packet, _) | Step::Broken(packet, _, _) => {
+                packet.orundetect = orundetect;
+                let request_ok = !packet.bad_request_parity && !packet.stop && packet.park;
+                if mode == Mode::Swd
+                    && request_ok
+                    && !packet.apndp
+                    && !packet.rnw
+                    && packet.ack == Ack::Ok
+                    && !packet.bad_data_parity
+                {
+                    match packet.addr & 0xc {
+                        0x8 => dpbanksel = packet.data & 0xf,
+                        0x4 if dpbanksel == 0 => orundetect = packet.data & 1 != 0,
+                        _ => {}
+                    }
+                }
                 if mode == Mode::Swd {
                     let tx = TxId(next);
                     next += 1;
@@ -1242,17 +1270,20 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                 }
                 if let Step::Broken(..) = step {
                     events.push(SwdEvent::LineReset);
+                    dpbanksel = 0;
                     mode = after_reset(mode);
                 }
             }
             Step::Reset(..) => {
                 events.push(SwdEvent::LineReset);
+                dpbanksel = 0;
                 mode = after_reset(mode);
             }
             Step::Switch(to, ..) => {
                 events.push(SwdEvent::LineReset);
                 events.push(SwdEvent::Switch { to: *to });
                 events.push(SwdEvent::LineReset);
+                dpbanksel = 0;
                 mode = match to {
                     Interface::Swd => Mode::Swd,
                     Interface::Jtag => Mode::Jtag,
@@ -1264,6 +1295,7 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                 events.push(SwdEvent::Switch {
                     to: Interface::Dormant,
                 });
+                dpbanksel = 0;
                 mode = match wake {
                     Wake::Swd => {
                         events.push(SwdEvent::Switch { to: Interface::Swd });
@@ -1280,8 +1312,9 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                 };
             }
         }
+        annotated.push(step);
     }
-    events
+    (events, annotated)
 }
 
 proptest! {
@@ -1294,9 +1327,10 @@ proptest! {
         sizes in prop::collection::vec(1u64..300, 1..5),
         delay in 0..HALF,
     ) {
+        let (expected, steps) = simulate(&steps);
         let block = build(&steps, delay);
         let decoded = items(&block, &[]);
-        prop_assert_eq!(payloads(&decoded), model(&steps));
+        prop_assert_eq!(payloads(&decoded), expected);
         let mut cut = harness(GraphConfig { queue_capacity: 2, budget: 5 });
         cut.drain_on_full = 1;
         cut.feed_cut(&block, &[], &sizes, &[1, 0, 2]);

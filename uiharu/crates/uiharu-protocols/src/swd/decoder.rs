@@ -40,8 +40,15 @@
 //!   turnaround, and the acknowledge, three bits least significant first. After OK, a read
 //!   goes on with 32 data bits, least significant first, and a parity bit from the target,
 //!   then a turnaround; a write with a turnaround, then 32 data bits and a parity bit from the
-//!   host. After WAIT or FAULT comes a turnaround and no data. A turnaround lasts the clocks
-//!   the configuration says, 1 to 4 (DLCR.TURNROUND), one unless the debugger changed it;
+//!   host. After WAIT or FAULT comes a turnaround and no data — unless overrun detection is on
+//!   (CTRL/STAT.ORUNDETECT, B4.2.6), when a data phase follows all the same, undriven for a
+//!   read and ignored by the target for a write: the decoder reads it through without a `data`
+//!   event and ends the packet after it. The configuration says whether overrun detection is
+//!   on, off, or followed from the wire: then it is off until a write to CTRL/STAT turns it
+//!   on, a debug port write to `0x4` acknowledged OK with SELECT.DPBANKSEL at 0, which the
+//!   writes to SELECT (`0x8`) choose and a line reset puts back to 0. A turnaround lasts the
+//!   clocks the configuration says, 1 to 4 (DLCR.TURNROUND), one unless the debugger changed
+//!   it;
 //! - a packet ends `complete` on its last bit — the read's final turnaround, the write's parity
 //!   bit — and `wait` or `fault` on the turnaround after the acknowledge;
 //! - a write to debug port address `0xC` is a TARGETSEL write (B4.3.4, SWD protocol version
@@ -60,11 +67,13 @@
 //!   that may be a select sequence; of the request, acknowledge or data being read;
 //! - a bit decides at most a field of the packet and then its end, in that order.
 //!
-//! Limits: the turnaround is the configuration's, not followed from writes to DLCR; with
-//! overrun detection (CTRL/STAT.ORUNDETECT) WAIT and FAULT carry a data phase the decoder does
-//! not expect; the JTAG-to-dormant sequence, defined by the TAP controller's zero-bit scans, is
-//! not recognised on SWDIO. No register is named: what `addr` selects depends on APnDP and on
-//! the debug and access ports, which is the next layer's business.
+//! Limits: the turnaround is the configuration's, not followed from writes to DLCR; overrun
+//! detection followed from the wire is only as right as the writes the decoder saw — a write
+//! to CTRL/STAT before the samples begin, in a gap or while the decoder was not aligned is
+//! missed, and the configuration can then say `on` or `off` outright; the JTAG-to-dormant
+//! sequence, defined by the TAP controller's zero-bit scans, is not recognised on SWDIO. No
+//! register is named: what `addr` selects depends on APnDP and on the debug and access ports,
+//! which is the next layer's business.
 
 use std::sync::Arc;
 
@@ -136,6 +145,9 @@ pub struct SwdConfig {
     /// The turnaround period in clocks, 1 to 4: what the debugger wrote to DLCR.TURNROUND,
     /// one after a reset.
     pub turnaround: u8,
+    /// Whether overrun detection (CTRL/STAT.ORUNDETECT) is on, which makes WAIT and FAULT
+    /// carry a data phase.
+    pub overrun_detect: OverrunDetect,
 }
 
 impl Default for SwdConfig {
@@ -144,8 +156,23 @@ impl Default for SwdConfig {
             swclk: 0,
             swdio: 1,
             turnaround: 1,
+            overrun_detect: OverrunDetect::Auto,
         }
     }
+}
+
+/// How the decoder knows whether overrun detection is on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OverrunDetect {
+    /// From the wire: off, as after a powerup reset, until a write to CTRL/STAT acknowledged
+    /// OK sets or clears it.
+    #[default]
+    Auto,
+    /// On throughout.
+    On,
+    /// Off throughout.
+    Off,
 }
 
 impl SwdConfig {
@@ -490,6 +517,9 @@ struct Packet {
     tx: TxId,
     /// Clocks in a turnaround.
     trn: u8,
+    /// Whether overrun detection was on when the packet began: WAIT and FAULT then carry a
+    /// data phase.
+    orundetect: bool,
     /// Bits taken, from the Start bit.
     taken: u8,
     start: Tick,
@@ -502,10 +532,11 @@ struct Packet {
 }
 
 impl Packet {
-    fn new(tx: TxId, trn: u8) -> Self {
+    fn new(tx: TxId, trn: u8, orundetect: bool) -> Self {
         Self {
             tx,
             trn,
+            orundetect,
             taken: 0,
             start: Tick::ZERO,
             request: 0,
@@ -538,8 +569,17 @@ impl Packet {
         10 + 2 * self.trn
     }
 
+    fn apndp(&self) -> bool {
+        self.request >> 1 & 1 != 0
+    }
+
     fn rnw(&self) -> bool {
         self.request >> 2 & 1 != 0
+    }
+
+    /// A\[3:2\] as a byte address.
+    fn addr(&self) -> u8 {
+        (self.request >> 3 & 1) << 2 | (self.request >> 4 & 1) << 3
     }
 
     /// Whether the request is a write to debug port address `0xC`: TARGETSEL, whose
@@ -549,10 +589,26 @@ impl Packet {
         self.request & 0b1_1110 == 0b1_1000
     }
 
-    /// Whether a data phase follows the acknowledge: after OK, and after any acknowledge of
-    /// a TARGETSEL write.
-    fn has_data_phase(&self) -> bool {
+    /// Whether the data phase carries a word to report: after OK, and after any acknowledge
+    /// of a TARGETSEL write.
+    fn emits_data(&self) -> bool {
         Ack::from_bits(self.ack) == Ack::Ok || self.targetsel()
+    }
+
+    /// Whether a data phase follows the acknowledge: one that carries a word, or the empty one
+    /// of WAIT and FAULT under overrun detection.
+    fn has_data_phase(&self) -> bool {
+        self.emits_data()
+            || (self.orundetect && matches!(Ack::from_bits(self.ack), Ack::Wait | Ack::Fault))
+    }
+
+    /// How the packet ends after its data phase.
+    fn end_after_data(&self) -> EndReason {
+        match Ack::from_bits(self.ack) {
+            Ack::Wait => EndReason::Wait,
+            Ack::Fault => EndReason::Fault,
+            Ack::Ok | Ack::Other(_) => EndReason::Complete,
+        }
     }
 
     /// Whether the target drives the bit at `index`: the acknowledge, and a read's data and
@@ -579,7 +635,7 @@ impl Packet {
         match self.taken {
             1..=7 => Some(self.start),
             taken if taken > self.ack_first() && taken <= self.ack_last() => Some(self.ack_first),
-            taken if self.has_data_phase() => {
+            taken if self.emits_data() => {
                 let (first, parity) = self.data_bits();
                 (first < taken && taken <= parity).then_some(self.data_first)
             }
@@ -599,6 +655,12 @@ fn settle(at: Provenance, now: Tick) -> Provenance {
 struct Decoder {
     /// Clocks in a turnaround.
     trn: u8,
+    /// How overrun detection is known.
+    overrun: OverrunDetect,
+    /// Whether overrun detection is on.
+    orundetect: bool,
+    /// SELECT.DPBANKSEL: which register a debug port access to `0x4` reaches.
+    dpbanksel: u8,
     mode: Mode,
     run: Run,
     select: Option<Select>,
@@ -614,6 +676,9 @@ impl Decoder {
     fn new(config: &SwdConfig) -> Self {
         Self {
             trn: config.turnaround,
+            overrun: config.overrun_detect,
+            orundetect: config.overrun_detect == OverrunDetect::On,
+            dpbanksel: 0,
             mode: Mode::Unaligned,
             run: Run::default(),
             select: None,
@@ -642,6 +707,25 @@ impl Decoder {
     /// starting earlier follows.
     fn hold(&self, tick: Tick) -> Tick {
         self.in_flight().map_or(tick, |start| start.min(tick))
+    }
+
+    /// A line reset resets SELECT.DPBANKSEL (B4.3.3); CTRL/STAT keeps its value.
+    fn line_reset(&mut self) {
+        self.dpbanksel = 0;
+    }
+
+    /// A debug port write acknowledged OK and whole, as far as overrun detection followed
+    /// from the wire cares: SELECT (`0x8`) chooses the bank of `0x4`, CTRL/STAT (`0x4` in bank
+    /// 0) turns overrun detection on or off with its bit 0.
+    fn dp_write(&mut self, addr: u8, value: u32) {
+        if self.overrun != OverrunDetect::Auto {
+            return;
+        }
+        match addr {
+            0x8 => self.dpbanksel = (value & 0xf) as u8,
+            0x4 if self.dpbanksel == 0 => self.orundetect = value & 1 != 0,
+            _ => {}
+        }
     }
 
     /// A bit read from the wire, not one decoded again: watched for the wake sequence, then
@@ -695,6 +779,7 @@ impl Decoder {
             select.bits[0] = bit;
             select.len = 1;
             self.select = Some(select);
+            self.line_reset();
             let at = settle(Provenance::over(run.span(), bit.tick), self.now);
             out.emit(at, SwdEvent::LineReset).await;
             return;
@@ -704,7 +789,7 @@ impl Decoder {
             // it belongs to the request.
             let tx = TxId(self.next_tx);
             self.next_tx += 1;
-            self.packet = Some(Packet::new(tx, self.trn));
+            self.packet = Some(Packet::new(tx, self.trn, self.orundetect));
             let ones = (run.count as usize).min(REQUEST_BITS);
             let mut bits = [bit; REQUEST_BITS + 1];
             for (slot, tick) in bits.iter_mut().zip(&run.first[..ones]) {
@@ -826,16 +911,16 @@ impl Decoder {
                     self.end(EndReason::ProtocolError, bit, out).await;
                 }
             }
-            // A TARGETSEL write's data phase follows whatever the acknowledge bits showed.
-            _ if packet.targetsel() => self.data_bit(index, bit, high, out).await,
+            // After OK, a TARGETSEL write's acknowledge whatever it showed, and WAIT or FAULT
+            // under overrun detection.
+            _ if packet.has_data_phase() => self.data_bit(index, bit, high, out).await,
             _ => match Ack::from_bits(packet.ack) {
                 // The turnaround back to the host ends the packet on its last clock.
                 Ack::Wait | Ack::Fault if index < packet.last_without_data() => {}
                 Ack::Wait => self.end(EndReason::Wait, bit, out).await,
                 Ack::Fault => self.end(EndReason::Fault, bit, out).await,
-                Ack::Ok => self.data_bit(index, bit, high, out).await,
                 // The packet ended with the acknowledge.
-                Ack::Other(_) => {}
+                Ack::Ok | Ack::Other(_) => {}
             },
         }
     }
@@ -862,7 +947,18 @@ impl Decoder {
         if index > parity {
             // A read's turnaround back to the host ends the packet on its last clock.
             if index == packet.last() {
-                self.end(EndReason::Complete, bit, out).await;
+                let reason = packet.end_after_data();
+                self.end(reason, bit, out).await;
+            }
+            return;
+        }
+        if !packet.emits_data() {
+            // The data phase of WAIT or FAULT under overrun detection carries nothing: the
+            // line is not driven for a read, the word is ignored for a write, which ends with
+            // its parity bit.
+            if !rnw {
+                let reason = packet.end_after_data();
+                self.end(reason, bit, out).await;
             }
             return;
         }
@@ -875,8 +971,14 @@ impl Decoder {
             parity_ok,
             from_target: rnw,
         };
+        let dp_write =
+            (!rnw && !packet.apndp() && parity_ok && Ack::from_bits(packet.ack) == Ack::Ok)
+                .then(|| (packet.addr(), value));
         out.emit(settle(Provenance::over(span, bit.tick), now), event)
             .await;
+        if let Some((addr, value)) = dp_write {
+            self.dp_write(addr, value);
+        }
         if !parity_ok {
             self.end(EndReason::ProtocolError, bit, out).await;
         } else if !rnw {
@@ -924,6 +1026,7 @@ impl Decoder {
             out.emit(Provenance::at(tick), end).await;
         }
         if select.is_none() && run.count >= LINE_RESET_CLOCKS {
+            self.line_reset();
             out.emit(Provenance::over(run.span(), tick), SwdEvent::LineReset)
                 .await;
         }
@@ -1022,6 +1125,7 @@ mod tests {
             swclk: 9,
             swdio: 2,
             turnaround: 2,
+            ..SwdConfig::default()
         })
         .expect("valid");
         let spec = swd.spec();
