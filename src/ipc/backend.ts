@@ -211,6 +211,8 @@ export interface Backend {
   onDecoded(handler: (event: DecodedEvent) => void): Promise<Unsubscribe>
   /** A decoder has more to show. */
   onDecodeProgress(handler: (event: DecodedEvent) => void): Promise<Unsubscribe>
+  /** Decoder modules came with a capture file: the modules and the catalog changed. */
+  onModulesChanged(handler: () => void): Promise<Unsubscribe>
 }
 
 /** A channel the backend reports the share done through. */
@@ -460,6 +462,10 @@ class TauriBackend implements Backend {
 
   onDecodeProgress(handler: (event: DecodedEvent) => void) {
     return listen<DecodedEvent>('decode://progress', (event) => handler(event.payload))
+  }
+
+  onModulesChanged(handler: () => void) {
+    return listen<null>('decode://modules', () => handler())
   }
 
   onDevices(handler: (devices: DeviceSummary[]) => void) {

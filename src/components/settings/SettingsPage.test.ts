@@ -21,6 +21,7 @@ const backend = {
   updateCheck: vi.fn<() => Promise<AvailableUpdate | null>>(() => Promise.resolve(null)),
   updateInstall: vi.fn(() => Promise.resolve()),
   decodeCatalog: vi.fn<() => Promise<CatalogEntry[]>>(() => Promise.resolve([])),
+  decodeModules: vi.fn<() => Promise<ModuleInfo[]>>(() => Promise.resolve([])),
   decodeLoadModule: vi.fn<(path: string) => Promise<ModuleInfo>>((path) =>
     Promise.resolve({ name: 'uart', path, category: 'bus', shadows: true }),
   ),
@@ -164,6 +165,32 @@ describe('settings page', () => {
       ?.trigger('click')
     await flushPromises()
     expect(wrapper.find('[role="tabpanel"]').text()).toContain('My sensor')
+    wrapper.unmount()
+  })
+
+  it('lists the modules a capture file brought, and lets them go', async () => {
+    localStorage.clear()
+    const { wrapper, settings } = await page()
+    const decode = useDecodeStore()
+    decode.carried = [
+      { name: 'my-sensor', path: '/captures/sensor.hsync', category: 'line', shadows: false },
+    ]
+    settings.section = 'decoders'
+    await flushPromises()
+    const panel = () => wrapper.find('[role="tabpanel"]')
+    expect(panel().text()).toContain('my-sensor')
+    expect(panel().text()).toContain('Came with the capture file sensor.hsync')
+    expect(panel().text()).not.toContain('Stands in for')
+
+    backend.decodeModules.mockResolvedValueOnce([])
+    await panel()
+      .findAll('button')
+      .find((one) => one.text() === 'Remove')
+      ?.trigger('click')
+    await flushPromises()
+    expect(backend.decodeUnloadModule).toHaveBeenCalledWith('my-sensor')
+    expect(decode.carried).toEqual([])
+    expect(panel().text()).toContain('No decoder module is loaded')
     wrapper.unmount()
   })
 

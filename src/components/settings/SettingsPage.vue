@@ -24,6 +24,7 @@ import {
 } from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
 import {
+  computed,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -41,7 +42,7 @@ import { pickFile } from '@/ipc/dialogs'
 import { toUiError, type UiError } from '@/ipc/errors'
 import { LOG_LEVELS } from '@/ipc/logLevels'
 import { vIndicator } from '@/motion/indicator'
-import { useDecodeStore } from '@/stores/decode'
+import { useDecodeStore, type ModuleEntry } from '@/stores/decode'
 import {
   DENSITIES,
   GRAPHICS,
@@ -161,10 +162,33 @@ async function revealLog(): Promise<void> {
 
 const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
 
+/** A row of the Decoders section: a module loaded here, or one a capture file brought. */
+interface ModuleRow {
+  key: string
+  entry: ModuleEntry
+  carried: boolean
+}
+
+/** The modules loaded here, then those capture files brought. */
+const moduleRows = computed<ModuleRow[]>(() => [
+  ...decode.modules.map((entry) => ({ key: entry.path, entry, carried: false })),
+  ...decode.carried.map((info) => ({
+    key: `${info.path}#${info.name}`,
+    entry: { path: info.path, info, error: null, loading: false },
+    carried: true,
+  })),
+])
+
 /** Asks for a module file and loads it. */
 async function loadModule(): Promise<void> {
   const path = await pickFile([{ name: t('settings.decoders.filter'), extensions: ['json'] }])
   if (path) await decode.loadModule(path)
+}
+
+/** Lets a module go, whichever way it came. */
+function removeModule(row: ModuleRow): void {
+  if (row.carried) void decode.unloadCarried(row.entry.info?.name ?? '')
+  else void decode.unloadModule(row.entry.path)
 }
 </script>
 
@@ -366,37 +390,37 @@ async function loadModule(): Promise<void> {
           <div v-else-if="settings.section === 'decoders'" class="flex flex-col gap-3">
             <p class="text-ink-3">{{ t('settings.decoders.intro') }}</p>
             <ul
-              v-if="decode.modules.length > 0"
+              v-if="moduleRows.length > 0"
               class="flex flex-col gap-1.5"
               :aria-label="t('settings.sections.decoders')"
             >
               <li
-                v-for="entry in decode.modules"
-                :key="entry.path"
+                v-for="row in moduleRows"
+                :key="row.key"
                 class="flex items-start gap-3 rounded-6 bg-control px-3 py-2"
               >
                 <Puzzle class="mt-0.5 flex-none text-ink-3" />
                 <div class="flex min-w-0 flex-1 flex-col gap-0.5">
                   <span class="font-medium">
-                    {{ entry.info ? typeName(entry.info.name) : fileName(entry.path) }}
+                    {{ row.entry.info ? typeName(row.entry.info.name) : fileName(row.entry.path) }}
                   </span>
-                  <span class="truncate text-caption text-ink-3" :title="entry.path">
-                    {{ entry.path }}
+                  <span class="truncate text-caption text-ink-3" :title="row.entry.path">
+                    {{ row.entry.path }}
                   </span>
-                  <span v-if="entry.info?.shadows" class="text-caption text-ink-3">
-                    {{ t('settings.decoders.replaces', { name: typeName(entry.info.name) }) }}
+                  <span v-if="row.carried" class="text-caption text-ink-3">
+                    {{ t('settings.decoders.carried', { file: fileName(row.entry.path) }) }}
                   </span>
-                  <span v-if="entry.error" role="alert" class="text-caption text-alert">
-                    {{ text.error(entry.error) }}
+                  <span v-if="row.entry.info?.shadows" class="text-caption text-ink-3">
+                    {{ t('settings.decoders.replaces', { name: typeName(row.entry.info.name) }) }}
                   </span>
-                  <span v-else-if="entry.loading" class="text-caption text-ink-3">
+                  <span v-if="row.entry.error" role="alert" class="text-caption text-alert">
+                    {{ text.error(row.entry.error) }}
+                  </span>
+                  <span v-else-if="row.entry.loading" class="text-caption text-ink-3">
                     {{ t('settings.decoders.loading') }}
                   </span>
                 </div>
-                <button
-                  class="btn-ghost h-[22px] flex-none text-alert"
-                  @click="decode.unloadModule(entry.path)"
-                >
+                <button class="btn-ghost h-[22px] flex-none text-alert" @click="removeModule(row)">
                   {{ t('settings.decoders.remove') }}
                 </button>
               </li>

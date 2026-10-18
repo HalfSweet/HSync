@@ -714,5 +714,10 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
       // The recording is complete from the start: nothing progresses.
       return Promise.resolve<Unsubscribe>(() => undefined)
     },
+
+    onModulesChanged() {
+      // The mock's captures carry no modules.
+      return Promise.resolve<Unsubscribe>(() => undefined)
+    },
   }
 }

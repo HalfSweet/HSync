@@ -1589,12 +1589,13 @@
       "checkUpdates": "Check for updates at startup"
     },
     "decoders": {
-      "intro": "Decoders written in HSync's DSL run beside the built-in ones: load the module file the compiler writes (pnpm dsl:compile). A module named like a built-in decoder stands in for it while it is loaded, and the open capture decodes again with it.",
+      "intro": "Decoders written in HSync's DSL run beside the built-in ones: load the module file the compiler writes (pnpm dsl:compile). A module named like a built-in decoder stands in for it while it is loaded, and the open capture decodes again with it. A capture file carries the modules its decoders use and brings them along when it is opened.",
       "load": "Load module…",
       "filter": "Decoder module",
       "empty": "No decoder module is loaded.",
       "remove": "Remove",
       "replaces": "Stands in for the built-in {name} decoder",
+      "carried": "Came with the capture file {file}",
       "loading": "Loading…"
     },
     "diagnostics": {
