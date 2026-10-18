@@ -80,7 +80,7 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 
 - **Light and Dark themes**, Comfortable and Compact density, and English or Simplified Chinese.
 - **Waveforms drawn with WebGPU** where it is available, with Canvas2D as the fallback.
-- **Keyboard shortcuts** for zooming, panning, searching, opening and saving.
+- **Keyboard shortcuts** for zooming, panning, searching, opening, saving and more, all of which you can change.
 - **Updates inside the app**: HSync checks at startup and installs a new version in one click.
 
 ## Download
