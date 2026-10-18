@@ -1585,6 +1585,7 @@
       "followLatest": "采集时自动滚动到最新数据",
       "quickScroll": "快速拖动后波形继续滚动",
       "wheelZoom": "滚轮直接缩放波形",
+      "fitRows": "波形高度随窗口缩放",
       "keepStopped": "重复模式下停止后显示最新数据",
       "checkUpdates": "启动时检查更新"
     },

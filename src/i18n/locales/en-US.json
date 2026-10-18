@@ -1585,6 +1585,7 @@
       "followLatest": "Follow the latest data while capturing",
       "quickScroll": "Keep scrolling after a quick drag",
       "wheelZoom": "Zoom the waveform with the wheel alone",
+      "fitRows": "Fit waveform heights to the window",
       "keepStopped": "Show the latest data when a repeat stops",
       "checkUpdates": "Check for updates at startup"
     },
