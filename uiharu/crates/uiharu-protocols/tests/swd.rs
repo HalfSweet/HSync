@@ -29,13 +29,13 @@ fn waveform() -> SwdWaveform {
     waveform
 }
 
-fn harness(graph: GraphConfig) -> Harness<SwdEvent> {
+fn harness_as(config: &SwdConfig, graph: GraphConfig) -> Harness<SwdEvent> {
     Harness::build(
         CHANNELS,
         TimeBase::new(1_000_000),
         graph,
         |graph, source| {
-            let swd = graph.add(Swd::new(SwdConfig::default()).expect("a valid configuration"));
+            let swd = graph.add(Swd::new(config.clone()).expect("a valid configuration"));
             graph.connect(source.samples, Swd::input(swd))?;
             Ok(Swd::events(swd))
         },
@@ -43,13 +43,25 @@ fn harness(graph: GraphConfig) -> Harness<SwdEvent> {
     .expect("builds")
 }
 
-fn items(block: &LogicBlock, gaps: &[TickRange]) -> Vec<Item<SwdEvent>> {
-    let mut harness = harness(GraphConfig::default());
+fn harness(graph: GraphConfig) -> Harness<SwdEvent> {
+    harness_as(&SwdConfig::default(), graph)
+}
+
+fn items_as(config: &SwdConfig, block: &LogicBlock, gaps: &[TickRange]) -> Vec<Item<SwdEvent>> {
+    let mut harness = harness_as(config, GraphConfig::default());
     harness.feed_with_gaps(block, gaps, &[89]);
     harness.end();
     let items = harness.without_progress();
     assert_settled_in_order(&items);
     items
+}
+
+fn items(block: &LogicBlock, gaps: &[TickRange]) -> Vec<Item<SwdEvent>> {
+    items_as(&SwdConfig::default(), block, gaps)
+}
+
+fn decode_as(config: &SwdConfig, block: &LogicBlock) -> Vec<String> {
+    describe(&items_as(config, block, &[]))
 }
 
 fn decode(block: &LogicBlock) -> Vec<String> {
@@ -162,9 +174,15 @@ fn one(what: &str, tick: u64) -> String {
 }
 
 /// The lines of packet `tx`, whose first clock starts at `position`, up to its end: well
-/// formed, or broken where the knobs say.
+/// formed, or broken where the knobs say; turnarounds last one clock.
 fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
+    packet_lines_as(tx, packet, position, 1)
+}
+
+/// The lines of packet `tx` on a port whose turnarounds last `trn` clocks.
+fn packet_lines_as(tx: u64, packet: &SwdPacket, position: u64, trn: u64) -> Vec<String> {
     let rise = |index: u64| position + index * PERIOD + HALF;
+    let (ack_first, ack_last) = (8 + trn, 10 + trn);
     let request = packet.request_bits();
     // The packet is known from the first low bit of its request.
     let decided = (1..8).find(|i| request >> i & 1 == 0).map_or(rise(8), rise);
@@ -197,14 +215,18 @@ fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
     lines.push(format!(
         "ack p{tx} {} [{},{})@{}",
         ack_name(packet.ack),
-        rise(9),
-        rise(11) + 1,
-        rise(11)
+        rise(ack_first),
+        rise(ack_last) + 1,
+        rise(ack_last)
     ));
     match packet.ack {
         // A TARGETSEL write's data phase follows whatever the acknowledge showed.
         _ if packet.ack == Ack::Ok || packet.is_targetsel() => {
-            let (first, parity) = if packet.rnw { (12, 44) } else { (13, 45) };
+            let (first, parity) = if packet.rnw {
+                (ack_last + 1, ack_last + 33)
+            } else {
+                (ack_last + 1 + trn, ack_last + 33 + trn)
+            };
             let event = SwdEvent::Data {
                 tx: TxId(tx),
                 value: packet.data,
@@ -221,13 +243,16 @@ fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
             if packet.bad_data_parity {
                 lines.push(one(&format!("end p{tx} protocol-error"), rise(parity)));
             } else {
-                lines.push(one(&format!("end p{tx} complete"), rise(45)));
+                lines.push(one(
+                    &format!("end p{tx} complete"),
+                    rise(ack_last + 33 + trn),
+                ));
             }
         }
-        Ack::Wait => lines.push(one(&format!("end p{tx} wait"), rise(12))),
-        Ack::Fault => lines.push(one(&format!("end p{tx} fault"), rise(12))),
+        Ack::Wait => lines.push(one(&format!("end p{tx} wait"), rise(ack_last + trn))),
+        Ack::Fault => lines.push(one(&format!("end p{tx} fault"), rise(ack_last + trn))),
         Ack::Ok | Ack::Other(_) => {
-            lines.push(one(&format!("end p{tx} protocol-error"), rise(11)));
+            lines.push(one(&format!("end p{tx} protocol-error"), rise(ack_last)));
         }
     }
     lines
@@ -420,6 +445,48 @@ fn malformed_requests_end_the_packet_on_their_park_bit() {
         expected.extend(packet_lines(2, &packet, again));
         expected.push(format!("eof {}", block.end()));
         assert_eq!(decode(&block), expected, "{broken:?}");
+    }
+}
+
+#[test]
+fn the_turnaround_lasts_as_many_clocks_as_configured() {
+    for turnaround in [2u8, 4] {
+        let config = SwdConfig {
+            turnaround,
+            ..SwdConfig::default()
+        };
+        let mut waveform = SwdWaveform::new(config.clone(), CHANNELS, HALF, Tick::ZERO);
+        waveform.idle(LEAD);
+        waveform.connect();
+        let packets = [
+            SwdPacket::read(false, 0x0, 0x2ba0_1477),
+            SwdPacket::write(false, 0x8, 0x0000_00f0),
+            SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait),
+            SwdPacket::write(false, 0x4, 0x5000_0000).with_ack(Ack::Fault),
+            SwdPacket::targetsel(0x0100_2927),
+            SwdPacket::read(true, 0x0, 0xffff_ffff),
+            SwdPacket::read(false, 0x0, 0).with_ack(Ack::Other(7)),
+        ];
+        let mut expected = connect_lines(LEAD);
+        for (n, packet) in packets.iter().enumerate() {
+            let position = waveform.position().get();
+            waveform.packet(packet);
+            waveform.idle_cycles(n as u32 % 2);
+            expected.extend(packet_lines_as(
+                n as u64 + 1,
+                packet,
+                position,
+                u64::from(turnaround),
+            ));
+        }
+        waveform.idle(4);
+        let block = waveform.finish();
+        expected.push(format!("eof {}", block.end()));
+        assert_eq!(
+            decode_as(&config, &block),
+            expected,
+            "turnaround {turnaround}"
+        );
     }
 }
 
