@@ -1165,12 +1165,20 @@
     },
     "swd": {
       "name": "SWD",
-      "summary": "读取 Arm 串行线调试：数据包、线路复位与切换序列",
+      "summary": "读取 Arm 串行线调试：数据包、线路复位、切换与休眠序列",
       "field": {
         "swclk": "SWCLK 线",
-        "swdio": "SWDIO 线"
+        "swdio": "SWDIO 线",
+        "turnaround": "转向周期（时钟数）",
+        "overrun_detect": "溢出检测"
       },
-      "value": {},
+      "value": {
+        "overrun_detect": {
+          "auto": "跟随 CTRL/STAT 写入",
+          "on": "开",
+          "off": "关"
+        }
+      },
       "event": {
         "begin": "开始",
         "request": "请求",
