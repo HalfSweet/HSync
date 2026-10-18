@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 (2026-10-18)
+
+### Features
+
+- **uiharu:** Run decoder IR in an interpreter (#41) ([0ab223b](https://github.com/HalfSweet/HSync/commit/0ab223b5ee4f86b55fa3c6cc5d23976eba3eddc5))
+- **timeline:** Show readouts in the status bar or floating over the waveforms (#43) ([2d06f0f](https://github.com/HalfSweet/HSync/commit/2d06f0f0527a7249fb5d4b39e85d83c0a1d8da70))
+- Load decoder modules written in the DSL into the app (#42) ([0f153df](https://github.com/HalfSweet/HSync/commit/0f153dfb34b005fc599ff8f7dc0855c75fe82e92))
+- **timeline:** Fit waveform heights to the window (#44) ([1ea4881](https://github.com/HalfSweet/HSync/commit/1ea48810b278b778d2b9e927ff69a2982c047bc3))
+
+### Bug Fixes
+
+- **uiharu:** Decode SWD as ADIv6.0 specifies (#45) ([9479eef](https://github.com/HalfSweet/HSync/commit/9479eef6d23e4678aaf5fefff9fdb8b633905731))
+
 ## 0.2.2 (2026-10-17)
 
 ### Features
