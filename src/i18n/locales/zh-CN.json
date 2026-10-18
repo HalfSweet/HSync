@@ -1563,6 +1563,12 @@
       "label": "语言",
       "system": "跟随系统"
     },
+    "readouts": {
+      "label": "读数位置",
+      "status": "状态栏",
+      "float": "悬浮",
+      "note": "指针下的脉宽与边沿测量的结果显示在哪里"
+    },
     "graphics": {
       "label": "图形加速",
       "auto": "自动（WebGPU）",
