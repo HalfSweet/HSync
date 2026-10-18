@@ -35,10 +35,15 @@
 //!   host. After WAIT or FAULT comes a turnaround and no data;
 //! - a packet ends `complete` on its last bit — the read's final turnaround, the write's parity
 //!   bit — and `wait` or `fault` on the turnaround after the acknowledge;
+//! - a write to debug port address `0xC` is a TARGETSEL write (B4.3.4, SWD protocol version
+//!   2): the target does not drive the acknowledge, and the host goes on with the data phase
+//!   whatever the line showed. The decoder reports the three bits as read and decodes the
+//!   write's data phase after them;
 //! - a protocol error ends the packet with `protocol-error` on the bit that shows it: a request
 //!   whose parity is wrong, whose Stop bit is not 0 or whose Park bit is not 1; an acknowledge
-//!   other than OK, WAIT and FAULT; data whose parity is wrong. High bits at the end of the
-//!   broken packet count toward the line reset that brings the decoder back;
+//!   other than OK, WAIT and FAULT, except after a TARGETSEL write; data whose parity is wrong.
+//!   High bits at the end of the broken packet count toward the line reset that brings the
+//!   decoder back;
 //! - a gap or the end of the samples ends the packet under way `aborted`, and a run of high
 //!   bits long enough is a line reset there;
 //! - progress is passed on, held back to the first bit read and not reported yet: of a run of
@@ -48,10 +53,9 @@
 //!
 //! Limits: the turnaround lasts one clock, the reset value of DLCR.TURNROUND; with overrun
 //! detection (CTRL/STAT.ORUNDETECT) WAIT and FAULT carry a data phase the decoder does not
-//! expect; the TARGETSEL write of multi-drop SWD, whose acknowledge no target drives, is
-//! reported as a protocol error; the dormant state of ADIv6 and its selection sequences are out
-//! of scope. No register is named: what `addr` selects depends on APnDP and on the debug and
-//! access ports, which is the next layer's business.
+//! expect; the dormant state of ADIv6 and its selection sequences are out of scope. No register
+//! is named: what `addr` selects depends on APnDP and on the debug and access ports, which is
+//! the next layer's business.
 
 use std::sync::Arc;
 
@@ -325,6 +329,19 @@ impl Packet {
         self.request >> 2 & 1 != 0
     }
 
+    /// Whether the request is a write to debug port address `0xC`: TARGETSEL, whose
+    /// acknowledge the target does not drive and whose data phase follows whatever it showed.
+    fn targetsel(&self) -> bool {
+        // APnDP 0, RnW 0, A[2] 1, A[3] 1.
+        self.request & 0b1_1110 == 0b1_1000
+    }
+
+    /// Whether a data phase follows the acknowledge: after OK, and after any acknowledge of
+    /// a TARGETSEL write.
+    fn has_data_phase(&self) -> bool {
+        Ack::from_bits(self.ack) == Ack::Ok || self.targetsel()
+    }
+
     /// Whether the target drives the bit at `index`: the acknowledge, and a read's data and
     /// parity after OK.
     fn target_drives(&self, index: u8) -> bool {
@@ -344,7 +361,7 @@ impl Packet {
         match self.taken {
             1..=7 => Some(self.start),
             10..=11 => Some(self.ack_first),
-            taken if Ack::from_bits(self.ack) == Ack::Ok => {
+            taken if self.has_data_phase() => {
                 let (first, parity) = self.data_bits();
                 (first < taken && taken <= parity).then_some(self.data_first)
             }
@@ -546,10 +563,14 @@ impl Decoder {
                     SwdEvent::Ack { tx, value },
                 )
                 .await;
-                if let Ack::Other(_) = value {
+                if let Ack::Other(_) = value
+                    && !packet.targetsel()
+                {
                     self.end(EndReason::ProtocolError, bit, out).await;
                 }
             }
+            // A TARGETSEL write's data phase follows whatever the acknowledge bits showed.
+            _ if packet.targetsel() => self.data_bit(index, bit, high, out).await,
             _ => match Ack::from_bits(packet.ack) {
                 // The turnaround back to the host ends the packet.
                 Ack::Wait => self.end(EndReason::Wait, bit, out).await,
@@ -561,8 +582,8 @@ impl Decoder {
         }
     }
 
-    /// A bit of the data phase after OK: a read's data, parity and turnaround from bit 12, or
-    /// a write's turnaround, data and parity; `high` is the bit as the side driving it sent it.
+    /// A bit of the data phase: a read's data, parity and turnaround from bit 12, or a write's
+    /// turnaround, data and parity; `high` is the bit as the side driving it sent it.
     async fn data_bit(&mut self, index: u8, bit: Bit, high: bool, out: &mut Outbox<SwdEvent>) {
         let now = self.now;
         let Some(packet) = self.packet.as_mut() else {

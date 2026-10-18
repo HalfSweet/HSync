@@ -57,6 +57,18 @@ impl SwdPacket {
         }
     }
 
+    /// A TARGETSEL write selecting `target`: a write to debug port address `0xC`, whose
+    /// acknowledge no target drives — the line stays high — and whose data the host sends
+    /// whatever the acknowledge bits showed.
+    pub fn targetsel(target: u32) -> Self {
+        Self::write(false, 0xc, target).with_ack(Ack::Other(7))
+    }
+
+    /// Whether the packet is a TARGETSEL write.
+    pub fn is_targetsel(&self) -> bool {
+        !self.apndp && !self.rnw && self.addr & 0xc == 0xc
+    }
+
     /// The same packet answered with `ack`.
     pub fn with_ack(self, ack: Ack) -> Self {
         Self { ack, ..self }
@@ -220,7 +232,8 @@ impl SwdWaveform {
 
     /// One packet: the request, a turnaround and the acknowledge; after OK, the read data,
     /// its parity and a turnaround, or a turnaround, the written data and its parity; after
-    /// WAIT and FAULT, a turnaround; after anything else, nothing.
+    /// WAIT and FAULT, a turnaround; after anything else, nothing — except for a TARGETSEL
+    /// write, whose data the host sends whatever the acknowledge bits showed.
     ///
     /// The target starts driving the first acknowledge bit at the rising edge of the
     /// turnaround clock after Park, each bit of its at the next, and releases the line at the
@@ -243,14 +256,8 @@ impl SwdWaveform {
                 self.turnaround();
                 self.turnaround();
             }
-            Ack::Ok => {
-                // The last acknowledge bit is read and the target releases the line; then the
-                // turnaround to the host.
-                self.turnaround();
-                self.turnaround();
-                self.bits(u64::from(packet.data), 32);
-                self.clock(parity);
-            }
+            Ack::Ok => self.write_phase(packet.data, parity),
+            _ if packet.is_targetsel() => self.write_phase(packet.data, parity),
             Ack::Wait | Ack::Fault => {
                 self.turnaround();
                 self.turnaround();
@@ -258,6 +265,15 @@ impl SwdWaveform {
             // The last acknowledge bit is read; a host that saw it backs off.
             Ack::Other(_) => self.turnaround(),
         }
+    }
+
+    /// A write's data phase after the acknowledge: the clock at whose falling edge the last
+    /// acknowledge bit is read, the turnaround to the host, the data and its parity bit.
+    fn write_phase(&mut self, data: u32, parity: bool) {
+        self.turnaround();
+        self.turnaround();
+        self.bits(u64::from(data), 32);
+        self.clock(parity);
     }
 
     /// The samples so far; at least one must have been produced.

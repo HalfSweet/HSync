@@ -202,7 +202,8 @@ fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
         rise(11)
     ));
     match packet.ack {
-        Ack::Ok => {
+        // A TARGETSEL write's data phase follows whatever the acknowledge showed.
+        _ if packet.ack == Ack::Ok || packet.is_targetsel() => {
             let (first, parity) = if packet.rnw { (12, 44) } else { (13, 45) };
             let event = SwdEvent::Data {
                 tx: TxId(tx),
@@ -225,7 +226,9 @@ fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
         }
         Ack::Wait => lines.push(one(&format!("end p{tx} wait"), rise(12))),
         Ack::Fault => lines.push(one(&format!("end p{tx} fault"), rise(12))),
-        Ack::Other(_) => lines.push(one(&format!("end p{tx} protocol-error"), rise(11))),
+        Ack::Ok | Ack::Other(_) => {
+            lines.push(one(&format!("end p{tx} protocol-error"), rise(11)));
+        }
     }
     lines
 }
@@ -917,7 +920,7 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                             value: packet.ack,
                         });
                         match packet.ack {
-                            Ack::Ok => {
+                            _ if packet.ack == Ack::Ok || packet.is_targetsel() => {
                                 events.push(SwdEvent::Data {
                                     tx,
                                     value: packet.data,
@@ -932,7 +935,7 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                             }
                             Ack::Wait => EndReason::Wait,
                             Ack::Fault => EndReason::Fault,
-                            Ack::Other(_) => EndReason::ProtocolError,
+                            Ack::Ok | Ack::Other(_) => EndReason::ProtocolError,
                         }
                     };
                     events.push(SwdEvent::End { tx, reason });
