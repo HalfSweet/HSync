@@ -1553,6 +1553,7 @@
     "sections": {
       "appearance": "外观",
       "behaviour": "行为",
+      "shortcuts": "快捷键",
       "decoders": "解码器",
       "diagnostics": "诊断",
       "about": "关于"
@@ -1596,6 +1597,42 @@
       "fitRows": "波形高度随窗口缩放",
       "keepStopped": "重复模式下停止后显示最新数据",
       "checkUpdates": "启动时检查更新"
+    },
+    "shortcuts": {
+      "intro": "点击快捷键框，再同时按下想要的组合键（最多 {count} 个键）；Esc 取消。",
+      "groups": {
+        "file": "文件",
+        "view": "视图",
+        "capture": "采集"
+      },
+      "actions": {
+        "open": "打开文件",
+        "save": "保存采集",
+        "export": "导出",
+        "settings": "打开或关闭设置",
+        "zoomIn": "放大",
+        "zoomOut": "缩小",
+        "fit": "缩放到全览",
+        "panLeft": "向左平移",
+        "panRight": "向右平移",
+        "panLeftFar": "向左平移半屏",
+        "panRightFar": "向右平移半屏",
+        "clear": "取消测量或选段",
+        "search": "搜索",
+        "dataStream": "显示或隐藏数据流",
+        "capture": "开始或停止采集",
+        "trigger": "打开触发设置"
+      },
+      "none": "未设置",
+      "press": "按下快捷键…",
+      "pressHint": "按下新的快捷键，Esc 取消",
+      "change": "修改「{action}」的快捷键，当前为 {chord}",
+      "clear": "清除「{action}」的快捷键",
+      "reset": "恢复「{action}」的默认快捷键",
+      "resetAll": "全部恢复默认",
+      "taken": "{chord} 已从「{action}」移除",
+      "takenBack": "已从「{action}」收回默认快捷键",
+      "tooMany": "最多同时按 {count} 个键"
     },
     "decoders": {
       "intro": "用 HSync 的 DSL 编写的解码器可以与内置解码器一起使用：加载编译器（pnpm dsl:compile）写出的模块文件。与内置解码器同名的模块在加载期间会替代它，当前采集也会用它重新解码。采集文件会带上其解码器所用的模块，打开时一并载入。",
@@ -1705,5 +1742,8 @@
     },
     "license": "HSync 是自由软件：以 Apache-2.0 或 GPL-3.0-or-later 许可提供，任选其一。",
     "credits": "DSLogic 驱动移植自 DreamSourceLab 的 DSView（libsigrok4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL），PXLogic 驱动移植自 PXView（GPL），其固件与 FPGA 位流也取自 PXView；DSLogic 固件与 FPGA 位流以 MIT 许可随附；解码引擎 uiharu 以 Apache-2.0 许可；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
+  },
+  "shortcuts": {
+    "space": "空格"
   }
 }

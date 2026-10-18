@@ -13,6 +13,7 @@ import { useI18n } from 'vue-i18n'
 
 import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { useRowMetrics } from '@/composables/useRowMetrics'
+import { useShortcuts } from '@/composables/useShortcuts'
 import { getBackend } from '@/ipc/backend'
 import { binStart, type BinsResult } from '@/ipc/bins'
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
@@ -35,7 +36,6 @@ import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/
 import type { FloatAnchor, FloatBounds } from '@/timeline/float'
 import { denseGap } from '@/render/shape'
 import { BUSY_WIDTH, blockWidth, traceBlocks } from '@/timeline/blocks'
-import { keyTakenElsewhere, timelineAction } from '@/timeline/keys'
 import {
   clickMeasure,
   leftStart,
@@ -758,29 +758,35 @@ const pulseAnchor = computed<FloatAnchor | null>(() => {
   return { x, align: 'beside', top: box.top, bottom: box.top + box.height, side }
 })
 
-// Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §10).
-useEventListener(document, 'keydown', (event: KeyboardEvent) => {
-  if (event.defaultPrevented || keyTakenElsewhere(event.target)) return
-  const action = timelineAction(event)
-  if (!action) return
+// Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §10): by
+// default `+` and `-` zoom, `←` and `→` pan a tenth of the view (half with Shift), `Home` shows
+// the whole capture and `Esc` lets go of the edge measurement, or else of the segment.
+const pan = (share: number) => () => {
   stopFling()
-  switch (action.kind) {
-    case 'zoom':
-      view.zoom(action.factor)
-      break
-    case 'pan':
-      view.pan(view.viewport.width * action.share)
-      break
-    case 'fit':
-      view.fit()
-      break
-    case 'clear':
-      if (view.measure) view.setMeasure(null)
-      else if (view.segment) view.setSegment(null)
-      else return
-      break
-  }
-  event.preventDefault()
+  view.pan(view.viewport.width * share)
+}
+useShortcuts({
+  zoomIn: () => {
+    stopFling()
+    view.zoom(2)
+  },
+  zoomOut: () => {
+    stopFling()
+    view.zoom(0.5)
+  },
+  fit: () => {
+    stopFling()
+    view.fit()
+  },
+  panLeft: pan(-0.1),
+  panRight: pan(0.1),
+  panLeftFar: pan(-0.5),
+  panRightFar: pan(0.5),
+  clear: () => {
+    if (view.measure) view.setMeasure(null)
+    else if (view.segment) view.setSegment(null)
+    else return false
+  },
 })
 
 // Trackpads send several wheel events a frame: gather them and move the view once per frame.

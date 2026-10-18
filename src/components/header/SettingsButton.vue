@@ -1,26 +1,20 @@
 <script setup lang="ts">
-import { onKeyStroke } from '@vueuse/core'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import { useShortcutTip, useShortcuts } from '@/composables/useShortcuts'
 import { useSettingsStore } from '@/stores/settings'
 import { useUpdateStore } from '@/stores/update'
-import { commandLabel, isCommand } from '@/utils/keys'
 
 /** The top bar's settings button, which opens the settings page (DESIGN.md §4, §11). */
 const { t } = useI18n()
 const settings = useSettingsStore()
 const update = useUpdateStore()
 
-// ⌘/Ctrl+, opens and closes the settings page from anywhere.
-onKeyStroke(
-  (event) => isCommand(event, ','),
-  (event) => {
-    event.preventDefault()
-    settings.toggle()
-  },
-)
+// Its shortcut, by default ⌘/Ctrl+, opens and closes the settings page from anywhere.
+useShortcuts({ settings: () => settings.toggle() })
+const tip = useShortcutTip()
 
 /** The button's name, which tells of a newer release. */
 const label = computed(() =>
@@ -34,7 +28,7 @@ const label = computed(() =>
   <button
     class="relative btn w-8 justify-center p-0"
     :aria-label="label"
-    :title="t('header.withShortcut', { label, shortcut: commandLabel(',') })"
+    :title="tip(label, 'settings')"
     aria-haspopup="dialog"
     :aria-expanded="settings.open"
     @click="settings.toggle()"

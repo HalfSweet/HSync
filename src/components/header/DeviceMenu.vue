@@ -5,11 +5,11 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useFileActions } from '@/composables/useFileActions'
+import { useShortcutLabel } from '@/composables/useShortcuts'
 import type { DeviceSummary } from '@/ipc/bindings/DeviceSummary'
 import { holdInPlace } from '@/motion/list'
 import { useCaptureStore } from '@/stores/capture'
 import { DEMO_DRIVER, useDeviceStore } from '@/stores/device'
-import { commandLabel } from '@/utils/keys'
 
 /** The device picker of the top bar (DESIGN.md §4). */
 const { t } = useI18n()
@@ -18,6 +18,7 @@ const capture = useCaptureStore()
 const open = ref(false)
 const root = useTemplateRef<HTMLElement>('root')
 const files = useFileActions()
+const shortcut = useShortcutLabel()
 
 onClickOutside(root, () => (open.value = false))
 onKeyStroke('Escape', () => (open.value = false))
@@ -133,7 +134,9 @@ function loadSession(): void {
           @click="openFile"
         >
           <span class="flex-1 text-left">{{ t('file.open') }}</span>
-          <kbd class="font-sans text-caption text-ink-3">{{ commandLabel('o') }}</kbd>
+          <kbd v-if="shortcut('open')" class="font-sans text-caption text-ink-3">{{
+            shortcut('open')
+          }}</kbd>
         </button>
         <button
           role="menuitem"

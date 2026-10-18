@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { onClickOutside, onKeyStroke } from '@vueuse/core'
-import { ref, useTemplateRef } from 'vue'
+import { computed, ref, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import ExportDialog from '@/components/export/ExportDialog.vue'
 import { useFileActions } from '@/composables/useFileActions'
+import { useShortcutLabel, useShortcuts } from '@/composables/useShortcuts'
 import { useCaptureStore } from '@/stores/capture'
-import { commandLabel } from '@/utils/keys'
 
 /** The export button of the top bar (DESIGN.md §4): saving the capture, and exporting it. */
 const { t } = useI18n()
@@ -29,6 +29,13 @@ function exportAs(): void {
   open.value = false
   showDialog.value = true
 }
+
+/** Saving and exporting need a capture, and no capture or file job under way. */
+const canSave = computed(() => capture.summary !== null && !capture.busy && capture.job === null)
+
+// The export shortcut opens the export dialog, as the menu item does.
+useShortcuts({ export: () => (canSave.value ? exportAs() : false) })
+const shortcut = useShortcutLabel()
 
 function saveSession(): void {
   open.value = false
@@ -58,19 +65,24 @@ function saveSession(): void {
         <button
           role="menuitem"
           class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-          :disabled="!capture.summary || capture.busy || capture.job !== null"
+          :disabled="!canSave"
           @click="save"
         >
           <span class="flex-1 text-left">{{ t('file.save') }}</span>
-          <kbd class="font-sans text-caption text-ink-3">{{ commandLabel('s') }}</kbd>
+          <kbd v-if="shortcut('save')" class="font-sans text-caption text-ink-3">{{
+            shortcut('save')
+          }}</kbd>
         </button>
         <button
           role="menuitem"
           class="flex h-[30px] w-full items-center gap-2 rounded-4 px-2 hover:bg-hover disabled:opacity-55 disabled:hover:bg-transparent"
-          :disabled="!capture.summary || capture.busy || capture.job !== null"
+          :disabled="!canSave"
           @click="exportAs"
         >
           <span class="flex-1 text-left">{{ t('file.exportItem') }}</span>
+          <kbd v-if="shortcut('export')" class="font-sans text-caption text-ink-3">{{
+            shortcut('export')
+          }}</kbd>
         </button>
         <div class="my-1 border-t border-line-2" />
         <button

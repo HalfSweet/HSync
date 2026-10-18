@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { onKeyStroke } from '@vueuse/core'
 import { computed, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import TriggerPanel from '@/components/trigger/TriggerPanel.vue'
 import { useFileActions } from '@/composables/useFileActions'
+import { useShortcutLabel, useShortcuts } from '@/composables/useShortcuts'
 import { useCaptureStore } from '@/stores/capture'
 import { useSearchStore } from '@/stores/search'
-import { isCommand } from '@/utils/keys'
 import { formatTime } from '@/utils/units'
 
 import AcquisitionMenu from './AcquisitionMenu.vue'
@@ -22,15 +21,16 @@ const capture = useCaptureStore()
 const finder = useSearchStore()
 const search = useTemplateRef<HTMLInputElement>('search')
 
-// ⌘/Ctrl+O opens a capture file and ⌘/Ctrl+S saves the open capture.
+const shortcut = useShortcutLabel()
+
+// Opening a capture file, saving the open capture and searching, by default ⌘/Ctrl+O, ⌘/Ctrl+S
+// and `/` (DESIGN.md §8, §10).
 const files = useFileActions()
-onKeyStroke(
-  (event) => isCommand(event, 'o') || isCommand(event, 's'),
-  (event) => {
-    event.preventDefault()
-    void (isCommand(event, 'o') ? files.open() : files.save())
-  },
-)
+useShortcuts({
+  open: () => void files.open(),
+  save: () => void files.save(),
+  search: () => search.value?.focus(),
+})
 
 /** What the search found, at the right end of the box. */
 const searchNote = computed<{ text: string; alert: boolean } | null>(() => {
@@ -68,14 +68,6 @@ function onSearchKey(event: KeyboardEvent): void {
     search.value?.blur()
   }
 }
-
-// `/` focuses the search box from anywhere but text fields (DESIGN.md §8).
-onKeyStroke('/', (event) => {
-  const target = event.target as HTMLElement | null
-  if (target?.closest('input, textarea, [contenteditable="true"]')) return
-  event.preventDefault()
-  search.value?.focus()
-})
 </script>
 
 <template>
@@ -120,10 +112,10 @@ onKeyStroke('/', (event) => {
         >{{ searchNote.text }}</span
       >
       <kbd
-        v-else
+        v-else-if="shortcut('search')"
         class="min-w-5 flex-none rounded-4 bg-control px-1 text-center font-sans text-caption leading-[18px] text-ink-3"
       >
-        /
+        {{ shortcut('search') }}
       </kbd>
     </label>
 

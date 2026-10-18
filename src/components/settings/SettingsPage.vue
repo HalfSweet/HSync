@@ -5,6 +5,7 @@ import {
   FolderOpen,
   Gpu,
   Info,
+  Keyboard,
   Languages,
   Monitor,
   Moon,
@@ -57,6 +58,7 @@ import { SETTINGS_SECTIONS, useSettingsStore, type SettingsSection } from '@/sto
 import { useUpdateStore } from '@/stores/update'
 
 import AboutSection from './AboutSection.vue'
+import ShortcutsSection from './ShortcutsSection.vue'
 
 /**
  * The settings page (DESIGN.md §11): centred over the blurred interface, with the sections in a
@@ -89,6 +91,7 @@ const BEHAVIOURS = [
 const SECTION_ICONS: Record<SettingsSection, Component> = {
   appearance: Palette,
   behaviour: SlidersHorizontal,
+  shortcuts: Keyboard,
   decoders: Puzzle,
   diagnostics: Stethoscope,
   about: Info,
@@ -389,6 +392,8 @@ function removeModule(row: ModuleRow): void {
               <span>{{ t(`settings.behaviour.${behaviour}`) }}</span>
             </label>
           </div>
+
+          <ShortcutsSection v-else-if="settings.section === 'shortcuts'" />
 
           <div v-else-if="settings.section === 'decoders'" class="flex flex-col gap-3">
             <p class="text-ink-3">{{ t('settings.decoders.intro') }}</p>

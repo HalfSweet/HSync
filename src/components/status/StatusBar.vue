@@ -6,6 +6,7 @@ import AppIcon from '@/components/common/AppIcon.vue'
 import SegmentMeasure from '@/components/status/SegmentMeasure.vue'
 import TimelineReadout from '@/components/status/TimelineReadout.vue'
 import { useBackendText } from '@/composables/useBackendText'
+import { useShortcutLabel, useShortcutTip, useShortcuts } from '@/composables/useShortcuts'
 import { useCaptureStore, type FileJob } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
 import { useStreamStore } from '@/stores/stream'
@@ -18,6 +19,11 @@ const capture = useCaptureStore()
 const device = useDeviceStore()
 const stream = useStreamStore()
 const view = useViewStore()
+
+// The data stream shortcut, unbound until the user gives it one, opens and closes the panel.
+useShortcuts({ dataStream: () => stream.toggle() })
+const shortcut = useShortcutLabel()
+const tip = useShortcutTip()
 
 const percent = (part: number, whole: number) =>
   whole > 0 ? Math.min(100, Math.floor((part / whole) * 100)) : 0
@@ -96,6 +102,7 @@ const perDivision = computed(() =>
     <button
       class="-ml-1 inline-flex h-[22px] items-center gap-1 rounded-4 pr-2 pl-1 whitespace-nowrap text-ink-2 hover:bg-hover hover:text-ink aria-pressed:bg-hover aria-pressed:text-ink"
       :aria-pressed="stream.open"
+      :title="shortcut('dataStream') ? tip(t('stream.title'), 'dataStream') : undefined"
       @click="stream.toggle()"
     >
       <AppIcon name="stream" />
@@ -152,7 +159,7 @@ const perDivision = computed(() =>
       <button
         class="btn-icon"
         :aria-label="t('status.zoomOut')"
-        :title="t('status.zoomOut')"
+        :title="tip(t('status.zoomOut'), 'zoomOut')"
         @click="view.zoom(0.5)"
       >
         <AppIcon name="minus" />
@@ -161,7 +168,7 @@ const perDivision = computed(() =>
       <button
         class="btn-icon"
         :aria-label="t('status.zoomIn')"
-        :title="t('status.zoomIn')"
+        :title="tip(t('status.zoomIn'), 'zoomIn')"
         @click="view.zoom(2)"
       >
         <AppIcon name="plus" />
@@ -169,7 +176,7 @@ const perDivision = computed(() =>
       <button
         class="ml-1 btn-icon"
         :aria-label="t('status.zoomFit')"
-        :title="t('status.zoomFit')"
+        :title="tip(t('status.zoomFit'), 'fit')"
         @click="view.fit()"
       >
         <AppIcon name="fit" />

@@ -1553,6 +1553,7 @@
     "sections": {
       "appearance": "Appearance",
       "behaviour": "Behaviour",
+      "shortcuts": "Shortcuts",
       "decoders": "Decoders",
       "diagnostics": "Diagnostics",
       "about": "About"
@@ -1596,6 +1597,42 @@
       "fitRows": "Fit waveform heights to the window",
       "keepStopped": "Show the latest data when a repeat stops",
       "checkUpdates": "Check for updates at startup"
+    },
+    "shortcuts": {
+      "intro": "Click a shortcut box, then press the keys together (up to {count}); Esc cancels.",
+      "groups": {
+        "file": "File",
+        "view": "View",
+        "capture": "Capture"
+      },
+      "actions": {
+        "open": "Open a file",
+        "save": "Save the capture",
+        "export": "Export",
+        "settings": "Open or close the settings",
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
+        "fit": "Zoom to fit",
+        "panLeft": "Pan left",
+        "panRight": "Pan right",
+        "panLeftFar": "Pan left half a view",
+        "panRightFar": "Pan right half a view",
+        "clear": "Clear the measurement or segment",
+        "search": "Search",
+        "dataStream": "Show or hide the data stream",
+        "capture": "Start or stop capturing",
+        "trigger": "Open the trigger settings"
+      },
+      "none": "None",
+      "press": "Press a shortcut…",
+      "pressHint": "Press the new shortcut, Esc to cancel",
+      "change": "Change the shortcut of “{action}”, now {chord}",
+      "clear": "Clear the shortcut of “{action}”",
+      "reset": "Restore the default shortcut of “{action}”",
+      "resetAll": "Restore all defaults",
+      "taken": "{chord} was taken from “{action}”",
+      "takenBack": "The default was taken back from “{action}”",
+      "tooMany": "Press at most {count} keys together"
     },
     "decoders": {
       "intro": "Decoders written in HSync's DSL run beside the built-in ones: load the module file the compiler writes (pnpm dsl:compile). A module named like a built-in decoder stands in for it while it is loaded, and the open capture decodes again with it. A capture file carries the modules its decoders use and brings them along when it is opened.",
@@ -1705,5 +1742,8 @@
     },
     "license": "HSync is free software, available under the Apache-2.0 or the GPL-3.0-or-later license, at your option.",
     "credits": "The DSLogic driver is ported from DreamSourceLab’s DSView (libsigrok4DSL, GPL), the ATK-Logic driver from ALIENTEK’s ATK-Logic (GPL), and the PXLogic driver from PXView (GPL), which also supplies its firmware and FPGA bitstreams; the DSLogic firmware and FPGA bitstreams ship under the MIT license; the uiharu decode engine under the Apache-2.0 license; the IBM Plex fonts under the SIL OFL 1.1; the Lucide icons under the ISC license."
+  },
+  "shortcuts": {
+    "space": "Space"
   }
 }
