@@ -327,6 +327,26 @@ export interface ConfigSpec<C> {
   validate?(config: C): string | undefined
 }
 
+/** The names of the fields of a union's variants, the `kind` tag aside. */
+export type FieldsOf<E> = E extends unknown ? Exclude<keyof E & string, 'kind'> : never
+
+/**
+ * What a user interface shows for a decoder in one language: its name, a one-line summary and
+ * the labels of its configuration fields, their enumerated values, its event kinds and their
+ * fields. What is left out shows as the identifier, or as the interface's own copy for a
+ * decoder of that name.
+ */
+export interface Locale<C, E extends Tagged> {
+  readonly name?: string
+  readonly summary?: string
+  readonly fields?: { readonly [K in keyof C & string]?: string }
+  readonly values?: {
+    readonly [K in keyof C & string]?: { readonly [V in Extract<C[K], string>]?: string }
+  }
+  readonly events?: { readonly [K in E['kind']]?: string }
+  readonly eventFields?: { readonly [K in FieldsOf<E>]?: string }
+}
+
 /**
  * What every decoder has: its configuration, the source's clock and the hooks the runtime calls
  * around its body.
@@ -415,6 +435,9 @@ export interface LogicDecoderDefinition<C, E extends Tagged> {
   readonly output: Schema<E, unknown>
   /** What the output declares. */
   props?(config: C): Props
+  /** What an interface shows for the decoder, by language tag (`en-US`, `zh-CN`…), all
+   * literals. */
+  readonly locales?: Readonly<Record<string, Locale<C, E>>>
   readonly decoder: new () => LogicDecoder<C, E>
 }
 
@@ -427,6 +450,9 @@ export interface StreamDecoderDefinition<C, L extends Tagged, E extends Tagged> 
   requires?(config: C): Requires
   readonly output: Schema<E, unknown>
   props?(config: C): Props
+  /** What an interface shows for the decoder, by language tag (`en-US`, `zh-CN`…), all
+   * literals. */
+  readonly locales?: Readonly<Record<string, Locale<C, E>>>
   readonly decoder: new () => StreamDecoder<C, L, E>
 }
 
@@ -441,6 +467,9 @@ export interface BusDecoderDefinition<C, L extends Tagged, I, E extends Tagged, 
   /** What to do with a frame whose beginning was not seen: drain it (the default) or read it. */
   readonly partial?: 'drain' | 'read'
   readonly recovery: Recovery<R>
+  /** What an interface shows for the decoder, by language tag (`en-US`, `zh-CN`…), all
+   * literals. */
+  readonly locales?: Readonly<Record<string, Locale<C, E>>>
   readonly decoder: new () => BusDecoder<C, I, E, R>
 }
 

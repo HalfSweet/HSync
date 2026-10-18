@@ -117,6 +117,16 @@ export interface StateField {
   readonly?: true
 }
 
+/** What an interface shows for the decoder in one language (`Locale` in the DSL). */
+export interface Locale {
+  name?: string
+  summary?: string
+  fields?: Record<string, string>
+  values?: Record<string, Record<string, string>>
+  events?: Record<string, string>
+  eventFields?: Record<string, string>
+}
+
 export interface Decoder {
   name: string
   category: Category
@@ -125,6 +135,8 @@ export interface Decoder {
   requires?: RequireSpec[]
   output: { schema: SchemaRef }
   props?: PropSpec[]
+  /** By language tag. */
+  locales?: Record<string, Locale>
   partial?: 'drain' | 'read'
   recovery?: Recovery
   state?: StateField[]
