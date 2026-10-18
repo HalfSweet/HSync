@@ -955,6 +955,29 @@
         },
         "optional": false,
         "default": 1
+      },
+      {
+        "name": "turnaround",
+        "kind": {
+          "kind": "integer",
+          "min": 1,
+          "max": 4
+        },
+        "optional": false,
+        "default": 1
+      },
+      {
+        "name": "overrun_detect",
+        "kind": {
+          "kind": "enum",
+          "values": [
+            "auto",
+            "on",
+            "off"
+          ]
+        },
+        "optional": false,
+        "default": "auto"
       }
     ],
     "events": [

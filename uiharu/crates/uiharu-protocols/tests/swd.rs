@@ -11,8 +11,8 @@ use uiharu_core::{
 };
 use uiharu_protocols::swd::synth::{SwdPacket, SwdWaveform};
 use uiharu_protocols::swd::{
-    Ack, Data, EndReason, Field, Interface, Next, Read, Request, Swd, SwdBus, SwdConfig, SwdEvent,
-    TxId,
+    ACTIVATE_JTAG_DP, ACTIVATE_SWD, Ack, Data, EndReason, Field, Interface, Next, OverrunDetect,
+    Read, Request, Swd, SwdBus, SwdConfig, SwdEvent, TxId,
 };
 
 /// SWCLK and SWDIO on channels 0 and 1.
@@ -29,13 +29,13 @@ fn waveform() -> SwdWaveform {
     waveform
 }
 
-fn harness(graph: GraphConfig) -> Harness<SwdEvent> {
+fn harness_as(config: &SwdConfig, graph: GraphConfig) -> Harness<SwdEvent> {
     Harness::build(
         CHANNELS,
         TimeBase::new(1_000_000),
         graph,
         |graph, source| {
-            let swd = graph.add(Swd::new(SwdConfig::default()).expect("a valid configuration"));
+            let swd = graph.add(Swd::new(config.clone()).expect("a valid configuration"));
             graph.connect(source.samples, Swd::input(swd))?;
             Ok(Swd::events(swd))
         },
@@ -43,13 +43,25 @@ fn harness(graph: GraphConfig) -> Harness<SwdEvent> {
     .expect("builds")
 }
 
-fn items(block: &LogicBlock, gaps: &[TickRange]) -> Vec<Item<SwdEvent>> {
-    let mut harness = harness(GraphConfig::default());
+fn harness(graph: GraphConfig) -> Harness<SwdEvent> {
+    harness_as(&SwdConfig::default(), graph)
+}
+
+fn items_as(config: &SwdConfig, block: &LogicBlock, gaps: &[TickRange]) -> Vec<Item<SwdEvent>> {
+    let mut harness = harness_as(config, GraphConfig::default());
     harness.feed_with_gaps(block, gaps, &[89]);
     harness.end();
     let items = harness.without_progress();
     assert_settled_in_order(&items);
     items
+}
+
+fn items(block: &LogicBlock, gaps: &[TickRange]) -> Vec<Item<SwdEvent>> {
+    items_as(&SwdConfig::default(), block, gaps)
+}
+
+fn decode_as(config: &SwdConfig, block: &LogicBlock) -> Vec<String> {
+    describe(&items_as(config, block, &[]))
 }
 
 fn decode(block: &LogicBlock) -> Vec<String> {
@@ -142,6 +154,15 @@ fn describe(items: &[Item<SwdEvent>]) -> Vec<String> {
         .collect()
 }
 
+/// The events among `items`, without their provenance.
+fn payloads(items: &[Item<SwdEvent>]) -> Vec<SwdEvent> {
+    items
+        .iter()
+        .filter_map(Item::event)
+        .map(|event| event.payload)
+        .collect()
+}
+
 /// The tick at which the clock starting at `position` rises.
 fn rise_at(position: u64) -> u64 {
     position + HALF
@@ -153,9 +174,15 @@ fn one(what: &str, tick: u64) -> String {
 }
 
 /// The lines of packet `tx`, whose first clock starts at `position`, up to its end: well
-/// formed, or broken where the knobs say.
+/// formed, or broken where the knobs say; turnarounds last one clock.
 fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
+    packet_lines_as(tx, packet, position, 1)
+}
+
+/// The lines of packet `tx` on a port whose turnarounds last `trn` clocks.
+fn packet_lines_as(tx: u64, packet: &SwdPacket, position: u64, trn: u64) -> Vec<String> {
     let rise = |index: u64| position + index * PERIOD + HALF;
+    let (ack_first, ack_last) = (8 + trn, 10 + trn);
     let request = packet.request_bits();
     // The packet is known from the first low bit of its request.
     let decided = (1..8).find(|i| request >> i & 1 == 0).map_or(rise(8), rise);
@@ -188,13 +215,18 @@ fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
     lines.push(format!(
         "ack p{tx} {} [{},{})@{}",
         ack_name(packet.ack),
-        rise(9),
-        rise(11) + 1,
-        rise(11)
+        rise(ack_first),
+        rise(ack_last) + 1,
+        rise(ack_last)
     ));
     match packet.ack {
-        Ack::Ok => {
-            let (first, parity) = if packet.rnw { (12, 44) } else { (13, 45) };
+        // A TARGETSEL write's data phase follows whatever the acknowledge showed.
+        _ if packet.ack == Ack::Ok || packet.is_targetsel() => {
+            let (first, parity) = if packet.rnw {
+                (ack_last + 1, ack_last + 33)
+            } else {
+                (ack_last + 1 + trn, ack_last + 33 + trn)
+            };
             let event = SwdEvent::Data {
                 tx: TxId(tx),
                 value: packet.data,
@@ -211,12 +243,24 @@ fn packet_lines(tx: u64, packet: &SwdPacket, position: u64) -> Vec<String> {
             if packet.bad_data_parity {
                 lines.push(one(&format!("end p{tx} protocol-error"), rise(parity)));
             } else {
-                lines.push(one(&format!("end p{tx} complete"), rise(45)));
+                lines.push(one(
+                    &format!("end p{tx} complete"),
+                    rise(ack_last + 33 + trn),
+                ));
             }
         }
-        Ack::Wait => lines.push(one(&format!("end p{tx} wait"), rise(12))),
-        Ack::Fault => lines.push(one(&format!("end p{tx} fault"), rise(12))),
-        Ack::Other(_) => lines.push(one(&format!("end p{tx} protocol-error"), rise(11))),
+        // Under overrun detection, a data phase with nothing to report comes first.
+        Ack::Wait if packet.orundetect => {
+            lines.push(one(&format!("end p{tx} wait"), rise(ack_last + 33 + trn)));
+        }
+        Ack::Fault if packet.orundetect => {
+            lines.push(one(&format!("end p{tx} fault"), rise(ack_last + 33 + trn)));
+        }
+        Ack::Wait => lines.push(one(&format!("end p{tx} wait"), rise(ack_last + trn))),
+        Ack::Fault => lines.push(one(&format!("end p{tx} fault"), rise(ack_last + trn))),
+        Ack::Ok | Ack::Other(_) => {
+            lines.push(one(&format!("end p{tx} protocol-error"), rise(ack_last)));
+        }
     }
     lines
 }
@@ -232,6 +276,12 @@ fn line_reset(from: u64, to: u64) -> String {
     )
 }
 
+/// The line of a switch to `to` whose `bits` bits start with the clock at `from`.
+fn switch_line(to: &str, from: u64, bits: u64) -> String {
+    let last = rise_at(from + (bits - 1) * PERIOD);
+    format!("switch {to} [{},{})@{last}", rise_at(from), last + 1)
+}
+
 /// A debugger connecting at `from`: the lines of its line resets and select sequence.
 fn connect_lines(from: u64) -> Vec<String> {
     let select = from + 56 * PERIOD;
@@ -239,14 +289,15 @@ fn connect_lines(from: u64) -> Vec<String> {
     let idle = second + 56 * PERIOD;
     vec![
         line_reset(from, select),
-        format!(
-            "switch swd [{},{})@{}",
-            rise_at(select),
-            rise_at(second - PERIOD) + 1,
-            rise_at(second - PERIOD)
-        ),
+        switch_line("swd", select, 16),
         line_reset(second, idle),
     ]
+}
+
+/// Bits in a wake: the Selection Alert, the four clocks the target ignores and a code of
+/// `code_bits` bits.
+fn wake_bits(code_bits: u64) -> u64 {
+    128 + 4 + code_bits
 }
 
 #[test]
@@ -274,6 +325,34 @@ fn reads_and_writes_are_decoded_with_every_acknowledge() {
     let block = waveform.finish();
     expected.push(format!("eof {}", block.end()));
     assert_eq!(decode(&block), expected);
+}
+
+#[test]
+fn the_targets_bits_are_read_at_the_falling_edge_whatever_its_delay() {
+    // The target changes SWDIO on the rising edge of SWCLK (ADIv6 B4.3.1); the analyzer sees
+    // the change in the edge's own sample or some later. The same traffic decodes the same.
+    let steps = [
+        Step::Switch(Interface::Swd, 56, 2),
+        Step::Packet(SwdPacket::read(false, 0x0, 0x2ba0_1477), 0),
+        Step::Packet(SwdPacket::write(false, 0x8, 0x0000_00f0), 1),
+        Step::Packet(SwdPacket::read(true, 0xc, 0xffff_0000), 0),
+        Step::Packet(SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait), 0),
+        Step::Packet(
+            SwdPacket::write(true, 0x4, 0x2300_0012).with_ack(Ack::Fault),
+            2,
+        ),
+        Step::Packet(SwdPacket::read(true, 0x0, 0x5555_aaaa), 0),
+    ];
+    let (expected, steps) = simulate(&steps);
+    assert!(expected.len() > 20, "{expected:?}");
+    let half = 8;
+    for delay in [0, 1, half - 1] {
+        let mut waveform = SwdWaveform::new(SwdConfig::default(), CHANNELS, half, Tick::ZERO)
+            .with_target_delay(delay);
+        waveform.idle(LEAD);
+        let block = build_on(waveform, &steps);
+        assert_eq!(payloads(&items(&block, &[])), expected, "delay {delay}");
+    }
 }
 
 #[test]
@@ -376,6 +455,243 @@ fn malformed_requests_end_the_packet_on_their_park_bit() {
     }
 }
 
+/// `packet` with overrun detection on.
+fn under_overrun(packet: SwdPacket) -> SwdPacket {
+    SwdPacket {
+        orundetect: true,
+        ..packet
+    }
+}
+
+#[test]
+fn overrun_detection_is_followed_from_the_writes_to_ctrl_stat() {
+    let mut waveform = waveform();
+    waveform.connect();
+    let mut expected = connect_lines(LEAD);
+    let mut tx = 0;
+    let mut send = |waveform: &mut SwdWaveform, expected: &mut Vec<String>, packet: SwdPacket| {
+        tx += 1;
+        let position = waveform.position().get();
+        waveform.packet(&packet);
+        waveform.idle_cycles(1);
+        expected.extend(packet_lines(tx, &packet, position));
+    };
+    let wait = SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait);
+    // Off after a powerup reset: WAIT ends with its turnaround.
+    send(&mut waveform, &mut expected, wait);
+    // CTRL/STAT.ORUNDETECT set: WAIT and FAULT carry a data phase from now on.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket::write(false, 0x4, 0x5000_0001),
+    );
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(true, 0x4, 0x1234_5678).with_ack(Ack::Fault)),
+    );
+    // With SELECT.DPBANKSEL at 1, address 0x4 is DLCR: a write there changes nothing, and
+    // neither does a write to CTRL/STAT the target answers WAIT.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket::write(false, 0x8, 0x0000_0001),
+    );
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(false, 0x4, 0x0000_0000)),
+    );
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(false, 0x8, 0).with_ack(Ack::Wait)),
+    );
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    // A line reset puts the bank back to 0; CTRL/STAT keeps its value.
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, idle));
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(false, 0x4, 0x5000_0000).with_ack(Ack::Wait)),
+    );
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    // Cleared: WAIT ends with its turnaround again.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket::write(false, 0x4, 0x5000_0000),
+    );
+    send(&mut waveform, &mut expected, wait);
+    // A write whose data fails its parity does not take effect; after the protocol error the
+    // decoder waits for a line reset.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket {
+            bad_data_parity: true,
+            ..SwdPacket::write(false, 0x4, 0x5000_0001)
+        },
+    );
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, idle));
+    send(&mut waveform, &mut expected, wait);
+    waveform.idle(4);
+    let block = waveform.finish();
+    expected.push(format!("eof {}", block.end()));
+    assert_eq!(decode(&block), expected);
+}
+
+#[test]
+fn overrun_detection_can_be_set_outright() {
+    for (setting, on) in [(OverrunDetect::On, true), (OverrunDetect::Off, false)] {
+        let config = SwdConfig {
+            overrun_detect: setting,
+            ..SwdConfig::default()
+        };
+        let mut waveform = waveform();
+        waveform.connect();
+        let mut expected = connect_lines(LEAD);
+        let wait = SwdPacket {
+            orundetect: on,
+            ..SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait)
+        };
+        // The writes to CTRL/STAT say the opposite and change nothing.
+        let packets = [
+            wait,
+            SwdPacket::write(false, 0x4, 0x5000_0000 | u32::from(!on)),
+            wait,
+        ];
+        for (n, packet) in packets.iter().enumerate() {
+            let position = waveform.position().get();
+            waveform.packet(packet);
+            waveform.idle_cycles(2);
+            expected.extend(packet_lines(n as u64 + 1, packet, position));
+        }
+        waveform.idle(4);
+        let block = waveform.finish();
+        expected.push(format!("eof {}", block.end()));
+        assert_eq!(decode_as(&config, &block), expected, "{setting:?}");
+    }
+}
+
+#[test]
+fn the_turnaround_lasts_as_many_clocks_as_configured() {
+    for turnaround in [2u8, 4] {
+        let config = SwdConfig {
+            turnaround,
+            ..SwdConfig::default()
+        };
+        let mut waveform = SwdWaveform::new(config.clone(), CHANNELS, HALF, Tick::ZERO);
+        waveform.idle(LEAD);
+        waveform.connect();
+        let packets = [
+            SwdPacket::read(false, 0x0, 0x2ba0_1477),
+            SwdPacket::write(false, 0x8, 0x0000_00f0),
+            SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait),
+            SwdPacket::write(false, 0x4, 0x5000_0000).with_ack(Ack::Fault),
+            SwdPacket::targetsel(0x0100_2927),
+            SwdPacket::read(true, 0x0, 0xffff_ffff),
+            SwdPacket::read(false, 0x0, 0).with_ack(Ack::Other(7)),
+        ];
+        let mut expected = connect_lines(LEAD);
+        for (n, packet) in packets.iter().enumerate() {
+            let position = waveform.position().get();
+            waveform.packet(packet);
+            waveform.idle_cycles(n as u32 % 2);
+            expected.extend(packet_lines_as(
+                n as u64 + 1,
+                packet,
+                position,
+                u64::from(turnaround),
+            ));
+        }
+        waveform.idle(4);
+        let block = waveform.finish();
+        expected.push(format!("eof {}", block.end()));
+        assert_eq!(
+            decode_as(&config, &block),
+            expected,
+            "turnaround {turnaround}"
+        );
+    }
+}
+
+#[test]
+fn a_targetsel_write_goes_on_without_an_acknowledge() {
+    // Multi-drop target selection (ADIv6 B4.3.4): a line reset, a TARGETSEL write that no
+    // target acknowledges, then the DPIDR read and whatever follows, with no line reset between.
+    let mut waveform = waveform();
+    waveform.connect();
+    let mut expected = connect_lines(LEAD);
+    let mut tx = 0;
+    let mut select =
+        |waveform: &mut SwdWaveform, expected: &mut Vec<String>, packets: &[SwdPacket]| {
+            let reset = waveform.position().get();
+            waveform.line_reset(56);
+            let idle = waveform.position().get();
+            waveform.idle_cycles(2);
+            expected.push(line_reset(reset, idle));
+            for packet in packets {
+                tx += 1;
+                let position = waveform.position().get();
+                waveform.packet(packet);
+                waveform.idle_cycles(2);
+                expected.extend(packet_lines(tx, packet, position));
+            }
+        };
+    select(
+        &mut waveform,
+        &mut expected,
+        &[
+            SwdPacket::targetsel(0x0100_2927),
+            SwdPacket::read(false, 0x0, 0x0bc1_2477),
+            SwdPacket::read(false, 0x4, 0xf000_0040),
+        ],
+    );
+    // Whatever the three undriven bits happened to show, the data phase follows.
+    select(
+        &mut waveform,
+        &mut expected,
+        &[
+            SwdPacket::targetsel(0x1100_2927).with_ack(Ack::Other(5)),
+            SwdPacket::read(false, 0x0, 0x0bc1_2477),
+        ],
+    );
+    // A parity error in the data of a TARGETSEL write is a protocol error (B4.3.4): the
+    // decoder waits for the next line reset, so the DPIDR read after it is not decoded.
+    select(
+        &mut waveform,
+        &mut expected,
+        &[SwdPacket {
+            bad_data_parity: true,
+            ..SwdPacket::targetsel(0x0100_2927)
+        }],
+    );
+    waveform.packet(&SwdPacket::read(false, 0x0, 0x0bc1_2477));
+    waveform.idle(4);
+    let block = waveform.finish();
+    expected.push(format!("eof {}", block.end()));
+    let lines = decode(&block);
+    assert_eq!(lines, expected);
+    assert!(lines.iter().any(|line| line.starts_with("ack p1 other(7)")));
+    assert!(lines.iter().any(|line| line.starts_with("end p1 complete")));
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("end p6 protocol-error"))
+    );
+}
+
 #[test]
 fn an_unanswered_request_is_a_protocol_error_and_its_high_bits_lead_into_the_line_reset() {
     let mut waveform = waveform();
@@ -446,6 +762,115 @@ fn line_resets_and_both_select_sequences_are_reported() {
     expected.extend(packet_lines(1, &packet, position));
     expected.push(format!("eof {}", block.end()));
     assert_eq!(decode(&block), expected);
+}
+
+#[test]
+fn the_dormant_state_is_entered_and_left_as_adiv6_has_it() {
+    let mut waveform = waveform();
+    waveform.connect();
+    let mut expected = connect_lines(LEAD);
+    // Into the dormant state: a line reset and 0xE3BC. Nothing is decoded there.
+    let reset = waveform.position().get();
+    waveform.line_reset(52);
+    let select = waveform.position().get();
+    waveform.select(Interface::Dormant);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("dormant", select, 16));
+    waveform.idle_cycles(3);
+    waveform.packet(&SwdPacket::read(false, 0x0, 1));
+    // A wake with a code the decoder does not know leaves the port dormant.
+    waveform.wake(0x5a, 8);
+    waveform.packet(&SwdPacket::read(false, 0x0, 1));
+    // The Arm CoreSight SW-DP code wakes the port to SWD, where the target waits for a line
+    // reset in the protocol error state: until it comes, nothing is decoded (this packet's
+    // last bits are low, so that they do not lead into the line reset).
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(u16::from(ACTIVATE_SWD), 8);
+    expected.push(switch_line("swd", alert, wake_bits(8)));
+    waveform.packet(&SwdPacket::read(false, 0x0, 0));
+    let reset = waveform.position().get();
+    waveform.line_reset(56);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, idle));
+    let position = waveform.position().get();
+    let packet = SwdPacket::read(false, 0x0, 0x0bc1_2477);
+    waveform.packet(&packet);
+    expected.extend(packet_lines(1, &packet, position));
+    waveform.idle_cycles(2);
+    // Dormant again, then woken to JTAG by the JTAG-DP code: no packet is decoded until a
+    // line reset and a switch back to SWD.
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let select = waveform.position().get();
+    waveform.select(Interface::Dormant);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("dormant", select, 16));
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(u16::from(ACTIVATE_JTAG_DP), 8);
+    expected.push(switch_line("jtag", alert, wake_bits(8)));
+    waveform.bits(0x0123_4567, 32);
+    waveform.packet(&packet);
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let select = waveform.position().get();
+    waveform.select(Interface::Swd);
+    let second = waveform.position().get();
+    waveform.line_reset(50);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("swd", select, 16));
+    expected.push(line_reset(second, idle));
+    let position = waveform.position().get();
+    waveform.packet(&packet);
+    expected.extend(packet_lines(2, &packet, position));
+    // The JTAG-Serial code, twelve zero bits, wakes to JTAG as well.
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let select = waveform.position().get();
+    waveform.select(Interface::Dormant);
+    expected.push(line_reset(reset, select));
+    expected.push(switch_line("dormant", select, 16));
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(0, 12);
+    expected.push(switch_line("jtag", alert, wake_bits(12)));
+    waveform.idle(4);
+    let block = waveform.finish();
+    expected.push(format!("eof {}", block.end()));
+    assert_eq!(decode(&block), expected);
+}
+
+#[test]
+fn a_selection_alert_is_recognised_in_swd_mode_as_well() {
+    // A host that takes the port for dormant while the decoder saw it in SWD: the alert's
+    // bits are decoded for what they look like, but the alert and its code are still a
+    // switch, every packet begun ends, and the line reset after it brings packets back.
+    let mut waveform = waveform();
+    waveform.connect();
+    let alert = waveform.position().get() + 8 * PERIOD;
+    waveform.wake(u16::from(ACTIVATE_SWD), 8);
+    let reset = waveform.position().get();
+    waveform.line_reset(56);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    let position = waveform.position().get();
+    let packet = SwdPacket::read(false, 0x0, 0x0bc1_2477);
+    waveform.packet(&packet);
+    waveform.idle(4);
+    let block = waveform.finish();
+    let lines = decode(&block);
+    let switch = switch_line("swd", alert, wake_bits(8));
+    let at = lines
+        .iter()
+        .position(|line| *line == switch)
+        .unwrap_or_else(|| panic!("no {switch} in {lines:?}"));
+    let count = |what: &str| lines[..at].iter().filter(|l| l.starts_with(what)).count();
+    assert_eq!(count("begin "), count("end "), "{lines:?}");
+    let mut tail = vec![line_reset(reset, idle)];
+    tail.extend(packet_lines(count("begin ") as u64 + 1, &packet, position));
+    tail.push(format!("eof {}", block.end()));
+    assert_eq!(lines[at + 1..], tail[..]);
 }
 
 #[test]
@@ -651,12 +1076,13 @@ fn progress_is_held_back_to_what_is_not_reported_yet() {
         (246, 230),
         // Inside the request, from its Start bit.
         (rise(3), rise(0)),
-        // On the Park bit, high: should the packet break, it would lead into a line reset.
-        (rise(7), rise(7)),
+        // On the Park bit: Stop and Park, 0 then 1, are how a Selection Alert starts.
+        (rise(7), rise(6)),
         // Inside the data.
         (rise(30), rise(12)),
-        // Nothing once the packet is complete.
-        (rise(45), rise(45) + 1),
+        // Once the packet is complete, only the turnaround bit, low here, which could start a
+        // Selection Alert.
+        (rise(45), rise(45)),
     ] {
         let cut = Tick(last + 1);
         let piece = block.slice(TickRange::new(from, cut)).expect("a slice");
@@ -703,6 +1129,12 @@ fn rich_waveform() -> LogicBlock {
     for n in 0..5u32 {
         waveform.packet(&SwdPacket::write(true, 0x4, n << 28));
     }
+    waveform.connect_through_dormant();
+    waveform.packet(&SwdPacket::read(false, 0x0, 0x0bc1_2477));
+    waveform.packet(&SwdPacket::write(false, 0x4, 0x5000_0001));
+    waveform.packet(&under_overrun(
+        SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait),
+    ));
     waveform.idle(6);
     waveform.finish()
 }
@@ -726,6 +1158,9 @@ fn every_cut_and_pause_yields_the_same_events() {
         "switch jtag",
         "switch swd",
         "end p31 complete",
+        "switch dormant",
+        "end p32 complete",
+        "end p34 wait",
     ] {
         assert!(
             lines.iter().any(|line| line.starts_with(what)),
@@ -749,6 +1184,30 @@ enum Step {
     Reset(u32, u32),
     /// A line reset, a select sequence, another line reset and idle cycles.
     Switch(Interface, u32, u32),
+    /// A line reset, the SWD-to-dormant sequence, then a wake, then idle cycles; a wake to
+    /// SWD is followed by a line reset first.
+    Dormant(Wake, u32, u32),
+}
+
+/// What a wake from the dormant state asks for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Wake {
+    Swd,
+    Jtag,
+    JtagSerial,
+    Unrecognized,
+}
+
+impl Wake {
+    /// The activation code and its length in bits.
+    fn code(self) -> (u16, u32) {
+        match self {
+            Wake::Swd => (u16::from(ACTIVATE_SWD), 8),
+            Wake::Jtag => (u16::from(ACTIVATE_JTAG_DP), 8),
+            Wake::JtagSerial => (0, 12),
+            Wake::Unrecognized => (0x5a, 8),
+        }
+    }
 }
 
 fn packet() -> impl Strategy<Value = SwdPacket> {
@@ -798,16 +1257,31 @@ fn step() -> impl Strategy<Value = Step> {
             .prop_map(|(packet, reset, idle)| Step::Broken(packet, reset, idle)),
         1 => (50u32..70, 3u32..8).prop_map(|(reset, idle)| Step::Reset(reset, idle)),
         1 => (
-            prop::sample::select(vec![Interface::Swd, Interface::Jtag]),
+            prop::sample::select(vec![Interface::Swd, Interface::Jtag, Interface::Dormant]),
             50u32..60,
             3u32..6
         )
             .prop_map(|(to, reset, idle)| Step::Switch(to, reset, idle)),
+        1 => (
+            prop::sample::select(vec![
+                Wake::Swd,
+                Wake::Jtag,
+                Wake::JtagSerial,
+                Wake::Unrecognized
+            ]),
+            50u32..60,
+            2u32..6
+        )
+            .prop_map(|(wake, reset, idle)| Step::Dormant(wake, reset, idle)),
     ]
 }
 
-fn build(steps: &[Step]) -> LogicBlock {
-    let mut waveform = waveform();
+fn build(steps: &[Step], delay: u64) -> LogicBlock {
+    build_on(waveform().with_target_delay(delay), steps)
+}
+
+/// Puts `steps` on `waveform`.
+fn build_on(mut waveform: SwdWaveform, steps: &[Step]) -> LogicBlock {
     for step in steps {
         match step {
             Step::Packet(packet, idle) => {
@@ -829,34 +1303,63 @@ fn build(steps: &[Step]) -> LogicBlock {
                 waveform.line_reset(*reset);
                 waveform.idle_cycles(*idle);
             }
+            Step::Dormant(wake, reset, idle) => {
+                waveform.line_reset(*reset);
+                waveform.select(Interface::Dormant);
+                let (code, bits) = wake.code();
+                waveform.wake(code, bits);
+                if *wake == Wake::Swd {
+                    waveform.line_reset(*reset);
+                }
+                waveform.idle_cycles(*idle);
+            }
         }
     }
     waveform.idle(4);
     waveform.finish()
 }
 
-/// The events a scenario must decode to, from the protocol's rules alone: packets count only
-/// between a line reset and a protocol error, in SWD.
-fn model(steps: &[Step]) -> Vec<SwdEvent> {
+/// The events a scenario must decode to, from the protocol's rules alone — packets count only
+/// between a line reset and a protocol error, in SWD — and the steps with each packet told
+/// whether overrun detection is on, as the debug port writes decoded so far have set it: a
+/// write to CTRL/STAT acknowledged OK and whole, in bank 0 of SELECT.DPBANKSEL, which a line
+/// reset puts back to 0.
+fn simulate(steps: &[Step]) -> (Vec<SwdEvent>, Vec<Step>) {
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Mode {
         Unaligned,
         Swd,
         Jtag,
+        Dormant,
     }
     let mut mode = Mode::Unaligned;
     let mut next = 1;
     let mut events = Vec::new();
-    let after_reset = |mode: Mode| {
-        if mode == Mode::Jtag {
-            Mode::Jtag
-        } else {
-            Mode::Swd
-        }
+    let mut annotated = Vec::with_capacity(steps.len());
+    let (mut orundetect, mut dpbanksel) = (false, 0u32);
+    let after_reset = |mode: Mode| match mode {
+        Mode::Jtag | Mode::Dormant => mode,
+        Mode::Unaligned | Mode::Swd => Mode::Swd,
     };
     for step in steps {
-        match step {
+        let mut step = step.clone();
+        match &mut step {
             Step::Packet(packet, _) | Step::Broken(packet, _, _) => {
+                packet.orundetect = orundetect;
+                let request_ok = !packet.bad_request_parity && !packet.stop && packet.park;
+                if mode == Mode::Swd
+                    && request_ok
+                    && !packet.apndp
+                    && !packet.rnw
+                    && packet.ack == Ack::Ok
+                    && !packet.bad_data_parity
+                {
+                    match packet.addr & 0xc {
+                        0x8 => dpbanksel = packet.data & 0xf,
+                        0x4 if dpbanksel == 0 => orundetect = packet.data & 1 != 0,
+                        _ => {}
+                    }
+                }
                 if mode == Mode::Swd {
                     let tx = TxId(next);
                     next += 1;
@@ -876,7 +1379,7 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                             value: packet.ack,
                         });
                         match packet.ack {
-                            Ack::Ok => {
+                            _ if packet.ack == Ack::Ok || packet.is_targetsel() => {
                                 events.push(SwdEvent::Data {
                                     tx,
                                     value: packet.data,
@@ -891,7 +1394,7 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                             }
                             Ack::Wait => EndReason::Wait,
                             Ack::Fault => EndReason::Fault,
-                            Ack::Other(_) => EndReason::ProtocolError,
+                            Ack::Ok | Ack::Other(_) => EndReason::ProtocolError,
                         }
                     };
                     events.push(SwdEvent::End { tx, reason });
@@ -901,25 +1404,51 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                 }
                 if let Step::Broken(..) = step {
                     events.push(SwdEvent::LineReset);
+                    dpbanksel = 0;
                     mode = after_reset(mode);
                 }
             }
             Step::Reset(..) => {
                 events.push(SwdEvent::LineReset);
+                dpbanksel = 0;
                 mode = after_reset(mode);
             }
             Step::Switch(to, ..) => {
                 events.push(SwdEvent::LineReset);
                 events.push(SwdEvent::Switch { to: *to });
                 events.push(SwdEvent::LineReset);
+                dpbanksel = 0;
                 mode = match to {
                     Interface::Swd => Mode::Swd,
                     Interface::Jtag => Mode::Jtag,
+                    Interface::Dormant => Mode::Dormant,
+                };
+            }
+            Step::Dormant(wake, ..) => {
+                events.push(SwdEvent::LineReset);
+                events.push(SwdEvent::Switch {
+                    to: Interface::Dormant,
+                });
+                dpbanksel = 0;
+                mode = match wake {
+                    Wake::Swd => {
+                        events.push(SwdEvent::Switch { to: Interface::Swd });
+                        events.push(SwdEvent::LineReset);
+                        Mode::Swd
+                    }
+                    Wake::Jtag | Wake::JtagSerial => {
+                        events.push(SwdEvent::Switch {
+                            to: Interface::Jtag,
+                        });
+                        Mode::Jtag
+                    }
+                    Wake::Unrecognized => Mode::Dormant,
                 };
             }
         }
+        annotated.push(step);
     }
-    events
+    (events, annotated)
 }
 
 proptest! {
@@ -930,15 +1459,12 @@ proptest! {
     fn random_traffic_decodes_as_the_rules_say(
         steps in prop::collection::vec(step(), 1..24),
         sizes in prop::collection::vec(1u64..300, 1..5),
+        delay in 0..HALF,
     ) {
-        let block = build(&steps);
+        let (expected, steps) = simulate(&steps);
+        let block = build(&steps, delay);
         let decoded = items(&block, &[]);
-        let payloads: Vec<SwdEvent> = decoded
-            .iter()
-            .filter_map(Item::event)
-            .map(|event| event.payload)
-            .collect();
-        prop_assert_eq!(payloads, model(&steps));
+        prop_assert_eq!(payloads(&decoded), expected);
         let mut cut = harness(GraphConfig { queue_capacity: 2, budget: 5 });
         cut.drain_on_full = 1;
         cut.feed_cut(&block, &[], &sizes, &[1, 0, 2]);

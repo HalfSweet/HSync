@@ -7,36 +7,59 @@
 //! (ARM IHI 0031): its Serial Wire Debug protocol and the switching sequences of the SWJ-DP.
 //! The rules:
 //!
-//! - every bit is read at the tick SWCLK rises: the host drives SWDIO before that edge and the
-//!   target after the falling edge before it, so the one edge reads both directions;
+//! - every bit belongs to a rising edge of SWCLK. The host's bits are read there, where the
+//!   target samples them; the target changes SWDIO on the rising edge (B4.3.1), so its bits —
+//!   the acknowledge, a read's data and parity — are read at the falling edge before, where
+//!   they have settled, whatever the target's output delay;
 //! - a line reset is at least 50 clocks in a row with SWDIO high; it is reported when SWDIO is
 //!   read low again, or where the samples stop, spanning the whole run;
-//! - right after a line reset, the select sequences JTAG-to-SWD (`0xE79E`) and SWD-to-JTAG
-//!   (`0xE73C`), sixteen bits sent least significant first, are reported as a `switch`; while
-//!   the bits after a line reset may still be one, nothing is reported for them, and once they
-//!   cannot, they are decoded as idle cycles and packets;
+//! - right after a line reset, the select sequences JTAG-to-SWD (`0xE79E`), SWD-to-JTAG
+//!   (`0xE73C`) and SWD-to-dormant (`0xE3BC`), sixteen bits sent least significant first, are
+//!   reported as a `switch`; while the bits after a line reset may still be one, nothing is
+//!   reported for them, and once they cannot, they are decoded as idle cycles and packets;
+//! - the Selection Alert that wakes a dormant target (B5.3.4: 128 bits, then four clocks the
+//!   target ignores, then an activation code) is watched for on every bit of the wire. The
+//!   Arm CoreSight SW-DP code switches to SWD, the Arm CoreSight JTAG-DP and the JTAG-Serial
+//!   codes to JTAG, as a `switch` spanning alert and code; a code the decoder does not know
+//!   leaves the port where it was. A packet under way when the alert completes was none: it
+//!   ends with `protocol-error`;
 //! - packets are decoded only where it is known where they start: from a line reset on, until
-//!   a protocol error, a gap or a switch to JTAG. At the first sample, after a gap and after a
-//!   protocol error the decoder waits for a line reset rather than for idle cycles, which the
-//!   bits of a data phase can imitate; after a switch to JTAG it decodes no packet until a
-//!   line reset and a switch back. A line reset that is not followed by a select sequence is
-//!   taken to leave the port in SWD, unless it was switched to JTAG;
+//!   a protocol error, a gap or a switch to JTAG or dormant. At the first sample, after a gap,
+//!   after a protocol error and after waking to SWD — which leaves the target in the protocol
+//!   error state until a line reset — the decoder waits for a line reset rather than for idle
+//!   cycles, which the bits of a data phase can imitate; after a switch to JTAG or dormant it
+//!   decodes no packet until a line reset and a switch back. A line reset that is not followed
+//!   by a select sequence is taken to leave the port in SWD, unless it was switched to JTAG or
+//!   dormant;
 //! - between packets, a low bit is an idle cycle and a high bit a Start bit — unless the run of
 //!   high bits it starts grows into a line reset. A packet is therefore reported from the
 //!   first low bit of its request (a well-formed request has one among its first six bits),
 //!   and its `begin` is settled there; a run of 8 to 49 high bits is a request of all ones,
 //!   which is malformed;
-//! - a packet is a request (Start, APnDP, RnW, A\[2\], A\[3\], Parity, Stop, Park), one
+//! - a packet is a request (Start, APnDP, RnW, A\[2\], A\[3\], Parity, Stop, Park), a
 //!   turnaround, and the acknowledge, three bits least significant first. After OK, a read
 //!   goes on with 32 data bits, least significant first, and a parity bit from the target,
 //!   then a turnaround; a write with a turnaround, then 32 data bits and a parity bit from the
-//!   host. After WAIT or FAULT comes a turnaround and no data;
+//!   host. After WAIT or FAULT comes a turnaround and no data — unless overrun detection is on
+//!   (CTRL/STAT.ORUNDETECT, B4.2.6), when a data phase follows all the same, undriven for a
+//!   read and ignored by the target for a write: the decoder reads it through without a `data`
+//!   event and ends the packet after it. The configuration says whether overrun detection is
+//!   on, off, or followed from the wire: then it is off until a write to CTRL/STAT turns it
+//!   on, a debug port write to `0x4` acknowledged OK with SELECT.DPBANKSEL at 0, which the
+//!   writes to SELECT (`0x8`) choose and a line reset puts back to 0. A turnaround lasts the
+//!   clocks the configuration says, 1 to 4 (DLCR.TURNROUND), one unless the debugger changed
+//!   it;
 //! - a packet ends `complete` on its last bit — the read's final turnaround, the write's parity
 //!   bit — and `wait` or `fault` on the turnaround after the acknowledge;
+//! - a write to debug port address `0xC` is a TARGETSEL write (B4.3.4, SWD protocol version
+//!   2): the target does not drive the acknowledge, and the host goes on with the data phase
+//!   whatever the line showed. The decoder reports the three bits as read and decodes the
+//!   write's data phase after them;
 //! - a protocol error ends the packet with `protocol-error` on the bit that shows it: a request
 //!   whose parity is wrong, whose Stop bit is not 0 or whose Park bit is not 1; an acknowledge
-//!   other than OK, WAIT and FAULT; data whose parity is wrong. High bits at the end of the
-//!   broken packet count toward the line reset that brings the decoder back;
+//!   other than OK, WAIT and FAULT, except after a TARGETSEL write; data whose parity is wrong.
+//!   High bits at the end of the broken packet count toward the line reset that brings the
+//!   decoder back;
 //! - a gap or the end of the samples ends the packet under way `aborted`, and a run of high
 //!   bits long enough is a line reset there;
 //! - progress is passed on, held back to the first bit read and not reported yet: of a run of
@@ -44,12 +67,13 @@
 //!   that may be a select sequence; of the request, acknowledge or data being read;
 //! - a bit decides at most a field of the packet and then its end, in that order.
 //!
-//! Limits: the turnaround lasts one clock, the reset value of DLCR.TURNROUND; with overrun
-//! detection (CTRL/STAT.ORUNDETECT) WAIT and FAULT carry a data phase the decoder does not
-//! expect; the TARGETSEL write of multi-drop SWD, whose acknowledge no target drives, is
-//! reported as a protocol error; the dormant state of ADIv6 and its selection sequences are out
-//! of scope. No register is named: what `addr` selects depends on APnDP and on the debug and
-//! access ports, which is the next layer's business.
+//! Limits: the turnaround is the configuration's, not followed from writes to DLCR; overrun
+//! detection followed from the wire is only as right as the writes the decoder saw — a write
+//! to CTRL/STAT before the samples begin, in a gap or while the decoder was not aligned is
+//! missed, and the configuration can then say `on` or `off` outright; the JTAG-to-dormant
+//! sequence, defined by the TAP controller's zero-bit scans, is not recognised on SWDIO. No
+//! register is named: what `addr` selects depends on APnDP and on the debug and access ports,
+//! which is the next layer's business.
 
 use std::sync::Arc;
 
@@ -71,18 +95,46 @@ pub const JTAG_TO_SWD: u16 = 0xE79E;
 /// The SWD-to-JTAG select sequence, sent least significant bit first.
 pub const SWD_TO_JTAG: u16 = 0xE73C;
 
+/// The SWD-to-dormant select sequence, sent least significant bit first.
+pub const SWD_TO_DS: u16 = 0xE3BC;
+
+/// The Selection Alert that wakes a dormant target: 128 bits, sent least significant bit
+/// first.
+pub const SELECTION_ALERT: u128 = 0x19BC_0EA2_E3DD_AFE9_8685_2D95_6209_F392;
+
+/// The activation code of an Arm CoreSight SW-DP, as read least significant bit first: the
+/// code `0b0101_1000` of ADIv6 Table B5-2, which is sent most significant bit first.
+pub const ACTIVATE_SWD: u8 = 0x1A;
+
+/// The activation code of an Arm CoreSight JTAG-DP, as read least significant bit first: the
+/// code `0b0101_0000` of ADIv6 Table B5-2, which is sent most significant bit first.
+pub const ACTIVATE_JTAG_DP: u8 = 0x0A;
+
+/// Bits in the JTAG-Serial activation code, which are all zero.
+pub const JTAG_SERIAL_BITS: u8 = 12;
+
 /// Bits in a select sequence.
 const SELECT_BITS: usize = 16;
 
+/// Bits in the Selection Alert.
+const ALERT_BITS: usize = 128;
+
+/// Clocks after the Selection Alert whose SWDIO the target ignores, before the activation
+/// code.
+const ACTIVATION_GAP: u8 = 4;
+
 /// Bits in a packet request.
 const REQUEST_BITS: usize = 8;
+
+/// The longest turnaround DLCR.TURNROUND can ask for, in clocks.
+pub const MAX_TURNAROUND: u8 = 4;
 
 /// The most bits waiting to be decoded again: the bits after a line reset that turned out to
 /// be no select sequence. A request found among them is put back in their place, so it never
 /// adds to them; one found on the wire is at most a request and the low bit after it.
 const REPLAY_BITS: usize = SELECT_BITS;
 
-/// How the port is wired.
+/// How the port is wired and set up.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SwdConfig {
@@ -90,12 +142,37 @@ pub struct SwdConfig {
     pub swclk: u8,
     /// The data channel.
     pub swdio: u8,
+    /// The turnaround period in clocks, 1 to 4: what the debugger wrote to DLCR.TURNROUND,
+    /// one after a reset.
+    pub turnaround: u8,
+    /// Whether overrun detection (CTRL/STAT.ORUNDETECT) is on, which makes WAIT and FAULT
+    /// carry a data phase.
+    pub overrun_detect: OverrunDetect,
 }
 
 impl Default for SwdConfig {
     fn default() -> Self {
-        Self { swclk: 0, swdio: 1 }
+        Self {
+            swclk: 0,
+            swdio: 1,
+            turnaround: 1,
+            overrun_detect: OverrunDetect::Auto,
+        }
     }
+}
+
+/// How the decoder knows whether overrun detection is on.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OverrunDetect {
+    /// From the wire: off, as after a powerup reset, until a write to CTRL/STAT acknowledged
+    /// OK sets or clears it.
+    #[default]
+    Auto,
+    /// On throughout.
+    On,
+    /// Off throughout.
+    Off,
 }
 
 impl SwdConfig {
@@ -114,12 +191,15 @@ impl SwdConfig {
         if self.swclk == self.swdio {
             return Err(SwdConfigError::DuplicateChannel(self.swclk));
         }
+        if !(1..=MAX_TURNAROUND).contains(&self.turnaround) {
+            return Err(SwdConfigError::Turnaround(self.turnaround));
+        }
         Ok(())
     }
 
     /// What the decoder's output port declares: the turnaround it assumes, in clocks.
     pub fn props(&self) -> Props {
-        Props::new().with("turnaround", 1)
+        Props::new().with("turnaround", i64::from(self.turnaround))
     }
 }
 
@@ -132,6 +212,9 @@ pub enum SwdConfigError {
     /// A channel number is out of range.
     #[error("channel {0} is out of range; channels are 0 to {last}", last = MAX_CHANNELS - 1)]
     Channel(u8),
+    /// The turnaround is not 1 to 4 clocks.
+    #[error("a turnaround of {0} clocks is out of range; it is 1 to {MAX_TURNAROUND}")]
+    Turnaround(u8),
 }
 
 /// The SWD decoder node: logic samples in, `swd.events` out.
@@ -185,11 +268,16 @@ impl Node for Swd {
     }
 }
 
-/// SWDIO as read at a rising edge of SWCLK.
+/// SWDIO around a rising edge of SWCLK: at the edge, where the target samples what the host
+/// drives, and at the falling edge before it, where the host samples what the target drives.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Bit {
     tick: Tick,
+    /// SWDIO at the rising edge: the host's bit.
     high: bool,
+    /// SWDIO at the falling edge before it: the target's bit. Where no falling edge came
+    /// before, since the samples began, the level at the rising edge.
+    target: bool,
 }
 
 /// What the decoder knows about where packets start.
@@ -201,6 +289,9 @@ enum Mode {
     Swd,
     /// The port was switched to JTAG.
     Jtag,
+    /// The port was put into the dormant state, which a Selection Alert and an activation
+    /// code leave.
+    Dormant,
 }
 
 /// High bits in a row, outside packets or at the end of one that broke.
@@ -255,6 +346,139 @@ impl Select {
     }
 }
 
+/// The bit at `index` of the Selection Alert.
+fn alert_bit(index: usize) -> bool {
+    SELECTION_ALERT >> index & 1 != 0
+}
+
+/// The activation code being read after a Selection Alert.
+#[derive(Clone, Copy, Debug)]
+struct Activation {
+    /// The alert's first bit.
+    start: Tick,
+    /// Bits taken since the alert: the ignored clocks, then the code's.
+    taken: u8,
+    /// The code's bits, bit `i` as the `i`-th on the wire.
+    bits: u16,
+}
+
+/// What a bit of the wire did to the wake sequence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Woke {
+    /// Nothing yet: the bit is the wire's to decode.
+    Nothing,
+    /// The last 128 bits were the Selection Alert.
+    Alert,
+    /// The bit is one the target ignores or one of the activation code, which is not complete.
+    Code,
+    /// The activation code selected an interface; the sequence began at the tick.
+    Switch(Interface, Tick),
+    /// The activation code is none the decoder knows: the port stays where it was.
+    Unrecognized,
+}
+
+/// The Selection Alert and the activation code after it, watched for on every bit of the wire.
+struct Wake {
+    /// How many bits of the alert the latest bits match, 0 to 128.
+    matched: usize,
+    /// For every prefix of the alert, the length of the longest shorter prefix that is also
+    /// its suffix: where a match goes on from after a bit that breaks it.
+    fail: [u8; ALERT_BITS],
+    /// The ticks of the last 128 bits read; `pos` counts them.
+    ticks: [Tick; ALERT_BITS],
+    pos: usize,
+    /// The activation code being read, after an alert.
+    code: Option<Activation>,
+}
+
+impl Wake {
+    fn new() -> Self {
+        let mut fail = [0u8; ALERT_BITS];
+        let mut k = 0usize;
+        for i in 1..ALERT_BITS {
+            while k > 0 && alert_bit(i) != alert_bit(k) {
+                k = usize::from(fail[k - 1]);
+            }
+            if alert_bit(i) == alert_bit(k) {
+                k += 1;
+            }
+            fail[i] = k as u8;
+        }
+        Self {
+            matched: 0,
+            fail,
+            ticks: [Tick::ZERO; ALERT_BITS],
+            pos: 0,
+            code: None,
+        }
+    }
+
+    /// Takes a bit of the wire in.
+    fn feed(&mut self, bit: Bit) -> Woke {
+        if let Some(code) = self.code.as_mut() {
+            code.taken += 1;
+            if code.taken <= ACTIVATION_GAP {
+                return Woke::Code;
+            }
+            let index = code.taken - ACTIVATION_GAP - 1;
+            code.bits |= u16::from(bit.high) << index;
+            let (start, bits) = (code.start, code.bits);
+            let woke = match (index + 1, bits) {
+                (8, bits) if bits == u16::from(ACTIVATE_SWD) => Woke::Switch(Interface::Swd, start),
+                (8, bits) if bits == u16::from(ACTIVATE_JTAG_DP) => {
+                    Woke::Switch(Interface::Jtag, start)
+                }
+                // Eight zero bits may go on into the JTAG-Serial code.
+                (8, 0) => return Woke::Code,
+                (8, _) => Woke::Unrecognized,
+                (JTAG_SERIAL_BITS, 0) => Woke::Switch(Interface::Jtag, start),
+                (JTAG_SERIAL_BITS, _) => Woke::Unrecognized,
+                _ => return Woke::Code,
+            };
+            self.code = None;
+            return woke;
+        }
+        self.ticks[self.pos % ALERT_BITS] = bit.tick;
+        self.pos = self.pos.wrapping_add(1);
+        while self.matched > 0 && bit.high != alert_bit(self.matched) {
+            self.matched = usize::from(self.fail[self.matched - 1]);
+        }
+        if bit.high == alert_bit(self.matched) {
+            self.matched += 1;
+        }
+        if self.matched < ALERT_BITS {
+            return Woke::Nothing;
+        }
+        self.matched = 0;
+        self.code = Some(Activation {
+            start: self.start_of(ALERT_BITS),
+            taken: 0,
+            bits: 0,
+        });
+        Woke::Alert
+    }
+
+    /// The tick of the first of the last `count` bits read.
+    fn start_of(&self, count: usize) -> Tick {
+        self.ticks[self.pos.wrapping_sub(count) % ALERT_BITS]
+    }
+
+    /// The first bit that may still be part of a switch: of the alert and code under way, or
+    /// of the bits that match the start of the alert.
+    fn in_flight(&self) -> Option<Tick> {
+        if let Some(code) = &self.code {
+            return Some(code.start);
+        }
+        (self.matched > 0).then(|| self.start_of(self.matched))
+    }
+
+    /// Forgets the bits: the samples stopped.
+    fn reset(&mut self) {
+        self.matched = 0;
+        self.code = None;
+    }
+}
+
 /// Bits waiting to be decoded again, in order.
 #[derive(Clone, Copy, Debug, Default)]
 struct Replay {
@@ -285,10 +509,17 @@ impl Replay {
     }
 }
 
-/// The packet under way.
+/// The packet under way. Its bits are numbered from the Start bit: the request is bits 0 to
+/// 7, a turnaround of `trn` clocks follows, then the three acknowledge bits; a read's data
+/// phase comes right after them and ends with a turnaround, a write's begins with one.
 #[derive(Clone, Copy, Debug)]
 struct Packet {
     tx: TxId,
+    /// Clocks in a turnaround.
+    trn: u8,
+    /// Whether overrun detection was on when the packet began: WAIT and FAULT then carry a
+    /// data phase.
+    orundetect: bool,
     /// Bits taken, from the Start bit.
     taken: u8,
     start: Tick,
@@ -301,9 +532,11 @@ struct Packet {
 }
 
 impl Packet {
-    fn new(tx: TxId) -> Self {
+    fn new(tx: TxId, trn: u8, orundetect: bool) -> Self {
         Self {
             tx,
+            trn,
+            orundetect,
             taken: 0,
             start: Tick::ZERO,
             request: 0,
@@ -314,14 +547,86 @@ impl Packet {
         }
     }
 
+    /// The index of the first acknowledge bit.
+    fn ack_first(&self) -> u8 {
+        8 + self.trn
+    }
+
+    /// The index of the last acknowledge bit.
+    fn ack_last(&self) -> u8 {
+        10 + self.trn
+    }
+
+    /// The index of the last bit of a packet with a data phase: a read's final turnaround, a
+    /// write's parity bit.
+    fn last(&self) -> u8 {
+        43 + 2 * self.trn
+    }
+
+    /// The index of the last bit of a packet without a data phase: the turnaround after WAIT
+    /// or FAULT.
+    fn last_without_data(&self) -> u8 {
+        10 + 2 * self.trn
+    }
+
+    fn apndp(&self) -> bool {
+        self.request >> 1 & 1 != 0
+    }
+
     fn rnw(&self) -> bool {
         self.request >> 2 & 1 != 0
     }
 
-    /// The indices of the first data bit and of the parity bit after OK: a read's data follows
-    /// the acknowledge, a write's comes after a turnaround.
+    /// A\[3:2\] as a byte address.
+    fn addr(&self) -> u8 {
+        (self.request >> 3 & 1) << 2 | (self.request >> 4 & 1) << 3
+    }
+
+    /// Whether the request is a write to debug port address `0xC`: TARGETSEL, whose
+    /// acknowledge the target does not drive and whose data phase follows whatever it showed.
+    fn targetsel(&self) -> bool {
+        // APnDP 0, RnW 0, A[2] 1, A[3] 1.
+        self.request & 0b1_1110 == 0b1_1000
+    }
+
+    /// Whether the data phase carries a word to report: after OK, and after any acknowledge
+    /// of a TARGETSEL write.
+    fn emits_data(&self) -> bool {
+        Ack::from_bits(self.ack) == Ack::Ok || self.targetsel()
+    }
+
+    /// Whether a data phase follows the acknowledge: one that carries a word, or the empty one
+    /// of WAIT and FAULT under overrun detection.
+    fn has_data_phase(&self) -> bool {
+        self.emits_data()
+            || (self.orundetect && matches!(Ack::from_bits(self.ack), Ack::Wait | Ack::Fault))
+    }
+
+    /// How the packet ends after its data phase.
+    fn end_after_data(&self) -> EndReason {
+        match Ack::from_bits(self.ack) {
+            Ack::Wait => EndReason::Wait,
+            Ack::Fault => EndReason::Fault,
+            Ack::Ok | Ack::Other(_) => EndReason::Complete,
+        }
+    }
+
+    /// Whether the target drives the bit at `index`: the acknowledge, and a read's data and
+    /// parity after OK.
+    fn target_drives(&self, index: u8) -> bool {
+        (self.ack_first()..=self.ack_last()).contains(&index)
+            || (self.rnw() && index > self.ack_last() && Ack::from_bits(self.ack) == Ack::Ok)
+    }
+
+    /// The indices of the first data bit and of the parity bit: a read's data follows the
+    /// acknowledge, a write's comes after a turnaround.
     fn data_bits(&self) -> (u8, u8) {
-        if self.rnw() { (12, 44) } else { (13, 45) }
+        let after_ack = self.ack_last() + 1;
+        if self.rnw() {
+            (after_ack, after_ack + 32)
+        } else {
+            (after_ack + self.trn, after_ack + self.trn + 32)
+        }
     }
 
     /// The first bit of the field being read — the request, the acknowledge or the data — which
@@ -329,8 +634,8 @@ impl Packet {
     fn field_start(&self) -> Option<Tick> {
         match self.taken {
             1..=7 => Some(self.start),
-            10..=11 => Some(self.ack_first),
-            taken if Ack::from_bits(self.ack) == Ack::Ok => {
+            taken if taken > self.ack_first() && taken <= self.ack_last() => Some(self.ack_first),
+            taken if self.emits_data() => {
                 let (first, parity) = self.data_bits();
                 (first < taken && taken <= parity).then_some(self.data_first)
             }
@@ -348,24 +653,38 @@ fn settle(at: Provenance, now: Tick) -> Provenance {
 }
 
 struct Decoder {
+    /// Clocks in a turnaround.
+    trn: u8,
+    /// How overrun detection is known.
+    overrun: OverrunDetect,
+    /// Whether overrun detection is on.
+    orundetect: bool,
+    /// SELECT.DPBANKSEL: which register a debug port access to `0x4` reaches.
+    dpbanksel: u8,
     mode: Mode,
     run: Run,
     select: Option<Select>,
     packet: Option<Packet>,
     replay: Replay,
+    wake: Wake,
     next_tx: u64,
     /// The tick of the last bit read from the wire.
     now: Tick,
 }
 
 impl Decoder {
-    fn new() -> Self {
+    fn new(config: &SwdConfig) -> Self {
         Self {
+            trn: config.turnaround,
+            overrun: config.overrun_detect,
+            orundetect: config.overrun_detect == OverrunDetect::On,
+            dpbanksel: 0,
             mode: Mode::Unaligned,
             run: Run::default(),
             select: None,
             packet: None,
             replay: Replay::default(),
+            wake: Wake::new(),
             next_tx: 1,
             now: Tick::ZERO,
         }
@@ -374,19 +693,69 @@ impl Decoder {
     /// The first bit read and not reported yet, which an event may still span from: of a run
     /// of high bits, which may turn into a line reset or be decoded again as a request; of the
     /// bits after a line reset that may be a select sequence; of the packet's field being
-    /// read. Bits waiting in the replay need nothing: the wire is read only once they are
-    /// decoded.
+    /// read; of the bits that may be a Selection Alert and its activation code. Bits waiting
+    /// in the replay need nothing: the wire is read only once they are decoded.
     fn in_flight(&self) -> Option<Tick> {
         let run = (self.run.count > 0).then_some(self.run.first[0]);
         let select = self.select.as_ref().map(|select| select.bits[0].tick);
         let field = self.packet.as_ref().and_then(Packet::field_start);
-        [run, select, field].into_iter().flatten().min()
+        let wake = self.wake.in_flight();
+        [run, select, field, wake].into_iter().flatten().min()
     }
 
     /// Progress to `tick`, held back to what is in flight, which promises that nothing
     /// starting earlier follows.
     fn hold(&self, tick: Tick) -> Tick {
         self.in_flight().map_or(tick, |start| start.min(tick))
+    }
+
+    /// A line reset resets SELECT.DPBANKSEL (B4.3.3); CTRL/STAT keeps its value.
+    fn line_reset(&mut self) {
+        self.dpbanksel = 0;
+    }
+
+    /// A debug port write acknowledged OK and whole, as far as overrun detection followed
+    /// from the wire cares: SELECT (`0x8`) chooses the bank of `0x4`, CTRL/STAT (`0x4` in bank
+    /// 0) turns overrun detection on or off with its bit 0.
+    fn dp_write(&mut self, addr: u8, value: u32) {
+        if self.overrun != OverrunDetect::Auto {
+            return;
+        }
+        match addr {
+            0x8 => self.dpbanksel = (value & 0xf) as u8,
+            0x4 if self.dpbanksel == 0 => self.orundetect = value & 1 != 0,
+            _ => {}
+        }
+    }
+
+    /// A bit read from the wire, not one decoded again: watched for the wake sequence, then
+    /// decoded.
+    async fn wire_bit(&mut self, bit: Bit, out: &mut Outbox<SwdEvent>) {
+        match self.wake.feed(bit) {
+            Woke::Nothing => self.bit(bit, out).await,
+            Woke::Alert => {
+                // The last 128 bits were the Selection Alert, whatever they were taken for: a
+                // packet under way was none, and they were no line reset or select sequence.
+                if self.packet.is_some() {
+                    self.end(EndReason::ProtocolError, bit, out).await;
+                }
+                self.run = Run::default();
+                self.select = None;
+            }
+            Woke::Code | Woke::Unrecognized => {}
+            Woke::Switch(to, start) => {
+                self.mode = match to {
+                    // Woken to SWD, the target is in the protocol error state until a line
+                    // reset.
+                    Interface::Swd => Mode::Unaligned,
+                    Interface::Jtag => Mode::Jtag,
+                    Interface::Dormant => Mode::Dormant,
+                };
+                let span = TickRange::new(start, bit.tick.next());
+                out.emit(Provenance::over(span, bit.tick), SwdEvent::Switch { to })
+                    .await;
+            }
+        }
     }
 
     async fn bit(&mut self, bit: Bit, out: &mut Outbox<SwdEvent>) {
@@ -410,6 +779,7 @@ impl Decoder {
             select.bits[0] = bit;
             select.len = 1;
             self.select = Some(select);
+            self.line_reset();
             let at = settle(Provenance::over(run.span(), bit.tick), self.now);
             out.emit(at, SwdEvent::LineReset).await;
             return;
@@ -419,13 +789,14 @@ impl Decoder {
             // it belongs to the request.
             let tx = TxId(self.next_tx);
             self.next_tx += 1;
-            self.packet = Some(Packet::new(tx));
+            self.packet = Some(Packet::new(tx, self.trn, self.orundetect));
             let ones = (run.count as usize).min(REQUEST_BITS);
             let mut bits = [bit; REQUEST_BITS + 1];
             for (slot, tick) in bits.iter_mut().zip(&run.first[..ones]) {
                 *slot = Bit {
                     tick: *tick,
                     high: true,
+                    target: true,
                 };
             }
             self.replay.put_back(&bits[..=ones]);
@@ -442,6 +813,7 @@ impl Decoder {
         let to = [
             (JTAG_TO_SWD, Interface::Swd),
             (SWD_TO_JTAG, Interface::Jtag),
+            (SWD_TO_DS, Interface::Dormant),
         ]
         .into_iter()
         .find(|(sequence, _)| select.matches(*sequence))
@@ -451,6 +823,7 @@ impl Decoder {
                 self.mode = match to {
                     Interface::Swd => Mode::Swd,
                     Interface::Jtag => Mode::Jtag,
+                    Interface::Dormant => Mode::Dormant,
                 };
                 let span = TickRange::new(select.bits[0].tick, bit.tick.next());
                 let at = settle(Provenance::over(span, bit.tick), self.now);
@@ -458,8 +831,9 @@ impl Decoder {
             }
             Some(_) => self.select = Some(select),
             None => {
-                // No select sequence: idle cycles and packets, or more JTAG.
-                if self.mode != Mode::Jtag {
+                // No select sequence: idle cycles and packets, or more JTAG, or a target
+                // still dormant.
+                if !matches!(self.mode, Mode::Jtag | Mode::Dormant) {
                     self.mode = Mode::Swd;
                 }
                 self.replay.put_back(&select.bits[..select.len]);
@@ -475,7 +849,12 @@ impl Decoder {
         let index = packet.taken;
         packet.taken = packet.taken.saturating_add(1);
         let tx = packet.tx;
-        let level = u8::from(bit.high);
+        let high = if packet.target_drives(index) {
+            bit.target
+        } else {
+            bit.high
+        };
+        let level = u8::from(high);
         match index {
             0 => {
                 packet.start = bit.tick;
@@ -510,13 +889,13 @@ impl Decoder {
                 }
             }
             // The turnaround to the target.
-            8 => {}
-            9..=11 => {
-                if index == 9 {
+            index if index < packet.ack_first() => {}
+            index if index <= packet.ack_last() => {
+                if index == packet.ack_first() {
                     packet.ack_first = bit.tick;
                 }
-                packet.ack |= level << (index - 9);
-                if index < 11 {
+                packet.ack |= level << (index - packet.ack_first());
+                if index < packet.ack_last() {
                     return;
                 }
                 let value = Ack::from_bits(packet.ack);
@@ -526,24 +905,29 @@ impl Decoder {
                     SwdEvent::Ack { tx, value },
                 )
                 .await;
-                if let Ack::Other(_) = value {
+                if let Ack::Other(_) = value
+                    && !packet.targetsel()
+                {
                     self.end(EndReason::ProtocolError, bit, out).await;
                 }
             }
+            // After OK, a TARGETSEL write's acknowledge whatever it showed, and WAIT or FAULT
+            // under overrun detection.
+            _ if packet.has_data_phase() => self.data_bit(index, bit, high, out).await,
             _ => match Ack::from_bits(packet.ack) {
-                // The turnaround back to the host ends the packet.
+                // The turnaround back to the host ends the packet on its last clock.
+                Ack::Wait | Ack::Fault if index < packet.last_without_data() => {}
                 Ack::Wait => self.end(EndReason::Wait, bit, out).await,
                 Ack::Fault => self.end(EndReason::Fault, bit, out).await,
-                Ack::Ok => self.data_bit(index, bit, out).await,
                 // The packet ended with the acknowledge.
-                Ack::Other(_) => {}
+                Ack::Ok | Ack::Other(_) => {}
             },
         }
     }
 
-    /// A bit of the data phase after OK: a read's data, parity and turnaround from bit 12, or
-    /// a write's turnaround, data and parity.
-    async fn data_bit(&mut self, index: u8, bit: Bit, out: &mut Outbox<SwdEvent>) {
+    /// A bit of the data phase after the acknowledge: a read's data, parity and turnaround, or
+    /// a write's turnaround, data and parity; `high` is the bit as the side driving it sent it.
+    async fn data_bit(&mut self, index: u8, bit: Bit, high: bool, out: &mut Outbox<SwdEvent>) {
         let now = self.now;
         let Some(packet) = self.packet.as_mut() else {
             return;
@@ -557,15 +941,29 @@ impl Decoder {
             if index == first {
                 packet.data_first = bit.tick;
             }
-            packet.data |= u32::from(bit.high) << (index - first);
+            packet.data |= u32::from(high) << (index - first);
             return;
         }
         if index > parity {
-            self.end(EndReason::Complete, bit, out).await;
+            // A read's turnaround back to the host ends the packet on its last clock.
+            if index == packet.last() {
+                let reason = packet.end_after_data();
+                self.end(reason, bit, out).await;
+            }
+            return;
+        }
+        if !packet.emits_data() {
+            // The data phase of WAIT or FAULT under overrun detection carries nothing: the
+            // line is not driven for a read, the word is ignored for a write, which ends with
+            // its parity bit.
+            if !rnw {
+                let reason = packet.end_after_data();
+                self.end(reason, bit, out).await;
+            }
             return;
         }
         let value = packet.data;
-        let parity_ok = (value.count_ones() & 1 == 1) == bit.high;
+        let parity_ok = (value.count_ones() & 1 == 1) == high;
         let span = TickRange::new(packet.data_first, bit.tick.next());
         let event = SwdEvent::Data {
             tx: packet.tx,
@@ -573,8 +971,14 @@ impl Decoder {
             parity_ok,
             from_target: rnw,
         };
+        let dp_write =
+            (!rnw && !packet.apndp() && parity_ok && Ack::from_bits(packet.ack) == Ack::Ok)
+                .then(|| (packet.addr(), value));
         out.emit(settle(Provenance::over(span, bit.tick), now), event)
             .await;
+        if let Some((addr, value)) = dp_write {
+            self.dp_write(addr, value);
+        }
         if !parity_ok {
             self.end(EndReason::ProtocolError, bit, out).await;
         } else if !rnw {
@@ -611,6 +1015,7 @@ impl Decoder {
             "the wire is read only once the replay is done"
         );
         self.mode = Mode::Unaligned;
+        self.wake.reset();
         let run = std::mem::take(&mut self.run);
         let select = self.select.take();
         if let Some(packet) = self.packet.take() {
@@ -621,6 +1026,7 @@ impl Decoder {
             out.emit(Provenance::at(tick), end).await;
         }
         if select.is_none() && run.count >= LINE_RESET_CLOCKS {
+            self.line_reset();
             out.emit(Provenance::over(run.span(), tick), SwdEvent::LineReset)
                 .await;
         }
@@ -628,8 +1034,10 @@ impl Decoder {
 }
 
 async fn run(mut signal: SignalCursor, mut out: Outbox<SwdEvent>, config: SwdConfig) {
-    let mut decoder = Decoder::new();
+    let mut decoder = Decoder::new(&config);
     let clock = ChannelMask::one(config.swclk);
+    // SWDIO at the last falling edge of SWCLK, where the target's bit is read.
+    let mut fall: Option<bool> = None;
     loop {
         if let Some(bit) = decoder.replay.pop() {
             decoder.bit(bit, &mut out).await;
@@ -637,16 +1045,21 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<SwdEvent>, config: SwdCon
         }
         match signal.next_change(clock).await {
             Change::At { tick, levels, .. } => {
+                let swdio = levels.high(config.swdio);
                 if levels.high(config.swclk) {
                     decoder.now = tick;
                     let bit = Bit {
                         tick,
-                        high: levels.high(config.swdio),
+                        high: swdio,
+                        target: fall.take().unwrap_or(swdio),
                     };
-                    decoder.bit(bit, &mut out).await;
+                    decoder.wire_bit(bit, &mut out).await;
+                } else {
+                    fall = Some(swdio);
                 }
             }
             Change::Gap(range) => {
+                fall = None;
                 decoder.cut(range.start, &mut out).await;
                 out.gap(range).await;
             }
@@ -670,27 +1083,152 @@ mod tests {
     fn configurations_are_checked() {
         assert_eq!(SwdConfig::default().validate(), Ok(()));
         assert_eq!(
-            SwdConfig { swclk: 3, swdio: 3 }.validate(),
+            SwdConfig {
+                swclk: 3,
+                swdio: 3,
+                ..SwdConfig::default()
+            }
+            .validate(),
             Err(SwdConfigError::DuplicateChannel(3))
         );
         assert_eq!(
             SwdConfig {
-                swclk: 0,
-                swdio: 64
+                swdio: 64,
+                ..SwdConfig::default()
             }
             .validate(),
             Err(SwdConfigError::Channel(64))
+        );
+        for turnaround in [0, 5] {
+            assert_eq!(
+                SwdConfig {
+                    turnaround,
+                    ..SwdConfig::default()
+                }
+                .validate(),
+                Err(SwdConfigError::Turnaround(turnaround))
+            );
+        }
+        assert_eq!(
+            SwdConfig {
+                turnaround: 4,
+                ..SwdConfig::default()
+            }
+            .validate(),
+            Ok(())
         );
     }
 
     #[test]
     fn props_and_requirements() {
-        let swd = Swd::new(SwdConfig { swclk: 9, swdio: 2 }).expect("valid");
+        let swd = Swd::new(SwdConfig {
+            swclk: 9,
+            swdio: 2,
+            turnaround: 2,
+            ..SwdConfig::default()
+        })
+        .expect("valid");
         let spec = swd.spec();
-        assert_eq!(spec.outputs[0].props.get("turnaround"), Some(&1i64.into()));
+        assert_eq!(spec.outputs[0].props.get("turnaround"), Some(&2i64.into()));
         let requires = &spec.inputs[0].requires;
         assert!(requires.unmet(&Props::new().with("channels", 10)).is_none());
         assert!(requires.unmet(&Props::new().with("channels", 9)).is_some());
+    }
+
+    #[test]
+    fn the_selection_alert_is_matched_wherever_it_starts() {
+        let bit = |tick: u64, high: bool| Bit {
+            tick: Tick(tick),
+            high,
+            target: high,
+        };
+        let mut wake = Wake::new();
+        // It starts 0, 1, 0, 0, 1 (ADIv6 Figure B5-9).
+        assert_eq!(
+            (0..5).map(alert_bit).collect::<Vec<_>>(),
+            [false, true, false, false, true]
+        );
+        // A run of ones, a false start of twenty bits, then the alert itself.
+        let mut tick = 0;
+        for _ in 0..8 {
+            assert_eq!(wake.feed(bit(tick, true)), Woke::Nothing);
+            tick += 1;
+        }
+        for k in 0..20 {
+            assert_eq!(wake.feed(bit(tick, alert_bit(k))), Woke::Nothing);
+            tick += 1;
+        }
+        assert_eq!(wake.in_flight(), Some(Tick(8)));
+        let start = tick;
+        for k in 0..ALERT_BITS {
+            let woke = wake.feed(bit(tick, alert_bit(k)));
+            tick += 1;
+            if k < ALERT_BITS - 1 {
+                assert_eq!(woke, Woke::Nothing, "bit {k}");
+            } else {
+                assert_eq!(woke, Woke::Alert);
+            }
+        }
+        assert_eq!(wake.in_flight(), Some(Tick(start)));
+        // Four clocks the target ignores, then the SW-DP code.
+        for high in [true, false, true, true] {
+            assert_eq!(wake.feed(bit(tick, high)), Woke::Code);
+            tick += 1;
+        }
+        for i in 0..8 {
+            let woke = wake.feed(bit(tick, ACTIVATE_SWD >> i & 1 != 0));
+            tick += 1;
+            if i < 7 {
+                assert_eq!(woke, Woke::Code);
+            } else {
+                assert_eq!(woke, Woke::Switch(Interface::Swd, Tick(start)));
+            }
+        }
+        assert_eq!(wake.in_flight(), None);
+    }
+
+    #[test]
+    fn the_activation_codes_are_told_apart() {
+        let code = |bits: &[bool]| {
+            let mut wake = Wake::new();
+            wake.code = Some(Activation {
+                start: Tick(1),
+                taken: ACTIVATION_GAP,
+                bits: 0,
+            });
+            let mut last = Woke::Nothing;
+            for (i, high) in bits.iter().enumerate() {
+                last = wake.feed(Bit {
+                    tick: Tick(2 + i as u64),
+                    high: *high,
+                    target: *high,
+                });
+            }
+            last
+        };
+        let lsb_first = |value: u16, count: usize| -> Vec<bool> {
+            (0..count).map(|i| value >> i & 1 != 0).collect()
+        };
+        assert_eq!(
+            code(&lsb_first(u16::from(ACTIVATE_JTAG_DP), 8)),
+            Woke::Switch(Interface::Jtag, Tick(1))
+        );
+        assert_eq!(code(&lsb_first(0, 8)), Woke::Code);
+        assert_eq!(
+            code(&lsb_first(0, 12)),
+            Woke::Switch(Interface::Jtag, Tick(1))
+        );
+        assert_eq!(
+            code(
+                &[false; 11]
+                    .iter()
+                    .chain(&[true])
+                    .copied()
+                    .collect::<Vec<_>>()
+            ),
+            Woke::Unrecognized
+        );
+        assert_eq!(code(&lsb_first(0x5A, 8)), Woke::Unrecognized);
     }
 
     #[test]
@@ -700,6 +1238,7 @@ mod tests {
             select.bits[i] = Bit {
                 tick: Tick(i as u64),
                 high,
+                target: high,
             };
             select.len = i + 1;
         }
@@ -712,6 +1251,7 @@ mod tests {
         let bit = |tick: u64| Bit {
             tick: Tick(tick),
             high: tick.is_multiple_of(2),
+            target: tick.is_multiple_of(2),
         };
         let mut replay = Replay::default();
         replay.put_back(&[bit(5), bit(6), bit(7)]);

@@ -10,5 +10,9 @@ mod events;
 pub mod synth;
 
 pub use bus::{Data, Field, Next, Packet, Read, ReadError, Request, SwdBus};
-pub use decoder::{JTAG_TO_SWD, LINE_RESET_CLOCKS, SWD_TO_JTAG, Swd, SwdConfig, SwdConfigError};
+pub use decoder::{
+    ACTIVATE_JTAG_DP, ACTIVATE_SWD, JTAG_SERIAL_BITS, JTAG_TO_SWD, LINE_RESET_CLOCKS,
+    MAX_TURNAROUND, OverrunDetect, SELECTION_ALERT, SWD_TO_DS, SWD_TO_JTAG, Swd, SwdConfig,
+    SwdConfigError,
+};
 pub use events::{Ack, EndReason, Interface, SWD_EVENTS, SwdEvent, TxId};

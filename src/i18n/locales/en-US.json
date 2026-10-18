@@ -1165,12 +1165,20 @@
     },
     "swd": {
       "name": "SWD",
-      "summary": "Arm Serial Wire Debug packets, line resets and switch sequences",
+      "summary": "Arm Serial Wire Debug packets, line resets, switch and dormant sequences",
       "field": {
         "swclk": "SWCLK line",
-        "swdio": "SWDIO line"
+        "swdio": "SWDIO line",
+        "turnaround": "Turnaround (clocks)",
+        "overrun_detect": "Overrun detection"
       },
-      "value": {},
+      "value": {
+        "overrun_detect": {
+          "auto": "Follow CTRL/STAT writes",
+          "on": "On",
+          "off": "Off"
+        }
+      },
       "event": {
         "begin": "Begin",
         "request": "Request",
