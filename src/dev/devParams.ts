@@ -14,14 +14,20 @@
  *   &update=0.3.0        the mock backend announces this release, found at startup
  *   &import=1            open the import dialog on the waveform the mock backend reads
  *   &import=all          import every signal of it at once, to see the capture it makes
+ *   &settings=decoders   open the settings page on this section
+ *   &modules=uart,mine   "load" decoder modules of these names (the mock backend fakes them)
+ *   &carried=mine        a capture file "brought" decoder modules of these names, likewise
  */
 import { nextTick, watch } from 'vue'
 
+import { getBackend } from '@/ipc/backend'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
+import { useDecodeStore } from '@/stores/decode'
 import { useDeviceStore } from '@/stores/device'
 import { useSearchStore } from '@/stores/search'
+import { SETTINGS_SECTIONS, useSettingsStore } from '@/stores/settings'
 import { useStreamStore } from '@/stores/stream'
 import { useTriggerStore } from '@/stores/trigger'
 import { useUpdateStore } from '@/stores/update'
@@ -85,6 +91,26 @@ export function applyDevParams(search = window.location.search): void {
   if (locale) preferences.locale = locale
   // Development builds skip the check at startup; this one finds what the mock announces.
   if (params.has('update')) void useUpdateStore().check(true)
+  const section = oneOf(SETTINGS_SECTIONS, params.get('settings'))
+  if (section) {
+    const settings = useSettingsStore()
+    settings.section = section
+    settings.open = true
+  }
+  for (const name of (params.get('modules') ?? '').split(',').filter(Boolean)) {
+    void useDecodeStore().loadModule(`/Users/dev/decoders/${name}.json`, false)
+  }
+  const carried = (params.get('carried') ?? '').split(',').filter(Boolean)
+  if (carried.length > 0) {
+    void (async () => {
+      // Loaded behind the store's back, as a capture file's modules are, then listed.
+      const backend = await getBackend()
+      for (const name of carried) {
+        await backend.decodeLoadModule(`/Users/dev/captures/${name}.hsync`)
+      }
+      await useDecodeStore().modulesChanged()
+    })()
+  }
   const imported = params.get('import')
   if (imported === '1' || imported === 'all') {
     void capture.inspectWaveform('sim/counter.vcd').then(() => {

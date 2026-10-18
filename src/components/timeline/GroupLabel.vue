@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useClockFrequency } from '@/composables/useClockFrequency'
+import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { useDecodeStore } from '@/stores/decode'
 import { useStreamStore } from '@/stores/stream'
 import { I2C_RATES, nominalRate } from '@/timeline/clock'
@@ -13,8 +14,8 @@ import { formatFrequencyShort, formatSamplerate } from '@/utils/units'
 const props = defineProps<{ group: ChannelGroup; collapsed: boolean }>()
 const emit = defineEmits<{ toggle: [] }>()
 
-const i18n = useI18n()
-const { t } = i18n
+const { t } = useI18n()
+const copy = useDecoderCopy()
 const stream = useStreamStore()
 const decode = useDecodeStore()
 const showing = computed(() => stream.open && stream.decoder === props.group.decoder)
@@ -23,10 +24,7 @@ const showing = computed(() => stream.open && stream.decoder === props.group.dec
 const title = computed(() => {
   if (props.group.unnamed) return t('group.unnamed')
   if (props.group.title) return props.group.title
-  const type = props.group.type ?? ''
-  // Node types come from the backend, so their names are checked at run time rather than typed.
-  const key = `decoder.${type}.name`
-  return i18n.te(key) ? t(key as never) : type
+  return copy.typeName(props.group.type ?? '')
 })
 
 const SQUARES: Record<BusKind, string> = {

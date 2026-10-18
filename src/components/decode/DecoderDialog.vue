@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useBackendText } from '@/composables/useBackendText'
+import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import {
   baseTypes,
   buildEntry,
@@ -48,17 +49,19 @@ const existing = computed(() =>
 /** The stored nodes when editing: the protocol first, then the decoder stacked on it. */
 const storedNodes = computed<NodeEntry[]>(() => Object.values(existing.value?.nodes ?? {}))
 
-// Names follow the catalog, so their keys are checked at run time rather than typed.
-function named(key: string, fallback: string): string {
-  return i18n.te(key) ? t(key as never) : fallback
+const copy = useDecoderCopy()
+const { typeName, categoryName } = copy
+/** The decoder's one-line summary; for a loaded module without one, the file it came from. */
+function typeSummary(type: string): string {
+  const summary = copy.typeSummary(type)
+  if (summary) return summary
+  const file = typeOf(type, decode.catalog)?.module?.split(/[\\/]/).pop()
+  return file ? t('decoderDialog.loadedFrom', { file }) : ''
 }
-const typeName = (type: string) => named(`decoder.${type}.name`, type)
-const typeSummary = (type: string) => named(`decoder.${type}.summary`, '')
-const categoryName = (category: string) => named(`decoder.category.${category}`, category)
 const fieldLabel = (type: CatalogEntry, field: CatalogField) =>
-  named(`decoder.${type.name}.field.${field.name}`, field.name)
+  copy.fieldLabel(type.name, field.name)
 const valueLabel = (type: CatalogEntry, field: CatalogField, value: string) =>
-  named(`decoder.${type.name}.value.${field.name}.${value}`, value)
+  copy.valueLabel(type.name, field.name, value)
 
 const CATEGORY_ORDER = ['bus', 'line', 'device']
 function categoryRank(category: string): number {

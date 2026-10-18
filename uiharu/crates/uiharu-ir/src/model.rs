@@ -255,6 +255,9 @@ pub struct Decoder {
     /// What the output declares, evaluated with `config` in scope.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub props: Vec<PropSpec>,
+    /// What an interface shows for the decoder, by language tag (`en-US`, `zh-CN`…).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub locales: BTreeMap<String, Locale>,
     /// What a bus decoder does with a frame whose beginning was not seen.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub partial: Option<Partial>,
@@ -269,6 +272,30 @@ pub struct Decoder {
     /// `transaction` and `recover` (bus decoders), and the optional `hold`, `onGap`, `onEnd`
     /// and `onProgress`.
     pub methods: Vec<Function>,
+}
+
+/// What an interface shows for the decoder in one language: its name, a one-line summary and
+/// the labels of its configuration fields, their enumerated values, its event kinds and their
+/// fields, by the names the module declares. What is left out shows as the identifier.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct Locale {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    /// The configuration fields.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub fields: BTreeMap<String, String>,
+    /// The values of the enumerated configuration fields, by field.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub values: BTreeMap<String, BTreeMap<String, String>>,
+    /// The kinds of event the decoder emits.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub events: BTreeMap<String, String>,
+    /// The fields of its events, whichever kind carries them.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub event_fields: BTreeMap<String, String>,
 }
 
 /// Where the catalog lists a decoder.

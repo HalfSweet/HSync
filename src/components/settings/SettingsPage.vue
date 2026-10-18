@@ -10,6 +10,7 @@ import {
   Moon,
   MoveHorizontal,
   Palette,
+  Puzzle,
   RefreshCw,
   Repeat,
   Rows3,
@@ -23,6 +24,7 @@ import {
 } from '@lucide/vue'
 import { onKeyStroke } from '@vueuse/core'
 import {
+  computed,
   nextTick,
   onBeforeUnmount,
   onMounted,
@@ -34,10 +36,13 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useBackendText } from '@/composables/useBackendText'
+import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { getBackend } from '@/ipc/backend'
+import { pickFile } from '@/ipc/dialogs'
 import { toUiError, type UiError } from '@/ipc/errors'
 import { LOG_LEVELS } from '@/ipc/logLevels'
 import { vIndicator } from '@/motion/indicator'
+import { useDecodeStore, type ModuleEntry } from '@/stores/decode'
 import {
   DENSITIES,
   GRAPHICS,
@@ -58,9 +63,11 @@ import AboutSection from './AboutSection.vue'
  */
 const { t } = useI18n()
 const text = useBackendText()
+const { typeName } = useDecoderCopy()
 const preferences = usePreferencesStore()
 const settings = useSettingsStore()
 const update = useUpdateStore()
+const decode = useDecodeStore()
 const dialog = useTemplateRef<HTMLElement>('dialog')
 const tablist = useTemplateRef<HTMLElement>('tablist')
 
@@ -80,6 +87,7 @@ const BEHAVIOURS = [
 const SECTION_ICONS: Record<SettingsSection, Component> = {
   appearance: Palette,
   behaviour: SlidersHorizontal,
+  decoders: Puzzle,
   diagnostics: Stethoscope,
   about: Info,
 }
@@ -150,6 +158,37 @@ async function revealLog(): Promise<void> {
   } catch (error) {
     revealError.value = toUiError(error)
   }
+}
+
+const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
+
+/** A row of the Decoders section: a module loaded here, or one a capture file brought. */
+interface ModuleRow {
+  key: string
+  entry: ModuleEntry
+  carried: boolean
+}
+
+/** The modules loaded here, then those capture files brought. */
+const moduleRows = computed<ModuleRow[]>(() => [
+  ...decode.modules.map((entry) => ({ key: entry.path, entry, carried: false })),
+  ...decode.carried.map((info) => ({
+    key: `${info.path}#${info.name}`,
+    entry: { path: info.path, info, error: null, loading: false },
+    carried: true,
+  })),
+])
+
+/** Asks for a module file and loads it. */
+async function loadModule(): Promise<void> {
+  const path = await pickFile([{ name: t('settings.decoders.filter'), extensions: ['json'] }])
+  if (path) await decode.loadModule(path)
+}
+
+/** Lets a module go, whichever way it came. */
+function removeModule(row: ModuleRow): void {
+  if (row.carried) void decode.unloadCarried(row.entry.info?.name ?? '')
+  else void decode.unloadModule(row.entry.path)
 }
 </script>
 
@@ -346,6 +385,53 @@ async function revealLog(): Promise<void> {
               <component :is="BEHAVIOUR_ICONS[behaviour]" class="text-ink-3" />
               <span>{{ t(`settings.behaviour.${behaviour}`) }}</span>
             </label>
+          </div>
+
+          <div v-else-if="settings.section === 'decoders'" class="flex flex-col gap-3">
+            <p class="text-ink-3">{{ t('settings.decoders.intro') }}</p>
+            <ul
+              v-if="moduleRows.length > 0"
+              class="flex flex-col gap-1.5"
+              :aria-label="t('settings.sections.decoders')"
+            >
+              <li
+                v-for="row in moduleRows"
+                :key="row.key"
+                class="flex items-start gap-3 rounded-6 bg-control px-3 py-2"
+              >
+                <Puzzle class="mt-0.5 flex-none text-ink-3" />
+                <div class="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span class="font-medium">
+                    {{ row.entry.info ? typeName(row.entry.info.name) : fileName(row.entry.path) }}
+                  </span>
+                  <span class="truncate text-caption text-ink-3" :title="row.entry.path">
+                    {{ row.entry.path }}
+                  </span>
+                  <span v-if="row.carried" class="text-caption text-ink-3">
+                    {{ t('settings.decoders.carried', { file: fileName(row.entry.path) }) }}
+                  </span>
+                  <span v-if="row.entry.info?.shadows" class="text-caption text-ink-3">
+                    {{ t('settings.decoders.replaces', { name: typeName(row.entry.info.name) }) }}
+                  </span>
+                  <span v-if="row.entry.error" role="alert" class="text-caption text-alert">
+                    {{ text.error(row.entry.error) }}
+                  </span>
+                  <span v-else-if="row.entry.loading" class="text-caption text-ink-3">
+                    {{ t('settings.decoders.loading') }}
+                  </span>
+                </div>
+                <button class="btn-ghost h-[22px] flex-none text-alert" @click="removeModule(row)">
+                  {{ t('settings.decoders.remove') }}
+                </button>
+              </li>
+            </ul>
+            <p v-else class="text-ink-3">{{ t('settings.decoders.empty') }}</p>
+            <div>
+              <button class="btn-ghost h-[22px]" @click="loadModule">
+                <FolderOpen :size="14" />
+                {{ t('settings.decoders.load') }}
+              </button>
+            </div>
           </div>
 
           <div

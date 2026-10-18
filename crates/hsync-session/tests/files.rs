@@ -1,11 +1,13 @@
 //! Saving and exporting the demo capture: whole or in part, in each format, and cancelled.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use crossbeam_channel::Receiver;
-use hsync_session::{ExportKind, ExportRequest, SessionError, SessionEvent, Workspace};
+use hsync_session::{ExportKind, ExportRequest, ModuleInfo, SessionError, SessionEvent, Workspace};
+use serde_json::json;
 
 fn demo_path() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../src-tauri/resources/demo/protocol.dsl")
@@ -71,6 +73,83 @@ fn exports_a_segment_as_an_hsync_capture_with_the_decoders_it_can_keep() {
     assert_eq!(statuses.len(), 1);
     assert_eq!(statuses[0].kinds, ["i2c", "eeprom24xx"]);
     let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn a_capture_file_carries_the_decoder_modules_its_decoders_name() {
+    let module_path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../uiharu/dsl/ir/uart.json");
+    let (mut workspace, events) = fresh();
+    workspace.load_module(&module_path).expect("loads");
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    decoders_done(&events, opened.id, 4);
+    let path = temp("carried.hsync");
+    workspace.save(opened.id, &path, json!({})).expect("saves");
+    let document = hsync_fileio::read_hsync_file(&path).expect("reads");
+    assert_eq!(
+        document.modules,
+        BTreeMap::from([(
+            "uart".to_owned(),
+            std::fs::read_to_string(&module_path).expect("the module")
+        )])
+    );
+
+    // Opened elsewhere, the file brings its module along, says so, and decodes with it.
+    let (mut other, events) = fresh();
+    let reopened = other.open_file(&path).expect("reopens");
+    assert!(matches!(
+        events
+            .recv_timeout(Duration::from_secs(10))
+            .expect("an event"),
+        SessionEvent::ModulesChanged
+    ));
+    let carried = ModuleInfo {
+        name: "uart".into(),
+        path: path.to_string_lossy().into_owned(),
+        category: "bus".into(),
+        shadows: true,
+    };
+    assert_eq!(other.modules(), std::slice::from_ref(&carried));
+    let uart = other.catalog();
+    let uart = uart
+        .iter()
+        .find(|entry| entry.name == "uart")
+        .expect("uart");
+    assert_eq!(uart.module.as_deref(), Some(carried.path.as_str()));
+    decoders_done(&events, reopened.id, 4);
+    let statuses = other.decoding(reopened.id).expect("decoders").statuses();
+    assert_eq!(statuses[1].kinds, ["uart"]);
+    assert_eq!(statuses[1].streams[0].progress.events, 47);
+    // Saved again from there, the file carries the module on.
+    let again = temp("carried-again.hsync");
+    other.save(reopened.id, &again, json!({})).expect("saves");
+    let document = hsync_fileio::read_hsync_file(&again).expect("reads");
+    assert_eq!(document.modules.keys().collect::<Vec<_>>(), ["uart"]);
+    // Let go, it is not brought back until the file is opened again.
+    assert!(other.unload_module("uart"));
+    assert!(other.modules().is_empty());
+
+    // A workspace with a module of that name keeps its own.
+    let (mut third, _) = fresh();
+    let its_own = third.load_module(&module_path).expect("loads");
+    third.open_file(&path).expect("reopens");
+    assert_eq!(third.modules(), [its_own]);
+
+    // A segment without the UART line carries no module: no decoder written names it.
+    let source = workspace.export_source(opened.id).expect("source");
+    let segment = temp("carried-segment.hsync");
+    source
+        .export(
+            &segment,
+            &request(ExportKind::Hsync, Some((40_000, 70_000)), &[1, 0]),
+            &mut |_| true,
+        )
+        .expect("exports");
+    let document = hsync_fileio::read_hsync_file(&segment).expect("reads");
+    assert!(document.modules.is_empty());
+    for file in [path, again, segment] {
+        let _ = std::fs::remove_file(file);
+    }
 }
 
 #[test]

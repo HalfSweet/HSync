@@ -117,11 +117,15 @@ export const test = defineLogicDecoder({
 
 const virtualFile = path.join(dsl, 'decoders', 'virtual-test.ts')
 
-function compileSnippet(text: string): { ok: boolean; diagnostics: Diagnostic[] } {
+function lowerSnippet(text: string): ReturnType<typeof lowerModule> {
   const project = loadProject(config, { [virtualFile]: text })
   const file = project.program.getSourceFile(virtualFile)
   if (!file) throw new Error('the virtual file is in the program')
-  const { module, diagnostics } = lowerModule(project, file)
+  return lowerModule(project, file)
+}
+
+function compileSnippet(text: string): { ok: boolean; diagnostics: Diagnostic[] } {
+  const { module, diagnostics } = lowerSnippet(text)
   return { ok: module !== undefined, diagnostics }
 }
 
@@ -213,6 +217,40 @@ export type Event = { kind: 'tick'; at: u64 }
     expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(
       'a module declares a decoder or a contract',
     )
+  })
+
+  test('lowers the copy a decoder declares by language tag, literals only', () => {
+    const locales = `locales: {
+    'en-US': {
+      name: 'Test',
+      summary: 'Ticks between edges',
+      fields: { channel: 'Signal line' },
+      events: { tick: 'Tick' },
+      eventFields: { at: 'Since the last edge' },
+    },
+    'zh-CN': { name: '测试' },
+  },
+  decoder: Test,`
+    const { module, diagnostics } = lowerSnippet(snippet(RUN).replace('decoder: Test,', locales))
+    expect(diagnostics).toEqual([])
+    expect(module?.decoder?.locales).toEqual({
+      'en-US': {
+        name: 'Test',
+        summary: 'Ticks between edges',
+        fields: { channel: 'Signal line' },
+        events: { tick: 'Tick' },
+        eventFields: { at: 'Since the last edge' },
+      },
+      'zh-CN': { name: '测试' },
+    })
+
+    const computed = snippet(RUN).replace(
+      'decoder: Test,',
+      "locales: { 'en-US': { name: `Te${'s'}t` } },\n  decoder: Test,",
+    )
+    const { ok, diagnostics: refused } = compileSnippet(computed)
+    expect(ok).toBe(false)
+    expect(refused.map((diagnostic) => diagnostic.message)).toEqual(['locales is made of literals'])
   })
 
   test('reports TypeScript errors first', () => {

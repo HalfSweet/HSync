@@ -55,6 +55,11 @@ pub struct ExportSource {
     pub(crate) capture: Arc<RwLock<LogicCapture>>,
     pub(crate) channel_names: BTreeMap<ChannelIndex, String>,
     pub(crate) decoders: Option<serde_json::Value>,
+    /// The node types the decoders name, to know which channels each reads.
+    pub(crate) catalog: uiharu_registry::Catalog,
+    /// The decoder modules loaded, by name: each one's JSON, for a capture file to carry
+    /// those its decoders name.
+    pub(crate) modules: BTreeMap<String, Arc<str>>,
     pub(crate) driver: String,
     pub(crate) model: String,
     pub(crate) session: Option<serde_json::Value>,
@@ -110,6 +115,16 @@ impl ExportSource {
             .iter()
             .map(|&index| (index, self.name_of(index)))
             .collect();
+        // The loaded modules the decoders name go along, so that the file decodes elsewhere
+        // as it does here.
+        let modules: BTreeMap<String, String> = decoders
+            .and_then(serde_json::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(|entry| DecoderEntry::parse(entry).ok())
+            .flat_map(|entry| entry.kinds())
+            .filter_map(|kind| self.modules.get(&kind).map(|json| (kind, json.to_string())))
+            .collect();
         let request = HsyncWriteRequest {
             channel_names: &names,
             source: (!self.driver.is_empty()).then(|| HsyncSource {
@@ -119,6 +134,7 @@ impl ExportSource {
             app_version: env!("CARGO_PKG_VERSION"),
             decoders,
             session,
+            modules: &modules,
         };
         hsync_fileio::write_hsync_file(path, capture, &request, progress)?;
         Ok(())
@@ -197,7 +213,7 @@ impl ExportSource {
                 .filter(|entry| {
                     DecoderEntry::parse(entry).is_ok_and(|entry| {
                         entry
-                            .channels()
+                            .channels(&self.catalog)
                             .iter()
                             .all(|index| channels.contains(index))
                     })

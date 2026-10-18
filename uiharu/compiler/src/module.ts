@@ -20,6 +20,7 @@ import type {
   Function,
   Import,
   Json,
+  Locale,
   Module,
   Param,
   PropSpec,
@@ -79,6 +80,7 @@ interface Definition {
   input?: ts.Expression
   output: ts.Expression
   props?: ts.Expression
+  locales?: Record<string, Locale>
   partial?: string
   recovery?: ts.ObjectLiteralExpression
   decoder: ts.Identifier
@@ -368,6 +370,8 @@ class ModuleLowerer {
     if (requires) definition.requires = requires
     const propsFn = props.get('props')
     if (propsFn) definition.props = propsFn
+    const locales = props.get('locales')
+    if (locales) definition.locales = localesOf(locales)
     if (definition.kind !== 'logic') definition.input = required('input')
     if (definition.kind === 'bus') {
       const partial = props.get('partial')
@@ -629,6 +633,7 @@ class ModuleLowerer {
       const props = this.propsOf(definition.props)
       if (props.length) decoder.props = props
     }
+    if (definition.locales) decoder.locales = definition.locales
     if (kind === 'bus') {
       if (definition.partial === 'drain' || definition.partial === 'read')
         decoder.partial = definition.partial
@@ -1051,12 +1056,28 @@ function jsonValue(node: ts.Expression): Json | undefined {
   if (ts.isObjectLiteralExpression(bare)) {
     const out: { [key: string]: Json } = {}
     for (const property of bare.properties) {
-      if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) return undefined
+      if (!ts.isPropertyAssignment(property)) return undefined
+      const name = property.name
+      if (!ts.isIdentifier(name) && !ts.isStringLiteral(name)) return undefined
       const value = jsonValue(property.initializer)
       if (value === undefined) return undefined
-      out[property.name.text] = value
+      out[name.text] = value
     }
     return out
   }
   return undefined
+}
+
+function isJsonObject(value: Json): value is { [key: string]: Json } {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** The decoder's copy by language tag: an object of locale blocks, all literals. */
+function localesOf(node: ts.Expression): Record<string, Locale> {
+  const value = jsonValue(node)
+  if (value === undefined) throw new CompileError(node, 'locales is made of literals')
+  if (!isJsonObject(value) || !Object.values(value).every(isJsonObject)) {
+    throw new CompileError(node, 'locales is an object of locale blocks by language tag')
+  }
+  return value as Record<string, Locale>
 }

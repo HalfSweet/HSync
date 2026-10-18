@@ -1481,7 +1481,8 @@
     "save": "Save",
     "remove": "Remove",
     "cancel": "Cancel",
-    "edit": "Decoder settings"
+    "edit": "Decoder settings",
+    "loadedFrom": "Loaded from {file}"
   },
   "stream": {
     "title": "Data stream",
@@ -1544,6 +1545,7 @@
     "sections": {
       "appearance": "Appearance",
       "behaviour": "Behaviour",
+      "decoders": "Decoders",
       "diagnostics": "Diagnostics",
       "about": "About"
     },
@@ -1585,6 +1587,16 @@
       "wheelZoom": "Zoom the waveform with the wheel alone",
       "keepStopped": "Show the latest data when a repeat stops",
       "checkUpdates": "Check for updates at startup"
+    },
+    "decoders": {
+      "intro": "Decoders written in HSync's DSL run beside the built-in ones: load the module file the compiler writes (pnpm dsl:compile). A module named like a built-in decoder stands in for it while it is loaded, and the open capture decodes again with it. A capture file carries the modules its decoders use and brings them along when it is opened.",
+      "load": "Load module…",
+      "filter": "Decoder module",
+      "empty": "No decoder module is loaded.",
+      "remove": "Remove",
+      "replaces": "Stands in for the built-in {name} decoder",
+      "carried": "Came with the capture file {file}",
+      "loading": "Loading…"
     },
     "diagnostics": {
       "level": "Log level",
@@ -1661,7 +1673,8 @@
     "decode": {
       "invalid": "The decoder cannot be used: {detail}",
       "missingChannels": "The decoder needs channels the capture lacks: {channels}",
-      "failed": "Decoding stopped: {detail}"
+      "failed": "Decoding stopped: {detail}",
+      "module": "The decoder module cannot be loaded: {detail}"
     },
     "update": {
       "check": "Could not check for updates: {detail}",

@@ -4,6 +4,7 @@
  * answers queries with the same algorithms as `hsync-capture` (see its tests for the semantics).
  */
 import type { Backend, DecodedEvent, StreamRequest, Unsubscribe } from '../backend'
+import type { ModuleInfo } from '../bindings/ModuleInfo'
 import type { BinsRequest } from '../bindings/BinsRequest'
 import type { CaptureRequest } from '../bindings/CaptureRequest'
 import type { CaptureSummary } from '../bindings/CaptureSummary'
@@ -176,6 +177,8 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
   let live: { status: LiveStatus; timers: ReturnType<typeof setTimeout>[] } | null = null
   /** The capture shown while a repeat fills behind it; both replay the same samples. */
   let held: { summary: CaptureSummary; keepStopped: boolean } | null = null
+  /** Decoder modules "loaded": named after their file, decoding as the built-in decoders. */
+  const modules: ModuleInfo[] = []
 
   const known = (captureId: number) => summary?.id === captureId || held?.summary.id === captureId
 
@@ -351,7 +354,55 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
     },
 
     async decodeCatalog() {
-      return Promise.resolve(catalog as CatalogEntry[])
+      const builtin = catalog as CatalogEntry[]
+      const entries = builtin.map((entry) => {
+        const module = modules.find((one) => one.name === entry.name)
+        return module ? { ...entry, module: module.path } : entry
+      })
+      // A module with a name of its own looks like the PWM decoder, under that name, with
+      // the name spelt out as its English copy.
+      const shape = builtin.find((entry) => entry.name === 'pwm')
+      for (const module of modules) {
+        if (shape && !builtin.some((entry) => entry.name === module.name)) {
+          const name = module.name.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
+          entries.push({
+            ...shape,
+            name: module.name,
+            module: module.path,
+            locales: { 'en-US': { name, fields: {}, values: {}, events: {}, eventFields: {} } },
+          })
+        }
+      }
+      return Promise.resolve(entries)
+    },
+
+    async decodeModules() {
+      return Promise.resolve([...modules])
+    },
+
+    async decodeLoadModule(path: string) {
+      // Named after the file's stem, whatever the extension: the development parameters fake
+      // the modules a capture file brought with a `.hsync` path.
+      const name = (path.split(/[\\/]/).pop() ?? '').replace(/\..*$/, '')
+      if (!/^[a-z][a-z0-9-]*$/.test(name))
+        throw uiError('error.decode.module', { path, detail: 'the module does not parse' })
+      const builtin = (catalog as CatalogEntry[]).find((entry) => entry.name === name)
+      const info: ModuleInfo = {
+        name,
+        path,
+        category: builtin?.category ?? 'line',
+        shadows: builtin !== undefined,
+      }
+      const at = modules.findIndex((one) => one.name === name)
+      if (at >= 0) modules.splice(at, 1)
+      modules.push(info)
+      return Promise.resolve(info)
+    },
+
+    async decodeUnloadModule(name: string) {
+      const at = modules.findIndex((one) => one.name === name)
+      if (at >= 0) modules.splice(at, 1)
+      return Promise.resolve(at >= 0)
     },
 
     async configureLog() {
@@ -663,6 +714,11 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
 
     onDecodeProgress() {
       // The recording is complete from the start: nothing progresses.
+      return Promise.resolve<Unsubscribe>(() => undefined)
+    },
+
+    onModulesChanged() {
+      // The mock's captures carry no modules.
       return Promise.resolve<Unsubscribe>(() => undefined)
     },
   }

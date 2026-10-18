@@ -3,7 +3,10 @@
 //! The PWM decoder lowered by hand from `dsl/decoders/pwm.ts`: it reads, it round-trips and it
 //! passes the checks; and the checks catch what they are there for.
 
-use uiharu_ir::{BinaryOp, Expr, Function, Literal, Module, Op, Stmt, Type, TypeKind, validate};
+use serde_json::json;
+use uiharu_ir::{
+    BinaryOp, Expr, Function, Literal, Locale, Module, Op, Stmt, Type, TypeKind, validate,
+};
 
 fn pwm() -> Module {
     let json = include_str!("fixtures/pwm.json");
@@ -50,6 +53,55 @@ fn the_pwm_module_round_trips_through_json() {
     let json = serde_json::to_string_pretty(&module).expect("serializes");
     let back: Module = serde_json::from_str(&json).expect("parses again");
     assert_eq!(back, module);
+}
+
+#[test]
+fn the_copy_names_what_the_decoder_declares() {
+    let locale =
+        |json: serde_json::Value| -> Locale { serde_json::from_value(json).expect("a locale") };
+    let mut module = pwm();
+    let decoder = module.decoder.as_mut().expect("a decoder");
+    decoder.locales.insert(
+        "en-US".into(),
+        locale(json!({
+            "name": "PWM",
+            "summary": "Each cycle of a PWM line",
+            "fields": { "channel": "Signal line", "polarity": "Polarity" },
+            "values": { "polarity": { "active-high": "Active high" } },
+            "events": { "cycle": "Cycle" },
+            "eventFields": { "periodTicks": "Period (ticks)" }
+        })),
+    );
+    assert_eq!(validate(&module), Vec::new());
+    let json = serde_json::to_string(&module).expect("serializes");
+    let back: Module = serde_json::from_str(&json).expect("parses again");
+    assert_eq!(back, module);
+
+    let decoder = module.decoder.as_mut().expect("a decoder");
+    decoder.locales.insert(
+        "zh-CN".into(),
+        locale(json!({
+            "fields": { "chan": "通道" },
+            "values": { "channel": { "0": "零" }, "polarity": { "sideways": "横" } },
+            "events": { "pulse": "脉冲" },
+            "eventFields": { "width": "宽度" }
+        })),
+    );
+    decoder.locales.insert("en US".into(), Locale::default());
+    for needle in [
+        "decoder.locales.zh-CN.fields.chan: chan is not a field of PwmConfig",
+        "decoder.locales.zh-CN.values.channel: channel is not an enumerated field",
+        "decoder.locales.zh-CN.values.polarity.sideways: sideways is not a value of polarity",
+        "decoder.locales.zh-CN.events.pulse: pulse is not a kind of event the decoder emits",
+        "decoder.locales.zh-CN.eventFields.width: width is not a field of any event",
+        "decoder.locales.en US: a locale is named by its language tag, such as en-US",
+    ] {
+        assert_reports(&module, needle);
+    }
+    assert!(
+        serde_json::from_str::<Locale>("{\"title\": \"PWM\"}").is_err(),
+        "a locale has no other fields"
+    );
 }
 
 #[test]

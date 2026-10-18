@@ -52,6 +52,9 @@ export const usePreferencesStore = defineStore('preferences', () => {
   /** Look for a newer release in the background at startup. */
   const checkUpdates = useStorage('hsync.checkUpdates', true)
 
+  /** The decoder module files loaded, in order, loaded again at startup. */
+  const decoderModules = useStorage<string[]>('hsync.decoderModules', [])
+
   // Diagnostics.
   const storedLogLevel = useStorage<string>('hsync.logLevel', 'info')
   /** Also write the log to the log file. */
@@ -106,6 +109,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     wheelZoom,
     keepStopped,
     checkUpdates,
+    decoderModules,
     logLevel,
     logToFile,
     resolvedTheme,

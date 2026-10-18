@@ -57,19 +57,21 @@ fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
     ]);
     let emitter = app.handle().clone();
     let events: EventSink = Arc::new(move |event| {
-        let (name, capture_id, index) = match event {
+        let decoder = |capture_id: u64, index: u32| serde_json::json!({ "captureId": capture_id, "index": index });
+        let (name, payload) = match event {
             SessionEvent::Decoded { capture_id, index } => {
-                (commands::decode::DECODED_EVENT, capture_id, index)
+                (commands::decode::DECODED_EVENT, decoder(capture_id, index))
             }
-            SessionEvent::DecodeProgress { capture_id, index } => {
-                (commands::decode::DECODE_PROGRESS_EVENT, capture_id, index)
+            SessionEvent::DecodeProgress { capture_id, index } => (
+                commands::decode::DECODE_PROGRESS_EVENT,
+                decoder(capture_id, index),
+            ),
+            SessionEvent::ModulesChanged => {
+                (commands::decode::MODULES_EVENT, serde_json::Value::Null)
             }
             SessionEvent::Live(_) => return,
         };
-        let _ = emitter.emit(
-            name,
-            serde_json::json!({ "captureId": capture_id, "index": index }),
-        );
+        let _ = emitter.emit(name, payload);
     });
     let workspace = Workspace::with_events(events);
     app.manage(AppState::new(workspace, Instrument::new(manager.clone())));
@@ -129,6 +131,9 @@ pub fn run() {
             commands::decode::decode_view,
             commands::decode::decode_stream,
             commands::decode::decode_catalog,
+            commands::decode::decode_modules,
+            commands::decode::decode_load_module,
+            commands::decode::decode_unload_module,
             commands::decode::decode_row_at,
             commands::decode::decode_search,
             commands::decode::decode_coverage,

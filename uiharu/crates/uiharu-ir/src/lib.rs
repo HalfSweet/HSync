@@ -25,9 +25,9 @@ mod validate;
 
 pub use model::{
     Arm, BinaryOp, Category, Config, Const, Contract, Decoder, EnumVariant, Expr, Field, Framing,
-    Function, Import, Input, Literal, Module, Op, Output, Param, Partial, Pattern, PropSpec,
-    Recovery, RequireKind, RequireSpec, SchemaRef, StateField, Stmt, Type, TypeDef, TypeKind,
-    UnaryOp, UnionVariant,
+    Function, Import, Input, Literal, Locale, Module, Op, Output, Param, Partial, Pattern,
+    PropSpec, Recovery, RequireKind, RequireSpec, SchemaRef, StateField, Stmt, Type, TypeDef,
+    TypeKind, UnaryOp, UnionVariant,
 };
 pub use validate::{Diagnostic, validate};
 

@@ -4,6 +4,8 @@
 //! - `decoders.json`: the decoder entries, as the session stores them;
 //! - `session.json`: the interface's session document (device settings, triggers, colours,
 //!   the view), kept as it is;
+//! - `modules/<name>.json`: the decoder modules the decoders name, each the JSON of its
+//!   decoder IR as it was loaded, so that the file decodes elsewhere as it did here;
 //! - `channels/<index>/<block>`: the samples of each channel, 64 per word, little-endian words
 //!   in blocks of `manifest.blocks.words` words, each block LZ4-compressed on its own (the
 //!   block's size in front, as `lz4_flex` writes it) and stored uncompressed in the archive.
@@ -108,6 +110,8 @@ pub struct HsyncDocument {
     pub decoders: Option<serde_json::Value>,
     /// The `session.json` entry.
     pub session: Option<serde_json::Value>,
+    /// The `modules/<name>.json` entries: by name, each module's JSON as written.
+    pub modules: BTreeMap<String, String>,
 }
 
 /// What [`write_hsync`] stores besides the samples.
@@ -120,11 +124,15 @@ pub struct HsyncWriteRequest<'a> {
     pub app_version: &'a str,
     pub decoders: Option<&'a serde_json::Value>,
     pub session: Option<&'a serde_json::Value>,
+    /// The decoder modules to carry, by name: each one's JSON, written as it is.
+    pub modules: &'a BTreeMap<String, String>,
 }
 
 const MANIFEST: &str = "manifest.json";
 const DECODERS: &str = "decoders.json";
 const SESSION: &str = "session.json";
+const MODULES: &str = "modules/";
+const MODULE_EXTENSION: &str = ".json";
 const LZ4: &str = "lz4";
 
 fn block_name(channel: ChannelIndex, block: usize) -> String {
@@ -220,11 +228,27 @@ pub fn read_hsync<R: Read + Seek>(reader: R) -> Result<HsyncDocument, FileError>
     }
     let decoders = read_json(&mut archive, DECODERS)?;
     let session = read_json(&mut archive, SESSION)?;
+    let module_entries: Vec<String> = archive
+        .file_names()
+        .filter(|name| name.starts_with(MODULES) && name.ends_with(MODULE_EXTENSION))
+        .map(ToOwned::to_owned)
+        .collect();
+    let mut modules = BTreeMap::new();
+    for entry_name in module_entries {
+        let mut entry = archive
+            .by_name(&entry_name)
+            .map_err(|_| FileError::MissingEntry(entry_name.clone()))?;
+        let mut text = String::new();
+        entry.read_to_string(&mut text)?;
+        let name = &entry_name[MODULES.len()..entry_name.len() - MODULE_EXTENSION.len()];
+        modules.insert(name.to_owned(), text);
+    }
     Ok(HsyncDocument {
         manifest,
         capture,
         decoders,
         session,
+        modules,
     })
 }
 
@@ -308,6 +332,10 @@ pub fn write_hsync_with<W: Write + Seek>(
     if let Some(session) = request.session {
         zip.start_file(SESSION, text)?;
         zip.write_all(json(session, SESSION)?.as_bytes())?;
+    }
+    for (name, module) in request.modules {
+        zip.start_file(format!("{MODULES}{name}{MODULE_EXTENSION}"), text)?;
+        zip.write_all(module.as_bytes())?;
     }
 
     let mut bytes = Vec::new();

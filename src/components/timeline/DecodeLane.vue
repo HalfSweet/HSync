@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import type { NumberFormat } from '@/decode/numberFormat'
 import { fieldTexts, primaryFields, valueText, type Wording } from '@/decode/present'
 import type { EventRow } from '@/ipc/bindings/EventRow'
@@ -37,25 +38,17 @@ const emit = defineEmits<{
   pick: [block: { id: string; start: number; end: number }]
 }>()
 
-const i18n = useI18n()
-const { t } = i18n
+const { t } = useI18n()
+const copy = useDecoderCopy()
 
 /** Blocks narrower than this share of the viewport hide their text (`la-tiny`). */
 const TINY_SHARE = 0.032
 
-/**
- * `key` translated when the messages have it, else `fallback`. Kinds, fields and values come
- * from the decoder, so they are checked at run time rather than typed.
- */
-function named(key: string, fallback: string): string {
-  return i18n.te(key) ? t(key as never) : fallback
-}
-
-const kindLabel = (kind: string) => named(`decoder.${props.kind}.event.${kind}`, kind)
-const fieldLabel = (field: string) => named(`decoder.${props.kind}.eventField.${field}`, field)
+const kindLabel = (kind: string) => copy.eventLabel(props.kind, kind)
+const fieldLabel = (field: string) => copy.eventFieldLabel(props.kind, field)
 
 const wording = computed<Wording>(() => ({
-  enumValue: (field, value) => named(`decoder.${props.kind}.value.${field}.${value}`, value),
+  enumValue: (field, value) => copy.valueLabel(props.kind, field, value),
   yes: t('decode.yes'),
   no: t('decode.no'),
   none: t('decode.none'),

@@ -6,12 +6,25 @@ import { getBackend } from '@/ipc/backend'
 import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
 import type { DecoderLanes } from '@/ipc/bindings/DecoderLanes'
 import type { DecoderStatus } from '@/ipc/bindings/DecoderStatus'
+import type { ModuleInfo } from '@/ipc/bindings/ModuleInfo'
 import type { StreamView } from '@/ipc/bindings/StreamView'
+import { toUiError, type UiError } from '@/ipc/errors'
 import { viewportEnd } from '@/timeline/viewport'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
 
 import { useCaptureStore } from './capture'
+import { usePreferencesStore } from './preferences'
 import { useViewStore } from './view'
+
+/** A decoder module as the settings page lists it: its file, and what loading it gave. */
+export interface ModuleEntry {
+  path: string
+  /** What the backend says of it once loaded. */
+  info: ModuleInfo | null
+  /** Why it did not load. */
+  error: UiError | null
+  loading: boolean
+}
 
 /** A decoder's progress refreshes what shows this often at most. */
 const PROGRESS_MS = 120
@@ -20,6 +33,7 @@ const PROGRESS_MS = 120
 export const useDecodeStore = defineStore('decode', () => {
   const capture = useCaptureStore()
   const view = useViewStore()
+  const preferences = usePreferencesStore()
   const statuses = shallowRef<DecoderStatus[]>([])
   /** Grows whenever a decoder has more to show, so views that depend on results ask again. */
   const revision = shallowRef(0)
@@ -76,8 +90,88 @@ export const useDecodeStore = defineStore('decode', () => {
     }, PROGRESS_MS)
   }
 
+  /** The decoder modules loaded here, as the settings page lists them (DESIGN.md §11). */
+  const modules = shallowRef<ModuleEntry[]>([])
+  /** The modules capture files brought: those the backend holds that were not loaded here. */
+  const carried = shallowRef<ModuleInfo[]>([])
+
+  function setModule(path: string, patch: Partial<ModuleEntry>): void {
+    const at = modules.value.findIndex((entry) => entry.path === path)
+    const entry: ModuleEntry = {
+      ...(modules.value[at] ?? { path, info: null, error: null, loading: false }),
+      ...patch,
+    }
+    const next = [...modules.value]
+    if (at < 0) next.push(entry)
+    else next[at] = entry
+    modules.value = next
+  }
+
+  /** Lists the modules the backend holds; those not loaded here came with a capture file. */
+  async function refreshModules(): Promise<void> {
+    try {
+      const all = await (await getBackend()).decodeModules()
+      const own = new Set(modules.value.flatMap((entry) => (entry.info ? [entry.info.name] : [])))
+      carried.value = all.filter((info) => !own.has(info.name))
+    } catch (error) {
+      console.warn('the decoder modules are not available', error)
+    }
+  }
+
+  /** The modules changed: the catalog follows, as do the lists. */
+  function modulesChanged(): Promise<void> {
+    return Promise.all([loadCatalog(), refreshModules()]).then(() => undefined)
+  }
+
+  /** The capture decodes again with the node types as they are now; its states follow. */
+  async function catalogChanged(): Promise<void> {
+    await modulesChanged()
+    const id = capture.summary?.id
+    if (id !== undefined) changed(id, true)
+  }
+
+  /**
+   * Loads the decoder module at `path` and, when `remember` is set, loads it again at every
+   * startup; a module that does not load stays listed with why.
+   */
+  async function loadModule(path: string, remember = true): Promise<void> {
+    setModule(path, { loading: true, error: null })
+    try {
+      const info = await (await getBackend()).decodeLoadModule(path)
+      setModule(path, { info, loading: false })
+      if (remember && !preferences.decoderModules.includes(path))
+        preferences.decoderModules = [...preferences.decoderModules, path]
+      await catalogChanged()
+    } catch (error) {
+      setModule(path, { error: toUiError(error), loading: false })
+    }
+  }
+
+  /** Forgets the decoder module at `path`: the decoder built in takes over. */
+  async function unloadModule(path: string): Promise<void> {
+    const entry = modules.value.find((one) => one.path === path)
+    modules.value = modules.value.filter((one) => one.path !== path)
+    preferences.decoderModules = preferences.decoderModules.filter((one) => one !== path)
+    if (!entry?.info) return
+    await unloadNamed(entry.info.name)
+  }
+
+  /** Lets go of the module `name` a capture file brought: the decoder built in takes over. */
+  function unloadCarried(name: string): Promise<void> {
+    return unloadNamed(name)
+  }
+
+  async function unloadNamed(name: string): Promise<void> {
+    try {
+      await (await getBackend()).decodeUnloadModule(name)
+      await catalogChanged()
+    } catch (error) {
+      console.error('unloading a decoder module failed', error)
+    }
+  }
+
   let subscribed = false
-  /** Follows decoders working in the background. */
+  /** Follows decoders working in the background, and loads the modules remembered. */
   async function init(): Promise<void> {
     if (subscribed) return
     subscribed = true
@@ -85,6 +179,10 @@ export const useDecodeStore = defineStore('decode', () => {
     const backend = await getBackend()
     await backend.onDecoded(({ captureId }) => changed(captureId, true))
     await backend.onDecodeProgress(({ captureId }) => changed(captureId, false))
+    await backend.onModulesChanged(() => void modulesChanged())
+    // In order, as they were loaded: a later module stands in for an earlier one of its name.
+    for (const path of [...preferences.decoderModules]) await loadModule(path, false)
+    await refreshModules()
   }
 
   /** The visible samples, for the decode lanes. */
@@ -192,7 +290,13 @@ export const useDecodeStore = defineStore('decode', () => {
     editor,
     entries,
     catalog,
+    modules,
+    carried,
     init,
+    loadModule,
+    unloadModule,
+    unloadCarried,
+    modulesChanged,
     statusOf,
     lanesOf,
     streamView,

@@ -2,8 +2,12 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { activeCatalog, DEFAULT_CATALOG } from '@/decode/catalog'
 import { i18n } from '@/i18n'
 import type { AvailableUpdate } from '@/ipc/backend'
+import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
+import type { ModuleInfo } from '@/ipc/bindings/ModuleInfo'
+import { useDecodeStore } from '@/stores/decode'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useSettingsStore } from '@/stores/settings'
 import { useUpdateStore } from '@/stores/update'
@@ -16,8 +20,16 @@ const backend = {
   revealLog: vi.fn(() => Promise.resolve()),
   updateCheck: vi.fn<() => Promise<AvailableUpdate | null>>(() => Promise.resolve(null)),
   updateInstall: vi.fn(() => Promise.resolve()),
+  decodeCatalog: vi.fn<() => Promise<CatalogEntry[]>>(() => Promise.resolve([])),
+  decodeModules: vi.fn<() => Promise<ModuleInfo[]>>(() => Promise.resolve([])),
+  decodeLoadModule: vi.fn<(path: string) => Promise<ModuleInfo>>((path) =>
+    Promise.resolve({ name: 'uart', path, category: 'bus', shadows: true }),
+  ),
+  decodeUnloadModule: vi.fn(() => Promise.resolve(true)),
 }
 vi.mock('@/ipc/backend', () => ({ getBackend: () => Promise.resolve(backend) }))
+const picked = vi.fn<() => Promise<string | null>>(() => Promise.resolve(null))
+vi.mock('@/ipc/dialogs', () => ({ pickFile: () => picked() }))
 
 async function page() {
   const settings = useSettingsStore()
@@ -41,6 +53,7 @@ describe('settings page', () => {
   })
   afterEach(() => {
     document.body.innerHTML = ''
+    activeCatalog.value = DEFAULT_CATALOG
   })
 
   it('takes focus without ringing a section, and shows the one chosen in the side bar', async () => {
@@ -78,6 +91,106 @@ describe('settings page', () => {
     await buttons[1]?.trigger('click')
     expect(usePreferencesStore().readoutPlace).toBe('float')
     expect(buttons[1]?.attributes('aria-pressed')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('loads decoder modules from Decoders, remembers them and lets them go', async () => {
+    localStorage.clear()
+    const { wrapper, settings } = await page()
+    await tab(wrapper, 'Decoders')?.trigger('click')
+    expect(settings.section).toBe('decoders')
+    const panel = () => wrapper.find('[role="tabpanel"]')
+    expect(panel().text()).toContain('No decoder module is loaded')
+
+    picked.mockResolvedValueOnce('/decoders/uart.json')
+    const load = panel()
+      .findAll('button')
+      .find((one) => one.text() === 'Load module…')
+    await load?.trigger('click')
+    await flushPromises()
+    expect(backend.decodeLoadModule).toHaveBeenCalledWith('/decoders/uart.json')
+    expect(panel().text()).toContain('UART')
+    expect(panel().text()).toContain('Stands in for the built-in UART decoder')
+    expect(usePreferencesStore().decoderModules).toEqual(['/decoders/uart.json'])
+    expect(useDecodeStore().modules.map((entry) => entry.info?.name)).toEqual(['uart'])
+
+    backend.decodeLoadModule.mockRejectedValueOnce({
+      code: 'error.decode.module',
+      params: { path: '/decoders/bad.json', detail: 'the module does not parse' },
+    })
+    picked.mockResolvedValueOnce('/decoders/bad.json')
+    await load?.trigger('click')
+    await flushPromises()
+    expect(panel().find('[role="alert"]').text()).toBe(
+      'The decoder module cannot be loaded: the module does not parse',
+    )
+    expect(usePreferencesStore().decoderModules).toEqual(['/decoders/uart.json'])
+
+    const remove = panel()
+      .findAll('button')
+      .filter((one) => one.text() === 'Remove')
+    expect(remove).toHaveLength(2)
+    await remove[0]?.trigger('click')
+    await flushPromises()
+    expect(backend.decodeUnloadModule).toHaveBeenCalledWith('uart')
+    expect(usePreferencesStore().decoderModules).toEqual([])
+    expect(panel().text()).not.toContain('UART')
+    wrapper.unmount()
+  })
+
+  it('names a loaded module by the copy it carries', async () => {
+    localStorage.clear()
+    const sensor: CatalogEntry = {
+      ...(DEFAULT_CATALOG[0] as CatalogEntry),
+      name: 'my-sensor',
+      module: '/decoders/my-sensor.json',
+      locales: {
+        'en-US': { name: 'My sensor', fields: {}, values: {}, events: {}, eventFields: {} },
+      },
+    }
+    backend.decodeCatalog.mockResolvedValueOnce([...DEFAULT_CATALOG, sensor])
+    backend.decodeLoadModule.mockResolvedValueOnce({
+      name: 'my-sensor',
+      path: '/decoders/my-sensor.json',
+      category: 'line',
+      shadows: false,
+    })
+    const { wrapper, settings } = await page()
+    settings.section = 'decoders'
+    await flushPromises()
+    picked.mockResolvedValueOnce('/decoders/my-sensor.json')
+    await wrapper
+      .findAll('[role="tabpanel"] button')
+      .find((one) => one.text() === 'Load module…')
+      ?.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[role="tabpanel"]').text()).toContain('My sensor')
+    wrapper.unmount()
+  })
+
+  it('lists the modules a capture file brought, and lets them go', async () => {
+    localStorage.clear()
+    const { wrapper, settings } = await page()
+    const decode = useDecodeStore()
+    decode.carried = [
+      { name: 'my-sensor', path: '/captures/sensor.hsync', category: 'line', shadows: false },
+    ]
+    settings.section = 'decoders'
+    await flushPromises()
+    const panel = () => wrapper.find('[role="tabpanel"]')
+    expect(panel().text()).toContain('my-sensor')
+    expect(panel().text()).toContain('Came with the capture file sensor.hsync')
+    expect(panel().text()).not.toContain('Stands in for')
+
+    backend.decodeModules.mockResolvedValueOnce([])
+    await panel()
+      .findAll('button')
+      .find((one) => one.text() === 'Remove')
+      ?.trigger('click')
+    await flushPromises()
+    expect(backend.decodeUnloadModule).toHaveBeenCalledWith('my-sensor')
+    expect(decode.carried).toEqual([])
+    expect(panel().text()).toContain('No decoder module is loaded')
     wrapper.unmount()
   })
 

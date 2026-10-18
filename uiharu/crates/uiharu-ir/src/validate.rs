@@ -9,8 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::IR_VERSION;
 use crate::model::{
-    Contract, Decoder, Expr, Framing, Function, Input, Module, Op, Pattern, Stmt, Type, TypeDef,
-    TypeKind,
+    Contract, Decoder, Expr, Field, Framing, Function, Input, Module, Op, Pattern, Stmt, Type,
+    TypeDef, TypeKind, UnionVariant,
 };
 
 /// A rule a module breaks, with the path of the item that breaks it.
@@ -561,6 +561,89 @@ impl<'a> Checker<'a> {
             self.function(&format!("{path}.methods[{index}]"), method, true);
         }
         self.hooks(path, decoder);
+        self.locales(path, decoder);
+    }
+
+    /// Checks that the copy the decoder carries names its configuration fields, the values of
+    /// its enumerated fields, the kinds of event it emits and their fields.
+    fn locales(&mut self, path: &str, decoder: &Decoder) {
+        let config = &decoder.config.ty;
+        let config_fields: &'a [Field] = match self.types.get(config.as_str()).copied() {
+            Some(TypeKind::Record { fields }) => fields,
+            _ => &[],
+        };
+        let variants: &'a [UnionVariant] = self
+            .schema_known(&decoder.output.schema)
+            .and_then(|contract| self.union(&contract.event))
+            .unwrap_or(&[]);
+        for (tag, locale) in &decoder.locales {
+            let path = format!("{path}.locales.{tag}");
+            if tag.is_empty() || !tag.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+                self.report(
+                    path.clone(),
+                    "a locale is named by its language tag, such as en-US",
+                );
+            }
+            for name in locale.fields.keys() {
+                if !config_fields.iter().any(|field| &field.name == name) {
+                    self.report(
+                        format!("{path}.fields.{name}"),
+                        format!("{name} is not a field of {config}"),
+                    );
+                }
+            }
+            for (name, values) in &locale.values {
+                let Some(field) = config_fields.iter().find(|field| &field.name == name) else {
+                    self.report(
+                        format!("{path}.values.{name}"),
+                        format!("{name} is not a field of {config}"),
+                    );
+                    continue;
+                };
+                let ty = match &field.ty {
+                    Type::Option { option } => option.as_ref(),
+                    other => other,
+                };
+                let variants = match ty {
+                    Type::Name(name) => self.enum_variants(name),
+                    _ => None,
+                };
+                let Some(variants) = variants else {
+                    self.report(
+                        format!("{path}.values.{name}"),
+                        format!("{name} is not an enumerated field"),
+                    );
+                    continue;
+                };
+                for value in values.keys() {
+                    if !variants.iter().any(|variant| &variant.0 == value) {
+                        self.report(
+                            format!("{path}.values.{name}.{value}"),
+                            format!("{value} is not a value of {name}"),
+                        );
+                    }
+                }
+            }
+            for kind in locale.events.keys() {
+                if !variants.iter().any(|variant| &variant.name == kind) {
+                    self.report(
+                        format!("{path}.events.{kind}"),
+                        format!("{kind} is not a kind of event the decoder emits"),
+                    );
+                }
+            }
+            for name in locale.event_fields.keys() {
+                if !variants
+                    .iter()
+                    .any(|variant| variant.fields.iter().any(|field| &field.name == name))
+                {
+                    self.report(
+                        format!("{path}.eventFields.{name}"),
+                        format!("{name} is not a field of any event"),
+                    );
+                }
+            }
+        }
     }
 
     /// Checks that the hooks the decoder's kind calls for are there with the right shape.

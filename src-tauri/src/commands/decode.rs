@@ -1,7 +1,9 @@
 //! Decoded data: decoder states, lanes for the timeline, the data stream listings, the search
 //! and the catalog of decoders.
 
-use hsync_session::{CatalogEntry, DecoderLanes, DecoderStatus, SearchResult, StreamPage};
+use hsync_session::{
+    CatalogEntry, DecoderLanes, DecoderStatus, ModuleInfo, SearchResult, StreamPage,
+};
 use tauri::State;
 
 use super::CommandResult;
@@ -13,6 +15,10 @@ pub const DECODED_EVENT: &str = "decode://done";
 
 /// Event sent when a decoder of a capture has more to show: `{ captureId, index }`.
 pub const DECODE_PROGRESS_EVENT: &str = "decode://progress";
+
+/// Event sent when the decoder modules loaded changed without a request: a capture file
+/// brought some. No payload; the interface asks for the modules and the catalog again.
+pub const MODULES_EVENT: &str = "decode://modules";
 
 fn decoding(
     state: &AppState,
@@ -98,10 +104,41 @@ pub fn decode_coverage(
     Ok(decoding(&state, capture_id)?.coverage(index, start..end, resolution.max(1)))
 }
 
-/// Every decoder the app offers, with its configuration fields and event kinds.
+/// Every decoder the app offers, built in or loaded, with its configuration fields and
+/// event kinds.
 #[tauri::command]
-pub fn decode_catalog() -> Vec<CatalogEntry> {
-    hsync_session::catalog()
+pub fn decode_catalog(state: State<'_, AppState>) -> Vec<CatalogEntry> {
+    state.workspace.lock().catalog()
+}
+
+/// The decoder modules loaded, in the order they were.
+#[tauri::command]
+pub fn decode_modules(state: State<'_, AppState>) -> Vec<ModuleInfo> {
+    state.workspace.lock().modules()
+}
+
+/// Loads the decoder module at `path`: a decoder written in the DSL, as its IR. It stands in
+/// for a decoder of its name built in or loaded before, and the open capture's decoders that
+/// name it decode again with it.
+#[tauri::command]
+pub async fn decode_load_module(app: tauri::AppHandle, path: String) -> CommandResult<ModuleInfo> {
+    super::blocking(app, move |state| {
+        state
+            .workspace
+            .lock()
+            .load_module(std::path::Path::new(&path))
+    })
+    .await
+}
+
+/// Forgets the decoder module `name`; the open capture's decoders that name it decode again
+/// with the decoder built in. Whether there was such a module.
+#[tauri::command]
+pub async fn decode_unload_module(app: tauri::AppHandle, name: String) -> CommandResult<bool> {
+    super::blocking(app, move |state| {
+        Ok(state.workspace.lock().unload_module(&name))
+    })
+    .await
 }
 
 /// Replaces the decoders of a capture with `decoders` (HSync's entries) and decodes again,
