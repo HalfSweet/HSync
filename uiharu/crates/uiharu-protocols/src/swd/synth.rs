@@ -5,7 +5,9 @@
 
 use uiharu_core::{Levels, LogicBlock, LogicBlockBuilder, Tick};
 
-use super::decoder::{JTAG_TO_SWD, SWD_TO_JTAG, SwdConfig};
+use super::decoder::{
+    ACTIVATE_SWD, JTAG_TO_SWD, SELECTION_ALERT, SWD_TO_DS, SWD_TO_JTAG, SwdConfig,
+};
 use super::events::{Ack, Interface};
 
 /// One packet as the host sends it and the target answers it, with knobs for the errors a
@@ -217,8 +219,37 @@ impl SwdWaveform {
         let sequence = match to {
             Interface::Swd => JTAG_TO_SWD,
             Interface::Jtag => SWD_TO_JTAG,
+            Interface::Dormant => SWD_TO_DS,
         };
         self.bits(u64::from(sequence), 16);
+    }
+
+    /// The 128-bit Selection Alert, least significant bit first.
+    pub fn selection_alert(&mut self) {
+        for word in 0..4 {
+            self.bits((SELECTION_ALERT >> (32 * word)) as u64 & 0xffff_ffff, 32);
+        }
+    }
+
+    /// What a debugger sends to wake a dormant target: eight clocks high, the Selection
+    /// Alert, four clocks low and the `bits` low bits of the activation `code`, least
+    /// significant first.
+    pub fn wake(&mut self, code: u16, bits: u32) {
+        self.line_reset(8);
+        self.selection_alert();
+        self.idle_cycles(4);
+        self.bits(u64::from(code), bits);
+    }
+
+    /// What a debugger sends to take over a port through the dormant state, as ADIv6
+    /// recommends: a line reset and the SWD-to-dormant sequence, the wake with the SW-DP
+    /// activation code, a line reset and two idle cycles.
+    pub fn connect_through_dormant(&mut self) {
+        self.line_reset(56);
+        self.select(Interface::Dormant);
+        self.wake(u16::from(ACTIVATE_SWD), 8);
+        self.line_reset(56);
+        self.idle_cycles(2);
     }
 
     /// What a debugger sends to take over a port that may be in JTAG: a line reset, the

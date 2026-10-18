@@ -70,14 +70,19 @@ pub enum EndReason {
     Aborted,
 }
 
-/// The interface a select sequence switches a Serial Wire/JTAG debug port to.
+/// The interface a select sequence or an activation code switches a debug port to.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum Interface {
-    /// Serial Wire Debug, selected by `0xE79E`.
+    /// Serial Wire Debug: selected by `0xE79E` after a line reset, or by the Arm CoreSight
+    /// SW-DP activation code after a Selection Alert.
     Swd,
-    /// JTAG, selected by `0xE73C`.
+    /// JTAG: selected by `0xE73C` after a line reset, or by the Arm CoreSight JTAG-DP or the
+    /// JTAG-Serial activation code after a Selection Alert.
     Jtag,
+    /// The dormant state, selected by `0xE3BC` after a line reset; a Selection Alert and an
+    /// activation code leave it.
+    Dormant,
 }
 
 /// What travels on an SWD event stream.
@@ -134,7 +139,8 @@ pub enum SwdEvent {
     },
     /// SWDIO was held high for at least 50 clocks: a line reset.
     LineReset,
-    /// A select sequence followed a line reset.
+    /// A select sequence followed a line reset, or a Selection Alert and an activation code
+    /// woke the port from the dormant state.
     Switch {
         /// The interface selected.
         to: Interface,

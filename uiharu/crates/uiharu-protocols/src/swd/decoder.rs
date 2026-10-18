@@ -13,16 +13,24 @@
 //!   they have settled, whatever the target's output delay;
 //! - a line reset is at least 50 clocks in a row with SWDIO high; it is reported when SWDIO is
 //!   read low again, or where the samples stop, spanning the whole run;
-//! - right after a line reset, the select sequences JTAG-to-SWD (`0xE79E`) and SWD-to-JTAG
-//!   (`0xE73C`), sixteen bits sent least significant first, are reported as a `switch`; while
-//!   the bits after a line reset may still be one, nothing is reported for them, and once they
-//!   cannot, they are decoded as idle cycles and packets;
+//! - right after a line reset, the select sequences JTAG-to-SWD (`0xE79E`), SWD-to-JTAG
+//!   (`0xE73C`) and SWD-to-dormant (`0xE3BC`), sixteen bits sent least significant first, are
+//!   reported as a `switch`; while the bits after a line reset may still be one, nothing is
+//!   reported for them, and once they cannot, they are decoded as idle cycles and packets;
+//! - the Selection Alert that wakes a dormant target (B5.3.4: 128 bits, then four clocks the
+//!   target ignores, then an activation code) is watched for on every bit of the wire. The
+//!   Arm CoreSight SW-DP code switches to SWD, the Arm CoreSight JTAG-DP and the JTAG-Serial
+//!   codes to JTAG, as a `switch` spanning alert and code; a code the decoder does not know
+//!   leaves the port where it was. A packet under way when the alert completes was none: it
+//!   ends with `protocol-error`;
 //! - packets are decoded only where it is known where they start: from a line reset on, until
-//!   a protocol error, a gap or a switch to JTAG. At the first sample, after a gap and after a
-//!   protocol error the decoder waits for a line reset rather than for idle cycles, which the
-//!   bits of a data phase can imitate; after a switch to JTAG it decodes no packet until a
-//!   line reset and a switch back. A line reset that is not followed by a select sequence is
-//!   taken to leave the port in SWD, unless it was switched to JTAG;
+//!   a protocol error, a gap or a switch to JTAG or dormant. At the first sample, after a gap,
+//!   after a protocol error and after waking to SWD — which leaves the target in the protocol
+//!   error state until a line reset — the decoder waits for a line reset rather than for idle
+//!   cycles, which the bits of a data phase can imitate; after a switch to JTAG or dormant it
+//!   decodes no packet until a line reset and a switch back. A line reset that is not followed
+//!   by a select sequence is taken to leave the port in SWD, unless it was switched to JTAG or
+//!   dormant;
 //! - between packets, a low bit is an idle cycle and a high bit a Start bit — unless the run of
 //!   high bits it starts grows into a line reset. A packet is therefore reported from the
 //!   first low bit of its request (a well-formed request has one among its first six bits),
@@ -53,9 +61,9 @@
 //!
 //! Limits: the turnaround lasts one clock, the reset value of DLCR.TURNROUND; with overrun
 //! detection (CTRL/STAT.ORUNDETECT) WAIT and FAULT carry a data phase the decoder does not
-//! expect; the dormant state of ADIv6 and its selection sequences are out of scope. No register
-//! is named: what `addr` selects depends on APnDP and on the debug and access ports, which is
-//! the next layer's business.
+//! expect; the JTAG-to-dormant sequence, defined by the TAP controller's zero-bit scans, is not
+//! recognised on SWDIO. No register is named: what `addr` selects depends on APnDP and on the
+//! debug and access ports, which is the next layer's business.
 
 use std::sync::Arc;
 
@@ -77,8 +85,33 @@ pub const JTAG_TO_SWD: u16 = 0xE79E;
 /// The SWD-to-JTAG select sequence, sent least significant bit first.
 pub const SWD_TO_JTAG: u16 = 0xE73C;
 
+/// The SWD-to-dormant select sequence, sent least significant bit first.
+pub const SWD_TO_DS: u16 = 0xE3BC;
+
+/// The Selection Alert that wakes a dormant target: 128 bits, sent least significant bit
+/// first.
+pub const SELECTION_ALERT: u128 = 0x19BC_0EA2_E3DD_AFE9_8685_2D95_6209_F392;
+
+/// The activation code of an Arm CoreSight SW-DP, as read least significant bit first: the
+/// code `0b0101_1000` of ADIv6 Table B5-2, which is sent most significant bit first.
+pub const ACTIVATE_SWD: u8 = 0x1A;
+
+/// The activation code of an Arm CoreSight JTAG-DP, as read least significant bit first: the
+/// code `0b0101_0000` of ADIv6 Table B5-2, which is sent most significant bit first.
+pub const ACTIVATE_JTAG_DP: u8 = 0x0A;
+
+/// Bits in the JTAG-Serial activation code, which are all zero.
+pub const JTAG_SERIAL_BITS: u8 = 12;
+
 /// Bits in a select sequence.
 const SELECT_BITS: usize = 16;
+
+/// Bits in the Selection Alert.
+const ALERT_BITS: usize = 128;
+
+/// Clocks after the Selection Alert whose SWDIO the target ignores, before the activation
+/// code.
+const ACTIVATION_GAP: u8 = 4;
 
 /// Bits in a packet request.
 const REQUEST_BITS: usize = 8;
@@ -212,6 +245,9 @@ enum Mode {
     Swd,
     /// The port was switched to JTAG.
     Jtag,
+    /// The port was put into the dormant state, which a Selection Alert and an activation
+    /// code leave.
+    Dormant,
 }
 
 /// High bits in a row, outside packets or at the end of one that broke.
@@ -263,6 +299,139 @@ impl Select {
             .iter()
             .enumerate()
             .all(|(i, bit)| bit.high == (sequence >> i & 1 != 0))
+    }
+}
+
+/// The bit at `index` of the Selection Alert.
+fn alert_bit(index: usize) -> bool {
+    SELECTION_ALERT >> index & 1 != 0
+}
+
+/// The activation code being read after a Selection Alert.
+#[derive(Clone, Copy, Debug)]
+struct Activation {
+    /// The alert's first bit.
+    start: Tick,
+    /// Bits taken since the alert: the ignored clocks, then the code's.
+    taken: u8,
+    /// The code's bits, bit `i` as the `i`-th on the wire.
+    bits: u16,
+}
+
+/// What a bit of the wire did to the wake sequence.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Woke {
+    /// Nothing yet: the bit is the wire's to decode.
+    Nothing,
+    /// The last 128 bits were the Selection Alert.
+    Alert,
+    /// The bit is one the target ignores or one of the activation code, which is not complete.
+    Code,
+    /// The activation code selected an interface; the sequence began at the tick.
+    Switch(Interface, Tick),
+    /// The activation code is none the decoder knows: the port stays where it was.
+    Unrecognized,
+}
+
+/// The Selection Alert and the activation code after it, watched for on every bit of the wire.
+struct Wake {
+    /// How many bits of the alert the latest bits match, 0 to 128.
+    matched: usize,
+    /// For every prefix of the alert, the length of the longest shorter prefix that is also
+    /// its suffix: where a match goes on from after a bit that breaks it.
+    fail: [u8; ALERT_BITS],
+    /// The ticks of the last 128 bits read; `pos` counts them.
+    ticks: [Tick; ALERT_BITS],
+    pos: usize,
+    /// The activation code being read, after an alert.
+    code: Option<Activation>,
+}
+
+impl Wake {
+    fn new() -> Self {
+        let mut fail = [0u8; ALERT_BITS];
+        let mut k = 0usize;
+        for i in 1..ALERT_BITS {
+            while k > 0 && alert_bit(i) != alert_bit(k) {
+                k = usize::from(fail[k - 1]);
+            }
+            if alert_bit(i) == alert_bit(k) {
+                k += 1;
+            }
+            fail[i] = k as u8;
+        }
+        Self {
+            matched: 0,
+            fail,
+            ticks: [Tick::ZERO; ALERT_BITS],
+            pos: 0,
+            code: None,
+        }
+    }
+
+    /// Takes a bit of the wire in.
+    fn feed(&mut self, bit: Bit) -> Woke {
+        if let Some(code) = self.code.as_mut() {
+            code.taken += 1;
+            if code.taken <= ACTIVATION_GAP {
+                return Woke::Code;
+            }
+            let index = code.taken - ACTIVATION_GAP - 1;
+            code.bits |= u16::from(bit.high) << index;
+            let (start, bits) = (code.start, code.bits);
+            let woke = match (index + 1, bits) {
+                (8, bits) if bits == u16::from(ACTIVATE_SWD) => Woke::Switch(Interface::Swd, start),
+                (8, bits) if bits == u16::from(ACTIVATE_JTAG_DP) => {
+                    Woke::Switch(Interface::Jtag, start)
+                }
+                // Eight zero bits may go on into the JTAG-Serial code.
+                (8, 0) => return Woke::Code,
+                (8, _) => Woke::Unrecognized,
+                (JTAG_SERIAL_BITS, 0) => Woke::Switch(Interface::Jtag, start),
+                (JTAG_SERIAL_BITS, _) => Woke::Unrecognized,
+                _ => return Woke::Code,
+            };
+            self.code = None;
+            return woke;
+        }
+        self.ticks[self.pos % ALERT_BITS] = bit.tick;
+        self.pos = self.pos.wrapping_add(1);
+        while self.matched > 0 && bit.high != alert_bit(self.matched) {
+            self.matched = usize::from(self.fail[self.matched - 1]);
+        }
+        if bit.high == alert_bit(self.matched) {
+            self.matched += 1;
+        }
+        if self.matched < ALERT_BITS {
+            return Woke::Nothing;
+        }
+        self.matched = 0;
+        self.code = Some(Activation {
+            start: self.start_of(ALERT_BITS),
+            taken: 0,
+            bits: 0,
+        });
+        Woke::Alert
+    }
+
+    /// The tick of the first of the last `count` bits read.
+    fn start_of(&self, count: usize) -> Tick {
+        self.ticks[self.pos.wrapping_sub(count) % ALERT_BITS]
+    }
+
+    /// The first bit that may still be part of a switch: of the alert and code under way, or
+    /// of the bits that match the start of the alert.
+    fn in_flight(&self) -> Option<Tick> {
+        if let Some(code) = &self.code {
+            return Some(code.start);
+        }
+        (self.matched > 0).then(|| self.start_of(self.matched))
+    }
+
+    /// Forgets the bits: the samples stopped.
+    fn reset(&mut self) {
+        self.matched = 0;
+        self.code = None;
     }
 }
 
@@ -384,6 +553,7 @@ struct Decoder {
     select: Option<Select>,
     packet: Option<Packet>,
     replay: Replay,
+    wake: Wake,
     next_tx: u64,
     /// The tick of the last bit read from the wire.
     now: Tick,
@@ -397,6 +567,7 @@ impl Decoder {
             select: None,
             packet: None,
             replay: Replay::default(),
+            wake: Wake::new(),
             next_tx: 1,
             now: Tick::ZERO,
         }
@@ -405,19 +576,50 @@ impl Decoder {
     /// The first bit read and not reported yet, which an event may still span from: of a run
     /// of high bits, which may turn into a line reset or be decoded again as a request; of the
     /// bits after a line reset that may be a select sequence; of the packet's field being
-    /// read. Bits waiting in the replay need nothing: the wire is read only once they are
-    /// decoded.
+    /// read; of the bits that may be a Selection Alert and its activation code. Bits waiting
+    /// in the replay need nothing: the wire is read only once they are decoded.
     fn in_flight(&self) -> Option<Tick> {
         let run = (self.run.count > 0).then_some(self.run.first[0]);
         let select = self.select.as_ref().map(|select| select.bits[0].tick);
         let field = self.packet.as_ref().and_then(Packet::field_start);
-        [run, select, field].into_iter().flatten().min()
+        let wake = self.wake.in_flight();
+        [run, select, field, wake].into_iter().flatten().min()
     }
 
     /// Progress to `tick`, held back to what is in flight, which promises that nothing
     /// starting earlier follows.
     fn hold(&self, tick: Tick) -> Tick {
         self.in_flight().map_or(tick, |start| start.min(tick))
+    }
+
+    /// A bit read from the wire, not one decoded again: watched for the wake sequence, then
+    /// decoded.
+    async fn wire_bit(&mut self, bit: Bit, out: &mut Outbox<SwdEvent>) {
+        match self.wake.feed(bit) {
+            Woke::Nothing => self.bit(bit, out).await,
+            Woke::Alert => {
+                // The last 128 bits were the Selection Alert, whatever they were taken for: a
+                // packet under way was none, and they were no line reset or select sequence.
+                if self.packet.is_some() {
+                    self.end(EndReason::ProtocolError, bit, out).await;
+                }
+                self.run = Run::default();
+                self.select = None;
+            }
+            Woke::Code | Woke::Unrecognized => {}
+            Woke::Switch(to, start) => {
+                self.mode = match to {
+                    // Woken to SWD, the target is in the protocol error state until a line
+                    // reset.
+                    Interface::Swd => Mode::Unaligned,
+                    Interface::Jtag => Mode::Jtag,
+                    Interface::Dormant => Mode::Dormant,
+                };
+                let span = TickRange::new(start, bit.tick.next());
+                out.emit(Provenance::over(span, bit.tick), SwdEvent::Switch { to })
+                    .await;
+            }
+        }
     }
 
     async fn bit(&mut self, bit: Bit, out: &mut Outbox<SwdEvent>) {
@@ -474,6 +676,7 @@ impl Decoder {
         let to = [
             (JTAG_TO_SWD, Interface::Swd),
             (SWD_TO_JTAG, Interface::Jtag),
+            (SWD_TO_DS, Interface::Dormant),
         ]
         .into_iter()
         .find(|(sequence, _)| select.matches(*sequence))
@@ -483,6 +686,7 @@ impl Decoder {
                 self.mode = match to {
                     Interface::Swd => Mode::Swd,
                     Interface::Jtag => Mode::Jtag,
+                    Interface::Dormant => Mode::Dormant,
                 };
                 let span = TickRange::new(select.bits[0].tick, bit.tick.next());
                 let at = settle(Provenance::over(span, bit.tick), self.now);
@@ -490,8 +694,9 @@ impl Decoder {
             }
             Some(_) => self.select = Some(select),
             None => {
-                // No select sequence: idle cycles and packets, or more JTAG.
-                if self.mode != Mode::Jtag {
+                // No select sequence: idle cycles and packets, or more JTAG, or a target
+                // still dormant.
+                if !matches!(self.mode, Mode::Jtag | Mode::Dormant) {
                     self.mode = Mode::Swd;
                 }
                 self.replay.put_back(&select.bits[..select.len]);
@@ -652,6 +857,7 @@ impl Decoder {
             "the wire is read only once the replay is done"
         );
         self.mode = Mode::Unaligned;
+        self.wake.reset();
         let run = std::mem::take(&mut self.run);
         let select = self.select.take();
         if let Some(packet) = self.packet.take() {
@@ -688,7 +894,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<SwdEvent>, config: SwdCon
                         high: swdio,
                         target: fall.take().unwrap_or(swdio),
                     };
-                    decoder.bit(bit, &mut out).await;
+                    decoder.wire_bit(bit, &mut out).await;
                 } else {
                     fall = Some(swdio);
                 }
@@ -739,6 +945,102 @@ mod tests {
         let requires = &spec.inputs[0].requires;
         assert!(requires.unmet(&Props::new().with("channels", 10)).is_none());
         assert!(requires.unmet(&Props::new().with("channels", 9)).is_some());
+    }
+
+    #[test]
+    fn the_selection_alert_is_matched_wherever_it_starts() {
+        let bit = |tick: u64, high: bool| Bit {
+            tick: Tick(tick),
+            high,
+            target: high,
+        };
+        let mut wake = Wake::new();
+        // It starts 0, 1, 0, 0, 1 (ADIv6 Figure B5-9).
+        assert_eq!(
+            (0..5).map(alert_bit).collect::<Vec<_>>(),
+            [false, true, false, false, true]
+        );
+        // A run of ones, a false start of twenty bits, then the alert itself.
+        let mut tick = 0;
+        for _ in 0..8 {
+            assert_eq!(wake.feed(bit(tick, true)), Woke::Nothing);
+            tick += 1;
+        }
+        for k in 0..20 {
+            assert_eq!(wake.feed(bit(tick, alert_bit(k))), Woke::Nothing);
+            tick += 1;
+        }
+        assert_eq!(wake.in_flight(), Some(Tick(8)));
+        let start = tick;
+        for k in 0..ALERT_BITS {
+            let woke = wake.feed(bit(tick, alert_bit(k)));
+            tick += 1;
+            if k < ALERT_BITS - 1 {
+                assert_eq!(woke, Woke::Nothing, "bit {k}");
+            } else {
+                assert_eq!(woke, Woke::Alert);
+            }
+        }
+        assert_eq!(wake.in_flight(), Some(Tick(start)));
+        // Four clocks the target ignores, then the SW-DP code.
+        for high in [true, false, true, true] {
+            assert_eq!(wake.feed(bit(tick, high)), Woke::Code);
+            tick += 1;
+        }
+        for i in 0..8 {
+            let woke = wake.feed(bit(tick, ACTIVATE_SWD >> i & 1 != 0));
+            tick += 1;
+            if i < 7 {
+                assert_eq!(woke, Woke::Code);
+            } else {
+                assert_eq!(woke, Woke::Switch(Interface::Swd, Tick(start)));
+            }
+        }
+        assert_eq!(wake.in_flight(), None);
+    }
+
+    #[test]
+    fn the_activation_codes_are_told_apart() {
+        let code = |bits: &[bool]| {
+            let mut wake = Wake::new();
+            wake.code = Some(Activation {
+                start: Tick(1),
+                taken: ACTIVATION_GAP,
+                bits: 0,
+            });
+            let mut last = Woke::Nothing;
+            for (i, high) in bits.iter().enumerate() {
+                last = wake.feed(Bit {
+                    tick: Tick(2 + i as u64),
+                    high: *high,
+                    target: *high,
+                });
+            }
+            last
+        };
+        let lsb_first = |value: u16, count: usize| -> Vec<bool> {
+            (0..count).map(|i| value >> i & 1 != 0).collect()
+        };
+        assert_eq!(
+            code(&lsb_first(u16::from(ACTIVATE_JTAG_DP), 8)),
+            Woke::Switch(Interface::Jtag, Tick(1))
+        );
+        assert_eq!(code(&lsb_first(0, 8)), Woke::Code);
+        assert_eq!(
+            code(&lsb_first(0, 12)),
+            Woke::Switch(Interface::Jtag, Tick(1))
+        );
+        assert_eq!(
+            code(
+                &[false; 11]
+                    .iter()
+                    .chain(&[true])
+                    .copied()
+                    .collect::<Vec<_>>()
+            ),
+            Woke::Unrecognized
+        );
+        assert_eq!(code(&lsb_first(0x5A, 8)), Woke::Unrecognized);
     }
 
     #[test]

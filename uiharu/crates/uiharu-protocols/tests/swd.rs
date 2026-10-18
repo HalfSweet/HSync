@@ -757,12 +757,13 @@ fn progress_is_held_back_to_what_is_not_reported_yet() {
         (246, 230),
         // Inside the request, from its Start bit.
         (rise(3), rise(0)),
-        // On the Park bit, high: should the packet break, it would lead into a line reset.
-        (rise(7), rise(7)),
+        // On the Park bit: Stop and Park, 0 then 1, are how a Selection Alert starts.
+        (rise(7), rise(6)),
         // Inside the data.
         (rise(30), rise(12)),
-        // Nothing once the packet is complete.
-        (rise(45), rise(45) + 1),
+        // Once the packet is complete, only the turnaround bit, low here, which could start a
+        // Selection Alert.
+        (rise(45), rise(45)),
     ] {
         let cut = Tick(last + 1);
         let piece = block.slice(TickRange::new(from, cut)).expect("a slice");
@@ -953,16 +954,14 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
         Unaligned,
         Swd,
         Jtag,
+        Dormant,
     }
     let mut mode = Mode::Unaligned;
     let mut next = 1;
     let mut events = Vec::new();
-    let after_reset = |mode: Mode| {
-        if mode == Mode::Jtag {
-            Mode::Jtag
-        } else {
-            Mode::Swd
-        }
+    let after_reset = |mode: Mode| match mode {
+        Mode::Jtag | Mode::Dormant => mode,
+        Mode::Unaligned | Mode::Swd => Mode::Swd,
     };
     for step in steps {
         match step {
@@ -1025,6 +1024,7 @@ fn model(steps: &[Step]) -> Vec<SwdEvent> {
                 mode = match to {
                     Interface::Swd => Mode::Swd,
                     Interface::Jtag => Mode::Jtag,
+                    Interface::Dormant => Mode::Dormant,
                 };
             }
         }
