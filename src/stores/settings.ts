@@ -8,6 +8,7 @@ import { shallowRef } from 'vue'
 export const SETTINGS_SECTIONS = [
   'appearance',
   'behaviour',
+  'shortcuts',
   'decoders',
   'diagnostics',
   'about',
