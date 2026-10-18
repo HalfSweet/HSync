@@ -4,11 +4,15 @@
 //! configuration and the kinds of events it emits. Manifests are the JSON files in
 //! `manifests/`, one per node type, embedded into the registry; the user-visible names of
 //! everything they mention are the interface's business (i18n keys such as
-//! `decoder.<type>.title` and `decoder.<type>.field.<name>`), never text here.
+//! `decoder.<type>.title` and `decoder.<type>.field.<name>`), never text here. A module
+//! loaded at run time may carry its own copy (`locales`, the DSL's declaration), for an
+//! interface that has none for it.
 
+use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
+pub use uiharu_ir::Locale;
 
 use crate::kinds::KINDS;
 
@@ -30,6 +34,11 @@ pub struct Manifest {
     /// The kinds of events the first output emits, with their fields.
     #[serde(default)]
     pub events: Vec<EventKind>,
+    /// What an interface shows for the node type, by language tag, as a loaded module
+    /// declares it: its configuration fields and the enumerated values are keyed by the
+    /// names of `config`. Empty for the engine's own node types.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub locales: BTreeMap<String, Locale>,
 }
 
 /// A group of the catalog.
@@ -239,6 +248,7 @@ mod tests {
                 outputs,
                 config,
                 events: Vec::new(),
+                locales: BTreeMap::new(),
             };
             let text = serde_json::to_string_pretty(&manifest).expect("serializes");
             std::fs::write(&path, text + "\n").expect("writes the skeleton");

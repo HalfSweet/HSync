@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use indexmap::IndexMap;
 use uiharu_core::{DynExposedRef, Node, Pipeline, SchemaId};
-use uiharu_interp::{DynEvent, Interpreter, LoadError, Program};
+use uiharu_interp::{DynEvent, Interpreter, LoadError, Program, snake};
 use uiharu_ir::{Category as IrCategory, Module, Type, TypeKind};
 
 use crate::dynamic::{DynReader, TypedReader};
@@ -389,6 +389,32 @@ fn manifest_of(module: &Module, program: &Program, defaults: &serde_json::Value)
             _ => None,
         })
         .unwrap_or_default();
+    // The copy keys its configuration fields as the module names them; the manifest's are
+    // named as the configuration reads them.
+    let locales = module
+        .decoder
+        .as_ref()
+        .map(|decoder| {
+            decoder
+                .locales
+                .iter()
+                .map(|(tag, locale)| {
+                    let mut named = locale.clone();
+                    named.fields = locale
+                        .fields
+                        .iter()
+                        .map(|(name, text)| (snake(name), text.clone()))
+                        .collect();
+                    named.values = locale
+                        .values
+                        .iter()
+                        .map(|(name, values)| (snake(name), values.clone()))
+                        .collect();
+                    (tag.clone(), named)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     Manifest {
         name: module.name.clone(),
         category,
@@ -396,6 +422,7 @@ fn manifest_of(module: &Module, program: &Program, defaults: &serde_json::Value)
         outputs,
         config,
         events,
+        locales,
     }
 }
 
@@ -481,6 +508,41 @@ mod tests {
                 .defaults)();
             assert_eq!(loaded.defaults(), &builtin_defaults, "{name}");
         }
+    }
+
+    #[test]
+    fn a_loaded_module_carries_its_copy_under_the_manifest_names() {
+        let mut module = module("uart");
+        let decoder = module.decoder.as_mut().expect("a decoder");
+        let locale: uiharu_ir::Locale = serde_json::from_value(serde_json::json!({
+            "name": "UART",
+            "fields": { "dataBits": "Data bits", "line": "Line" },
+            "values": { "stopBits": { "one-and-a-half": "1.5 bits" } },
+            "events": { "break": "Break" },
+            "eventFields": { "framingOk": "Framing OK" }
+        }))
+        .expect("a locale");
+        decoder.locales.insert("en-US".into(), locale);
+        let mut catalog = Catalog::new();
+        let manifest = catalog.load(&module).expect("loads").manifest().clone();
+        let en = &manifest.locales["en-US"];
+        assert_eq!(en.name.as_deref(), Some("UART"));
+        assert_eq!(
+            en.fields.iter().collect::<Vec<_>>(),
+            [
+                (&"data_bits".to_string(), &"Data bits".to_string()),
+                (&"line".to_string(), &"Line".to_string())
+            ]
+        );
+        assert_eq!(en.values["stop_bits"]["one-and-a-half"], "1.5 bits");
+        assert_eq!(en.events["break"], "Break");
+        assert_eq!(en.event_fields["framingOk"], "Framing OK");
+        assert!(
+            manifest
+                .config
+                .iter()
+                .any(|field| field.name == "data_bits")
+        );
     }
 
     #[test]

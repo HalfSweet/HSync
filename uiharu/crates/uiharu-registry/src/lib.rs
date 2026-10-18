@@ -34,4 +34,6 @@ pub use catalog::{Catalog, CatalogError, KindRef, LoadedKind};
 pub use description::{Connection, Description, NodeDescription, SourceDescription};
 pub use dynamic::{DynItem, DynReader, TypedReader};
 pub use kinds::{Bridge, KINDS, Kind, kind};
-pub use manifest::{Category, EventKind, Field, FieldKind, LOGIC, Manifest, Port, manifests};
+pub use manifest::{
+    Category, EventKind, Field, FieldKind, LOGIC, Locale, Manifest, Port, manifests,
+};

@@ -13,8 +13,9 @@ use crate::program::Program;
 use crate::types::{FieldDef, Ty, TypeRef, TypeTable};
 use crate::value::{Value, Width};
 
-/// `camelCase` to `snake_case`: the name serde gives a record's field.
-pub(crate) fn snake(name: &str) -> String {
+/// `camelCase` to `snake_case`: the name serde gives a record's field, under which a
+/// configuration's fields are read and written as JSON.
+pub fn snake(name: &str) -> String {
     let mut out = String::with_capacity(name.len() + 4);
     let chars: Vec<char> = name.chars().collect();
     for (index, &c) in chars.iter().enumerate() {

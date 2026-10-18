@@ -32,6 +32,7 @@ pub use bridge::{FromDyn, ToDyn};
 pub use event::DynEvent;
 pub use framer::DynFramer;
 pub use intern::intern;
+pub use json::snake;
 pub use node::Interpreter;
 pub use program::{Kind, LoadError, Program};
 pub use vm::FaultHandle;
