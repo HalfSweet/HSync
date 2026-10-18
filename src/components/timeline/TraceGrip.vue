@@ -4,10 +4,11 @@ import { useI18n } from 'vue-i18n'
 
 /**
  * The bottom edge of a channel row in the label column (DESIGN.md §6.1): dragging it asks for
- * the row's height to follow the pointer, a double-click for the row's default height.
+ * the row's height to follow the pointer, then says when the drag ends; a double-click asks for
+ * the row's default height.
  */
 const props = defineProps<{ channel: string; height: number }>()
-const emit = defineEmits<{ resize: [height: number]; reset: [] }>()
+const emit = defineEmits<{ resize: [height: number]; end: []; reset: [] }>()
 
 const { t } = useI18n()
 
@@ -28,7 +29,9 @@ function onMove(event: PointerEvent): void {
 }
 
 function onUp(): void {
+  if (!grip.value) return
   grip.value = null
+  emit('end')
 }
 </script>
 

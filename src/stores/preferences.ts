@@ -46,6 +46,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const quickScroll = useStorage('hsync.quickScroll', true)
   /** The wheel alone zooms the waveforms, as Ctrl/⌘ + wheel does; over the labels it scrolls. */
   const wheelZoom = useStorage('hsync.wheelZoom', false)
+  /** The channel rows grow and shrink with the timeline's height, keeping their proportions. */
+  const fitRows = useStorage('hsync.fitRows', true)
   /** A repeat stopped early shows what it caught instead of the last complete capture. */
   const keepStopped = useStorage('hsync.keepStopped', false)
 
@@ -107,6 +109,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     followLatest,
     quickScroll,
     wheelZoom,
+    fitRows,
     keepStopped,
     checkUpdates,
     decoderModules,

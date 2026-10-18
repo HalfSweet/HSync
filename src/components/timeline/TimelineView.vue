@@ -44,7 +44,14 @@ import {
   type MeasureEnd,
 } from '@/timeline/measure'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
-import { clampTraceHeight, collapsedByDefault, layoutRows, type Row } from '@/timeline/layout'
+import {
+  clampTraceHeight,
+  collapsedByDefault,
+  fitRows,
+  layoutRows,
+  type PinnedRow,
+  type Row,
+} from '@/timeline/layout'
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
 import { sampleToX, viewportEnd, xToSample } from '@/timeline/viewport'
@@ -82,15 +89,25 @@ const scroller = useTemplateRef<HTMLElement>('scroller')
 const rowsElement = useTemplateRef<HTMLElement>('rows')
 const canvas = useTemplateRef<HTMLCanvasElement>('canvas')
 
-const layout = computed(() =>
-  layoutRows(
+// Size and scroll position of the visible area.
+const client = shallowRef({ width: 0, height: 0 })
+const scroll = shallowRef({ top: 0, left: 0 })
+
+/** A channel row whose edge is being dragged while the rows fit the timeline. */
+const pinned = shallowRef<PinnedRow | null>(null)
+
+const layout = computed(() => {
+  const rows = layoutRows(
     capture.groups,
     metrics.value,
     (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
     (group) => decode.statusOf(group.decoder)?.streams.length ?? 1,
     (channel) => channels.heights[channel.index],
-  ),
-)
+  )
+  // The channel rows grow and shrink with the timeline's height, below the ruler (§6.1).
+  if (!preferences.fitRows || client.value.height <= 0) return { ...rows, scale: 1 }
+  return fitRows(rows, metrics.value, client.value.height - metrics.value.ruler, pinned.value)
+})
 
 const isTrace = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow'
 
@@ -99,10 +116,24 @@ const resizable = computed(() => layout.value.rows.filter((row) => isTrace(row) 
 
 function resizeRow(row: Row, height: number | null): void {
   if (!row.channel) return
-  channels.setHeight(
-    row.channel.index,
-    height === null ? null : clampTraceHeight(height, metrics.value),
-  )
+  if (height === null || !preferences.fitRows) {
+    channels.setHeight(
+      row.channel.index,
+      height === null ? null : clampTraceHeight(height, metrics.value),
+    )
+    return
+  }
+  // While the rows fit the timeline, the dragged row follows the pointer and the others make
+  // room; the drag's end keeps the height it ends at.
+  pinned.value = { index: row.channel.index, height: clampTraceHeight(height, metrics.value) }
+}
+
+/** The height a drag ended at, kept as the channel's own height before the rows were scaled. */
+function endResize(): void {
+  const drag = pinned.value
+  if (!drag) return
+  channels.setHeight(drag.index, clampTraceHeight(drag.height / layout.value.scale, metrics.value))
+  pinned.value = null
 }
 
 /** The decoder's stream a row shows: the first on the group's title row, each further one (a
@@ -165,9 +196,6 @@ function laneLabel(row: Row): string | null {
   return copy.typeName(kind)
 }
 
-// Size and scroll position of the visible area.
-const client = shallowRef({ width: 0, height: 0 })
-const scroll = shallowRef({ top: 0, left: 0 })
 let resizeObserver: ResizeObserver | undefined
 
 function measure(): void {
@@ -821,6 +849,7 @@ function onWheel(event: WheelEvent): void {
             :height="row.height"
             :style="{ top: `${row.top + row.height - 3}px` }"
             @resize="(height) => resizeRow(row, height)"
+            @end="endResize"
             @reset="resizeRow(row, null)"
           />
         </div>

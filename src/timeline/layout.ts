@@ -114,6 +114,94 @@ export function layoutRows(
   return { rows, height: top }
 }
 
+/** The most the channel rows grow to fit the window: three times their own heights. */
+export const MAX_FIT_SCALE = 3
+
+/** A channel row a drag is resizing, which keeps the height the pointer gives it. */
+export interface PinnedRow {
+  index: number
+  height: number
+}
+
+const isChannelRow = (row: Row) =>
+  (row.kind === 'trace' || row.kind === 'trace-narrow') && row.channel !== undefined
+
+/**
+ * Fits the channel rows of `layout` into `room` pixels of height (DESIGN.md §6.1): every channel
+ * row is scaled by one factor, from what makes a default row as low as a narrow one up to
+ * MAX_FIT_SCALE, no row lower than a narrow one or higher than MAX_TRACE_HEIGHT. Within those
+ * bounds the rows fill the room exactly, in whole pixels; beyond them the rows scroll, or leave
+ * room below. Group titles, decode lanes and gaps keep their heights, and a `pinned` row the
+ * height a drag gives it while the others fit around it. `scale` is the factor the others got.
+ */
+export function fitRows(
+  layout: { rows: Row[]; height: number },
+  metrics: RowMetrics,
+  room: number,
+  pinned: PinnedRow | null = null,
+): { rows: Row[]; height: number; scale: number } {
+  const isPinned = (row: Row) => isChannelRow(row) && row.channel?.index === pinned?.index
+  /** What a row keeps when it is not fitted: the drag's height, or its own. */
+  const kept = (row: Row) => (pinned && isPinned(row) ? pinned.height : row.height)
+  const fitted = layout.rows.filter((row) => isChannelRow(row) && !isPinned(row))
+  const fixed = layout.rows.reduce(
+    (sum, row) => (isChannelRow(row) && !isPinned(row) ? sum : sum + kept(row)),
+    0,
+  )
+  const space = room - fixed
+  const heightAt = (base: number, scale: number) =>
+    Math.min(MAX_TRACE_HEIGHT, Math.max(metrics.traceNarrow, base * scale))
+  const total = (scale: number) => fitted.reduce((sum, row) => sum + heightAt(row.height, scale), 0)
+
+  const low = metrics.traceNarrow / metrics.trace
+  let scale = 1
+  let exact = false
+  if (fitted.length > 0) {
+    if (total(low) >= space) scale = low
+    else if (total(MAX_FIT_SCALE) <= space) scale = MAX_FIT_SCALE
+    else {
+      // The total grows with the factor: halve the interval until it is well under a pixel.
+      let [from, to] = [low, MAX_FIT_SCALE]
+      for (let step = 0; step < 40; step++) {
+        const middle = (from + to) / 2
+        if (total(middle) < space) from = middle
+        else to = middle
+      }
+      scale = (from + to) / 2
+      exact = true
+    }
+  }
+
+  // Whole pixels; filling the room exactly, the pixels left over go to the rows that lost most.
+  const heights = new Map<Row, number>()
+  const wanted = fitted.map((row) => heightAt(row.height, scale))
+  if (exact) {
+    const floors = wanted.map(Math.floor)
+    let left = space - floors.reduce((sum, height) => sum + height, 0)
+    const order = wanted
+      .map((height, at) => ({ at, part: height - Math.floor(height) }))
+      .filter(({ at }) => (floors[at] as number) < MAX_TRACE_HEIGHT)
+      .sort((a, b) => b.part - a.part)
+    for (const { at } of order) {
+      if (left <= 0) break
+      floors[at] = (floors[at] as number) + 1
+      left -= 1
+    }
+    fitted.forEach((row, at) => heights.set(row, floors[at] as number))
+  } else {
+    fitted.forEach((row, at) => heights.set(row, Math.round(wanted[at] as number)))
+  }
+
+  let top = 0
+  const rows = layout.rows.map((row) => {
+    const height = heights.get(row) ?? kept(row)
+    const placed = { ...row, top, height }
+    top += height
+    return placed
+  })
+  return { rows, height: top, scale }
+}
+
 /** Rows that overlap `from..to` (offsets below the ruler). */
 export function visibleRows(rows: readonly Row[], from: number, to: number): Row[] {
   return rows.filter((row) => row.top < to && row.top + row.height > from)
