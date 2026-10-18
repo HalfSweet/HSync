@@ -31,6 +31,7 @@ import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
 import type { ChannelRef } from '@/timeline/groups'
 import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/timeline/fling'
+import type { FloatAnchor, FloatBounds } from '@/timeline/float'
 import { denseGap } from '@/render/shape'
 import { BUSY_WIDTH, blockWidth, traceBlocks } from '@/timeline/blocks'
 import { keyTakenElsewhere, timelineAction } from '@/timeline/keys'
@@ -51,6 +52,7 @@ import { formatCount, formatFrequency, formatSampled, formatTime } from '@/utils
 
 import ChannelLabel from './ChannelLabel.vue'
 import DecodeLane from './DecodeLane.vue'
+import FloatingReadout from './FloatingReadout.vue'
 import GroupLabel from './GroupLabel.vue'
 import MeasureOverlay from './MeasureOverlay.vue'
 import TimelineRuler from './TimelineRuler.vue'
@@ -669,18 +671,65 @@ const readout = computed(() => {
   }
 })
 
-// The read-outs go to the status bar, where they cover no waveform (DESIGN.md §10).
-watch([readout, measured], ([pulse, measure]) =>
-  view.setReadouts({
-    pulse: pulse && { channel: pulse.channel, primary: pulse.primary, secondary: pulse.secondary },
-    measure: measure && {
-      primary: measure.primary,
-      secondary: measure.secondary,
-      done: measure.done,
-    },
-  }),
+/** The settings float the read-outs over the rows instead of the status bar (DESIGN.md §11). */
+const floating = computed(() => preferences.readoutPlace === 'float')
+
+// The read-outs go to the status bar, where they cover no waveform (DESIGN.md §10), unless they
+// float.
+watch([readout, measured, floating], ([pulse, measure, float]) =>
+  view.setReadouts(
+    float
+      ? { pulse: null, measure: null }
+      : {
+          pulse: pulse && {
+            channel: pulse.channel,
+            primary: pulse.primary,
+            secondary: pulse.secondary,
+          },
+          measure: measure && {
+            primary: measure.primary,
+            secondary: measure.secondary,
+            done: measure.done,
+          },
+        },
+  ),
 )
 onBeforeUnmount(() => view.setReadouts({ pulse: null, measure: null }))
+
+/** The visible tracks, which floating read-outs stay inside: right of the label column and
+ * under the ruler. */
+const floatBounds = computed<FloatBounds>(() => ({
+  left: scroll.value.left,
+  right: Math.min(
+    view.viewport.width,
+    scroll.value.left + client.value.width - metrics.value.label,
+  ),
+  top: scroll.value.top + metrics.value.ruler,
+  bottom: scroll.value.top + client.value.height,
+}))
+
+/** A floating measurement read-out: centred on its line, over the row it ends on. */
+const measureAnchor = computed<FloatAnchor | null>(() => {
+  const geometry = measured.value?.geometry
+  const line = geometry && (geometry.to ?? geometry.from)
+  if (!floating.value || !geometry || !line) return null
+  const span = geometry.span
+  const x = span ? span.left + span.width / 2 : line.visible ? line.x : null
+  if (x === null) return null
+  return { x, align: 'centre', top: line.top, bottom: line.top + line.height, side: 'above' }
+})
+
+/** A floating pulse read-out: beside the pointer, over the row, or under it when the
+ * measurement's read-out is over it. */
+const pulseAnchor = computed<FloatAnchor | null>(() => {
+  const current = readout.value
+  const box = current && rowBox(current.rowKey)
+  if (!floating.value || !current || !box) return null
+  const at = pointer.value
+  const x = at?.row.key === current.rowKey ? at.x : current.left + current.width / 2
+  const side = measureAnchor.value?.top === box.top ? 'below' : 'above'
+  return { x, align: 'beside', top: box.top, bottom: box.top + box.height, side }
+})
 
 // Keyboard navigation, unless a text field, menu or dialog has the keys (DESIGN.md §10).
 useEventListener(document, 'keydown', (event: KeyboardEvent) => {
@@ -896,6 +945,29 @@ function onWheel(event: WheelEvent): void {
           :geometry="measured?.geometry ?? null"
           :target="target"
         />
+
+        <div
+          v-if="measureAnchor || pulseAnchor"
+          class="pointer-events-none absolute inset-y-0 right-0 left-(--lab) z-[4] overflow-hidden"
+        >
+          <FloatingReadout
+            v-if="measured && measureAnchor"
+            data-part="measure"
+            :anchor="measureAnchor"
+            :bounds="floatBounds"
+            :primary="measured.primary"
+            :secondary="measured.secondary"
+            :announce="measured.done"
+          />
+          <FloatingReadout
+            v-if="readout && pulseAnchor"
+            data-part="pulse"
+            :anchor="pulseAnchor"
+            :bounds="floatBounds"
+            :primary="readout.primary"
+            :secondary="readout.secondary"
+          />
+        </div>
 
         <Transition name="pop">
           <ChannelMenu

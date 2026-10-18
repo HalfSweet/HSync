@@ -16,6 +16,10 @@ export type Density = (typeof DENSITIES)[number]
 export const GRAPHICS = ['auto', 'off'] as const
 export type GraphicsPreference = (typeof GRAPHICS)[number]
 
+/** Where the pulse and edge measurement read-outs go: the status bar, or over the waveforms. */
+export const READOUT_PLACES = ['status', 'float'] as const
+export type ReadoutPlace = (typeof READOUT_PLACES)[number]
+
 export const LOCALE_PREFERENCES = ['system', ...SUPPORTED_LOCALES] as const
 export type LocalePreference = (typeof LOCALE_PREFERENCES)[number]
 
@@ -29,6 +33,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
   const storedDensity = useStorage<string>('hsync.density', 'comfortable')
   const storedLocale = useStorage<string>('hsync.locale', 'system')
   const storedGraphics = useStorage<string>('hsync.graphics', 'auto')
+  const storedReadoutPlace = useStorage<string>('hsync.readoutPlace', 'status')
   /** The renderer the timeline ended up with. */
   const activeRenderer = shallowRef<'webgpu' | 'canvas2d' | null>(null)
 
@@ -71,6 +76,11 @@ export const usePreferencesStore = defineStore('preferences', () => {
     set: (value) => (storedGraphics.value = value),
   })
 
+  const readoutPlace = computed<ReadoutPlace>({
+    get: () => oneOf(READOUT_PLACES, storedReadoutPlace.value, 'status'),
+    set: (value) => (storedReadoutPlace.value = value),
+  })
+
   const logLevel = computed<LogLevel>({
     get: () => oneOf(LOG_LEVELS, storedLogLevel.value, 'info'),
     set: (value) => (storedLogLevel.value = value),
@@ -89,6 +99,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     locale,
     graphics,
     activeRenderer,
+    readoutPlace,
     centerTrigger,
     followLatest,
     quickScroll,

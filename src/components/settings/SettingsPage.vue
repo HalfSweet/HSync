@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Repeat,
   Rows3,
+  RulerDimensionLine,
   ScrollText,
   SlidersHorizontal,
   Stethoscope,
@@ -41,6 +42,7 @@ import {
   DENSITIES,
   GRAPHICS,
   LOCALE_PREFERENCES,
+  READOUT_PLACES,
   THEMES,
   usePreferencesStore,
   type ThemePreference,
@@ -263,6 +265,29 @@ async function revealLog(): Promise<void> {
               >
                 {{ t(`settings.density.${density}`) }}
               </button>
+            </div>
+
+            <span class="flex h-[26px] items-center gap-2 text-ink-2">
+              <RulerDimensionLine class="text-ink-3" />{{ t('settings.readouts.label') }}
+            </span>
+            <div class="flex flex-col items-start gap-1.5">
+              <div
+                v-indicator
+                role="group"
+                :aria-label="t('settings.readouts.label')"
+                class="flex gap-0.5 rounded-6 bg-hover p-0.5"
+              >
+                <button
+                  v-for="place in READOUT_PLACES"
+                  :key="place"
+                  class="seg"
+                  :aria-pressed="preferences.readoutPlace === place"
+                  @click="preferences.readoutPlace = place"
+                >
+                  {{ t(`settings.readouts.${place}`) }}
+                </button>
+              </div>
+              <span class="text-caption text-ink-3">{{ t('settings.readouts.note') }}</span>
             </div>
 
             <span class="flex h-[26px] items-center gap-2 text-ink-2">

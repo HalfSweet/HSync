@@ -60,6 +60,7 @@
   --color-veil: var(--veil);
   --color-hover: var(--hover);
   --color-sel: var(--sel);
+  --color-float: var(--float);
   --color-find: var(--find);
   --color-find-strong: var(--find-strong);
   --color-alert: var(--alert);

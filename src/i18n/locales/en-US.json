@@ -1563,6 +1563,12 @@
       "label": "Language",
       "system": "System"
     },
+    "readouts": {
+      "label": "Readout position",
+      "status": "Status bar",
+      "float": "Floating",
+      "note": "Where pulse widths and edge measurements show"
+    },
     "graphics": {
       "label": "Graphics acceleration",
       "auto": "Auto (WebGPU)",
