@@ -2,8 +2,10 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { activeCatalog, DEFAULT_CATALOG } from '@/decode/catalog'
 import { i18n } from '@/i18n'
 import type { AvailableUpdate } from '@/ipc/backend'
+import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
 import type { ModuleInfo } from '@/ipc/bindings/ModuleInfo'
 import { useDecodeStore } from '@/stores/decode'
 import { usePreferencesStore } from '@/stores/preferences'
@@ -18,7 +20,7 @@ const backend = {
   revealLog: vi.fn(() => Promise.resolve()),
   updateCheck: vi.fn<() => Promise<AvailableUpdate | null>>(() => Promise.resolve(null)),
   updateInstall: vi.fn(() => Promise.resolve()),
-  decodeCatalog: vi.fn(() => Promise.resolve([])),
+  decodeCatalog: vi.fn<() => Promise<CatalogEntry[]>>(() => Promise.resolve([])),
   decodeLoadModule: vi.fn<(path: string) => Promise<ModuleInfo>>((path) =>
     Promise.resolve({ name: 'uart', path, category: 'bus', shadows: true }),
   ),
@@ -50,6 +52,7 @@ describe('settings page', () => {
   })
   afterEach(() => {
     document.body.innerHTML = ''
+    activeCatalog.value = DEFAULT_CATALOG
   })
 
   it('takes focus without ringing a section, and shows the one chosen in the side bar', async () => {
@@ -131,6 +134,36 @@ describe('settings page', () => {
     expect(backend.decodeUnloadModule).toHaveBeenCalledWith('uart')
     expect(usePreferencesStore().decoderModules).toEqual([])
     expect(panel().text()).not.toContain('UART')
+    wrapper.unmount()
+  })
+
+  it('names a loaded module by the copy it carries', async () => {
+    localStorage.clear()
+    const sensor: CatalogEntry = {
+      ...(DEFAULT_CATALOG[0] as CatalogEntry),
+      name: 'my-sensor',
+      module: '/decoders/my-sensor.json',
+      locales: {
+        'en-US': { name: 'My sensor', fields: {}, values: {}, events: {}, eventFields: {} },
+      },
+    }
+    backend.decodeCatalog.mockResolvedValueOnce([...DEFAULT_CATALOG, sensor])
+    backend.decodeLoadModule.mockResolvedValueOnce({
+      name: 'my-sensor',
+      path: '/decoders/my-sensor.json',
+      category: 'line',
+      shadows: false,
+    })
+    const { wrapper, settings } = await page()
+    settings.section = 'decoders'
+    await flushPromises()
+    picked.mockResolvedValueOnce('/decoders/my-sensor.json')
+    await wrapper
+      .findAll('[role="tabpanel"] button')
+      .find((one) => one.text() === 'Load module…')
+      ?.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[role="tabpanel"]').text()).toContain('My sensor')
     wrapper.unmount()
   })
 

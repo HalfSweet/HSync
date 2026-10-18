@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { defaultCaptureName, withExtension } from '@/composables/useFileActions'
+import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { entryFormat } from '@/decode/numberFormat'
 import { fieldTexts, type Wording } from '@/decode/present'
 import { getBackend } from '@/ipc/backend'
@@ -23,8 +24,7 @@ import { busKind, type BusKind } from '@/timeline/groups'
  * The data stream under the timeline (DESIGN.md §9): the events of one decoder's stream, one
  * row each, with the event's kind and its fields as the contract names them.
  */
-const i18n = useI18n()
-const { t } = i18n
+const { t } = useI18n()
 const capture = useCaptureStore()
 const decode = useDecodeStore()
 const stream = useStreamStore()
@@ -50,15 +50,8 @@ const SQUARES: Record<BusKind, string> = {
   other: 'bg-ink-2',
 }
 
-/** The translation under `key` when the locale has one, else `fallback`. */
-function named(key: string, fallback: string): string {
-  return i18n.te(key) ? t(key as never) : fallback
-}
-
-/** What a node type is called: `decoder.<type>.name`, else the type itself. */
-function typeName(type: string): string {
-  return named(`decoder.${type}.name`, type)
-}
+const labels = useDecoderCopy()
+const typeName = labels.typeName
 
 /** What decoder `index` is called: its label, else the name of its first node type. */
 function decoderName(index: number): string {
@@ -104,9 +97,7 @@ const format = computed(() =>
 
 const wording = computed<Wording>(() => ({
   enumValue: (field, value) =>
-    type.value === undefined
-      ? value
-      : named(`decoder.${type.value}.value.${field}.${value}`, value),
+    type.value === undefined ? value : labels.valueLabel(type.value, field, value),
   yes: t('decode.yes'),
   no: t('decode.no'),
   none: t('decode.none'),
@@ -145,16 +136,14 @@ const marks = computed(() => {
   return found
 })
 
-/** The kind of an event as named: `decoder.<type>.event.<kind>`, else the kind itself. */
+/** The kind of an event as named, else the kind itself. */
 function kindText(row: EventRow): string {
-  return type.value === undefined
-    ? row.kind
-    : named(`decoder.${type.value}.event.${row.kind}`, row.kind)
+  return type.value === undefined ? row.kind : labels.eventLabel(type.value, row.kind)
 }
 
-/** A field's label: `decoder.<type>.eventField.<name>`, else the name itself. */
+/** A field's label, else the name itself. */
 function fieldLabel(name: string): string {
-  return type.value === undefined ? name : named(`decoder.${type.value}.eventField.${name}`, name)
+  return type.value === undefined ? name : labels.eventFieldLabel(type.value, name)
 }
 
 /** The fields of an event as shown, "label: value" each, in the contract's order. */

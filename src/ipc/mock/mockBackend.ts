@@ -359,11 +359,19 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
         const module = modules.find((one) => one.name === entry.name)
         return module ? { ...entry, module: module.path } : entry
       })
-      // A module with a name of its own looks like the PWM decoder, under that name.
+      // A module with a name of its own looks like the PWM decoder, under that name, with
+      // the name spelt out as its English copy.
       const shape = builtin.find((entry) => entry.name === 'pwm')
       for (const module of modules) {
-        if (shape && !builtin.some((entry) => entry.name === module.name))
-          entries.push({ ...shape, name: module.name, module: module.path })
+        if (shape && !builtin.some((entry) => entry.name === module.name)) {
+          const name = module.name.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
+          entries.push({
+            ...shape,
+            name: module.name,
+            module: module.path,
+            locales: { 'en-US': { name, fields: {}, values: {}, events: {}, eventFields: {} } },
+          })
+        }
       }
       return Promise.resolve(entries)
     },

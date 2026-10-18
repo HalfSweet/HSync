@@ -35,6 +35,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useBackendText } from '@/composables/useBackendText'
+import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { getBackend } from '@/ipc/backend'
 import { pickFile } from '@/ipc/dialogs'
 import { toUiError, type UiError } from '@/ipc/errors'
@@ -59,9 +60,9 @@ import AboutSection from './AboutSection.vue'
  * The settings page (DESIGN.md §11): centred over the blurred interface, with the sections in a
  * side bar and About at its foot.
  */
-const i18n = useI18n()
-const { t } = i18n
+const { t } = useI18n()
 const text = useBackendText()
+const { typeName } = useDecoderCopy()
 const preferences = usePreferencesStore()
 const settings = useSettingsStore()
 const update = useUpdateStore()
@@ -158,9 +159,6 @@ async function revealLog(): Promise<void> {
   }
 }
 
-// Decoder modules: the names follow the catalog, so their keys are checked at run time.
-const typeName = (type: string) =>
-  i18n.te(`decoder.${type}.name`) ? t(`decoder.${type}.name` as never) : type
 const fileName = (path: string) => path.split(/[\\/]/).pop() ?? path
 
 /** Asks for a module file and loads it. */

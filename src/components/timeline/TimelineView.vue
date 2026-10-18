@@ -11,6 +11,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { useRowMetrics } from '@/composables/useRowMetrics'
 import { getBackend } from '@/ipc/backend'
 import { binStart, type BinsResult } from '@/ipc/bins'
@@ -65,8 +66,8 @@ const MIN_ROWS_WIDTH = 860
 /** Height of the trigger menu, for keeping it inside the timeline. */
 const MENU_HEIGHT = 236
 
-const i18n = useI18n()
-const { t, locale } = i18n
+const { t, locale } = useI18n()
+const copy = useDecoderCopy()
 const capture = useCaptureStore()
 const channels = useChannelsStore()
 const decode = useDecodeStore()
@@ -161,9 +162,7 @@ function laneLabel(row: Row): string | null {
   if (row.kind !== 'lane' || row.stream === undefined) return null
   const kind = decode.statusOf(row.group.decoder)?.streams[row.stream]?.kind
   if (kind === undefined) return null
-  // Node types come from the backend, so their names are checked at run time rather than typed.
-  const key = `decoder.${kind}.name`
-  return i18n.te(key) ? t(key as never) : kind
+  return copy.typeName(kind)
 }
 
 // Size and scroll position of the visible area.

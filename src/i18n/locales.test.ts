@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import pwm from '../../uiharu/dsl/ir/pwm.json'
+import spiNor from '../../uiharu/dsl/ir/spi-nor.json'
+import spi from '../../uiharu/dsl/ir/spi.json'
+import uart from '../../uiharu/dsl/ir/uart.json'
+
 import { detectLocale } from '.'
 import enUS from './locales/en-US.json'
 import zhCN from './locales/zh-CN.json'
@@ -44,6 +49,60 @@ describe('locale files', () => {
       expect(message, key).not.toMatch(/[@|$]/)
     }
   })
+})
+
+/** The copy a decoder module declares for one language (`uiharu/docs/dsl.md` §2.4). */
+interface ModuleCopy {
+  name?: string
+  summary?: string
+  fields?: Record<string, string>
+  values?: Record<string, Record<string, string>>
+  events?: Record<string, string>
+  eventFields?: Record<string, string>
+}
+interface ModuleWithCopy {
+  name: string
+  decoder: { locales: Record<string, ModuleCopy> }
+}
+
+/** A configuration field as the catalog spells it: serde's snake case. */
+const snake = (name: string) => name.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+
+/** A module's copy for one language, under the keys the app's locale files use. */
+function keysOf(module: ModuleWithCopy, tag: string): Map<string, string> {
+  const copy = module.decoder.locales[tag] ?? {}
+  const prefix = `decoder.${module.name}`
+  const out = new Map<string, string>()
+  if (copy.name !== undefined) out.set(`${prefix}.name`, copy.name)
+  if (copy.summary !== undefined) out.set(`${prefix}.summary`, copy.summary)
+  for (const [field, label] of Object.entries(copy.fields ?? {}))
+    out.set(`${prefix}.field.${snake(field)}`, label)
+  for (const [field, values] of Object.entries(copy.values ?? {}))
+    for (const [value, label] of Object.entries(values))
+      out.set(`${prefix}.value.${snake(field)}.${value}`, label)
+  for (const [kind, label] of Object.entries(copy.events ?? {}))
+    out.set(`${prefix}.event.${kind}`, label)
+  for (const [field, label] of Object.entries(copy.eventFields ?? {}))
+    out.set(`${prefix}.eventField.${field}`, label)
+  return out
+}
+
+describe('the decoders written in the DSL', () => {
+  const modules = [pwm, spi, spiNor, uart] as unknown as ModuleWithCopy[]
+  it.each(modules.map((module) => [module.name, module] as const))(
+    '%s carries the copy the app shows for it',
+    (_name, module) => {
+      for (const [tag, messages] of [
+        ['en-US', en],
+        ['zh-CN', zh],
+      ] as const) {
+        const own = new Map(
+          [...messages].filter(([key]) => key.startsWith(`decoder.${module.name}.`)),
+        )
+        expect(keysOf(module, tag), tag).toEqual(own)
+      }
+    },
+  )
 })
 
 describe('detectLocale', () => {
