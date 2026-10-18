@@ -129,6 +129,9 @@ pub enum SessionEvent {
     DecodeProgress { capture_id: u64, index: u32 },
     /// Decoder `index` of capture `capture_id` finished, or failed.
     Decoded { capture_id: u64, index: u32 },
+    /// The decoder modules loaded changed by the workspace's own doing — a capture file
+    /// brought some — rather than on a request, which answers for itself.
+    ModulesChanged,
 }
 
 /// Receives [`SessionEvent`]s; called from background threads.

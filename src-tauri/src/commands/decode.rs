@@ -16,6 +16,10 @@ pub const DECODED_EVENT: &str = "decode://done";
 /// Event sent when a decoder of a capture has more to show: `{ captureId, index }`.
 pub const DECODE_PROGRESS_EVENT: &str = "decode://progress";
 
+/// Event sent when the decoder modules loaded changed without a request: a capture file
+/// brought some. No payload; the interface asks for the modules and the catalog again.
+pub const MODULES_EVENT: &str = "decode://modules";
+
 fn decoding(
     state: &AppState,
     capture_id: u64,
