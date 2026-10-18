@@ -7,6 +7,7 @@ import AnimatedHeight from '@/components/common/AnimatedHeight.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import TriggerGlyph from '@/components/common/TriggerGlyph.vue'
 import { vIndicator } from '@/motion/indicator'
+import { useShortcutTip, useShortcuts } from '@/composables/useShortcuts'
 import { holdInPlace } from '@/motion/list'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
@@ -39,6 +40,10 @@ const root = useTemplateRef<HTMLElement>('root')
 
 onClickOutside(root, () => (open.value = false))
 onKeyStroke('Escape', () => (open.value = false))
+
+// The trigger shortcut, unbound until the user gives it one, opens the panel.
+useShortcuts({ trigger: () => void (open.value = true) })
+const tip = useShortcutTip()
 
 const MODES: TriggerMode[] = ['simple', 'stages', 'serial']
 const locked = computed(() => capture.busy)
@@ -108,7 +113,7 @@ const stageChoices = Array.from({ length: MAX_STAGES }, (_, i) => i + 1)
     <button
       class="btn"
       :aria-label="buttonTip"
-      :title="buttonTip"
+      :title="tip(buttonTip, 'trigger')"
       aria-haspopup="dialog"
       :aria-expanded="open"
       @click="open = !open"

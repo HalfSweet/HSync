@@ -4,6 +4,7 @@ import { computed, ref, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppIcon from '@/components/common/AppIcon.vue'
+import { useShortcutLabel, useShortcutTip, useShortcuts } from '@/composables/useShortcuts'
 import { REPEAT_INTERVAL, useCaptureStore, type CaptureMode } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
 import { useTriggerStore } from '@/stores/trigger'
@@ -27,6 +28,11 @@ function run(): void {
   else void capture.start(trigger.request(false))
 }
 
+// The capture shortcut, unbound until the user gives it one, captures or stops as the button does.
+useShortcuts({ capture: () => (ready.value ? run() : false) })
+const shortcut = useShortcutLabel()
+const tip = useShortcutTip()
+
 /** Loop captures need a device that can run on, such as a DSLogic in Stream mode. */
 const unavailable = (mode: CaptureMode) => mode === 'loop' && !capture.canLoop
 
@@ -47,6 +53,11 @@ function instant(): void {
     <button
       class="inline-flex h-8 items-center gap-2 rounded-l-6 bg-ink pr-4 pl-3 font-medium whitespace-nowrap text-canvas hover:opacity-86 disabled:opacity-55"
       :disabled="!ready"
+      :title="
+        shortcut('capture')
+          ? tip(capture.busy ? t('header.capture.stop') : t('header.capture.start'), 'capture')
+          : undefined
+      "
       @click="run"
     >
       <AppIcon :name="capture.busy ? 'stop' : 'play'" />

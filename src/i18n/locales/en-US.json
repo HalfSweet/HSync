@@ -1705,5 +1705,8 @@
     },
     "license": "HSync is free software, available under the Apache-2.0 or the GPL-3.0-or-later license, at your option.",
     "credits": "The DSLogic driver is ported from DreamSourceLab’s DSView (libsigrok4DSL, GPL), the ATK-Logic driver from ALIENTEK’s ATK-Logic (GPL), and the PXLogic driver from PXView (GPL), which also supplies its firmware and FPGA bitstreams; the DSLogic firmware and FPGA bitstreams ship under the MIT license; the uiharu decode engine under the Apache-2.0 license; the IBM Plex fonts under the SIL OFL 1.1; the Lucide icons under the ISC license."
+  },
+  "shortcuts": {
+    "space": "Space"
   }
 }
