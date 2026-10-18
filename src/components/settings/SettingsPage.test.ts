@@ -63,7 +63,7 @@ describe('settings page', () => {
 
     await tab(wrapper, 'Behaviour')?.trigger('click')
     expect(settings.section).toBe('behaviour')
-    expect(wrapper.findAll('[role="tabpanel"] input[type="checkbox"]')).toHaveLength(6)
+    expect(wrapper.findAll('[role="tabpanel"] input[type="checkbox"]')).toHaveLength(7)
     wrapper.unmount()
   })
 
@@ -191,6 +191,20 @@ describe('settings page', () => {
     expect(backend.decodeUnloadModule).toHaveBeenCalledWith('my-sensor')
     expect(decode.carried).toEqual([])
     expect(panel().text()).toContain('No decoder module is loaded')
+    wrapper.unmount()
+  })
+
+  it('stops fitting the waveform heights to the window from Behaviour', async () => {
+    localStorage.clear()
+    const { wrapper, settings } = await page()
+    settings.section = 'behaviour'
+    await flushPromises()
+    const option = wrapper
+      .findAll('[role="tabpanel"] label')
+      .find((one) => one.text() === 'Fit waveform heights to the window')
+    expect(option?.find('input').element.checked).toBe(true)
+    await option?.find('input').setValue(false)
+    expect(usePreferencesStore().fitRows).toBe(false)
     wrapper.unmount()
   })
 

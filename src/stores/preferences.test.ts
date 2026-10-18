@@ -20,6 +20,10 @@ describe('preferences store', () => {
     expect(usePreferencesStore().wheelZoom).toBe(false)
   })
 
+  it('fits the waveform heights to the window until asked not to', () => {
+    expect(usePreferencesStore().fitRows).toBe(true)
+  })
+
   it('reads out in the status bar until asked to float the read-outs', () => {
     localStorage.setItem('hsync.readoutPlace', 'sideways')
     const store = usePreferencesStore()
