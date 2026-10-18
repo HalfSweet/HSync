@@ -68,6 +68,19 @@ describe('settings page', () => {
     wrapper.unmount()
   })
 
+  it('floats the read-outs over the waveforms from Appearance', async () => {
+    localStorage.clear()
+    const { wrapper } = await page()
+    const group = wrapper.find('[role="group"][aria-label="Readout position"]')
+    const buttons = group.findAll('button')
+    expect(buttons.map((one) => one.text())).toEqual(['Status bar', 'Floating'])
+    expect(buttons[0]?.attributes('aria-pressed')).toBe('true')
+    await buttons[1]?.trigger('click')
+    expect(usePreferencesStore().readoutPlace).toBe('float')
+    expect(buttons[1]?.attributes('aria-pressed')).toBe('true')
+    wrapper.unmount()
+  })
+
   it('moves through the sections with the arrow keys, Home and End', async () => {
     const { wrapper, settings } = await page()
     const tablist = wrapper.find('[role="tablist"]')

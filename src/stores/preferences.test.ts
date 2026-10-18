@@ -20,6 +20,14 @@ describe('preferences store', () => {
     expect(usePreferencesStore().wheelZoom).toBe(false)
   })
 
+  it('reads out in the status bar until asked to float the read-outs', () => {
+    localStorage.setItem('hsync.readoutPlace', 'sideways')
+    const store = usePreferencesStore()
+    expect(store.readoutPlace).toBe('status')
+    store.readoutPlace = 'float'
+    expect(store.readoutPlace).toBe('float')
+  })
+
   it('resolves explicit choices', () => {
     const store = usePreferencesStore()
     store.theme = 'dark'
