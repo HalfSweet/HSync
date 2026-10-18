@@ -417,6 +417,72 @@ fn malformed_requests_end_the_packet_on_their_park_bit() {
 }
 
 #[test]
+fn a_targetsel_write_goes_on_without_an_acknowledge() {
+    // Multi-drop target selection (ADIv6 B4.3.4): a line reset, a TARGETSEL write that no
+    // target acknowledges, then the DPIDR read and whatever follows, with no line reset between.
+    let mut waveform = waveform();
+    waveform.connect();
+    let mut expected = connect_lines(LEAD);
+    let mut tx = 0;
+    let mut select =
+        |waveform: &mut SwdWaveform, expected: &mut Vec<String>, packets: &[SwdPacket]| {
+            let reset = waveform.position().get();
+            waveform.line_reset(56);
+            let idle = waveform.position().get();
+            waveform.idle_cycles(2);
+            expected.push(line_reset(reset, idle));
+            for packet in packets {
+                tx += 1;
+                let position = waveform.position().get();
+                waveform.packet(packet);
+                waveform.idle_cycles(2);
+                expected.extend(packet_lines(tx, packet, position));
+            }
+        };
+    select(
+        &mut waveform,
+        &mut expected,
+        &[
+            SwdPacket::targetsel(0x0100_2927),
+            SwdPacket::read(false, 0x0, 0x0bc1_2477),
+            SwdPacket::read(false, 0x4, 0xf000_0040),
+        ],
+    );
+    // Whatever the three undriven bits happened to show, the data phase follows.
+    select(
+        &mut waveform,
+        &mut expected,
+        &[
+            SwdPacket::targetsel(0x1100_2927).with_ack(Ack::Other(5)),
+            SwdPacket::read(false, 0x0, 0x0bc1_2477),
+        ],
+    );
+    // A parity error in the data of a TARGETSEL write is a protocol error (B4.3.4): the
+    // decoder waits for the next line reset, so the DPIDR read after it is not decoded.
+    select(
+        &mut waveform,
+        &mut expected,
+        &[SwdPacket {
+            bad_data_parity: true,
+            ..SwdPacket::targetsel(0x0100_2927)
+        }],
+    );
+    waveform.packet(&SwdPacket::read(false, 0x0, 0x0bc1_2477));
+    waveform.idle(4);
+    let block = waveform.finish();
+    expected.push(format!("eof {}", block.end()));
+    let lines = decode(&block);
+    assert_eq!(lines, expected);
+    assert!(lines.iter().any(|line| line.starts_with("ack p1 other(7)")));
+    assert!(lines.iter().any(|line| line.starts_with("end p1 complete")));
+    assert!(
+        lines
+            .iter()
+            .any(|line| line.starts_with("end p6 protocol-error"))
+    );
+}
+
+#[test]
 fn an_unanswered_request_is_a_protocol_error_and_its_high_bits_lead_into_the_line_reset() {
     let mut waveform = waveform();
     waveform.connect();
