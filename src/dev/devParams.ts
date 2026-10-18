@@ -16,9 +16,11 @@
  *   &import=all          import every signal of it at once, to see the capture it makes
  *   &settings=decoders   open the settings page on this section
  *   &modules=uart,mine   "load" decoder modules of these names (the mock backend fakes them)
+ *   &carried=mine        a capture file "brought" decoder modules of these names, likewise
  */
 import { nextTick, watch } from 'vue'
 
+import { getBackend } from '@/ipc/backend'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
@@ -97,6 +99,17 @@ export function applyDevParams(search = window.location.search): void {
   }
   for (const name of (params.get('modules') ?? '').split(',').filter(Boolean)) {
     void useDecodeStore().loadModule(`/Users/dev/decoders/${name}.json`, false)
+  }
+  const carried = (params.get('carried') ?? '').split(',').filter(Boolean)
+  if (carried.length > 0) {
+    void (async () => {
+      // Loaded behind the store's back, as a capture file's modules are, then listed.
+      const backend = await getBackend()
+      for (const name of carried) {
+        await backend.decodeLoadModule(`/Users/dev/captures/${name}.hsync`)
+      }
+      await useDecodeStore().modulesChanged()
+    })()
   }
   const imported = params.get('import')
   if (imported === '1' || imported === 'all') {

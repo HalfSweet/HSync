@@ -381,7 +381,9 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
     },
 
     async decodeLoadModule(path: string) {
-      const name = (path.split(/[\\/]/).pop() ?? '').replace(/\.json$/i, '')
+      // Named after the file's stem, whatever the extension: the development parameters fake
+      // the modules a capture file brought with a `.hsync` path.
+      const name = (path.split(/[\\/]/).pop() ?? '').replace(/\..*$/, '')
       if (!/^[a-z][a-z0-9-]*$/.test(name))
         throw uiError('error.decode.module', { path, detail: 'the module does not parse' })
       const builtin = (catalog as CatalogEntry[]).find((entry) => entry.name === name)

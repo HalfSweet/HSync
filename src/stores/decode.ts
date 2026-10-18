@@ -296,6 +296,7 @@ export const useDecodeStore = defineStore('decode', () => {
     loadModule,
     unloadModule,
     unloadCarried,
+    modulesChanged,
     statusOf,
     lanesOf,
     streamView,
