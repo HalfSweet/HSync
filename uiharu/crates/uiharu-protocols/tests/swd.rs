@@ -11,8 +11,8 @@ use uiharu_core::{
 };
 use uiharu_protocols::swd::synth::{SwdPacket, SwdWaveform};
 use uiharu_protocols::swd::{
-    ACTIVATE_JTAG_DP, ACTIVATE_SWD, Ack, Data, EndReason, Field, Interface, Next, Read, Request,
-    Swd, SwdBus, SwdConfig, SwdEvent, TxId,
+    ACTIVATE_JTAG_DP, ACTIVATE_SWD, Ack, Data, EndReason, Field, Interface, Next, OverrunDetect,
+    Read, Request, Swd, SwdBus, SwdConfig, SwdEvent, TxId,
 };
 
 /// SWCLK and SWDIO on channels 0 and 1.
@@ -452,6 +452,135 @@ fn malformed_requests_end_the_packet_on_their_park_bit() {
         expected.extend(packet_lines(2, &packet, again));
         expected.push(format!("eof {}", block.end()));
         assert_eq!(decode(&block), expected, "{broken:?}");
+    }
+}
+
+/// `packet` with overrun detection on.
+fn under_overrun(packet: SwdPacket) -> SwdPacket {
+    SwdPacket {
+        orundetect: true,
+        ..packet
+    }
+}
+
+#[test]
+fn overrun_detection_is_followed_from_the_writes_to_ctrl_stat() {
+    let mut waveform = waveform();
+    waveform.connect();
+    let mut expected = connect_lines(LEAD);
+    let mut tx = 0;
+    let mut send = |waveform: &mut SwdWaveform, expected: &mut Vec<String>, packet: SwdPacket| {
+        tx += 1;
+        let position = waveform.position().get();
+        waveform.packet(&packet);
+        waveform.idle_cycles(1);
+        expected.extend(packet_lines(tx, &packet, position));
+    };
+    let wait = SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait);
+    // Off after a powerup reset: WAIT ends with its turnaround.
+    send(&mut waveform, &mut expected, wait);
+    // CTRL/STAT.ORUNDETECT set: WAIT and FAULT carry a data phase from now on.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket::write(false, 0x4, 0x5000_0001),
+    );
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(true, 0x4, 0x1234_5678).with_ack(Ack::Fault)),
+    );
+    // With SELECT.DPBANKSEL at 1, address 0x4 is DLCR: a write there changes nothing, and
+    // neither does a write to CTRL/STAT the target answers WAIT.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket::write(false, 0x8, 0x0000_0001),
+    );
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(false, 0x4, 0x0000_0000)),
+    );
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(false, 0x8, 0).with_ack(Ack::Wait)),
+    );
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    // A line reset puts the bank back to 0; CTRL/STAT keeps its value.
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, idle));
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    send(
+        &mut waveform,
+        &mut expected,
+        under_overrun(SwdPacket::write(false, 0x4, 0x5000_0000).with_ack(Ack::Wait)),
+    );
+    send(&mut waveform, &mut expected, under_overrun(wait));
+    // Cleared: WAIT ends with its turnaround again.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket::write(false, 0x4, 0x5000_0000),
+    );
+    send(&mut waveform, &mut expected, wait);
+    // A write whose data fails its parity does not take effect; after the protocol error the
+    // decoder waits for a line reset.
+    send(
+        &mut waveform,
+        &mut expected,
+        SwdPacket {
+            bad_data_parity: true,
+            ..SwdPacket::write(false, 0x4, 0x5000_0001)
+        },
+    );
+    let reset = waveform.position().get();
+    waveform.line_reset(50);
+    let idle = waveform.position().get();
+    waveform.idle_cycles(2);
+    expected.push(line_reset(reset, idle));
+    send(&mut waveform, &mut expected, wait);
+    waveform.idle(4);
+    let block = waveform.finish();
+    expected.push(format!("eof {}", block.end()));
+    assert_eq!(decode(&block), expected);
+}
+
+#[test]
+fn overrun_detection_can_be_set_outright() {
+    for (setting, on) in [(OverrunDetect::On, true), (OverrunDetect::Off, false)] {
+        let config = SwdConfig {
+            overrun_detect: setting,
+            ..SwdConfig::default()
+        };
+        let mut waveform = waveform();
+        waveform.connect();
+        let mut expected = connect_lines(LEAD);
+        let wait = SwdPacket {
+            orundetect: on,
+            ..SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait)
+        };
+        // The writes to CTRL/STAT say the opposite and change nothing.
+        let packets = [
+            wait,
+            SwdPacket::write(false, 0x4, 0x5000_0000 | u32::from(!on)),
+            wait,
+        ];
+        for (n, packet) in packets.iter().enumerate() {
+            let position = waveform.position().get();
+            waveform.packet(packet);
+            waveform.idle_cycles(2);
+            expected.extend(packet_lines(n as u64 + 1, packet, position));
+        }
+        waveform.idle(4);
+        let block = waveform.finish();
+        expected.push(format!("eof {}", block.end()));
+        assert_eq!(decode_as(&config, &block), expected, "{setting:?}");
     }
 }
 
@@ -1002,6 +1131,10 @@ fn rich_waveform() -> LogicBlock {
     }
     waveform.connect_through_dormant();
     waveform.packet(&SwdPacket::read(false, 0x0, 0x0bc1_2477));
+    waveform.packet(&SwdPacket::write(false, 0x4, 0x5000_0001));
+    waveform.packet(&under_overrun(
+        SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait),
+    ));
     waveform.idle(6);
     waveform.finish()
 }
@@ -1027,6 +1160,7 @@ fn every_cut_and_pause_yields_the_same_events() {
         "end p31 complete",
         "switch dormant",
         "end p32 complete",
+        "end p34 wait",
     ] {
         assert!(
             lines.iter().any(|line| line.starts_with(what)),
