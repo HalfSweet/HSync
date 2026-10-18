@@ -142,6 +142,15 @@ fn describe(items: &[Item<SwdEvent>]) -> Vec<String> {
         .collect()
 }
 
+/// The events among `items`, without their provenance.
+fn payloads(items: &[Item<SwdEvent>]) -> Vec<SwdEvent> {
+    items
+        .iter()
+        .filter_map(Item::event)
+        .map(|event| event.payload)
+        .collect()
+}
+
 /// The tick at which the clock starting at `position` rises.
 fn rise_at(position: u64) -> u64 {
     position + HALF
@@ -274,6 +283,34 @@ fn reads_and_writes_are_decoded_with_every_acknowledge() {
     let block = waveform.finish();
     expected.push(format!("eof {}", block.end()));
     assert_eq!(decode(&block), expected);
+}
+
+#[test]
+fn the_targets_bits_are_read_at_the_falling_edge_whatever_its_delay() {
+    // The target changes SWDIO on the rising edge of SWCLK (ADIv6 B4.3.1); the analyzer sees
+    // the change in the edge's own sample or some later. The same traffic decodes the same.
+    let steps = [
+        Step::Switch(Interface::Swd, 56, 2),
+        Step::Packet(SwdPacket::read(false, 0x0, 0x2ba0_1477), 0),
+        Step::Packet(SwdPacket::write(false, 0x8, 0x0000_00f0), 1),
+        Step::Packet(SwdPacket::read(true, 0xc, 0xffff_0000), 0),
+        Step::Packet(SwdPacket::read(true, 0xc, 0).with_ack(Ack::Wait), 0),
+        Step::Packet(
+            SwdPacket::write(true, 0x4, 0x2300_0012).with_ack(Ack::Fault),
+            2,
+        ),
+        Step::Packet(SwdPacket::read(true, 0x0, 0x5555_aaaa), 0),
+    ];
+    let expected = model(&steps);
+    assert!(expected.len() > 20, "{expected:?}");
+    let half = 8;
+    for delay in [0, 1, half - 1] {
+        let mut waveform = SwdWaveform::new(SwdConfig::default(), CHANNELS, half, Tick::ZERO)
+            .with_target_delay(delay);
+        waveform.idle(LEAD);
+        let block = build_on(waveform, &steps);
+        assert_eq!(payloads(&items(&block, &[])), expected, "delay {delay}");
+    }
 }
 
 #[test]
@@ -806,8 +843,12 @@ fn step() -> impl Strategy<Value = Step> {
     ]
 }
 
-fn build(steps: &[Step]) -> LogicBlock {
-    let mut waveform = waveform();
+fn build(steps: &[Step], delay: u64) -> LogicBlock {
+    build_on(waveform().with_target_delay(delay), steps)
+}
+
+/// Puts `steps` on `waveform`.
+fn build_on(mut waveform: SwdWaveform, steps: &[Step]) -> LogicBlock {
     for step in steps {
         match step {
             Step::Packet(packet, idle) => {
@@ -930,15 +971,11 @@ proptest! {
     fn random_traffic_decodes_as_the_rules_say(
         steps in prop::collection::vec(step(), 1..24),
         sizes in prop::collection::vec(1u64..300, 1..5),
+        delay in 0..HALF,
     ) {
-        let block = build(&steps);
+        let block = build(&steps, delay);
         let decoded = items(&block, &[]);
-        let payloads: Vec<SwdEvent> = decoded
-            .iter()
-            .filter_map(Item::event)
-            .map(|event| event.payload)
-            .collect();
-        prop_assert_eq!(payloads, model(&steps));
+        prop_assert_eq!(payloads(&decoded), model(&steps));
         let mut cut = harness(GraphConfig { queue_capacity: 2, budget: 5 });
         cut.drain_on_full = 1;
         cut.feed_cut(&block, &[], &sizes, &[1, 0, 2]);
