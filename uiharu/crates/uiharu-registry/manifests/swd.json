@@ -21,6 +21,12 @@
     {
       "name": "swdio",
       "kind": "channel"
+    },
+    {
+      "name": "turnaround",
+      "kind": "integer",
+      "min": 1,
+      "max": 4
     }
   ],
   "events": [

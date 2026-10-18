@@ -264,13 +264,17 @@ impl SwdWaveform {
     /// One packet: the request, a turnaround and the acknowledge; after OK, the read data,
     /// its parity and a turnaround, or a turnaround, the written data and its parity; after
     /// WAIT and FAULT, a turnaround; after anything else, nothing — except for a TARGETSEL
-    /// write, whose data the host sends whatever the acknowledge bits showed.
+    /// write, whose data the host sends whatever the acknowledge bits showed. Turnarounds
+    /// last the clocks the configuration says.
     ///
-    /// The target starts driving the first acknowledge bit at the rising edge of the
+    /// The target starts driving the first acknowledge bit at the rising edge of the last
     /// turnaround clock after Park, each bit of its at the next, and releases the line at the
     /// rising edge of the clock at whose falling edge its last bit is read.
     pub fn packet(&mut self, packet: &SwdPacket) {
         self.bits(u64::from(packet.request_bits()), 8);
+        for _ in 1..self.config.turnaround {
+            self.turnaround();
+        }
         let ack = packet.ack.bits();
         for i in 0..3 {
             self.target_clock(ack >> i & 1 != 0);
@@ -282,27 +286,28 @@ impl SwdWaveform {
                     self.target_clock(packet.data >> i & 1 != 0);
                 }
                 self.target_clock(parity);
-                // The parity bit is read and the target releases the line; then the
-                // turnaround back to the host.
-                self.turnaround();
-                self.turnaround();
+                self.release();
             }
             Ack::Ok => self.write_phase(packet.data, parity),
             _ if packet.is_targetsel() => self.write_phase(packet.data, parity),
-            Ack::Wait | Ack::Fault => {
-                self.turnaround();
-                self.turnaround();
-            }
+            Ack::Wait | Ack::Fault => self.release(),
             // The last acknowledge bit is read; a host that saw it backs off.
             Ack::Other(_) => self.turnaround(),
         }
     }
 
-    /// A write's data phase after the acknowledge: the clock at whose falling edge the last
-    /// acknowledge bit is read, the turnaround to the host, the data and its parity bit.
+    /// The target's last bit is read at the falling edge and it releases the line at the
+    /// rising edge; then the turnaround to the host.
+    fn release(&mut self) {
+        for _ in 0..=self.config.turnaround {
+            self.turnaround();
+        }
+    }
+
+    /// A write's data phase after the acknowledge: the target's release and the turnaround,
+    /// then the data and its parity bit from the host.
     fn write_phase(&mut self, data: u32, parity: bool) {
-        self.turnaround();
-        self.turnaround();
+        self.release();
         self.bits(u64::from(data), 32);
         self.clock(parity);
     }
@@ -341,18 +346,36 @@ mod tests {
 
     #[test]
     fn packets_take_their_length_in_clocks() {
-        let config = SwdConfig::default();
-        let clocks = |packet: SwdPacket| {
-            let mut waveform = SwdWaveform::new(config.clone(), 2, 1, Tick::ZERO);
+        let clocks = |packet: SwdPacket, turnaround: u8| {
+            let config = SwdConfig {
+                turnaround,
+                ..SwdConfig::default()
+            };
+            let mut waveform = SwdWaveform::new(config, 2, 1, Tick::ZERO);
             waveform.packet(&packet);
             waveform.position().get() / waveform.period()
         };
-        assert_eq!(clocks(SwdPacket::read(false, 0, 1)), 46);
-        assert_eq!(clocks(SwdPacket::write(true, 4, 1)), 46);
-        assert_eq!(clocks(SwdPacket::read(false, 0, 1).with_ack(Ack::Wait)), 13);
+        assert_eq!(clocks(SwdPacket::read(false, 0, 1), 1), 46);
+        assert_eq!(clocks(SwdPacket::write(true, 4, 1), 1), 46);
+        assert_eq!(clocks(SwdPacket::targetsel(1), 1), 46);
         assert_eq!(
-            clocks(SwdPacket::read(false, 0, 1).with_ack(Ack::Other(7))),
+            clocks(SwdPacket::read(false, 0, 1).with_ack(Ack::Wait), 1),
+            13
+        );
+        assert_eq!(
+            clocks(SwdPacket::read(false, 0, 1).with_ack(Ack::Other(7)), 1),
             12
+        );
+        // Each turnaround clock more adds to both turnarounds of a packet with a data phase.
+        assert_eq!(clocks(SwdPacket::read(false, 0, 1), 4), 52);
+        assert_eq!(clocks(SwdPacket::write(true, 4, 1), 4), 52);
+        assert_eq!(
+            clocks(SwdPacket::read(false, 0, 1).with_ack(Ack::Fault), 4),
+            19
+        );
+        assert_eq!(
+            clocks(SwdPacket::read(false, 0, 1).with_ack(Ack::Other(7)), 4),
+            15
         );
     }
 }

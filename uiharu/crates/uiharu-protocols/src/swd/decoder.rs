@@ -36,11 +36,12 @@
 //!   first low bit of its request (a well-formed request has one among its first six bits),
 //!   and its `begin` is settled there; a run of 8 to 49 high bits is a request of all ones,
 //!   which is malformed;
-//! - a packet is a request (Start, APnDP, RnW, A\[2\], A\[3\], Parity, Stop, Park), one
+//! - a packet is a request (Start, APnDP, RnW, A\[2\], A\[3\], Parity, Stop, Park), a
 //!   turnaround, and the acknowledge, three bits least significant first. After OK, a read
 //!   goes on with 32 data bits, least significant first, and a parity bit from the target,
 //!   then a turnaround; a write with a turnaround, then 32 data bits and a parity bit from the
-//!   host. After WAIT or FAULT comes a turnaround and no data;
+//!   host. After WAIT or FAULT comes a turnaround and no data. A turnaround lasts the clocks
+//!   the configuration says, 1 to 4 (DLCR.TURNROUND), one unless the debugger changed it;
 //! - a packet ends `complete` on its last bit — the read's final turnaround, the write's parity
 //!   bit — and `wait` or `fault` on the turnaround after the acknowledge;
 //! - a write to debug port address `0xC` is a TARGETSEL write (B4.3.4, SWD protocol version
@@ -59,11 +60,11 @@
 //!   that may be a select sequence; of the request, acknowledge or data being read;
 //! - a bit decides at most a field of the packet and then its end, in that order.
 //!
-//! Limits: the turnaround lasts one clock, the reset value of DLCR.TURNROUND; with overrun
-//! detection (CTRL/STAT.ORUNDETECT) WAIT and FAULT carry a data phase the decoder does not
-//! expect; the JTAG-to-dormant sequence, defined by the TAP controller's zero-bit scans, is not
-//! recognised on SWDIO. No register is named: what `addr` selects depends on APnDP and on the
-//! debug and access ports, which is the next layer's business.
+//! Limits: the turnaround is the configuration's, not followed from writes to DLCR; with
+//! overrun detection (CTRL/STAT.ORUNDETECT) WAIT and FAULT carry a data phase the decoder does
+//! not expect; the JTAG-to-dormant sequence, defined by the TAP controller's zero-bit scans, is
+//! not recognised on SWDIO. No register is named: what `addr` selects depends on APnDP and on
+//! the debug and access ports, which is the next layer's business.
 
 use std::sync::Arc;
 
@@ -116,12 +117,15 @@ const ACTIVATION_GAP: u8 = 4;
 /// Bits in a packet request.
 const REQUEST_BITS: usize = 8;
 
+/// The longest turnaround DLCR.TURNROUND can ask for, in clocks.
+pub const MAX_TURNAROUND: u8 = 4;
+
 /// The most bits waiting to be decoded again: the bits after a line reset that turned out to
 /// be no select sequence. A request found among them is put back in their place, so it never
 /// adds to them; one found on the wire is at most a request and the low bit after it.
 const REPLAY_BITS: usize = SELECT_BITS;
 
-/// How the port is wired.
+/// How the port is wired and set up.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct SwdConfig {
@@ -129,11 +133,18 @@ pub struct SwdConfig {
     pub swclk: u8,
     /// The data channel.
     pub swdio: u8,
+    /// The turnaround period in clocks, 1 to 4: what the debugger wrote to DLCR.TURNROUND,
+    /// one after a reset.
+    pub turnaround: u8,
 }
 
 impl Default for SwdConfig {
     fn default() -> Self {
-        Self { swclk: 0, swdio: 1 }
+        Self {
+            swclk: 0,
+            swdio: 1,
+            turnaround: 1,
+        }
     }
 }
 
@@ -153,12 +164,15 @@ impl SwdConfig {
         if self.swclk == self.swdio {
             return Err(SwdConfigError::DuplicateChannel(self.swclk));
         }
+        if !(1..=MAX_TURNAROUND).contains(&self.turnaround) {
+            return Err(SwdConfigError::Turnaround(self.turnaround));
+        }
         Ok(())
     }
 
     /// What the decoder's output port declares: the turnaround it assumes, in clocks.
     pub fn props(&self) -> Props {
-        Props::new().with("turnaround", 1)
+        Props::new().with("turnaround", i64::from(self.turnaround))
     }
 }
 
@@ -171,6 +185,9 @@ pub enum SwdConfigError {
     /// A channel number is out of range.
     #[error("channel {0} is out of range; channels are 0 to {last}", last = MAX_CHANNELS - 1)]
     Channel(u8),
+    /// The turnaround is not 1 to 4 clocks.
+    #[error("a turnaround of {0} clocks is out of range; it is 1 to {MAX_TURNAROUND}")]
+    Turnaround(u8),
 }
 
 /// The SWD decoder node: logic samples in, `swd.events` out.
@@ -465,10 +482,14 @@ impl Replay {
     }
 }
 
-/// The packet under way.
+/// The packet under way. Its bits are numbered from the Start bit: the request is bits 0 to
+/// 7, a turnaround of `trn` clocks follows, then the three acknowledge bits; a read's data
+/// phase comes right after them and ends with a turnaround, a write's begins with one.
 #[derive(Clone, Copy, Debug)]
 struct Packet {
     tx: TxId,
+    /// Clocks in a turnaround.
+    trn: u8,
     /// Bits taken, from the Start bit.
     taken: u8,
     start: Tick,
@@ -481,9 +502,10 @@ struct Packet {
 }
 
 impl Packet {
-    fn new(tx: TxId) -> Self {
+    fn new(tx: TxId, trn: u8) -> Self {
         Self {
             tx,
+            trn,
             taken: 0,
             start: Tick::ZERO,
             request: 0,
@@ -492,6 +514,28 @@ impl Packet {
             data: 0,
             data_first: Tick::ZERO,
         }
+    }
+
+    /// The index of the first acknowledge bit.
+    fn ack_first(&self) -> u8 {
+        8 + self.trn
+    }
+
+    /// The index of the last acknowledge bit.
+    fn ack_last(&self) -> u8 {
+        10 + self.trn
+    }
+
+    /// The index of the last bit of a packet with a data phase: a read's final turnaround, a
+    /// write's parity bit.
+    fn last(&self) -> u8 {
+        43 + 2 * self.trn
+    }
+
+    /// The index of the last bit of a packet without a data phase: the turnaround after WAIT
+    /// or FAULT.
+    fn last_without_data(&self) -> u8 {
+        10 + 2 * self.trn
     }
 
     fn rnw(&self) -> bool {
@@ -514,14 +558,19 @@ impl Packet {
     /// Whether the target drives the bit at `index`: the acknowledge, and a read's data and
     /// parity after OK.
     fn target_drives(&self, index: u8) -> bool {
-        (9..=11).contains(&index)
-            || (self.rnw() && index >= 12 && Ack::from_bits(self.ack) == Ack::Ok)
+        (self.ack_first()..=self.ack_last()).contains(&index)
+            || (self.rnw() && index > self.ack_last() && Ack::from_bits(self.ack) == Ack::Ok)
     }
 
-    /// The indices of the first data bit and of the parity bit after OK: a read's data follows
-    /// the acknowledge, a write's comes after a turnaround.
+    /// The indices of the first data bit and of the parity bit: a read's data follows the
+    /// acknowledge, a write's comes after a turnaround.
     fn data_bits(&self) -> (u8, u8) {
-        if self.rnw() { (12, 44) } else { (13, 45) }
+        let after_ack = self.ack_last() + 1;
+        if self.rnw() {
+            (after_ack, after_ack + 32)
+        } else {
+            (after_ack + self.trn, after_ack + self.trn + 32)
+        }
     }
 
     /// The first bit of the field being read — the request, the acknowledge or the data — which
@@ -529,7 +578,7 @@ impl Packet {
     fn field_start(&self) -> Option<Tick> {
         match self.taken {
             1..=7 => Some(self.start),
-            10..=11 => Some(self.ack_first),
+            taken if taken > self.ack_first() && taken <= self.ack_last() => Some(self.ack_first),
             taken if self.has_data_phase() => {
                 let (first, parity) = self.data_bits();
                 (first < taken && taken <= parity).then_some(self.data_first)
@@ -548,6 +597,8 @@ fn settle(at: Provenance, now: Tick) -> Provenance {
 }
 
 struct Decoder {
+    /// Clocks in a turnaround.
+    trn: u8,
     mode: Mode,
     run: Run,
     select: Option<Select>,
@@ -560,8 +611,9 @@ struct Decoder {
 }
 
 impl Decoder {
-    fn new() -> Self {
+    fn new(config: &SwdConfig) -> Self {
         Self {
+            trn: config.turnaround,
             mode: Mode::Unaligned,
             run: Run::default(),
             select: None,
@@ -652,7 +704,7 @@ impl Decoder {
             // it belongs to the request.
             let tx = TxId(self.next_tx);
             self.next_tx += 1;
-            self.packet = Some(Packet::new(tx));
+            self.packet = Some(Packet::new(tx, self.trn));
             let ones = (run.count as usize).min(REQUEST_BITS);
             let mut bits = [bit; REQUEST_BITS + 1];
             for (slot, tick) in bits.iter_mut().zip(&run.first[..ones]) {
@@ -752,13 +804,13 @@ impl Decoder {
                 }
             }
             // The turnaround to the target.
-            8 => {}
-            9..=11 => {
-                if index == 9 {
+            index if index < packet.ack_first() => {}
+            index if index <= packet.ack_last() => {
+                if index == packet.ack_first() {
                     packet.ack_first = bit.tick;
                 }
-                packet.ack |= level << (index - 9);
-                if index < 11 {
+                packet.ack |= level << (index - packet.ack_first());
+                if index < packet.ack_last() {
                     return;
                 }
                 let value = Ack::from_bits(packet.ack);
@@ -777,7 +829,8 @@ impl Decoder {
             // A TARGETSEL write's data phase follows whatever the acknowledge bits showed.
             _ if packet.targetsel() => self.data_bit(index, bit, high, out).await,
             _ => match Ack::from_bits(packet.ack) {
-                // The turnaround back to the host ends the packet.
+                // The turnaround back to the host ends the packet on its last clock.
+                Ack::Wait | Ack::Fault if index < packet.last_without_data() => {}
                 Ack::Wait => self.end(EndReason::Wait, bit, out).await,
                 Ack::Fault => self.end(EndReason::Fault, bit, out).await,
                 Ack::Ok => self.data_bit(index, bit, high, out).await,
@@ -787,8 +840,8 @@ impl Decoder {
         }
     }
 
-    /// A bit of the data phase: a read's data, parity and turnaround from bit 12, or a write's
-    /// turnaround, data and parity; `high` is the bit as the side driving it sent it.
+    /// A bit of the data phase after the acknowledge: a read's data, parity and turnaround, or
+    /// a write's turnaround, data and parity; `high` is the bit as the side driving it sent it.
     async fn data_bit(&mut self, index: u8, bit: Bit, high: bool, out: &mut Outbox<SwdEvent>) {
         let now = self.now;
         let Some(packet) = self.packet.as_mut() else {
@@ -807,7 +860,10 @@ impl Decoder {
             return;
         }
         if index > parity {
-            self.end(EndReason::Complete, bit, out).await;
+            // A read's turnaround back to the host ends the packet on its last clock.
+            if index == packet.last() {
+                self.end(EndReason::Complete, bit, out).await;
+            }
             return;
         }
         let value = packet.data;
@@ -875,7 +931,7 @@ impl Decoder {
 }
 
 async fn run(mut signal: SignalCursor, mut out: Outbox<SwdEvent>, config: SwdConfig) {
-    let mut decoder = Decoder::new();
+    let mut decoder = Decoder::new(&config);
     let clock = ChannelMask::one(config.swclk);
     // SWDIO at the last falling edge of SWCLK, where the target's bit is read.
     let mut fall: Option<bool> = None;
@@ -924,24 +980,52 @@ mod tests {
     fn configurations_are_checked() {
         assert_eq!(SwdConfig::default().validate(), Ok(()));
         assert_eq!(
-            SwdConfig { swclk: 3, swdio: 3 }.validate(),
+            SwdConfig {
+                swclk: 3,
+                swdio: 3,
+                ..SwdConfig::default()
+            }
+            .validate(),
             Err(SwdConfigError::DuplicateChannel(3))
         );
         assert_eq!(
             SwdConfig {
-                swclk: 0,
-                swdio: 64
+                swdio: 64,
+                ..SwdConfig::default()
             }
             .validate(),
             Err(SwdConfigError::Channel(64))
+        );
+        for turnaround in [0, 5] {
+            assert_eq!(
+                SwdConfig {
+                    turnaround,
+                    ..SwdConfig::default()
+                }
+                .validate(),
+                Err(SwdConfigError::Turnaround(turnaround))
+            );
+        }
+        assert_eq!(
+            SwdConfig {
+                turnaround: 4,
+                ..SwdConfig::default()
+            }
+            .validate(),
+            Ok(())
         );
     }
 
     #[test]
     fn props_and_requirements() {
-        let swd = Swd::new(SwdConfig { swclk: 9, swdio: 2 }).expect("valid");
+        let swd = Swd::new(SwdConfig {
+            swclk: 9,
+            swdio: 2,
+            turnaround: 2,
+        })
+        .expect("valid");
         let spec = swd.spec();
-        assert_eq!(spec.outputs[0].props.get("turnaround"), Some(&1i64.into()));
+        assert_eq!(spec.outputs[0].props.get("turnaround"), Some(&2i64.into()));
         let requires = &spec.inputs[0].requires;
         assert!(requires.unmet(&Props::new().with("channels", 10)).is_none());
         assert!(requires.unmet(&Props::new().with("channels", 9)).is_some());
