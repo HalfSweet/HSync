@@ -143,7 +143,7 @@ while let Some(item) = operations.next() { /* events, gaps, progress, the end */
 
 A source that cannot hold its samples back announces what it lost with `SignalItem::Gap`; the engine never drops samples itself. `pipeline.stats()` reports every queue's size and high-water mark.
 
-A program that names its decoders rather than their types builds the pipeline from a `uiharu_registry::Description` with `build`, or with `build_with` and a `Catalog` into which decoder modules are loaded at run time (`catalog.load(&module)`, the module read from the IR's JSON): a loaded module is a node type like the engine's, with a manifest for a user interface, and connections between it and the engine's decoders are bridged. `Built::faults()` says whether an interpreted decoder stopped and why.
+A program that names its decoders rather than their types builds the pipeline from a `uiharu_registry::Description` with `build`, or with `build_with` and a `Catalog` into which decoder modules are loaded at run time (`catalog.load(&module)`, the module read from the IR's JSON): a loaded module is a node type like the engine's, with a manifest for a user interface that carries the copy the module declares (its `locales`), and connections between it and the engine's decoders are bridged. `Built::faults()` says whether an interpreted decoder stopped and why.
 
 ## License
 

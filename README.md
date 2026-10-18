@@ -53,7 +53,7 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 - **I²C, UART, SPI and CAN decoders**, drawn in line with the waveforms. They show what the bus carried, event by event, without guessing what it meant.
 - **30 more protocols** from HSync's own decode engine, [uiharu](uiharu/): from 1-Wire, JTAG and USB to USB Power Delivery and WS281x LEDs. Decoders that read another protocol's output — the 24xx EEPROM, SPI NOR flash, Modbus RTU, LIN — stack on it.
 - **Decoding keeps up with the capture**: results appear while the device is still filling it, and decoders can be added or changed meanwhile.
-- **Decoders of your own**, written in HSync's TypeScript decoder language and loaded from Settings without rebuilding the app; one named like a built-in decoder stands in for it.
+- **Decoders of your own**, written in HSync's TypeScript decoder language with their names in any language, loaded from Settings without rebuilding the app and carried along in the captures that use them; one named like a built-in decoder stands in for it.
 - **Values in hex, decimal, octal, binary or ASCII**, chosen per decoder.
 - **The data stream** lists everything a decoder found. Click a row to jump to it on the waveform; copy the list or export it as CSV or text.
 
