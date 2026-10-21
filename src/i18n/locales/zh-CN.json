@@ -346,7 +346,8 @@
     "running": "正在解码…",
     "failed": "解码中断",
     "missingChannels": "缺少通道",
-    "invalid": "无法解码"
+    "invalid": "无法解码",
+    "intervalTip": "{label} · {start}–{end}，持续 {duration}"
   },
   "decoder": {
     "category": {
@@ -764,8 +765,30 @@
       "value": {
         "initial_state": {
           "unknown": "未知",
-          "test-logic-reset": "Test-Logic-Reset",
-          "run-test-idle": "Run-Test/Idle"
+          "test-logic-reset": "测试逻辑复位",
+          "run-test-idle": "运行测试 / 空闲"
+        },
+        "state": {
+          "test-logic-reset": "测试逻辑复位",
+          "run-test-idle": "运行测试 / 空闲",
+          "select-dr-scan": "选择数据扫描",
+          "capture-dr": "数据捕获",
+          "shift-dr": "数据移位",
+          "exit1-dr": "数据退出 1",
+          "pause-dr": "数据暂停",
+          "exit2-dr": "数据退出 2",
+          "update-dr": "数据更新",
+          "select-ir-scan": "选择指令扫描",
+          "capture-ir": "指令捕获",
+          "shift-ir": "指令移位",
+          "exit1-ir": "指令退出 1",
+          "pause-ir": "指令暂停",
+          "exit2-ir": "指令退出 2",
+          "update-ir": "指令更新"
+        },
+        "register": {
+          "ir": "指令寄存器 (IR)",
+          "dr": "数据寄存器 (DR)"
         }
       },
       "event": {
@@ -785,6 +808,9 @@
         "tdo": "TDO",
         "bits": "位数",
         "reason": "原因"
+      },
+      "lane": {
+        "states": "TAP 状态"
       }
     },
     "lin": {

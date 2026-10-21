@@ -29,7 +29,7 @@ const isNumbers = (value: unknown): value is number[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'number')
 
 /** Fields that count or number things rather than carry what the bus said. */
-const COUNTERS = new Set(['tx', 'index', 'op', 'seq', 'frame', 'packet', 'pkt', 'xact'])
+const COUNTERS = new Set(['tx', 'index', 'op', 'seq', 'frame', 'packet', 'pkt', 'xact', 'scan'])
 
 /**
  * Fields that measure or count — ticks, bits, lengths, offsets, currents — and so read in
@@ -68,17 +68,19 @@ export function isQuantity(name: string): boolean {
 }
 
 /**
- * The fields a block shows beside the kind, at most `limit` of them: the numbers and byte
- * arrays that are not counters (the two lines of an SPI word, the one value of a UART
- * frame), else the first counter, else the first string; nothing for an event of booleans
- * alone.
+ * The fields a block shows beside the kind, at most `limit` of them: bus numbers and byte
+ * arrays first (both lines of a JTAG shift or SPI word), else non-counter quantities (the
+ * period and active ticks of PWM), else the first string, else the first counter; nothing
+ * for an event of booleans alone.
  */
 export function primaryFields(payload: Record<string, unknown>, limit = 2): [string, unknown][] {
   const fields = payloadFields(payload)
   const numeric = fields.filter(([, value]) => typeof value === 'number' || isNumbers(value))
-  const main = numeric.filter(([name]) => !COUNTERS.has(name)).slice(0, limit)
-  if (main.length > 0) return main
-  const fallback = numeric[0] ?? fields.find(([, value]) => typeof value === 'string')
+  const data = numeric.filter(([name]) => !isQuantity(name))
+  if (data.length > 0) return data.slice(0, limit)
+  const quantities = numeric.filter(([name]) => !COUNTERS.has(name))
+  if (quantities.length > 0) return quantities.slice(0, limit)
+  const fallback = fields.find(([, value]) => typeof value === 'string') ?? numeric[0]
   return fallback ? [fallback] : []
 }
 

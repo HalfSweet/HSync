@@ -3,9 +3,10 @@
 use serde::Serialize;
 use serde_json::Value;
 use ts_rs::TS;
-use uiharu_core::{Tick, TickRange};
+use uiharu_core::{SchemaId, Tick, TickRange};
 
 use crate::search::Needle;
+use crate::states::StateIndex;
 
 /// One event: where it lies and where its payload is in the text.
 #[derive(Debug, Clone, Copy)]
@@ -42,6 +43,7 @@ pub struct Store {
     gaps: Vec<TickRange>,
     settled: u64,
     ended: Option<u64>,
+    states: Option<StateIndex>,
 }
 
 /// An event as the interface reads it.
@@ -49,7 +51,7 @@ pub struct Store {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct EventRow {
-    /// Its position in the stream's time order.
+    /// Its position in the stream's time order, or within a derived annotation lane.
     pub index: u32,
     pub start: u64,
     pub end: u64,
@@ -77,7 +79,24 @@ pub enum LaneBlock {
 #[ts(export)]
 pub struct StreamView {
     pub blocks: Vec<LaneBlock>,
-    /// More items lay in the viewport than were returned.
+    /// More items lay in the viewport than were returned on this or an annotation lane.
+    pub truncated: bool,
+    /// Additional presentation lanes, without changing the stream's raw events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub annotations: Option<Vec<AnnotationLane>>,
+}
+
+/// A presentation lane derived from a stream's events.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AnnotationLane {
+    /// A stable presentation identifier; JTAG's TAP state intervals use `states`.
+    pub id: String,
+    /// The annotations overlapping the requested window, packed at its resolution.
+    pub blocks: Vec<LaneBlock>,
+    /// More items lay in the viewport than were returned on this lane.
     pub truncated: bool,
 }
 
@@ -93,10 +112,96 @@ pub struct EventPage {
     pub rows: Vec<EventRow>,
 }
 
+#[derive(Clone, Copy)]
+struct LaneSpan {
+    index: usize,
+    start: u64,
+    end: u64,
+    /// Different runs of known samples must not pack across a gap.
+    continuity: usize,
+}
+
+struct LaneRun {
+    first: LaneSpan,
+    end: u64,
+    count: u32,
+}
+
+/// Packs only spans first: parsing a payload is unnecessary for an event in a dense run.
+fn pack_lane(
+    spans: impl Iterator<Item = LaneSpan>,
+    samples_per_pixel: f64,
+    limit: usize,
+    row: impl Fn(LaneSpan) -> EventRow,
+) -> StreamView {
+    let unit = (samples_per_pixel * 2.0).max(1.0) as u64;
+    let mut view = StreamView {
+        blocks: Vec::new(),
+        truncated: false,
+        annotations: None,
+    };
+    let mut run: Option<LaneRun> = None;
+    let flush = |run: Option<LaneRun>, view: &mut StreamView| match run {
+        Some(run) if run.count == 1 => view.blocks.push(LaneBlock::Event(row(run.first))),
+        Some(run) => view.blocks.push(LaneBlock::Dense {
+            start: run.first.start,
+            end: run.end,
+            count: run.count,
+        }),
+        None => {}
+    };
+    for span in spans {
+        if view.blocks.len() >= limit {
+            view.truncated = true;
+            return view;
+        }
+        let reach = span.end.max(span.start.saturating_add(1));
+        if reach - span.start >= unit {
+            flush(run.take(), &mut view);
+            if view.blocks.len() >= limit {
+                view.truncated = true;
+                return view;
+            }
+            view.blocks.push(LaneBlock::Event(row(span)));
+            continue;
+        }
+        match &mut run {
+            Some(run)
+                if span.continuity == run.first.continuity
+                    && span.start <= run.end.saturating_add(unit) =>
+            {
+                run.end = run.end.max(reach);
+                run.count = run.count.saturating_add(1);
+            }
+            _ => {
+                flush(run.take(), &mut view);
+                if view.blocks.len() >= limit {
+                    view.truncated = true;
+                    return view;
+                }
+                run = Some(LaneRun {
+                    first: span,
+                    end: reach,
+                    count: 1,
+                });
+            }
+        }
+    }
+    flush(run, &mut view);
+    view
+}
+
 impl Store {
     /// An empty store.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub(crate) fn for_schema(schema: SchemaId) -> Self {
+        Self {
+            states: (schema.name == "jtag.events").then(StateIndex::default),
+            ..Self::default()
+        }
     }
 
     /// Events held.
@@ -135,6 +240,11 @@ impl Store {
             .get("kind")
             .and_then(Value::as_str)
             .unwrap_or_default();
+        if kind == "state"
+            && let Some(states) = &mut self.states
+        {
+            states.push(span.start.0, payload);
+        }
         let kind = match self.kinds.iter().position(|known| known == kind) {
             Some(index) => index,
             None => {
@@ -191,6 +301,9 @@ impl Store {
 
     /// Forgets the events and gaps lying wholly before `tick`.
     pub fn prune_before(&mut self, tick: Tick) {
+        if let Some(states) = &mut self.states {
+            states.prune_before(tick.0, self.ended.unwrap_or(u64::MAX), &self.gaps);
+        }
         let mut text = Vec::new();
         let mut entries = Vec::with_capacity(self.entries.len());
         for entry in &self.entries {
@@ -261,48 +374,41 @@ impl Store {
 
     /// The lane over `range` at `samples_per_pixel`: every event wide enough to be told
     /// apart on its own, runs of narrower ones packed into dense items; at most `limit`
-    /// items.
+    /// items per lane. JTAG state transitions appear as a separate duration annotation lane.
     pub fn view(&self, range: TickRange, samples_per_pixel: f64, limit: usize) -> StreamView {
-        // Narrower than two pixels is too narrow to tell apart.
-        let unit = (samples_per_pixel * 2.0).max(1.0) as u64;
-        let mut view = StreamView {
-            blocks: Vec::new(),
-            truncated: false,
-        };
-        let mut run: Option<(usize, u64, u64, u32)> = None;
-        let flush = |run: Option<(usize, u64, u64, u32)>, view: &mut StreamView| match run {
-            Some((first, _, _, 1)) => view
-                .blocks
-                .push(LaneBlock::Event(self.row(first).expect("the row is held"))),
-            Some((_, start, end, count)) => {
-                view.blocks.push(LaneBlock::Dense { start, end, count });
-            }
-            None => {}
-        };
-        for index in self.overlapping(range) {
-            if view.blocks.len() >= limit {
-                view.truncated = true;
-                return view;
-            }
+        let spans = self.overlapping(range).filter_map(|index| {
             let entry = &self.entries[index];
-            if entry.reach() - entry.start >= unit {
-                flush(run.take(), &mut view);
-                view.blocks
-                    .push(LaneBlock::Event(self.row(index).expect("the row is held")));
-                continue;
-            }
-            match &mut run {
-                Some((_, _, end, count)) if entry.start <= *end + unit => {
-                    *end = (*end).max(entry.reach());
-                    *count += 1;
-                }
-                _ => {
-                    flush(run.take(), &mut view);
-                    run = Some((index, entry.start, entry.reach(), 1));
-                }
-            }
+            (self.states.is_none() || self.kinds[usize::from(entry.kind)] != "state").then_some(
+                LaneSpan {
+                    index,
+                    start: entry.start,
+                    end: entry.end,
+                    continuity: 0,
+                },
+            )
+        });
+        let mut view = pack_lane(spans, samples_per_pixel, limit, |span| {
+            self.row(span.index).expect("the row is held")
+        });
+        if let Some(states) = &self.states {
+            let spans = states
+                .intervals(range, self.ended.unwrap_or(self.settled), &self.gaps)
+                .map(|(index, start, end, continuity)| LaneSpan {
+                    index,
+                    start,
+                    end,
+                    continuity,
+                });
+            let annotations = pack_lane(spans, samples_per_pixel, limit, |span| {
+                states.row(span.index, span.start, span.end)
+            });
+            view.truncated |= annotations.truncated;
+            view.annotations = Some(vec![AnnotationLane {
+                id: "states".into(),
+                blocks: annotations.blocks,
+                truncated: annotations.truncated,
+            }]);
         }
-        flush(run, &mut view);
         view
     }
 
@@ -526,5 +632,155 @@ mod tests {
             store.overlapping(range(0, 100)).collect::<Vec<_>>(),
             [0, 1, 2, 3, 4, 5]
         );
+    }
+
+    fn jtag() -> Store {
+        Store::for_schema(uiharu_core::SchemaId::new("jtag.events", 1))
+    }
+
+    fn state(store: &mut Store, tick: u64, name: &str) {
+        store.push_event(
+            range(tick, tick + 1),
+            &json!({ "kind": "state", "state": name }),
+        );
+    }
+
+    fn state_spans(view: &StreamView) -> Vec<(u64, u64, String)> {
+        let lane = &view.annotations.as_ref().expect("the state lane")[0];
+        assert_eq!(lane.id, "states");
+        lane.blocks
+            .iter()
+            .map(|block| match block {
+                LaneBlock::Event(row) => (
+                    row.start,
+                    row.end,
+                    row.payload["state"].as_str().expect("the state").to_owned(),
+                ),
+                LaneBlock::Dense { .. } => panic!("the states fit separately"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn jtag_states_cover_their_duration_without_changing_raw_events() {
+        let mut store = jtag();
+        state(&mut store, 10, "capture-ir");
+        state(&mut store, 90, "exit1-ir");
+        store.push_event(range(15, 25), &json!({ "kind": "shift", "tdi": [3] }));
+        state(&mut store, 30, "shift-ir");
+        store.push_event(range(30, 31), &json!({ "kind": "scan-begin", "scan": 1 }));
+        store.push_end(Tick(120));
+
+        let view = store.view(range(0, 120), 1.0, 100);
+        assert_eq!(
+            state_spans(&view),
+            [
+                (10, 30, "capture-ir".into()),
+                (30, 90, "shift-ir".into()),
+                (90, 120, "exit1-ir".into())
+            ]
+        );
+        assert_eq!(view.blocks.len(), 2);
+        assert!(
+            view.blocks
+                .iter()
+                .all(|block| matches!(block, LaneBlock::Event(row) if row.kind != "state"))
+        );
+        assert_eq!(
+            state_spans(&store.view(range(40, 80), 1.0, 100)),
+            [(30, 90, "shift-ir".into())]
+        );
+        let raw = store.page(None, 0, 100);
+        assert_eq!(raw.total, 5);
+        assert!(
+            raw.rows
+                .iter()
+                .filter(|row| row.kind == "state")
+                .all(|row| row.end == row.start + 1)
+        );
+        let (hits, _) = store.search(&Needle::parse("shift-ir").expect("a query"), 100);
+        assert_eq!(store.span(hits[0]), Some(range(30, 31)));
+    }
+
+    #[test]
+    fn a_live_state_reaches_only_the_settled_position_and_then_the_end() {
+        let mut store = jtag();
+        state(&mut store, 10, "run-test-idle");
+        store.push_progress(Tick(50));
+        assert_eq!(
+            state_spans(&store.view(range(30, 100), 1.0, 10)),
+            [(10, 50, "run-test-idle".into())]
+        );
+        store.push_end(Tick(80));
+        assert_eq!(
+            state_spans(&store.view(range(30, 100), 1.0, 10)),
+            [(10, 80, "run-test-idle".into())]
+        );
+        assert!(state_spans(&store.view(range(80, 100), 1.0, 10)).is_empty());
+    }
+
+    #[test]
+    fn state_annotations_stop_at_gaps_and_survive_retention_only_while_active() {
+        let mut store = jtag();
+        state(&mut store, 10, "shift-dr");
+        state(&mut store, 90, "test-logic-reset");
+        store.push_gap(range(50, 70));
+        store.push_end(Tick(120));
+        assert_eq!(
+            state_spans(&store.view(range(0, 120), 1.0, 10)),
+            [
+                (10, 50, "shift-dr".into()),
+                (90, 120, "test-logic-reset".into())
+            ]
+        );
+        assert!(state_spans(&store.view(range(70, 90), 1.0, 10)).is_empty());
+        let packed = store.view(range(0, 120), 100.0, 10);
+        assert_eq!(packed.annotations.expect("states")[0].blocks.len(), 2);
+        store.prune_before(Tick(40));
+        assert_eq!(store.page(None, 0, 10).total, 1);
+        assert_eq!(
+            state_spans(&store.view(range(40, 45), 1.0, 10)),
+            [(10, 50, "shift-dr".into())]
+        );
+        store.prune_before(Tick(80));
+        assert!(store.gaps().is_empty());
+        assert!(state_spans(&store.view(range(80, 90), 1.0, 10)).is_empty());
+        store.prune_before(Tick(100));
+        assert!(store.is_empty());
+        assert_eq!(
+            state_spans(&store.view(range(100, 120), 1.0, 10)),
+            [(90, 120, "test-logic-reset".into())]
+        );
+    }
+
+    #[test]
+    fn each_jtag_lane_packs_and_limits_its_own_blocks() {
+        let mut store = jtag();
+        state(&mut store, 0, "capture-ir");
+        state(&mut store, 10, "shift-ir");
+        state(&mut store, 20, "exit1-ir");
+        store.push_event(range(5, 8), &json!({ "kind": "shift", "tdi": [1] }));
+        store.push_end(Tick(30));
+        let view = store.view(range(0, 30), 1.0, 1);
+        assert_eq!(view.blocks.len(), 1);
+        let states = &view.annotations.as_ref().expect("states")[0];
+        assert_eq!(states.blocks.len(), 1);
+        assert!(states.truncated && view.truncated);
+        let view = store.view(range(0, 30), 10.0, 1);
+        assert!(!view.truncated);
+        assert!(matches!(
+            &view.annotations.as_ref().expect("states")[0].blocks[..],
+            [LaneBlock::Dense { count: 3, .. }]
+        ));
+    }
+
+    #[test]
+    fn other_schemas_keep_state_events_on_the_original_lane() {
+        let mut store = Store::new();
+        state(&mut store, 10, "idle");
+        store.push_end(Tick(50));
+        let view = store.view(range(0, 50), 1.0, 10);
+        assert!(view.annotations.is_none());
+        assert!(matches!(&view.blocks[..], [LaneBlock::Event(row)] if row.end == 11));
     }
 }

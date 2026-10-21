@@ -13,10 +13,11 @@ mod feed;
 mod query;
 mod run;
 mod search;
+mod states;
 mod store;
 
 pub use feed::{FeedError, Feeder};
 pub use query::{Hit, StreamProgress};
 pub use run::{DecodeError, Decoder, Position, Stream, Update, channels_read};
 pub use search::Needle;
-pub use store::{EventPage, EventRow, LaneBlock, Store, StreamView};
+pub use store::{AnnotationLane, EventPage, EventRow, LaneBlock, Store, StreamView};

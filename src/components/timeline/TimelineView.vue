@@ -17,6 +17,7 @@ import { useShortcuts } from '@/composables/useShortcuts'
 import { getBackend } from '@/ipc/backend'
 import { binStart, type BinsResult } from '@/ipc/bins'
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
+import type { StreamView } from '@/ipc/bindings/StreamView'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 import { Canvas2DRenderer } from '@/render/canvas2d'
 import type { WaveformRenderer } from '@/render/types'
@@ -31,7 +32,7 @@ import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useViewStore } from '@/stores/view'
-import type { ChannelRef } from '@/timeline/groups'
+import type { ChannelGroup, ChannelRef } from '@/timeline/groups'
 import { FLING_MIN_SPEED, flingStep, releaseSpeed, type PointerSample } from '@/timeline/fling'
 import type { FloatAnchor, FloatBounds } from '@/timeline/float'
 import { denseGap } from '@/render/shape'
@@ -101,8 +102,9 @@ const layout = computed(() => {
     capture.groups,
     metrics.value,
     (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
-    (group) => decode.statusOf(group.decoder)?.streams.length ?? 1,
+    (group) => Math.max(1, decode.statusOf(group.decoder)?.streams.length ?? 0),
     (channel) => channels.heights[channel.index],
+    streamKindOf,
   )
   // The channel rows grow and shrink with the timeline's height, below the ruler (§6.1).
   if (!preferences.fitRows || client.value.height <= 0) return { ...rows, scale: 1 }
@@ -144,9 +146,20 @@ function decodeStreamOf(row: Row): number | null {
   return row.kind === 'lane' ? (row.stream ?? null) : null
 }
 
-/** The node type whose events stream `stream` of the row's decoder carries, e.g. `i2c`. */
-function streamKind(row: Row, stream: number): string {
-  return decode.statusOf(row.group.decoder)?.streams[stream]?.kind ?? row.group.type ?? ''
+/** The node type whose events a stream carries, known before its viewport query returns. */
+function streamKindOf(group: ChannelGroup, stream: number): string {
+  return (
+    decode.statusOf(group.decoder)?.streams[stream]?.kind ??
+    (stream === 0 ? (group.type ?? '') : '')
+  )
+}
+
+/** The main events or the requested annotation lane, still belonging to the same stream. */
+function decodeViewOf(row: Row): StreamView | undefined {
+  const held = decode.streamView(row.group.decoder, row.stream ?? 0)
+  return row.annotation
+    ? held?.annotations?.find((annotation) => annotation.id === row.annotation)
+    : held
 }
 
 /** Clicking a decoded block marks it as the segment and lists its stream in the data stream;
@@ -191,6 +204,7 @@ const findBand = computed(() => {
 /** A stacked decoder's lane is named after its node type. */
 function laneLabel(row: Row): string | null {
   if (row.kind !== 'lane' || row.stream === undefined) return null
+  if (row.annotation === 'states') return t('decoder.jtag.lane.states')
   const kind = decode.statusOf(row.group.decoder)?.streams[row.stream]?.kind
   if (kind === undefined) return null
   return copy.typeName(kind)
@@ -901,11 +915,12 @@ function onWheel(event: WheelEvent): void {
             <DecodeLane
               v-if="row.group.decoder !== null && decodeStreamOf(row) !== null"
               :bus="row.group.kind"
-              :kind="streamKind(row, row.stream ?? 0)"
-              :view="decode.streamView(row.group.decoder, row.stream ?? 0)"
+              :kind="streamKindOf(row.group, row.stream ?? 0)"
+              :view="decodeViewOf(row)"
               :viewport="view.viewport"
               :decoder="row.group.decoder"
               :stream="row.stream ?? 0"
+              :annotation="row.annotation"
               :selected="view.segment?.blockId ?? null"
               :time-of="capture.timeOf"
               :format="entryFormat(decode.entries[row.group.decoder])"

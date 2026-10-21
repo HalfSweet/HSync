@@ -45,6 +45,47 @@ describe('generic presentation', () => {
     expect(primaryFields({ kind: 'ack', ok: true })).toEqual([])
   })
 
+  it('shows JTAG shift data before the scan, offset and bit count', () => {
+    const shift = { kind: 'shift', scan: 2, offset: 256, tdi: [15, 1], tdo: [18, 0], bits: 9 }
+    expect(primaryFields(shift)).toEqual([
+      ['tdi', [15, 1]],
+      ['tdo', [18, 0]],
+    ])
+    expect(primaryField(shift)).toEqual(['tdi', [15, 1]])
+    expect(primaryFields({ ...shift, tdi: null })).toEqual([['tdo', [18, 0]]])
+    expect(primaryField({ ...shift, tdi: null })).toEqual(['tdo', [18, 0]])
+    expect(primaryFields({ ...shift, tdo: null })).toEqual([['tdi', [15, 1]]])
+  })
+
+  it('shows USB data before its byte offset', () => {
+    const data = { kind: 'data', pkt: 2, offset: 32, bytes: [1, 2] }
+    expect(primaryFields(data)).toEqual([['bytes', [1, 2]]])
+    expect(primaryField(data)).toEqual(['bytes', [1, 2]])
+  })
+
+  it('keeps measurements when an event carries no bus data', () => {
+    const cycle = { kind: 'cycle', periodTicks: 100, activeTicks: 25 }
+    expect(primaryFields(cycle)).toEqual([
+      ['periodTicks', 100],
+      ['activeTicks', 25],
+    ])
+    expect(primaryField(cycle)).toEqual(['periodTicks', 100])
+    const edge = { kind: 'edge', slope: 'rising', sincePrevious: 250 }
+    expect(primaryFields(edge)).toEqual([['sincePrevious', 250]])
+    expect(primaryField(edge)).toEqual(['sincePrevious', 250])
+  })
+
+  it.each<[Record<string, unknown>, [string, unknown]]>([
+    [{ kind: 'scan-begin', scan: 2, register: 'dr' }, ['register', 'dr']],
+    [{ kind: 'end', tx: 3, reason: 'stop' }, ['reason', 'stop']],
+    [{ kind: 'begin', scan: 2 }, ['scan', 2]],
+    [{ kind: 'begin', tx: 3, partial: false }, ['tx', 3]],
+    [{ kind: 'edge', slope: 'falling', sincePrevious: null }, ['slope', 'falling']],
+  ])('uses the same fallback for one or multiple fields: %j', (payload, expected) => {
+    expect(primaryFields(payload)).toEqual([expected])
+    expect(primaryField(payload)).toEqual(expected)
+  })
+
   it('shows values in the number format and the words given', () => {
     expect(valueText('value', 0x41, 'hex', wording)).toBe('41')
     expect(valueText('value', 0x41, 'ascii', wording)).toBe('A')
@@ -68,11 +109,13 @@ describe('generic presentation', () => {
 
   it('reads counts and measures in decimal whatever the format', () => {
     expect(isQuantity('tx')).toBe(true)
+    expect(isQuantity('scan')).toBe(true)
     expect(isQuantity('periodTicks')).toBe(true)
     expect(isQuantity('droppedBits')).toBe(true)
     expect(isQuantity('value')).toBe(false)
     expect(isQuantity('address')).toBe(false)
     expect(valueText('tx', 12, 'hex', wording)).toBe('12')
+    expect(valueText('scan', 12, 'hex', wording)).toBe('12')
     expect(valueText('length', 64, 'bin', wording)).toBe('64')
     expect(valueText('address', 0x50, 'dec', wording)).toBe('80')
     expect(fieldTexts({ kind: 'word', tx: 10, mosi: 10 }, 'hex', wording)).toEqual([

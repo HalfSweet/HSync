@@ -42,6 +42,23 @@ fn shift_row(row: &mut EventRow, dropped: SampleIndex) {
     row.end = row.end.saturating_sub(dropped);
 }
 
+fn shift_view(view: &mut StreamView, dropped: SampleIndex) {
+    let annotations = view
+        .annotations
+        .iter_mut()
+        .flatten()
+        .flat_map(|lane| &mut lane.blocks);
+    for block in view.blocks.iter_mut().chain(annotations) {
+        match block {
+            LaneBlock::Event(row) => shift_row(row, dropped),
+            LaneBlock::Dense { start, end, .. } => {
+                *start = start.saturating_sub(dropped);
+                *end = end.saturating_sub(dropped);
+            }
+        }
+    }
+}
+
 impl Decoder {
     fn with_store<R>(&self, stream: usize, f: impl FnOnce(&Store, SampleIndex) -> R) -> Option<R> {
         let dropped = self.dropped();
@@ -65,8 +82,8 @@ impl Decoder {
         })
     }
 
-    /// The lane of stream `stream` over `range` at `samples_per_pixel`, at most `limit`
-    /// blocks.
+    /// The lanes of stream `stream` over `range` at `samples_per_pixel`, at most `limit`
+    /// blocks per lane, including any derived annotations.
     pub fn view(
         &self,
         stream: usize,
@@ -76,15 +93,7 @@ impl Decoder {
     ) -> Option<StreamView> {
         self.with_store(stream, |store, dropped| {
             let mut view = store.view(Self::absolute(range, dropped), samples_per_pixel, limit);
-            for block in &mut view.blocks {
-                match block {
-                    LaneBlock::Event(row) => shift_row(row, dropped),
-                    LaneBlock::Dense { start, end, .. } => {
-                        *start = start.saturating_sub(dropped);
-                        *end = end.saturating_sub(dropped);
-                    }
-                }
-            }
+            shift_view(&mut view, dropped);
             view
         })
     }
@@ -162,5 +171,37 @@ impl Decoder {
                 })
                 .collect()
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+    use uiharu_core::SchemaId;
+
+    use super::*;
+
+    #[test]
+    fn retained_state_intervals_shift_to_the_captures_remaining_samples() {
+        let mut store = Store::for_schema(SchemaId::new("jtag.events", 1));
+        store.push_event(
+            TickRange::one(Tick(20)),
+            &json!({ "kind": "state", "state": "shift-ir" }),
+        );
+        store.push_event(
+            TickRange::new(Tick(110), Tick(120)),
+            &json!({ "kind": "shift", "tdi": [3] }),
+        );
+        store.push_end(Tick(130));
+        store.prune_before(Tick(100));
+        let mut view = store.view(TickRange::new(Tick(100), Tick(130)), 1.0, 10);
+        shift_view(&mut view, 100);
+        assert!(
+            matches!(&view.blocks[..], [LaneBlock::Event(row)] if (row.start, row.end) == (10, 20))
+        );
+        let states = &view.annotations.expect("the state lane")[0];
+        assert!(
+            matches!(&states.blocks[..], [LaneBlock::Event(row)] if (row.start, row.end) == (0, 30))
+        );
     }
 }

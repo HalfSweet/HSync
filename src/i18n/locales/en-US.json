@@ -346,7 +346,8 @@
     "running": "Decoding…",
     "failed": "Decoding stopped",
     "missingChannels": "Channels missing",
-    "invalid": "Cannot decode"
+    "invalid": "Cannot decode",
+    "intervalTip": "{label} · {start}–{end}, duration {duration}"
   },
   "decoder": {
     "category": {
@@ -766,6 +767,28 @@
           "unknown": "Unknown",
           "test-logic-reset": "Test-Logic-Reset",
           "run-test-idle": "Run-Test/Idle"
+        },
+        "state": {
+          "test-logic-reset": "Test-Logic-Reset",
+          "run-test-idle": "Run-Test/Idle",
+          "select-dr-scan": "Select-DR-Scan",
+          "capture-dr": "Capture-DR",
+          "shift-dr": "Shift-DR",
+          "exit1-dr": "Exit1-DR",
+          "pause-dr": "Pause-DR",
+          "exit2-dr": "Exit2-DR",
+          "update-dr": "Update-DR",
+          "select-ir-scan": "Select-IR-Scan",
+          "capture-ir": "Capture-IR",
+          "shift-ir": "Shift-IR",
+          "exit1-ir": "Exit1-IR",
+          "pause-ir": "Pause-IR",
+          "exit2-ir": "Exit2-IR",
+          "update-ir": "Update-IR"
+        },
+        "register": {
+          "ir": "Instruction register (IR)",
+          "dr": "Data register (DR)"
         }
       },
       "event": {
@@ -785,6 +808,9 @@
         "tdo": "TDO",
         "bits": "Bits",
         "reason": "Reason"
+      },
+      "lane": {
+        "states": "TAP states"
       }
     },
     "lin": {

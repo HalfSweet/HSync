@@ -222,10 +222,29 @@ export const useDecodeStore = defineStore('decode', () => {
     }
     loading = true
     try {
-      const window = overscan(want.window, want.extent)
-      const found = await (
-        await getBackend()
-      ).decodeView(want.captureId, window.start, window.end, window.samplesPerPixel)
+      const backend = await getBackend()
+      let window = overscan(want.window, want.extent)
+      let found = await backend.decodeView(
+        want.captureId,
+        window.start,
+        window.end,
+        window.samplesPerPixel,
+      )
+      if (wanted.value?.captureId !== want.captureId) return
+      if (found.some((decoder) => decoder.streams.some((stream) => stream.view.truncated))) {
+        // Events in the left overscan can use up the block limit before the visible
+        // samples. Retry only the view, and do not cache the omitted margins as covered.
+        const visible = overscan(want.window, want.extent, 0)
+        if (visible.start !== window.start || visible.end !== window.end) {
+          window = visible
+          found = await backend.decodeView(
+            want.captureId,
+            window.start,
+            window.end,
+            window.samplesPerPixel,
+          )
+        }
+      }
       if (wanted.value?.captureId !== want.captureId) return
       lanes.value = new Map(found.map((one) => [one.index, one]))
       fetched = { key: want.key, window }

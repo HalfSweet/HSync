@@ -169,6 +169,75 @@ describe('layoutRows', () => {
     const shown = visibleRows(layout.rows, 0, 40)
     expect(shown.map((row) => row.kind)).toEqual(['gap', 'header', 'lane'])
   })
+
+  const jtag = groupChannels(
+    Array.from({ length: 4 }, (_, index) => ({ index, name: String(index) })),
+    [{ nodes: { tap: { type: 'jtag', config: { tck: 0, tms: 1, tdi: 2, tdo: 3 } } } }],
+  )
+
+  it('reserves a JTAG state lane below the data header before results arrive', () => {
+    const opened = layoutRows(jtag, COMFORTABLE_METRICS, () => false)
+    expect(opened.rows.map((row) => row.kind)).toEqual([
+      'gap',
+      'header',
+      'lane',
+      'trace-narrow',
+      'trace-narrow',
+      'trace-narrow',
+      'trace-narrow',
+      'gap',
+    ])
+    expect(opened.rows[2]).toMatchObject({
+      key: 'decoder:0:stream:0:annotation:states',
+      stream: 0,
+      annotation: 'states',
+      height: COMFORTABLE_METRICS.lane,
+    })
+    expect(opened.rows[1]?.annotation).toBeUndefined()
+  })
+
+  it('places each JTAG state lane after its stream without changing other streams', () => {
+    const opened = layoutRows(
+      jtag,
+      COMFORTABLE_METRICS,
+      () => false,
+      () => 3,
+      undefined,
+      (_group, stream) => ['jtag', 'spi', 'jtag'][stream] ?? null,
+    )
+    expect(
+      opened.rows
+        .filter((row) => row.kind === 'header' || row.kind === 'lane')
+        .map((row) => [row.kind, row.stream ?? 0, row.annotation ?? null]),
+    ).toEqual([
+      ['header', 0, null],
+      ['lane', 0, 'states'],
+      ['lane', 1, null],
+      ['lane', 2, null],
+      ['lane', 2, 'states'],
+    ])
+    expect(new Set(opened.rows.map((row) => row.key)).size).toBe(opened.rows.length)
+  })
+
+  it('hides JTAG state lanes and channel rows when the group is collapsed', () => {
+    const closed = layoutRows(jtag, COMFORTABLE_METRICS, () => true)
+    expect(closed.rows.map((row) => row.kind)).toEqual(['gap', 'header', 'gap'])
+  })
+
+  it('keeps the state lane height fixed when fitting JTAG channels to the window', () => {
+    const opened = layoutRows(jtag, COMFORTABLE_METRICS, () => false)
+    const fitted = fitRows(opened, COMFORTABLE_METRICS, opened.height + 40)
+    expect(fitted.rows.find((row) => row.annotation === 'states')?.height).toBe(
+      COMFORTABLE_METRICS.lane,
+    )
+    let top = 0
+    for (const row of fitted.rows) {
+      expect(row.top).toBe(top)
+      top += row.height
+    }
+    expect(top).toBe(opened.height + 40)
+    expect(fitted.height).toBe(top)
+  })
 })
 
 describe('fitRows', () => {

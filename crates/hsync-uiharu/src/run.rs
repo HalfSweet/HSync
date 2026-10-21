@@ -202,7 +202,7 @@ impl Decoder {
                     name: stream.name.clone(),
                     kind: stream.kind.clone(),
                     schema: stream.reader.schema(),
-                    store: RwLock::new(Store::new()),
+                    store: RwLock::new(Store::for_schema(stream.reader.schema())),
                 })
             })
             .collect();

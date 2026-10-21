@@ -19,6 +19,8 @@ export interface Row {
   labeled: boolean
   /** On `lane` rows, the position of the decoder's stream the row shows. */
   stream?: number
+  /** A separate annotation lane within that stream, such as JTAG's TAP states. */
+  annotation?: string
   /** A 1 px line above the row separates it from the previous group. */
   separator: boolean
 }
@@ -52,9 +54,9 @@ export function collapsedByDefault(group: ChannelGroup): boolean {
 
 /**
  * Lays out the rows: for each group its title row, which carries the decoder's first stream,
- * a lane row for each further stream (`streamsOf` says how many a decoder has), then its
- * channels, each as high as `heightOf` says (the user dragged its edge) or else its kind's
- * height.
+ * a lane row for each further stream (`streamsOf` says how many a decoder has), with a state
+ * annotation row after each JTAG stream (`streamKindOf` names it), then its channels, each as
+ * high as `heightOf` says (the user dragged its edge) or else its kind's height.
  */
 export function layoutRows(
   groups: ChannelGroup[],
@@ -62,6 +64,8 @@ export function layoutRows(
   isCollapsed: (group: ChannelGroup) => boolean,
   streamsOf: (group: ChannelGroup) => number = () => 1,
   heightOf: (channel: ChannelRef) => number | undefined = () => undefined,
+  streamKindOf: (group: ChannelGroup, stream: number) => string | null = (group, stream) =>
+    stream === 0 ? group.type : null,
 ): { rows: Row[]; height: number } {
   const rows: Row[] = []
   let top = 0
@@ -84,14 +88,26 @@ export function layoutRows(
       // The decoder's first stream sits on the title row; a decoder stacked on it (the
       // further streams) gets a lane of its own.
       const streams = group.decoder === null ? 0 : streamsOf(group)
-      for (let stream = 1; stream < streams; stream++) {
-        push({
-          key: `${group.key}:stream:${stream}`,
-          kind: 'lane',
-          height: metrics.lane,
-          group,
-          stream,
-        })
+      for (let stream = 0; stream < streams; stream++) {
+        if (stream > 0) {
+          push({
+            key: `${group.key}:stream:${stream}`,
+            kind: 'lane',
+            height: metrics.lane,
+            group,
+            stream,
+          })
+        }
+        if (streamKindOf(group, stream) === 'jtag') {
+          push({
+            key: `${group.key}:stream:${stream}:annotation:states`,
+            kind: 'lane',
+            height: metrics.lane,
+            group,
+            stream,
+            annotation: 'states',
+          })
+        }
       }
       for (const channel of group.channels) {
         const wide = group.kind === 'i2c' || group.kind === 'uart'
