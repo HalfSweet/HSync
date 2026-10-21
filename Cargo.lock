@@ -1738,6 +1738,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "hsync-slogic"
+version = "0.2.2"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-driver",
+ "log",
+ "nusb",
+]
+
+[[package]]
 name = "hsync-uiharu"
 version = "0.2.3"
 dependencies = [
