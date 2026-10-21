@@ -336,10 +336,69 @@ impl<'a> Checker<'a> {
             );
             return;
         };
+        self.roles(path, contract, variants);
         let Some(framing) = &contract.framing else {
             return;
         };
         self.framing(path, framing, variants);
+    }
+
+    /// Roles, when the contract declares them: one for every kind of event, and conditions
+    /// on fields the kind has, with values those fields can take.
+    fn roles(&mut self, path: &str, contract: &Contract, variants: &[crate::model::UnionVariant]) {
+        if contract.roles.is_empty() {
+            return;
+        }
+        for variant in variants {
+            if !contract.roles.contains_key(&variant.name) {
+                self.report(path, format!("roles: {} has no role", variant.name));
+            }
+        }
+        for (kind, role) in &contract.roles {
+            let Some(variant) = variants.iter().find(|variant| &variant.name == kind) else {
+                self.report(path, format!("roles: {kind} is not a variant"));
+                continue;
+            };
+            for condition in &role.error_when {
+                if condition.is_empty() {
+                    self.report(
+                        path,
+                        format!("roles.{kind}.errorWhen: a condition names a field"),
+                    );
+                }
+                for (name, value) in condition {
+                    match variant.fields.iter().find(|field| &field.name == name) {
+                        None => self.report(
+                            path,
+                            format!("roles.{kind}.errorWhen: {kind} has no field {name}"),
+                        ),
+                        Some(field) if !self.takes(&field.ty, value) => self.report(
+                            path,
+                            format!("roles.{kind}.errorWhen: {name} is never {value}"),
+                        ),
+                        Some(_) => {}
+                    }
+                }
+            }
+        }
+    }
+
+    /// Whether a field of type `ty` can serialize as `value`.
+    fn takes(&self, ty: &Type, value: &serde_json::Value) -> bool {
+        match ty {
+            Type::Option { option } => value.is_null() || self.takes(option, value),
+            Type::Name(name) => match name.as_str() {
+                "bool" => value.is_boolean(),
+                "u8" | "u16" | "u32" | "u64" => value.is_u64(),
+                "text" => value.is_string(),
+                other => self.enum_variants(other).is_some_and(|variants| {
+                    value
+                        .as_str()
+                        .is_some_and(|value| variants.iter().any(|variant| variant.0 == value))
+                }),
+            },
+            Type::Array { .. } | Type::Batch { .. } => false,
+        }
     }
 
     fn framing(&mut self, path: &str, framing: &Framing, variants: &[crate::model::UnionVariant]) {

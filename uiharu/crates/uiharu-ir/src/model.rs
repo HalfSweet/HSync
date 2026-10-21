@@ -160,6 +160,70 @@ pub struct Contract {
     /// How the stream frames its traffic, if it does.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub framing: Option<Framing>,
+    /// The role of each kind of event, by kind; empty in a module that predates roles.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub roles: BTreeMap<String, EventRole>,
+}
+
+/// What an event is to someone reading the bus, whatever the protocol, so that an interface
+/// can show events of the same role alike: the role of a kind of event, never how it looks.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Role {
+    /// Where a transaction, frame or scan begins or ends: STARTs, STOPs, scan boundaries.
+    Framing,
+    /// Whom the traffic is for: an I²C address, a CAN identifier, a USB token.
+    Address,
+    /// What is asked: an opcode, an SWD request, a USB SETUP request.
+    Command,
+    /// What a frame says of itself: a CAN control field, a USB PD header.
+    Control,
+    /// What the traffic carries.
+    Data,
+    /// A check over the traffic: a CRC, a checksum.
+    Check,
+    /// The other side's answer: an acknowledge, a handshake, a response.
+    Handshake,
+    /// A condition of the line itself: a line reset, a break, a bus reset, a suspend.
+    Line,
+    /// Something the decoder reports as wrong.
+    Error,
+}
+
+/// The role of a kind of event, and the field values that make one of its events an error.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct EventRole {
+    pub role: Role,
+    /// Conditions on the event's fields, as the contract serializes them: an event whose
+    /// fields have every value of any one condition is an error, such as a character whose
+    /// parity is wrong.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub error_when: Vec<BTreeMap<String, serde_json::Value>>,
+}
+
+impl EventRole {
+    /// The role `event`, a serialized event of the kind, has: [`Role::Error`] when it meets
+    /// a condition of `error_when`, else the kind's.
+    pub fn of(&self, event: &serde_json::Value) -> Role {
+        if Self::meets(&self.error_when, event) {
+            Role::Error
+        } else {
+            self.role
+        }
+    }
+
+    /// Whether `event` has every field value of one of `conditions`.
+    pub fn meets(
+        conditions: &[BTreeMap<String, serde_json::Value>],
+        event: &serde_json::Value,
+    ) -> bool {
+        conditions.iter().any(|condition| {
+            condition
+                .iter()
+                .all(|(field, value)| event.get(field) == Some(value))
+        })
+    }
 }
 
 /// The name and version of a schema.
