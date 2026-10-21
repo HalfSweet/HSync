@@ -27,6 +27,8 @@ const props = defineProps<{
   decoder: number
   /** Position of the stream among the decoder's. */
   stream: number
+  /** A presentation lane of the same event stream, such as JTAG's state intervals. */
+  annotation?: string
   /** The block the marked segment came from. */
   selected: string | null
   /** Converts a sample to seconds from the trigger, for tips. */
@@ -64,7 +66,7 @@ interface Geometry {
   tiny: boolean
 }
 
-function geometry(start: number, end: number): Geometry {
+function geometry(start: number, end: number, gap: number): Geometry {
   const { start: origin, samplesPerPixel, width } = props.viewport
   const x0 = (start - origin) / samplesPerPixel
   const x1 = (end - origin) / samplesPerPixel
@@ -72,17 +74,27 @@ function geometry(start: number, end: number): Geometry {
   const right = Math.min(width, x1)
   return {
     left,
-    width: Math.max(right - left, 1),
+    // Leave a pixel between events, but keep point events visible at every scale.
+    width: Math.max(right - left - gap, 2),
     cutLeft: x0 < 0,
     cutRight: x1 > width,
-    tiny: right - left < width * TINY_SHARE,
+    tiny: right - left < (props.annotation === 'states' ? 40 : width * TINY_SHARE),
   }
 }
 
-const blockId = (block: LaneBlock) => `${props.decoder}:${props.stream}:${block.start}:${block.end}`
+const blockId = (block: LaneBlock) =>
+  `${props.decoder}:${props.stream}:${props.annotation ? `${props.annotation}:` : ''}${block.type}:${block.start}:${block.end}`
 
 /** An event's tip: its kind, every field as shown, and when it starts. */
 function tipOf(event: EventRow): string {
+  if (props.annotation === 'states') {
+    return t('decode.intervalTip', {
+      label: copy.valueLabel(props.kind, 'state', String(event.payload.state)),
+      start: at(event.start),
+      end: at(event.end),
+      duration: formatTime(props.timeOf(event.end) - props.timeOf(event.start)),
+    })
+  }
   const fields = fieldTexts(event.payload, props.format, wording.value).map(({ name, text }) =>
     t('decode.field', { label: fieldLabel(name), value: text }),
   )
@@ -143,17 +155,33 @@ function fitting(
 const pieces = computed<(DensePiece | EventPiece)[]>(() => {
   const { start: origin, samplesPerPixel, width } = props.viewport
   const end = origin + width * samplesPerPixel
-  return (props.view?.blocks ?? [])
-    .filter((block) => block.end >= origin && block.start <= end)
-    .map((block) => {
-      const g = geometry(block.start, block.end)
+  // A state change and a scan boundary can occupy exactly the same samples. Give them
+  // one marker with every event in its tip, rather than overlapping buttons and keys.
+  const grouped = new Map<string, { block: LaneBlock; events: EventRow[] }>()
+  for (const block of props.view?.blocks ?? []) {
+    const id = blockId(block)
+    const held = grouped.get(id)
+    if (held && block.type === 'event') held.events.push(block)
+    else grouped.set(id, { block, events: block.type === 'event' ? [block] : [] })
+  }
+  return [...grouped.values()]
+    .filter(({ block }) => block.end >= origin && block.start <= end)
+    .map(({ block, events }) => {
+      const g = geometry(block.start, block.end, block.type === 'event' ? 1 : 0)
       const id = blockId(block)
       if (block.type === 'dense') return { type: 'dense', id, g, count: block.count }
-      const label = kindLabel(block.kind)
-      const values = primaryFields(block.payload).map(([name, held]) =>
-        valueText(name, held, props.format, wording.value),
+      const state = props.annotation === 'states'
+      const label = state ? '' : events.map((event) => kindLabel(event.kind)).join(' · ')
+      const values = events.flatMap((event) =>
+        primaryFields(event.payload).map(([name, held]) =>
+          valueText(name, held, props.format, wording.value),
+        ),
       )
-      const { value, label: labelFits } = fitting(label, values, g.width)
+      // State names occupy their own row; show as much of the name as fits, with the
+      // complete localized name and duration in the tip, even at a narrow clock cycle.
+      const { value, label: labelFits } = state
+        ? { value: values[0] ?? '', label: false }
+        : fitting(label, values, g.width)
       return {
         type: 'event',
         id,
@@ -163,7 +191,7 @@ const pieces = computed<(DensePiece | EventPiece)[]>(() => {
         label,
         value,
         labelFits,
-        tip: tipOf(block),
+        tip: events.map(tipOf).join('\n'),
       }
     })
 })
@@ -194,6 +222,7 @@ const roleTint = computed(
 function blockClass(g: Geometry, on: boolean): string[] {
   return [
     'blk',
+    props.annotation === 'states' ? 'blk-state' : '',
     on ? 'blk-on' : tint.value,
     g.cutLeft ? 'blk-cl' : '',
     g.cutRight ? 'blk-cr' : '',
@@ -219,8 +248,9 @@ function pick(piece: EventPiece): void {
       <button
         v-else
         :class="blockClass(piece.g, piece.on)"
-        :style="{ left: `${piece.g.left}px`, width: `${piece.g.width - 1}px` }"
+        :style="{ left: `${piece.g.left}px`, width: `${piece.g.width}px` }"
         :aria-pressed="piece.on"
+        :aria-label="piece.tip"
         :title="piece.tip"
         @click="pick(piece)"
       >
@@ -289,6 +319,16 @@ function pick(piece: EventPiece): void {
 .val {
   font-family: var(--mono);
   font-weight: 500;
+}
+
+.blk-state:not(.blk-tiny) {
+  padding: 0 4px;
+}
+
+.blk-state .val {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dim {
