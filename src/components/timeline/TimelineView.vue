@@ -11,6 +11,7 @@ import {
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useControlHeld } from '@/composables/useControlHeld'
 import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { useRowMetrics } from '@/composables/useRowMetrics'
 import { useShortcuts } from '@/composables/useShortcuts'
@@ -828,25 +829,36 @@ function queueWheel(): void {
   onNextFrame(applyWheel)
 }
 
+/** Track x of the pointer, within the track. */
+function anchorOf(clientX: number): number | null {
+  const rows = rowsElement.value?.getBoundingClientRect()
+  if (!rows) return null
+  return Math.min(Math.max(clientX - rows.left - metrics.value.label, 0), view.viewport.width)
+}
+
+const controlHeld = useControlHeld()
+
 // The wheel zooms around the pointer or pans (DESIGN.md §10); what it leaves alone scrolls the
-// rows.
+// rows. A wheel's notches glide (§13); a trackpad follows the fingers.
 function onWheel(event: WheelEvent): void {
   stopFling()
-  const rows = rowsElement.value?.getBoundingClientRect()
   const visible = scroller.value?.getBoundingClientRect()
-  if (!rows || !visible) return
+  const anchor = anchorOf(event.clientX)
+  if (!visible || anchor === null) return
   const action = wheelAction(event, {
     wheelZoom: preferences.wheelZoom,
     overLabels: event.clientX - visible.left < metrics.value.label,
+    controlHeld: controlHeld(),
   })
   if (!action) return
   event.preventDefault()
+  if (action.kind === 'zoom' && action.notched) {
+    view.glideZoom(action.factor, anchor)
+    return
+  }
   if (action.kind === 'zoom') {
     wheel.zoom *= action.factor
-    wheel.anchor = Math.min(
-      Math.max(event.clientX - rows.left - metrics.value.label, 0),
-      view.viewport.width,
-    )
+    wheel.anchor = anchor
   } else {
     wheel.pan += action.dx
   }

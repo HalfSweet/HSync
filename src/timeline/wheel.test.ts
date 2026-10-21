@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
-import { wheelAction, type WheelContext } from './wheel'
+import { wheelAction, type Wheel, type WheelContext } from './wheel'
 
-const turn = (patch: Partial<WheelEvent>) => ({
+const turn = (patch: Partial<Wheel>): Wheel => ({
   deltaX: 0,
   deltaY: 0,
   deltaMode: 0,
@@ -12,8 +12,8 @@ const turn = (patch: Partial<WheelEvent>) => ({
   ...patch,
 })
 
-const tracks: WheelContext = { wheelZoom: false, overLabels: false }
-const zooming: WheelContext = { wheelZoom: true, overLabels: false }
+const tracks: WheelContext = { wheelZoom: false, overLabels: false, controlHeld: false }
+const zooming: WheelContext = { wheelZoom: true, overLabels: false, controlHeld: false }
 
 describe('wheelAction', () => {
   it('zooms with Ctrl or ⌘, in by turning up and out by turning down', () => {
@@ -51,12 +51,10 @@ describe('wheelAction', () => {
     expect(wheelAction(turn({ deltaY: 100 }), { ...zooming, overLabels: true })).toBeNull()
   })
 
-  it('counts a line-based wheel in lines of 16 pixels', () => {
+  it('pans a line-based wheel in lines of 16 pixels', () => {
     expect(wheelAction(turn({ deltaY: 3, deltaMode: 1, shiftKey: true }), tracks)).toEqual({
       kind: 'pan',
       dx: 48,
     })
-    const zoom = wheelAction(turn({ deltaY: 3, deltaMode: 1 }), zooming)
-    expect(zoom?.kind === 'zoom' && zoom.factor).toBeCloseTo(Math.exp(-48 * 0.002))
   })
 })
