@@ -5,7 +5,7 @@
  */
 export type EventRow = { 
 /**
- * Its position in the stream's time order.
+ * Its position in the stream's time order, or within a derived annotation lane.
  */
 index: number, start: number, end: number, 
 /**

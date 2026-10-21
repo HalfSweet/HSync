@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use hsync_capture::LogicCapture;
-use hsync_uiharu::{DecodeError, Decoder, EventRow, Needle, Position, Update};
+use hsync_uiharu::{DecodeError, Decoder, EventRow, LaneBlock, Needle, Position, Update};
 use parking_lot::RwLock;
 use serde_json::json;
 use uiharu_core::{Tick, TickRange};
@@ -232,4 +232,34 @@ fn cancelling_ends_the_thread() {
     assert!(!decoder.is_finished());
     assert_eq!(decoder.error(), None);
     assert!(updates.try_recv().is_err());
+}
+
+#[test]
+fn jtag_state_lanes_use_durations_and_the_remaining_captures_origin() {
+    let mut capture = LogicCapture::new(1_000_000, 0..4);
+    for channel in 0..4 {
+        capture
+            .channel_mut(channel)
+            .expect("the channel")
+            .append_words(&[0, 0]);
+    }
+    let (decoder, updates) = start(
+        description(1_000_000, json!({
+            "type": "jtag",
+            "config": { "tck": 0, "tms": 1, "tdi": 2, "tdo": 3, "initial_state": "test-logic-reset" }
+        })),
+        Arc::new(RwLock::new(capture)),
+        Position { len: 128, dropped: 500, finishing: true },
+    ).expect("the decoder starts");
+    wait_finished(&updates);
+
+    let view = decoder.view(0, 40..80, 1.0, 10).expect("the stream");
+    assert!(view.blocks.is_empty());
+    let states = &view.annotations.expect("JTAG state annotations")[0];
+    assert_eq!(states.id, "states");
+    assert!(matches!(&states.blocks[..], [LaneBlock::Event(row)]
+        if row.start == 0 && row.end == 128 && row.payload["state"] == "test-logic-reset"));
+    let page = decoder.page(0, None, 0, 10).expect("the raw stream");
+    assert_eq!(page.total, 1);
+    assert_eq!((page.rows[0].start, page.rows[0].end), (0, 1));
 }
