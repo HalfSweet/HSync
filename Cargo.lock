@@ -1577,6 +1577,7 @@ dependencies = [
  "hsync-dslogic",
  "hsync-pxlogic",
  "hsync-session",
+ "hsync-slogic",
  "log",
  "parking_lot",
  "serde",
@@ -1739,7 +1740,7 @@ dependencies = [
 
 [[package]]
 name = "hsync-slogic"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "crossbeam-channel",
  "hsync-capture",

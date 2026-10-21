@@ -1699,7 +1699,25 @@
       "memoryFull": "The compressed samples outgrew the device memory, so the capture stopped. Choose a shorter duration",
       "rleOverrun": "The signals changed too fast to compress, so the capture stopped. Choose a duration that fits the device memory",
       "detached": "The device was disconnected",
-      "lost": "The connection to the device was lost"
+      "lost": "The connection to the device was lost",
+      "slogic": {
+        "captureRunning": "An SLogic16U3 capture is running; stop it before changing settings",
+        "samplerate": "This sample rate is unavailable for the enabled channels and USB link",
+        "sampleLimit": "Choose {min} to {max} samples in steps of {step}",
+        "threshold": "The SLogic16U3 threshold must be between 0 and 6 V",
+        "option": "SLogic16U3 does not support this setting",
+        "channel": "SLogic16U3 has no channel {channel}",
+        "noChannels": "Enable at least one channel before capturing",
+        "triggerType": "SLogic16U3 supports simple edge and level triggers only",
+        "triggerChannel": "Trigger channel {channel} does not exist on SLogic16U3",
+        "auxReady": "SLogic16U3 did not acknowledge its configuration command",
+        "sampleClock": "SLogic16U3 could not provide a clock for the selected sample rate",
+        "captureSettings": "The SLogic16U3 capture settings are invalid",
+        "captureData": "SLogic16U3 stopped sending samples. Check the USB connection and try again",
+        "cancelTransfers": "SLogic16U3 USB transfers did not stop in time. Reconnect the device",
+        "workerStart": "Could not start the SLogic16U3 capture worker",
+        "drain": "SLogic16U3 still has samples from a previous capture. Reconnect the device"
+      }
     },
     "file": {
       "io": "File access failed: {detail}",
@@ -1741,7 +1759,7 @@
       "restarting": "Restarting…"
     },
     "license": "HSync is free software, available under the Apache-2.0 or the GPL-3.0-or-later license, at your option.",
-    "credits": "The DSLogic driver is ported from DreamSourceLab’s DSView (libsigrok4DSL, GPL), the ATK-Logic driver from ALIENTEK’s ATK-Logic (GPL), and the PXLogic driver from PXView (GPL), which also supplies its firmware and FPGA bitstreams; the DSLogic firmware and FPGA bitstreams ship under the MIT license; the uiharu decode engine under the Apache-2.0 license; the IBM Plex fonts under the SIL OFL 1.1; the Lucide icons under the ISC license."
+    "credits": "The DSLogic driver is ported from DreamSourceLab’s DSView (libsigrok4DSL, GPL), the ATK-Logic driver from ALIENTEK’s ATK-Logic (GPL), and the PXLogic driver from PXView (GPL), which also supplies its firmware and FPGA bitstreams; the SLogic16U3 driver is ported from Sipeed’s libsigrok (GPL-3.0-or-later), used by its PulseView app; the DSLogic firmware and FPGA bitstreams ship under the MIT license; the uiharu decode engine under the Apache-2.0 license; the IBM Plex fonts under the SIL OFL 1.1; the Lucide icons under the ISC license."
   },
   "shortcuts": {
     "space": "Space"
