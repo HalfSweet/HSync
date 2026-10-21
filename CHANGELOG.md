@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.4 (2026-10-21)
+
+### Features
+
+- **ui:** Customise keyboard shortcuts in the settings (#47) ([2e637b3](https://github.com/HalfSweet/HSync/commit/2e637b3eff0789bbfff19e1219c1eee57e29446a))
+- **driver:** Add experimental SLogic16U3 support (#48) ([8802734](https://github.com/HalfSweet/HSync/commit/8802734a663240fda90e5d2545a321afe9cbda96))
+
 ## 0.2.3 (2026-10-18)
 
 ### Features
