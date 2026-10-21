@@ -8,7 +8,7 @@ import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { useDecodeStore } from '@/stores/decode'
 import { useStreamStore } from '@/stores/stream'
 import { I2C_RATES, nominalRate } from '@/timeline/clock'
-import { uartFormat, type BusKind, type ChannelGroup } from '@/timeline/groups'
+import { uartFormat, type ChannelGroup } from '@/timeline/groups'
 import { formatFrequencyShort, formatSamplerate } from '@/utils/units'
 
 const props = defineProps<{ group: ChannelGroup; collapsed: boolean }>()
@@ -27,15 +27,9 @@ const title = computed(() => {
   return copy.typeName(props.group.type ?? '')
 })
 
-const SQUARES: Record<BusKind, string> = {
-  i2c: 'bg-i2c',
-  uart: 'bg-uart',
-  spi: 'bg-spi',
-  can: 'bg-can',
-  other: 'bg-ink-2',
-}
+/** A decoder's square is neutral: colour on the timeline says what an event is (§3.2). */
 const square = computed(() =>
-  props.group.unnamed ? 'shadow-[inset_0_0_0_1px_var(--trace-2)]' : SQUARES[props.group.kind],
+  props.group.unnamed ? 'shadow-[inset_0_0_0_1px_var(--trace-2)]' : 'bg-ink-2',
 )
 
 const clockChannel = computed(
