@@ -23,6 +23,7 @@ import type { OptionKey } from './bindings/OptionKey'
 import type { OptionValue } from './bindings/OptionValue'
 import type { PatternCondition } from './bindings/PatternCondition'
 import type { PulseInfo } from './bindings/PulseInfo'
+import type { RolePart } from './bindings/RolePart'
 import type { SearchResult } from './bindings/SearchResult'
 import type { StreamPage } from './bindings/StreamPage'
 import type { WaveformSummary } from './bindings/WaveformSummary'
@@ -191,15 +192,15 @@ export interface Backend {
   ): Promise<number | null>
   /** Events matching `query` in every decoder's streams; `null` for a blank query. */
   decodeSearch(captureId: number, query: string): Promise<SearchResult | null>
-  /** Where decoder `index` has events within `start..end`, as `[start, end]` stretches at
-   * most `resolution` samples apart; `null` for a decoder that is not there. */
+  /** Where decoder `index` has events within `start..end`, in columns of `resolution` samples
+   * each in the role covering most of it, errors last; `null` for a decoder that is not there. */
   decodeCoverage(
     captureId: number,
     index: number,
     start: number,
     end: number,
     resolution: number,
-  ): Promise<[number, number][] | null>
+  ): Promise<RolePart[] | null>
 
   /** Progress and end of captures taken with a device. */
   onLive(handler: (status: LiveStatus) => void): Promise<Unsubscribe>
@@ -443,7 +444,7 @@ class TauriBackend implements Backend {
   }
 
   decodeCoverage(captureId: number, index: number, start: number, end: number, resolution: number) {
-    return invoke<[number, number][] | null>('decode_coverage', {
+    return invoke<RolePart[] | null>('decode_coverage', {
       captureId,
       index,
       start,
