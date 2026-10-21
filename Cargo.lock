@@ -1577,6 +1577,7 @@ dependencies = [
  "hsync-dslogic",
  "hsync-pxlogic",
  "hsync-session",
+ "hsync-slogic",
  "log",
  "parking_lot",
  "serde",
@@ -1735,6 +1736,18 @@ dependencies = [
  "thiserror 2.0.21",
  "ts-rs",
  "uiharu-registry",
+]
+
+[[package]]
+name = "hsync-slogic"
+version = "0.2.3"
+dependencies = [
+ "crossbeam-channel",
+ "hsync-capture",
+ "hsync-core",
+ "hsync-driver",
+ "log",
+ "nusb",
 ]
 
 [[package]]

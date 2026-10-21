@@ -1,6 +1,6 @@
 # HSync user guide
 
-HSync is a general-purpose logic analyzer app. It drives DreamSourceLab DSLogic devices, ALIENTEK ATK-Logic devices (DL16 and DL16 Plus), PXLogic PX-Logic devices (PX-Logic 32, 16 Pro, 16 Plus and 16 Base) and a built-in demo device, with the logic analyzer features of DSView. This guide walks through the interface in the order you use it. Installing HSync is described in the [README](../README.md#download).
+HSync is a general-purpose logic analyzer app. It drives DreamSourceLab DSLogic devices, ALIENTEK ATK-Logic devices (DL16 and DL16 Plus), PXLogic PX-Logic devices (PX-Logic 32, 16 Pro, 16 Plus and 16 Base) and a built-in demo device, with experimental support for Sipeed's SLogic16U3. This guide walks through the interface in the order you use it. Installing HSync is described in the [README](../README.md#download).
 
 ## Interface
 
@@ -19,10 +19,27 @@ From top to bottom, the window has five parts:
 - The first time you open a DSLogic, HSync loads the firmware and FPGA bitstream onto it automatically; this takes a few seconds.
 - An ATK-Logic is listed as **ATK-Logic** until it is opened, then by its model, such as **DL16 Plus**. HSync does not update its firmware: if it reports that the firmware needs an update, update it with ALIENTEK's ATK-Logic app, then plug the device in again.
 - A PX-Logic is likewise listed as **PXLogic** until it is opened (except the first 32-channel devices, named at once), then by its model, such as **PX-Logic 16 Plus**. HSync loads its FPGA bitstreams each time it opens it. If the device runs another firmware version than the one HSync brings (PXView 1.6.5's), HSync first writes its own into the device, which restarts and is opened again; this takes a few seconds more.
+- A Sipeed **SLogic16U3** uses the firmware already installed on the device. HSync does not update its firmware. This port is experimental; see [SLogic16U3](#sipeed-slogic16u3) below for connection details and limits.
 - If you plug in a logic analyzer while the demo device is open, the status bar shows "… connected"; click **Switch** to use it. If a loose USB cable makes the device drop out briefly and it reappears within two seconds, HSync reopens it automatically and restores its settings.
 - If a USB 3.0 model is plugged into a USB 2.0 port, the status bar reminds you to move it to a USB 3.0 port; otherwise Stream mode's speed is limited.
-- The device's options sit in the acquisition settings (below): the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**), the **External trigger input** and, for Buffer mode, what happens **When stopped**. Each device lists only the options it has: an ATK-Logic has the operation mode and a **Threshold voltage** from −5 to 5 V; a PX-Logic has the operation and channel modes, a **Threshold voltage** from 0 to 6 V, the filter, the clock edge and the **External trigger input**.
+- The device's options sit in the acquisition settings (below): the **Operation mode** (**Buffer mode** or **Stream mode**), **Channel mode**, **Threshold voltage** (**Threshold level** on models with fixed thresholds), the input filter (**Filter one-sample glitches**), **RLE compression**, the external clock and its edge (**Use an external clock**, **Sample on the falling clock edge**), the **External trigger input** and, for Buffer mode, what happens **When stopped**. Each device lists only the options it has: an ATK-Logic has the operation mode and a **Threshold voltage** from −5 to 5 V; a PX-Logic has the operation and channel modes, a **Threshold voltage** from 0 to 6 V, the filter, the clock edge and the **External trigger input**. An SLogic16U3 has Stream mode and a **Threshold voltage** from 0 to 6 V, initially 1.7 V; its sample-rate choices follow the enabled channels automatically.
 - HSync remembers the settings of each kind of device and restores them the next time you open it: the device options, enabled channels, triggers, channel colours and capture mode at once, the channel names and decoders with the first capture after it opens. Showing a file or another device's capture leaves the names and decoders remembered for this device alone; removing every decoder is remembered too.
+
+### Sipeed SLogic16U3
+
+Connect the analyzer with a USB 3.0 data cable, close any other application using it, then select **SLogic16U3** from the device menu. On Windows it needs WinUSB; on Linux install the SLogic16U3 udev rule in the [README](../README.md#first-launch). HSync recognizes the normal device with USB ID `359f:3031`; bootloader mode and other SLogic models are not supported.
+
+For a first capture, connect the analyzer's ground and one channel to a known low-frequency digital signal, select 5 MHz and a short duration, leave the trigger unset and press **Capture**. The port uses the installed firmware and does not flash the device. Alongside mock-based protocol and capture tests, a real SLogic16U3 passed USB 3.0 discovery and opening, three consecutive captures at 5 MHz in each of the 4-, 8- and 16-channel modes, and short captures configured at their 800, 400 and 200 MHz limits. Every capture delivered exactly 65,536 samples. The captured inputs were static, so channel mapping and signal timing remain unverified; sustained high-rate throughput and USB 2.0 also need hardware validation.
+
+SLogic16U3 captures in Stream mode, including Single, Repeat, Loop and Instant. The highest enabled channel determines the sampling limit, even if only one channel is enabled:
+
+| Enabled channels | Maximum with USB 3.0 | Maximum with USB 2.0 |
+| ---------------- | -------------------- | -------------------- |
+| Only D0–D3       | 800 MHz              | 80 MHz               |
+| Only D0–D7       | 400 MHz              | 40 MHz               |
+| Any of D8–D15    | 200 MHz              | 20 MHz               |
+
+These are the device’s advertised limits; sustained host throughput has not yet been measured. Choose from the discrete rates shown in the acquisition settings. For example, enabling only D15 still has the 16-channel limit. The threshold is shared by all channels. Simple edge and level triggers are evaluated in software; stages, serial triggers, Buffer mode, RLE, external clocks and external trigger inputs are unavailable. The pre-trigger history uses at most 64 MiB (33,554,432 samples), so long captures can contain less history than the requested trigger position; the trigger marker shows the actual position.
 
 ## Acquisition settings
 
@@ -40,7 +57,7 @@ Click the sample rate │ duration │ channels button in the top bar:
 - Use the arrow to the right of **Capture** to choose how to capture:
   - **Single**: capture once.
   - **Repeat**: capture again a set time after each capture completes. With **Repeat** selected, set the interval under **Repeat every** in the same menu (0.1–10 s, default 1 s). From the second capture on, the screen keeps the previous complete result while the new one is captured in the background, and the new one replaces it in one go once complete. By default, stopping midway discards the new capture and keeps the previous one; to show the latest data instead, turn on **Show the latest data when a repeat stops** in the settings.
-  - **Loop**: capture continuously, keeping only the latest stretch (as long as the selected duration); when you stop, that last stretch is shown. Available only on devices that can loop (a DSLogic, an ATK-Logic or a PX-Logic in Stream mode, the demo device).
+  - **Loop**: capture continuously, keeping only the latest stretch (as long as the selected duration); when you stop, that last stretch is shown. Available only on devices that can loop (a DSLogic, an ATK-Logic or a PX-Logic in Stream mode, an SLogic16U3, or the demo device).
   - **Instant**: ignore the trigger conditions and start at once.
 - Successive captures with the same device keep the current zoom and position, so you can keep your eye on the same detail across repeated captures.
 - When the computer cannot take in the data fast enough, the status bar reports that data was lost ("USB bandwidth exceeded; some data was lost").
@@ -49,7 +66,7 @@ Click the sample rate │ duration │ channels button in the top bar:
 
 - **Simple trigger**: each channel row has a trigger slot at the right end of its label. Click it to choose **None**, **Rising edge**, **Falling edge**, **Any edge**, **High level** or **Low level**. When several channels have conditions, the trigger fires only when all of them hold at once. The **Trigger** button in the top bar sums up the current conditions.
 - Click **Trigger** in the top bar to open the trigger settings:
-  - **Position**: the share of the whole capture that comes before the trigger point (fixed at 1% in Stream mode).
+  - **Position**: the share of the whole capture that comes before the trigger point (fixed at 1% in Stream mode on DSLogic, ATK-Logic and PX-Logic; adjustable up to 90% on SLogic16U3, subject to its pre-trigger history limit).
   - **Stages** (a DSLogic in Buffer mode): up to 16 stages. Each stage has two patterns, **Pattern A** and **Pattern B**; you can **Invert** each one and **Combine** them as **A and B** or **A or B**. Once a stage has held the set number of times (**Count**; tick **In a row** to require consecutive matches), the trigger moves on to the next stage.
   - **Serial** (a DSLogic in Buffer mode): **Start**, **Stop** and **Clock** conditions, the **Data** channel, and a data **Value** of up to 16 bits (each bit 0, 1 or X).
 - **External trigger input** (a PX-Logic): in the device options, choose the edge or level on the device's trigger input that fires the trigger (**Rising edge**, **High level**, **Falling edge**, **Low level** or **Any edge**), or **Off** to ignore the input. An **Instant** capture ignores it too.
