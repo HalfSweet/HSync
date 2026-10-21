@@ -39,20 +39,6 @@
   --alert: #ac312c;
   --alert-wash: #fef0ee;
 
-  /* Bus colours: main / block wash / stronger wash. Muted, one lightness and chroma for all. */
-  --i2c: #45658d;
-  --i2c-wash: #eff5fd;
-  --i2c-mid: #dce7f6;
-  --uart: #277165;
-  --uart-wash: #ecf7f5;
-  --uart-mid: #d6ece7;
-  --spi: #665a8a;
-  --spi-wash: #f5f3fc;
-  --spi-mid: #e7e3f5;
-  --can: #845169;
-  --can-wash: #fbf1f5;
-  --can-mid: #f4e0e8;
-
   /* Event roles (DESIGN.md §3.2): mark (narrow blocks, packed runs, the overview strip) /
      fill (blocks with text) / deep (the fill's border, emphasised blocks). The six hues share
      their lightness steps and chroma and keep clear of red, amber and the search yellow. */
@@ -165,19 +151,6 @@
   --find-strong: #5e5225;
   --alert: #f28881;
   --alert-wash: #381e1c;
-
-  --i2c: #a0c0eb;
-  --i2c-wash: #1c232d;
-  --i2c-mid: #283649;
-  --uart: #8bcdbf;
-  --uart-wash: #172623;
-  --uart-mid: #1e3c36;
-  --spi: #c0b5e7;
-  --spi-wash: #23212c;
-  --spi-mid: #373247;
-  --can: #e1acc4;
-  --can-wash: #2b1f24;
-  --can-mid: #452d38;
 
   --role-framing: #bcbec0;
   --role-address: #4c7fc0;
