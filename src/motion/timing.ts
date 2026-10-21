@@ -16,6 +16,16 @@ export function motionTiming(name: MotionName): MotionTiming {
   }
 }
 
+/**
+ * Reads a motion duration as it stands now: one of the pairs, or `view`, the timeline's glide,
+ * whose curve is run from script.
+ */
+export function motionDuration(name: MotionName | 'view'): number {
+  return parseDuration(
+    getComputedStyle(document.documentElement).getPropertyValue(`--motion-${name}`),
+  )
+}
+
 /** `200ms` or `.2s` (as the build may write it) in milliseconds; zero if unreadable. */
 export function parseDuration(text: string): number {
   const value = text.trim()

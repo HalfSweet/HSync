@@ -785,16 +785,16 @@ const pulseAnchor = computed<FloatAnchor | null>(() => {
 // the whole capture and `Esc` lets go of the edge measurement, or else of the segment.
 const pan = (share: number) => () => {
   stopFling()
-  view.pan(view.viewport.width * share)
+  view.glidePan(view.viewport.width * share)
 }
 useShortcuts({
   zoomIn: () => {
     stopFling()
-    view.zoom(2)
+    view.glideZoom(2)
   },
   zoomOut: () => {
     stopFling()
-    view.zoom(0.5)
+    view.glideZoom(0.5)
   },
   fit: () => {
     stopFling()

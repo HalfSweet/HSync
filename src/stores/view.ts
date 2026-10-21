@@ -1,6 +1,9 @@
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 
+import { onNextFrame } from '@/motion/frames'
+import { motionDuration } from '@/motion/timing'
+import { glideAt, glideDone, type Glide } from '@/timeline/glide'
 import type { ChannelRef } from '@/timeline/groups'
 import type { Measure } from '@/timeline/measure'
 import { rulerTicks } from '@/timeline/ticks'
@@ -10,6 +13,7 @@ import {
   panViewport,
   rangeViewport,
   viewportEnd,
+  xToSample,
   zoomViewport,
   type Viewport,
 } from '@/timeline/viewport'
@@ -57,16 +61,70 @@ export const useViewStore = defineStore('view', () => {
     }),
   )
 
+  /** The glide under way (DESIGN.md §13), if any. */
+  let glide: Glide | null = null
+  /** Milliseconds between the frames of the last glide. */
+  let frameTime = 1000 / 60
+  let lastFrame: number | null = null
+  let stepQueued = false
+
+  function queueStep(): void {
+    if (stepQueued) return
+    stepQueued = true
+    onNextFrame(stepGlide)
+  }
+
+  function stepGlide(now: number): void {
+    stepQueued = false
+    const current = glide
+    if (!current) {
+      lastFrame = null
+      return
+    }
+    if (lastFrame !== null) frameTime = Math.min(Math.max(now - lastFrame, 4), 50)
+    lastFrame = now
+    // Each frame shows where the glide is when the frame appears, a frame after its time, so
+    // the first frame already moves.
+    if (Number.isNaN(current.start)) current.start = now - frameTime
+    viewport.value = glideAt(current, now)
+    if (glideDone(current, now)) {
+      glide = null
+      lastFrame = null
+    } else {
+      queueStep()
+    }
+  }
+
+  /** Glides to `target`, from wherever the view is now; at once with reduced motion. */
+  function glideTo(target: Viewport): void {
+    autoFit = false
+    const duration = motionDuration('view')
+    if (duration <= 0) {
+      glide = null
+      viewport.value = target
+      return
+    }
+    glide = { from: viewport.value, to: target, start: Number.NaN, duration }
+    queueStep()
+  }
+
+  /** Jumps to `next`, ending any glide. */
   function update(next: Viewport, fitting = false): void {
+    glide = null
     autoFit = fitting
     viewport.value = next
   }
 
+  /** Changes the view at once; a glide under way carries on from the changed view. */
+  function adjust(change: (view: Viewport) => Viewport): void {
+    if (glide) glide = { ...glide, from: change(glide.from), to: change(glide.to) }
+    viewport.value = change(viewport.value)
+  }
+
   function setWidth(width: number): void {
     if (width === viewport.value.width) return
-    viewport.value = autoFit
-      ? fitViewport(width, capture.extent)
-      : clampViewport({ ...viewport.value, width }, capture.extent)
+    if (autoFit) update(fitViewport(width, capture.extent), true)
+    else adjust((view) => clampViewport({ ...view, width }, capture.extent))
   }
 
   function fit(): void {
@@ -75,11 +133,34 @@ export const useViewStore = defineStore('view', () => {
 
   /** Zooms by `factor` around `anchorX` (the middle of the track by default). */
   function zoom(factor: number, anchorX = viewport.value.width / 2): void {
-    update(zoomViewport(viewport.value, factor, anchorX, capture.extent))
+    autoFit = false
+    adjust((view) => zoomViewport(view, factor, anchorX, capture.extent))
   }
 
   function pan(dx: number): void {
-    update(panViewport(viewport.value, dx, capture.extent))
+    autoFit = false
+    adjust((view) => panViewport(view, dx, capture.extent))
+  }
+
+  /**
+   * Glides by `factor` around `anchorX` (the middle of the track by default). The sample under
+   * it now ends there; during a glide, the zoom adds to where it was going.
+   */
+  function glideZoom(factor: number, anchorX = viewport.value.width / 2): void {
+    const target = glide?.to ?? viewport.value
+    const samplesPerPixel = target.samplesPerPixel / factor
+    const anchor = xToSample(viewport.value, anchorX)
+    glideTo(
+      clampViewport(
+        { start: anchor - anchorX * samplesPerPixel, samplesPerPixel, width: target.width },
+        capture.extent,
+      ),
+    )
+  }
+
+  /** Glides by `dx` pixels of the view it is going to; positive is towards later samples. */
+  function glidePan(dx: number): void {
+    glideTo(panViewport(glide?.to ?? viewport.value, dx, capture.extent))
   }
 
   function showRange(from: number, to: number): void {
@@ -122,13 +203,16 @@ export const useViewStore = defineStore('view', () => {
         return
       }
       const scale = capture.samplerate / previous.samplerate
-      viewport.value = clampViewport(
-        {
-          ...viewport.value,
-          start: viewport.value.start * scale,
-          samplesPerPixel: viewport.value.samplesPerPixel * scale,
-        },
-        capture.extent,
+      const kept = glide?.to ?? viewport.value
+      update(
+        clampViewport(
+          {
+            ...kept,
+            start: kept.start * scale,
+            samplesPerPixel: kept.samplesPerPixel * scale,
+          },
+          capture.extent,
+        ),
       )
     },
   )
@@ -138,7 +222,7 @@ export const useViewStore = defineStore('view', () => {
     () => capture.extent,
     () => {
       if (autoFit) fit()
-      else viewport.value = clampViewport(viewport.value, capture.extent)
+      else adjust((view) => clampViewport(view, capture.extent))
     },
   )
 
@@ -158,11 +242,11 @@ export const useViewStore = defineStore('view', () => {
     () => [capture.sampleCount, capture.dropped] as const,
     () => {
       if (!capture.capturing || autoFit || !preferences.followLatest) return
-      const span = viewport.value.width * viewport.value.samplesPerPixel
-      const start = Math.max(0, capture.sampleCount - span)
-      if (start !== viewport.value.start) {
-        viewport.value = clampViewport({ ...viewport.value, start }, capture.extent)
+      const latest = (view: Viewport) => {
+        const start = Math.max(0, capture.sampleCount - view.width * view.samplesPerPixel)
+        return start === view.start ? view : clampViewport({ ...view, start }, capture.extent)
       }
+      if (glide || latest(viewport.value) !== viewport.value) adjust(latest)
     },
   )
 
@@ -177,6 +261,8 @@ export const useViewStore = defineStore('view', () => {
     fit,
     zoom,
     pan,
+    glideZoom,
+    glidePan,
     showRange,
     centerOn,
     setSegment,

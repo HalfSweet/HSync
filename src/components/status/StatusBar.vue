@@ -160,7 +160,7 @@ const perDivision = computed(() =>
         class="btn-icon"
         :aria-label="t('status.zoomOut')"
         :title="tip(t('status.zoomOut'), 'zoomOut')"
-        @click="view.zoom(0.5)"
+        @click="view.glideZoom(0.5)"
       >
         <AppIcon name="minus" />
       </button>
@@ -169,7 +169,7 @@ const perDivision = computed(() =>
         class="btn-icon"
         :aria-label="t('status.zoomIn')"
         :title="tip(t('status.zoomIn'), 'zoomIn')"
-        @click="view.zoom(2)"
+        @click="view.glideZoom(2)"
       >
         <AppIcon name="plus" />
       </button>
