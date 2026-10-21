@@ -11,6 +11,7 @@
 
 mod feed;
 mod query;
+mod roles;
 mod run;
 mod search;
 mod states;
@@ -18,6 +19,7 @@ mod store;
 
 pub use feed::{FeedError, Feeder};
 pub use query::{Hit, StreamProgress};
+pub use roles::{EventRole, RolePart};
 pub use run::{DecodeError, Decoder, Position, Stream, Update, channels_read};
 pub use search::Needle;
 pub use store::{AnnotationLane, EventPage, EventRow, LaneBlock, Store, StreamView};

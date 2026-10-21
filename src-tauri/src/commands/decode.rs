@@ -2,7 +2,7 @@
 //! and the catalog of decoders.
 
 use hsync_session::{
-    CatalogEntry, DecoderLanes, DecoderStatus, ModuleInfo, SearchResult, StreamPage,
+    CatalogEntry, DecoderLanes, DecoderStatus, ModuleInfo, RolePart, SearchResult, StreamPage,
 };
 use tauri::State;
 
@@ -90,8 +90,8 @@ pub async fn decode_search(
     Ok(decoding(&state, capture_id)?.search(&query))
 }
 
-/// The stretches of `start..end` where decoder `index` has events, those closer than
-/// `resolution` samples joined; for the overview strip.
+/// The stretches of `start..end` where decoder `index` has events, in columns of
+/// `resolution` samples each in the role covering most of it; for the overview strip.
 #[tauri::command]
 pub fn decode_coverage(
     state: State<'_, AppState>,
@@ -100,7 +100,7 @@ pub fn decode_coverage(
     start: u64,
     end: u64,
     resolution: u64,
-) -> CommandResult<Option<Vec<[u64; 2]>>> {
+) -> CommandResult<Option<Vec<RolePart>>> {
     Ok(decoding(&state, capture_id)?.coverage(index, start..end, resolution.max(1)))
 }
 

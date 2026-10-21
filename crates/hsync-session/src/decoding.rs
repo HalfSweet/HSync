@@ -8,7 +8,8 @@ use std::sync::Arc;
 use hsync_capture::LogicCapture;
 use hsync_core::{SampleIndex, UiError};
 use hsync_uiharu::{
-    DecodeError, Decoder, EventRow, Needle, Position, StreamProgress, StreamView, Update,
+    DecodeError, Decoder, EventRole, EventRow, Needle, Position, RolePart, StreamProgress,
+    StreamView, Update,
 };
 use parking_lot::{Mutex, RwLock};
 use serde::Serialize;
@@ -465,27 +466,32 @@ impl DecodeSet {
         Some(SearchResult { hits, truncated })
     }
 
-    /// The stretches of `range` where decoder `index` has events on any stream, those
-    /// closer than `resolution` samples joined; for the overview strip.
+    /// The stretches of `range` where decoder `index` has events on any stream, in columns
+    /// of `resolution` samples each in the role covering most of it, stretches of one role
+    /// closer than a column joined; errors come last, to be drawn over the rest. For the
+    /// overview strip.
     pub fn coverage(
         &self,
         index: u32,
         range: Range<SampleIndex>,
         resolution: u64,
-    ) -> Option<Vec<[SampleIndex; 2]>> {
+    ) -> Option<Vec<RolePart>> {
         self.with_decoder(index, |decoder| {
-            let mut stretches: Vec<[SampleIndex; 2]> = (0..decoder.streams().len())
+            let mut parts: Vec<RolePart> = (0..decoder.streams().len())
                 .filter_map(|stream| decoder.coverage(stream, range.clone(), resolution))
                 .flatten()
                 .collect();
-            stretches.sort_unstable();
-            let mut joined: Vec<[SampleIndex; 2]> = Vec::new();
-            for [start, end] in stretches {
+            parts.sort_unstable_by_key(|part| (part.role == EventRole::Error, part.start));
+            let mut joined: Vec<RolePart> = Vec::new();
+            for part in parts {
                 match joined.last_mut() {
-                    Some(last) if start <= last[1].saturating_add(resolution) => {
-                        last[1] = last[1].max(end);
+                    Some(last)
+                        if last.role == part.role
+                            && part.start <= last.end.saturating_add(resolution) =>
+                    {
+                        last.end = last.end.max(part.end);
                     }
-                    _ => joined.push([start, end]),
+                    _ => joined.push(part),
                 }
             }
             Some(joined)

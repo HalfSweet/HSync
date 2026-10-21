@@ -3,6 +3,7 @@
 use serde_json::{Value, json};
 use uiharu_core::TickRange;
 
+use crate::roles::{EventRole, tap_role};
 use crate::store::EventRow;
 
 #[derive(Debug)]
@@ -75,6 +76,11 @@ impl StateIndex {
             })
     }
 
+    /// The role of state `index`: the column of the TAP state diagram it lies in.
+    pub(crate) fn role(&self, index: usize) -> EventRole {
+        tap_role(&self.names[self.states[index].name])
+    }
+
     pub(crate) fn row(&self, index: usize, start: u64, end: u64) -> EventRow {
         let state = &self.states[index];
         EventRow {
@@ -82,6 +88,7 @@ impl StateIndex {
             start,
             end,
             kind: "state".into(),
+            role: self.role(index),
             payload: json!({ "kind": "state", "state": self.names[state.name] }),
         }
     }
