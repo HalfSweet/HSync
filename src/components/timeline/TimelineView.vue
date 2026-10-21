@@ -19,6 +19,7 @@ import { binStart, type BinsResult } from '@/ipc/bins'
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
 import type { StreamView } from '@/ipc/bindings/StreamView'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
+import { onFrameDrawn, onNextFrame } from '@/motion/frames'
 import { Canvas2DRenderer } from '@/render/canvas2d'
 import type { WaveformRenderer } from '@/render/types'
 import { WebGpuRenderer } from '@/render/webgpu'
@@ -350,7 +351,7 @@ async function createRenderer(element: HTMLCanvasElement): Promise<void> {
     }
     renderer = made
     preferences.activeRenderer = gpu ? 'webgpu' : 'canvas2d'
-    frameRequest ||= requestAnimationFrame(draw)
+    requestDraw()
   } finally {
     creating = false
   }
@@ -359,7 +360,7 @@ async function createRenderer(element: HTMLCanvasElement): Promise<void> {
 watch(canvasKey, () => {
   renderer?.dispose()
   renderer = null
-  frameRequest ||= requestAnimationFrame(draw)
+  requestDraw()
 })
 const tokens = shallowRef<RenderTokens | null>(null)
 watch(
@@ -413,9 +414,16 @@ const frame = computed<FrameDescriptor>(() => {
   }
 })
 
-let frameRequest = 0
+// Drawn once a frame, in the frame that moved the view when a glide, a fling or the wheel did.
+let drawQueued = false
+function requestDraw(): void {
+  if (drawQueued) return
+  drawQueued = true
+  onFrameDrawn(draw)
+}
+
 function draw(): void {
-  frameRequest = 0
+  drawQueued = false
   const element = canvas.value
   if (!element || !tokens.value) return
   if (!renderer) {
@@ -424,11 +432,8 @@ function draw(): void {
   }
   renderer.draw(frame.value, tokens.value)
 }
-watch([frame, tokens], () => {
-  frameRequest ||= requestAnimationFrame(draw)
-})
+watch([frame, tokens], requestDraw)
 onBeforeUnmount(() => {
-  cancelAnimationFrame(frameRequest)
   renderer?.dispose()
 })
 
@@ -492,30 +497,33 @@ let drag: { x: number; moves: PointerSample[] } | null = null
 /** Where the button went down: released within a few pixels, it is a click. */
 let press: { x: number; y: number; row: Row } | null = null
 const CLICK_SLOP = 3
-let fling = 0
+/** The fling under way; starting another or stopping replaces it. */
+let fling: object | null = null
 
 function stopFling(): void {
-  cancelAnimationFrame(fling)
-  fling = 0
+  fling = null
 }
 
 /** Keeps the waveform moving after a quick drag (DSView's quick scroll) until it slows down
  * or reaches an end. */
 function startFling(speed: number): void {
+  const current = {}
+  fling = current
   let last = performance.now()
   const frame = (now: number) => {
-    const step = flingStep(speed, now - last)
+    if (fling !== current) return
+    const step = flingStep(speed, Math.max(0, now - last))
     last = now
     const before = view.viewport.start
     if (step) view.pan(-step.dx)
     if (!step || view.viewport.start === before) {
-      fling = 0
+      fling = null
       return
     }
     speed = step.speed
-    fling = requestAnimationFrame(frame)
+    onNextFrame(frame)
   }
-  fling = requestAnimationFrame(frame)
+  onNextFrame(frame)
 }
 onBeforeUnmount(stopFling)
 
@@ -804,16 +812,21 @@ useShortcuts({
 })
 
 // Trackpads send several wheel events a frame: gather them and move the view once per frame.
-const wheel = { pan: 0, zoom: 1, anchor: 0, frame: 0 }
+const wheel = { pan: 0, zoom: 1, anchor: 0, queued: false }
 
 function applyWheel(): void {
-  wheel.frame = 0
+  wheel.queued = false
   if (wheel.zoom !== 1) view.zoom(wheel.zoom, wheel.anchor)
   if (wheel.pan !== 0) view.pan(wheel.pan)
   wheel.zoom = 1
   wheel.pan = 0
 }
-onBeforeUnmount(() => cancelAnimationFrame(wheel.frame))
+
+function queueWheel(): void {
+  if (wheel.queued) return
+  wheel.queued = true
+  onNextFrame(applyWheel)
+}
 
 // The wheel zooms around the pointer or pans (DESIGN.md §10); what it leaves alone scrolls the
 // rows.
@@ -837,7 +850,7 @@ function onWheel(event: WheelEvent): void {
   } else {
     wheel.pan += action.dx
   }
-  wheel.frame ||= requestAnimationFrame(applyWheel)
+  queueWheel()
 }
 </script>
 
