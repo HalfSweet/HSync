@@ -914,7 +914,6 @@ function onWheel(event: WheelEvent): void {
             <!-- The title row shows the decoder's first stream, a lane row the one it is for. -->
             <DecodeLane
               v-if="row.group.decoder !== null && decodeStreamOf(row) !== null"
-              :bus="row.group.kind"
               :kind="streamKindOf(row.group, row.stream ?? 0)"
               :view="decodeViewOf(row)"
               :viewport="view.viewport"

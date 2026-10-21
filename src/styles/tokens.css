@@ -53,6 +53,40 @@
   --can-wash: #fbf1f5;
   --can-mid: #f4e0e8;
 
+  /* Event roles (DESIGN.md §3.2): mark (narrow blocks, packed runs, the overview strip) /
+     fill (blocks with text) / deep (the fill's border, emphasised blocks). The six hues share
+     their lightness steps and chroma and keep clear of red, amber and the search yellow. */
+  --role-framing: #7e8082;
+  --role-framing-fill: var(--hover);
+  --role-framing-deep: var(--sel);
+  --role-address: #356bae;
+  --role-address-fill: #c8e0ff;
+  --role-address-deep: #a9cdfb;
+  --role-command: #937ecf;
+  --role-command-fill: #e7e1fe;
+  --role-command-deep: #d5c9fe;
+  --role-control: #247d46;
+  --role-control-fill: #c6e7cd;
+  --role-control-deep: #a6d9b2;
+  --role-data: #0ca397;
+  --role-data-fill: #c1f1e9;
+  --role-data-deep: #98e2d8;
+  --role-check: #8f4e8c;
+  --role-check-fill: #f1d2ee;
+  --role-check-deep: #e6b9e2;
+  --role-handshake: #929430;
+  --role-handshake-fill: #e7e9c3;
+  --role-handshake-deep: #d4d79d;
+  /* Line conditions take no hue: diagonal stripes over the neutral fill */
+  --role-line: rgb(25 27 29 / 0.2);
+  --role-line-fill: var(--hover);
+  --role-line-deep: var(--sel);
+  --role-line-stripe: rgb(25 27 29 / 0.62);
+  --role-line-fill-stripe: rgb(25 27 29 / 0.24);
+  --role-error: var(--alert);
+  --role-error-fill: var(--alert-wash);
+  --role-error-deep: rgb(172 49 44 / 0.35);
+
   /* Probe wire colours (black, brown, red, orange, yellow, green, blue, violet) and the
      opacity of each one's high-level wash, tuned so every wash reads equally bright. */
   --w0: #1f2224;
@@ -145,6 +179,30 @@
   --can-wash: #2b1f24;
   --can-mid: #452d38;
 
+  --role-framing: #bcbec0;
+  --role-address: #4c7fc0;
+  --role-address-fill: #1e3149;
+  --role-address-deep: #254369;
+  --role-command: #a08dda;
+  --role-command-fill: #38314d;
+  --role-command-deep: #4b3f6c;
+  --role-control: #41905b;
+  --role-control-fill: #1b3723;
+  --role-control-deep: #1e4d2d;
+  --role-data: #26b2a5;
+  --role-data-fill: #103e39;
+  --role-data-deep: #05544d;
+  --role-check: #a2639e;
+  --role-check-fill: #3e263c;
+  --role-check-deep: #573255;
+  --role-handshake: #a0a147;
+  --role-handshake-fill: #373818;
+  --role-handshake-deep: #4b4b14;
+  --role-line: rgb(234 235 236 / 0.2);
+  --role-line-stripe: rgb(234 235 236 / 0.62);
+  --role-line-fill-stripe: rgb(234 235 236 / 0.24);
+  --role-error-deep: rgb(242 136 129 / 0.35);
+
   --w0: #c8cbce;
   --w1: #a88467;
   --w2: #df7f7c;
@@ -231,4 +289,65 @@
   --w: var(--w7);
   --a: var(--a7);
   --b: calc(var(--a7) * var(--bk));
+}
+
+/*
+ * A decode block, a packed run or an overview band picks its event role; `--r` is the mark,
+ * `--r-fill` the fill of a block with text, `--r-deep` that fill's border and the fill of an
+ * emphasised block, and `--r-hatch` / `--r-fill-hatch` the stripes of a role without a hue.
+ */
+.role-framing {
+  --r: var(--role-framing);
+  --r-fill: var(--role-framing-fill);
+  --r-deep: var(--role-framing-deep);
+}
+.role-address {
+  --r: var(--role-address);
+  --r-fill: var(--role-address-fill);
+  --r-deep: var(--role-address-deep);
+}
+.role-command {
+  --r: var(--role-command);
+  --r-fill: var(--role-command-fill);
+  --r-deep: var(--role-command-deep);
+}
+.role-control {
+  --r: var(--role-control);
+  --r-fill: var(--role-control-fill);
+  --r-deep: var(--role-control-deep);
+}
+.role-data {
+  --r: var(--role-data);
+  --r-fill: var(--role-data-fill);
+  --r-deep: var(--role-data-deep);
+}
+.role-check {
+  --r: var(--role-check);
+  --r-fill: var(--role-check-fill);
+  --r-deep: var(--role-check-deep);
+}
+.role-handshake {
+  --r: var(--role-handshake);
+  --r-fill: var(--role-handshake-fill);
+  --r-deep: var(--role-handshake-deep);
+}
+.role-line {
+  --r: var(--role-line);
+  --r-fill: var(--role-line-fill);
+  --r-deep: var(--role-line-deep);
+  --r-hatch: repeating-linear-gradient(
+    135deg,
+    var(--role-line-stripe) 0 1.5px,
+    transparent 1.5px 4px
+  );
+  --r-fill-hatch: repeating-linear-gradient(
+    135deg,
+    var(--role-line-fill-stripe) 0 1.5px,
+    transparent 1.5px 4px
+  );
+}
+.role-error {
+  --r: var(--role-error);
+  --r-fill: var(--role-error-fill);
+  --r-deep: var(--role-error-deep);
 }

@@ -5,21 +5,20 @@ import { useI18n } from 'vue-i18n'
 import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import type { NumberFormat } from '@/decode/numberFormat'
 import { fieldTexts, primaryFields, valueText, type Wording } from '@/decode/present'
+import type { EventRole } from '@/ipc/bindings/EventRole'
 import type { EventRow } from '@/ipc/bindings/EventRow'
 import type { LaneBlock } from '@/ipc/bindings/LaneBlock'
 import type { StreamView } from '@/ipc/bindings/StreamView'
-import type { BusKind } from '@/timeline/groups'
 import type { Viewport } from '@/timeline/viewport'
 import { formatTime } from '@/utils/units'
 
 /**
  * One decode lane of the timeline (DESIGN.md §6.3): a block per event, whatever the protocol,
- * carrying the kind's name and the event's main value; events too close to tell apart at the
- * scale come packed into a dense block.
+ * carrying the kind's name and the event's main value and coloured by the event's role;
+ * events too close to tell apart at the scale come packed into a dense block, painted by the
+ * role covering most of every two pixels.
  */
 const props = defineProps<{
-  /** The bus the decoder sits on, for the tint. */
-  bus: BusKind
   /** The node type whose events the lane shows, e.g. `i2c`; it names the kinds and fields. */
   kind: string
   view: StreamView | undefined
@@ -43,8 +42,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const copy = useDecoderCopy()
 
-/** Blocks narrower than this share of the viewport hide their text (`la-tiny`). */
-const TINY_SHARE = 0.032
+/** State names show from this width on, abbreviated when they do not fit. */
+const STATE_TEXT = 40
 
 const kindLabel = (kind: string) => copy.eventLabel(props.kind, kind)
 const fieldLabel = (field: string) => copy.eventFieldLabel(props.kind, field)
@@ -63,7 +62,6 @@ interface Geometry {
   width: number
   cutLeft: boolean
   cutRight: boolean
-  tiny: boolean
 }
 
 function geometry(start: number, end: number, gap: number): Geometry {
@@ -78,7 +76,6 @@ function geometry(start: number, end: number, gap: number): Geometry {
     width: Math.max(right - left - gap, 2),
     cutLeft: x0 < 0,
     cutRight: x1 > width,
-    tiny: right - left < (props.annotation === 'states' ? 40 : width * TINY_SHARE),
   }
 }
 
@@ -104,11 +101,20 @@ function tipOf(event: EventRow): string {
   })
 }
 
+/** A stretch of a dense block in one role, placed within the block. */
+interface DensePart {
+  key: number
+  left: number
+  width: number
+  role: EventRole
+}
+
 interface DensePiece {
   type: 'dense'
   id: string
   g: Geometry
   count: number
+  parts: DensePart[]
 }
 
 interface EventPiece {
@@ -117,6 +123,8 @@ interface EventPiece {
   g: Geometry
   on: boolean
   event: EventRow
+  /** An error among the events of the block makes it an error. */
+  role: EventRole
   /** The kind's name, shown when the block has room for it beside the value. */
   label: string
   /** The main values the block has room for (an SPI word's two lines, or the first alone),
@@ -124,6 +132,8 @@ interface EventPiece {
   value: string
   /** Whether the kind's name fits before the value. */
   labelFits: boolean
+  /** A TAP state that shifts a register: the scan's data itself. */
+  emphasis: boolean
   tip: string
 }
 
@@ -150,6 +160,18 @@ function fitting(
   }
 }
 
+/** The parts of a dense block, placed within it. */
+function denseParts(block: Extract<LaneBlock, { type: 'dense' }>, g: Geometry): DensePart[] {
+  const { start: origin, samplesPerPixel } = props.viewport
+  return block.parts.flatMap((part) => {
+    const left = Math.max(0, (part.start - origin) / samplesPerPixel - g.left)
+    const right = Math.min(g.width, (part.end - origin) / samplesPerPixel - g.left)
+    return right > left
+      ? [{ key: part.start, left, width: Math.max(right - left, 1), role: part.role }]
+      : []
+  })
+}
+
 /** What is drawn in view. Lanes reach beyond the view, so panning shows them at once; what
  * lies wholly outside is left out. */
 const pieces = computed<(DensePiece | EventPiece)[]>(() => {
@@ -169,7 +191,9 @@ const pieces = computed<(DensePiece | EventPiece)[]>(() => {
     .map(({ block, events }) => {
       const g = geometry(block.start, block.end, block.type === 'event' ? 1 : 0)
       const id = blockId(block)
-      if (block.type === 'dense') return { type: 'dense', id, g, count: block.count }
+      if (block.type === 'dense') {
+        return { type: 'dense', id, g, count: block.count, parts: denseParts(block, g) }
+      }
       const state = props.annotation === 'states'
       const label = state ? '' : events.map((event) => kindLabel(event.kind)).join(' · ')
       const values = events.flatMap((event) =>
@@ -180,54 +204,48 @@ const pieces = computed<(DensePiece | EventPiece)[]>(() => {
       // State names occupy their own row; show as much of the name as fits, with the
       // complete localized name and duration in the tip, even at a narrow clock cycle.
       const { value, label: labelFits } = state
-        ? { value: values[0] ?? '', label: false }
+        ? { value: g.width >= STATE_TEXT ? (values[0] ?? '') : '', label: false }
         : fitting(label, values, g.width)
+      const role = events.some((event) => event.role === 'error') ? 'error' : block.role
       return {
         type: 'event',
         id,
         g,
         on: props.selected === id,
         event: block,
+        role,
         label,
         value,
         labelFits,
+        emphasis: state && String(block.payload.state).startsWith('shift-'),
         tip: events.map(tipOf).join('\n'),
       }
     })
 })
 
-const tint = computed(
-  () =>
-    ({
-      i2c: 'bg-i2c-wash border-i2c-mid',
-      uart: 'bg-uart-wash border-uart-mid',
-      spi: 'bg-spi-wash border-spi-mid',
-      can: 'bg-can-wash border-can-mid',
-      other: 'bg-hover border-line-2',
-    })[props.bus],
-)
-
-/** The kind's name takes the bus colour. */
-const roleTint = computed(
-  () =>
-    ({
-      i2c: 'text-i2c',
-      uart: 'text-uart',
-      spi: 'text-spi',
-      can: 'text-can',
-      other: 'text-ink-2',
-    })[props.bus],
-)
-
-function blockClass(g: Geometry, on: boolean): string[] {
+function blockClass(piece: EventPiece): (string | false)[] {
+  // A block without text shows its role in the stronger mark colour, so that narrow blocks
+  // stay distinct when zoomed out; an error mark spans the lane.
+  const bare = !piece.labelFits && !piece.value
   return [
     'blk',
-    props.annotation === 'states' ? 'blk-state' : '',
-    on ? 'blk-on' : tint.value,
-    g.cutLeft ? 'blk-cl' : '',
-    g.cutRight ? 'blk-cr' : '',
-    g.tiny ? 'blk-tiny' : '',
+    `role-${piece.role}`,
+    props.annotation === 'states' && 'blk-state',
+    piece.on && 'blk-on',
+    bare && 'blk-mark',
+    bare && piece.role === 'error' && 'blk-alarm',
+    !bare && piece.emphasis && 'blk-deep',
+    piece.g.cutLeft && 'blk-cl',
+    piece.g.cutRight && 'blk-cr',
   ]
+}
+
+function blockStyle(piece: EventPiece): Record<string, string> {
+  const alarm = !piece.labelFits && !piece.value && piece.role === 'error'
+  return {
+    left: `${piece.g.left}px`,
+    width: `${alarm ? Math.max(piece.g.width, 3) : piece.g.width}px`,
+  }
 }
 
 function pick(piece: EventPiece): void {
@@ -240,31 +258,36 @@ function pick(piece: EventPiece): void {
     <template v-for="piece in pieces" :key="piece.id">
       <span
         v-if="piece.type === 'dense'"
-        class="blk blk-tiny"
-        :class="tint"
+        class="dense"
         :style="{ left: `${piece.g.left}px`, width: `${piece.g.width}px` }"
         :title="t('decode.dense', { count: piece.count })"
-      />
+      >
+        <i
+          v-for="part in piece.parts"
+          :key="part.key"
+          class="part"
+          :class="[`role-${part.role}`, part.role === 'error' && 'part-alarm']"
+          :style="{ left: `${part.left}px`, width: `${part.width}px` }"
+        />
+      </span>
       <button
         v-else
-        :class="blockClass(piece.g, piece.on)"
-        :style="{ left: `${piece.g.left}px`, width: `${piece.g.width}px` }"
+        :class="blockClass(piece)"
+        :style="blockStyle(piece)"
         :aria-pressed="piece.on"
         :aria-label="piece.tip"
         :title="piece.tip"
         @click="pick(piece)"
       >
-        <template v-if="!piece.g.tiny">
-          <span v-if="piece.labelFits" class="role" :class="roleTint">{{ piece.label }}</span>
-          <span v-if="piece.value" class="val">{{ piece.value }}</span>
-        </template>
+        <span v-if="piece.labelFits" class="kind">{{ piece.label }}</span>
+        <span v-if="piece.value" class="val">{{ piece.value }}</span>
       </button>
     </template>
   </div>
 </template>
 
 <style scoped>
-/* la-blk */
+/* la-blk: a block with text sits on its role's fill, inside a border of the deeper fill. */
 .blk {
   position: absolute;
   top: 2px;
@@ -275,8 +298,11 @@ function pick(piece: EventPiece): void {
   min-width: 0;
   padding: 0 8px;
   overflow: hidden;
-  border: 1px solid transparent;
+  border: 1px solid var(--r-deep);
   border-radius: 3px;
+  background-color: var(--r-fill);
+  background-image: var(--r-fill-hatch, none);
+  color: var(--ink);
   font-size: 12px;
   line-height: 1;
   white-space: nowrap;
@@ -298,22 +324,34 @@ function pick(piece: EventPiece): void {
   border-right-color: transparent;
 }
 
+/* A block without room for text: the role's mark colour, edge to edge. */
+.blk-mark {
+  padding: 0;
+  border-color: transparent;
+  background-color: var(--r);
+  background-image: var(--r-hatch, none);
+}
+
+/* An error too narrow for text spans the lane, so that it stands out at every scale. */
+.blk-alarm {
+  top: 0;
+  bottom: 0;
+  border-radius: 1px;
+}
+
+.blk-deep {
+  background-color: var(--r-deep);
+}
+
 .blk-on {
   border-color: var(--ink);
   background: var(--ink);
   color: var(--canvas);
 }
 
-.blk-tiny {
-  padding: 0;
-}
-
-.blk-tiny > * {
-  display: none;
-}
-
-.role {
+.kind {
   font-size: 11px;
+  color: var(--ink-2);
 }
 
 .val {
@@ -321,7 +359,12 @@ function pick(piece: EventPiece): void {
   font-weight: 500;
 }
 
-.blk-state:not(.blk-tiny) {
+.role-error .kind,
+.role-error .val {
+  color: var(--alert);
+}
+
+.blk-state:not(.blk-mark) {
   padding: 0 4px;
 }
 
@@ -331,13 +374,33 @@ function pick(piece: EventPiece): void {
   text-overflow: ellipsis;
 }
 
-.dim {
-  color: var(--ink-3);
+.blk-on .kind,
+.blk-on .val {
+  color: inherit;
 }
 
-.blk-on .role,
-.blk-on .dim {
-  color: inherit;
+.blk-on .kind {
   opacity: 0.72;
+}
+
+/* A dense block: stretches in the role covering most of every two pixels. */
+.dense {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+}
+
+.part {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background-color: var(--r);
+  background-image: var(--r-hatch, none);
+}
+
+.part-alarm {
+  top: -2px;
+  bottom: -2px;
+  min-width: 3px;
 }
 </style>

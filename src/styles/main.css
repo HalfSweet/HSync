@@ -80,6 +80,9 @@
   --color-can-mid: var(--can-mid);
 
   --color-wire: var(--w);
+  --color-role: var(--r);
+  --color-role-fill: var(--r-fill);
+  --color-role-deep: var(--r-deep);
 
   --font-sans: var(--sans);
   --font-mono: var(--mono);
