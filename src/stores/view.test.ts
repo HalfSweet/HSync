@@ -1,9 +1,10 @@
 import { createPinia, setActivePinia } from 'pinia'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 
 import type { CaptureSummary } from '@/ipc/bindings/CaptureSummary'
 import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
+import { panViewport, xToSample, zoomViewport } from '@/timeline/viewport'
 
 import { useCaptureStore } from './capture'
 import { usePreferencesStore } from './preferences'
@@ -12,6 +13,10 @@ import { useViewStore } from './view'
 vi.mock('@/ipc/backend', () => ({
   getBackend: () => Promise.resolve({}),
 }))
+
+/** The glide's duration (`--motion-view`), zero with reduced motion. */
+const motion = vi.hoisted(() => ({ view: 100 }))
+vi.mock('@/motion/timing', () => ({ motionDuration: () => motion.view }))
 
 function summary(
   id: number,
@@ -122,5 +127,104 @@ describe('view store', () => {
     capture.summary = { ...capture.summary, info: { ...capture.summary.info, sampleCount: 60_000 } }
     await nextTick()
     expect(view.end).toBeCloseTo(40_000)
+  })
+})
+
+describe('view glides', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    setActivePinia(createPinia())
+    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance'] })
+    motion.view = 100
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  /** A million samples fitted to 1000 pixels. */
+  async function fitted() {
+    const capture = useCaptureStore()
+    const view = useViewStore()
+    capture.summary = summary(1, 'demo', 1_000_000, 1_000_000)
+    await nextTick()
+    view.setWidth(1000)
+    return view
+  }
+
+  /** Runs `count` animation frames of 16 ms. */
+  async function frames(count: number): Promise<void> {
+    for (let i = 0; i < count; i++) {
+      vi.advanceTimersToNextFrame()
+      for (let j = 0; j < 10; j++) await Promise.resolve()
+    }
+  }
+
+  it('glides a zoom over 100 ms, keeping the sample under the pointer still', async () => {
+    const view = await fitted()
+    const anchor = xToSample(view.viewport, 250)
+    view.glideZoom(4, 250)
+    expect(view.viewport.samplesPerPixel).toBe(1000)
+    const steps: number[] = []
+    for (let i = 0; i < 8; i++) {
+      await frames(1)
+      steps.push(view.viewport.samplesPerPixel)
+      expect(xToSample(view.viewport, 250)).toBeCloseTo(anchor, 6)
+    }
+    // The first frame already moves, and the moves get smaller until the view rests at 4×.
+    expect(steps[0]).toBeLessThan(1000)
+    const moves = steps.map((step, i) => Math.log((i === 0 ? 1000 : (steps[i - 1] ?? 0)) / step))
+    for (let i = 1; i < 6; i++) expect(moves[i]).toBeLessThan(moves[i - 1] ?? 0)
+    expect(steps.at(-1)).toBe(250)
+    expect(steps.indexOf(250)).toBeLessThanOrEqual(6)
+  })
+
+  it('adds a notch turned during a glide to where it is going', async () => {
+    const view = await fitted()
+    view.glideZoom(Math.SQRT2, 500)
+    await frames(2)
+    view.glideZoom(Math.SQRT2, 500)
+    await frames(2)
+    view.glideZoom(Math.SQRT2, 500)
+    await frames(10)
+    expect(view.viewport.samplesPerPixel).toBeCloseTo(1000 / Math.SQRT2 ** 3)
+  })
+
+  it('carries a glide on through a drag', async () => {
+    const view = await fitted()
+    const start = view.viewport
+    view.glideZoom(2, 500)
+    await frames(2)
+    view.pan(100)
+    await frames(10)
+    const expected = panViewport(zoomViewport(start, 2, 500, 1_000_000), 100, 1_000_000)
+    expect(view.viewport.start).toBeCloseTo(expected.start)
+    expect(view.viewport.samplesPerPixel).toBeCloseTo(expected.samplesPerPixel)
+  })
+
+  it('pans by keys to where the glide is going', async () => {
+    const view = await fitted()
+    view.zoom(10)
+    const start = view.viewport
+    view.glidePan(100)
+    await frames(1)
+    view.glidePan(100)
+    await frames(10)
+    expect(view.viewport.start).toBeCloseTo(start.start + 200 * start.samplesPerPixel)
+  })
+
+  it('ends a glide on a jump', async () => {
+    const view = await fitted()
+    view.glideZoom(4)
+    await frames(2)
+    view.fit()
+    await frames(10)
+    expect(view.viewport.samplesPerPixel).toBe(1000)
+  })
+
+  it('jumps at once with reduced motion', async () => {
+    motion.view = 0
+    const view = await fitted()
+    view.glideZoom(2)
+    expect(view.viewport.samplesPerPixel).toBe(500)
   })
 })

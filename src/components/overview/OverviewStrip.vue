@@ -3,6 +3,7 @@ import { useElementSize } from '@vueuse/core'
 import { computed, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useControlHeld } from '@/composables/useControlHeld'
 import { getBackend } from '@/ipc/backend'
 import type { RolePart } from '@/ipc/bindings/RolePart'
 import { useCaptureStore } from '@/stores/capture'
@@ -11,6 +12,7 @@ import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
 import { overviewTicks } from '@/timeline/ticks'
+import { wheelZoom } from '@/timeline/wheel'
 import { formatTimeShort } from '@/utils/units'
 
 const { t } = useI18n()
@@ -159,10 +161,14 @@ function onPointerMove(event: PointerEvent): void {
   if (dragging) view.centerOn(sampleAt(event))
 }
 
+const controlHeld = useControlHeld()
+
 function onWheel(event: WheelEvent): void {
   event.preventDefault()
   const anchor = (sampleAt(event) - view.viewport.start) / view.viewport.samplesPerPixel
-  view.zoom(Math.exp(-event.deltaY * 0.002), anchor)
+  const zoom = wheelZoom(event, controlHeld())
+  if (zoom.notched) view.glideZoom(zoom.factor, anchor)
+  else view.zoom(zoom.factor, anchor)
 }
 </script>
 

@@ -115,10 +115,12 @@
   --veil-blur: 12px;
 
   /* Motion (DESIGN.md §13): what appears starts fast and settles softly, what leaves goes
-     quicker and gathers speed, and a selection mark slides over with a slight overshoot. */
+     quicker and gathers speed, and a selection mark slides over with a slight overshoot. The
+     timeline's view glides to a new zoom or position, on a curve run from script. */
   --motion-enter: 200ms;
   --motion-exit: 120ms;
   --motion-slide: 260ms;
+  --motion-view: 100ms;
   --ease-enter: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-exit: cubic-bezier(0.4, 0, 1, 1);
   --ease-slide: cubic-bezier(0.34, 1.3, 0.64, 1);
@@ -216,6 +218,7 @@
     --motion-enter: 0s;
     --motion-exit: 0s;
     --motion-slide: 0s;
+    --motion-view: 0s;
   }
 }
 
