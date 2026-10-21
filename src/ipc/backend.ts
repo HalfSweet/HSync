@@ -448,7 +448,8 @@ class TauriBackend implements Backend {
       index,
       start,
       end,
-      resolution,
+      // Overview pixels can span a fraction of a sample; the command takes a u64.
+      resolution: Math.max(1, Math.ceil(resolution)),
     })
   }
 
