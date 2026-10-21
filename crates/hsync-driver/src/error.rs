@@ -5,6 +5,9 @@ use crate::usb::UsbError;
 /// Errors of drivers and devices.
 #[derive(Debug, thiserror::Error)]
 pub enum DriverError {
+    /// A device-specific i18n key and parameters, passed unchanged to the interface.
+    #[error(transparent)]
+    Localized(UiError),
     /// USB communication failed.
     #[error(transparent)]
     Usb(#[from] UsbError),
@@ -62,6 +65,7 @@ impl DriverError {
 impl From<&DriverError> for UiError {
     fn from(error: &DriverError) -> Self {
         match error {
+            DriverError::Localized(error) => error.clone(),
             DriverError::Usb(usb) => {
                 UiError::new("error.device.usb").with("detail", usb.to_string())
             }
@@ -89,5 +93,17 @@ impl From<&DriverError> for UiError {
             }
             DriverError::Unsupported => UiError::new("error.device.unsupported"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserves_localized_device_errors_without_natural_language_details() {
+        let message = UiError::new("error.device.slogic.channel").with("channel", 16);
+        let error = DriverError::Localized(message.clone());
+        assert_eq!(UiError::from(&error), message);
     }
 }
