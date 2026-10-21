@@ -228,7 +228,7 @@ The SLogic16U3 uses the same capability-driven controls: Stream mode and a 0–6
 
 ### 6.6 Segment
 
-- Drag on the ruler to mark a segment: its ends carry two 14 px flags, A and B (`--ink` fill), with an arrowed horizontal line between them labelled with the duration; `--veil` covers the whole segment on every row.
+- Drag on the ruler to mark a segment: its ends carry two 14 px flags, A and B (`--ink` fill), with an arrowed horizontal line between them labelled with the duration; `--veil` covers the whole segment on every row. The duration, here and in the status bar, reads in whole nanoseconds below a microsecond ("20 ns"), in microseconds with one decimal below a millisecond ("540.0 µs") and in milliseconds with four decimals above ("1.0460 ms").
 - The flags sit outside the segment and turn inwards near the viewport edges; when the segment is narrower than 9% of the viewport, the duration sits beside B (beside A when B is near the right edge); when one end of the segment lies outside the viewport, the duration reads "Extends beyond view".
 - A drag shorter than 2 µs counts as a click; a click on the ruler cancels the segment.
 - While a segment exists, the status bar shows its duration; clicking it lists each channel's rising edges, falling edges and edge count within the segment.
