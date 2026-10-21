@@ -864,6 +864,30 @@ function onWheel(event: WheelEvent): void {
   }
   queueWheel()
 }
+
+// WebKit on macOS sends a trackpad pinch as gesture events rather than as Ctrl + wheel: each
+// reports the scale since the pinch began.
+interface GestureEvent extends UIEvent {
+  scale: number
+  clientX: number
+}
+let gestureScale = 1
+
+useEventListener(scroller, 'gesturestart', (event: Event) => {
+  event.preventDefault()
+  stopFling()
+  gestureScale = 1
+})
+useEventListener(scroller, 'gesturechange', (event: Event) => {
+  event.preventDefault()
+  const gesture = event as GestureEvent
+  const anchor = anchorOf(gesture.clientX)
+  if (anchor === null || !(gesture.scale > 0)) return
+  wheel.zoom *= gesture.scale / gestureScale
+  wheel.anchor = anchor
+  gestureScale = gesture.scale
+  queueWheel()
+})
 </script>
 
 <template>
