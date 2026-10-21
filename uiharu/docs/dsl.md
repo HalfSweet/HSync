@@ -99,19 +99,21 @@ export type SpiEvent =
   | { kind: 'word'; tx: TxId; mosi: u8 | undefined; miso: u8 | undefined }
   | { kind: 'end'; tx: TxId; reason: EndReason }
 
-export const spiEvents = eventSchema<SpiEvent>('spi.events', 1).framed({
-  begin: 'begin',
-  items: ['word'],
-  end: 'end',
-  id: 'tx',
-  partial: 'partial',
-  reason: 'reason',
-  normal: ['cs-release'],
-  unframed: 0,
-})
+export const spiEvents = eventSchema<SpiEvent>('spi.events', 1)
+  .roles({ begin: 'framing', word: 'data', end: 'framing' })
+  .framed({
+    begin: 'begin',
+    items: ['word'],
+    end: 'end',
+    id: 'tx',
+    partial: 'partial',
+    reason: 'reason',
+    normal: ['cs-release'],
+    unframed: 0,
+  })
 ```
 
-`eventSchema` ties the event type to the schema name and version. `framed` declares how the stream frames its traffic: the event kind that begins a frame, the kinds that carry its items, the kind that ends it, the field that names the frame on all of them, the `begin` field saying the frame was under way, the `end` field saying why it ended and its values for a normal end, and the id of the one frame of a bus that has no framing line. A decoder reading the contract gets a cursor over its frames whose items are the item events without the frame's id: with one kind of item, its fields alone (`ItemOf<typeof spiEvents>` is `{ mosi: u8 | undefined; miso: u8 | undefined }`); with several — I²C's addresses, data bytes and repeated STARTs — their union tagged by `kind`, read with `switch (item.kind)`. The cursor is generated from the declaration (§5); it offers the contract's primitives — the next item, the normal end, draining — and nothing more.
+`eventSchema` ties the event type to the schema name and version. `roles` says what each kind of event is to someone reading the bus, whatever the protocol, so that an interface can show events of the same role alike: `framing` (where a transaction, frame or scan begins or ends), `address` (whom the traffic is for), `command` (what is asked), `control` (what a frame says of itself, such as a CAN control field), `data` (what it carries), `check` (a CRC or checksum), `handshake` (the other side's answer), `line` (a condition of the line itself: a line reset, a break) or `error` (something the decoder reports as wrong). A role names what an event is, never how it looks. Every contract declares one for every kind of event, and the checker holds it to that. A kind's role can carry `errorWhen`, field values that make one of its events an error: `frame: { role: 'data', errorWhen: [{ parity: 'error' }, { framingOk: false }] }` makes a character with a wrong parity bit or a bad stop bit an error, and an event is one when it has every value of any one condition. The conditions name only what the contract defines as wrong: an I²C address no device acknowledged is an error, a data byte the master did not acknowledge is not, because that is how a read ends. `framed` declares how the stream frames its traffic: the event kind that begins a frame, the kinds that carry its items, the kind that ends it, the field that names the frame on all of them, the `begin` field saying the frame was under way, the `end` field saying why it ended and its values for a normal end, and the id of the one frame of a bus that has no framing line. A decoder reading the contract gets a cursor over its frames whose items are the item events without the frame's id: with one kind of item, its fields alone (`ItemOf<typeof spiEvents>` is `{ mosi: u8 | undefined; miso: u8 | undefined }`); with several — I²C's addresses, data bytes and repeated STARTs — their union tagged by `kind`, read with `switch (item.kind)`. The cursor is generated from the declaration (§5); it offers the contract's primitives — the next item, the normal end, draining — and nothing more.
 
 A contract can be declared without a decoder: a module under `dsl/contracts/` with the event type, its enums and the `eventSchema` call, for a decoder that stays hand-written. Its Rust types are generated like any other's, the hand-written decoder emits them, and a decoder written in the DSL can stack on it. `contracts/i2c.ts` is one: the hand-written I²C decoder of `crates/uiharu-protocols` emits its types, and the 24xx EEPROM decoder reads them through `FramedBus`.
 
@@ -245,7 +247,7 @@ The compiler lowers a DSL module to one JSON document per decoder, read by `uiha
 }
 ```
 
-**Types** are strings — the primitives `bool`, `u8`, `u16`, `u32`, `u64`, `text`, `mask`, `levels`, `range`, `provenance`, `cursor` (the frame cursor of a bus decoder) or a declared name — or objects: `{ "option": T }`, `{ "array": T, "bound": N }`, `{ "batch": T, "bound": N }`. Declared types are records (fields), enums (variant names as events spell them) and unions (variants with fields, tagged by `kind`). A contract names its schema, its event union and, when framed, its framing (§2.3: `items`, the kinds that carry a frame's items, and `normal`, the reasons of a normal end, are lists); an import carries another module's contract with its types. A module without a `decoder` declares contracts only.
+**Types** are strings — the primitives `bool`, `u8`, `u16`, `u32`, `u64`, `text`, `mask`, `levels`, `range`, `provenance`, `cursor` (the frame cursor of a bus decoder) or a declared name — or objects: `{ "option": T }`, `{ "array": T, "bound": N }`, `{ "batch": T, "bound": N }`. Declared types are records (fields), enums (variant names as events spell them) and unions (variants with fields, tagged by `kind`). A contract names its schema, its event union, the role of each kind of event (§2.3: `"roles": { "frame": { "role": "data", "errorWhen": [{ "parity": "error" }] } }`, a lone condition written as a list of one; a module compiled before roles were declared has none, and its events show as data) and, when framed, its framing (§2.3: `items`, the kinds that carry a frame's items, and `normal`, the reasons of a normal end, are lists); an import carries another module's contract with its types. A module without a `decoder` declares contracts only.
 
 **The decoder** has its ports: `input` is `{ "kind": "logic" }`, `{ "kind": "stream", "schema": … }` or `{ "kind": "bus", "schema": … }`; `requires` and `props` are evaluated with `config` in scope; `locales` is the copy of §2.4 by language tag, every part optional; `partial` and `recovery` (with the reason enum's name) belong to bus decoders. `state` lists the fields with their initializers; `methods` the functions with `self`, the hooks among them by name.
 
@@ -264,6 +266,7 @@ The compiler lowers a DSL module to one JSON document per decoder, read by `uiha
 - while a local borrows a field of `self` (`let-ref`, or an `if-some`/`let-some` marked `borrow` because its binding is written through), no method of `self` is called — the borrow rule the Rust backend needs, kept simple enough to state;
 - the hooks a decoder's kind calls for are there with the right shape (§2.4), and a bus decoder declares its recovery with variants of its reason enum;
 - a framed contract's framing names variants and fields that exist, and its normal ends are variants of the reason enum;
+- a contract's roles, when it has them, give every variant of its event union a role and name no other, and each error condition names fields of its kind with values those fields can take (a boolean, an integer, text, or the name of a variant of the field's enum);
 - the copy a decoder carries names fields of its configuration, values of its enumerated fields, kinds of event it emits and fields of those events, under language tags;
 - text is made only in free functions: the messages of configuration checks.
 

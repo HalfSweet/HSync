@@ -99,7 +99,7 @@ Any pipeline can be described in a JSON file instead — the source, the nodes w
 }
 ```
 
-A configuration may leave fields out (they take the node's defaults); a connection the decoders cannot accept is refused with the graph's diagnostic, such as `flash#1.bus requires wordBits = 8 of spi#0.events, which declares 4`. The node types are listed in `crates/uiharu-registry`, with a manifest each (`manifests/<type>.json`: ports, configuration fields, event kinds); each protocol page in `docs/protocols/` names its type, ports and configuration.
+A configuration may leave fields out (they take the node's defaults); a connection the decoders cannot accept is refused with the graph's diagnostic, such as `flash#1.bus requires wordBits = 8 of spi#0.events, which declares 4`. The node types are listed in `crates/uiharu-registry`, with a manifest each (`manifests/<type>.json`: ports, configuration fields, event kinds and the role of each, see [docs/dsl.md](docs/dsl.md) §2.3); each protocol page in `docs/protocols/` names its type, ports and configuration.
 
 A decoder written in the DSL runs without being built into the engine: `uiharu decode --ir uiharu/dsl/ir/spi-nor.json flash.bin` interprets the module's IR (the JSON `pnpm dsl:compile` writes) under the module's name, in place of the decoder of that name built in, and emits the same events; `--ir` may be repeated. A connection between an interpreted decoder and a compiled one is bridged by the registry, so that a decoder under work stacks on the engine's buses as it is.
 
