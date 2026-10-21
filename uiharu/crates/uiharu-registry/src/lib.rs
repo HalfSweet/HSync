@@ -35,5 +35,6 @@ pub use description::{Connection, Description, NodeDescription, SourceDescriptio
 pub use dynamic::{DynItem, DynReader, TypedReader};
 pub use kinds::{Bridge, KINDS, Kind, kind};
 pub use manifest::{
-    Category, EventKind, Field, FieldKind, LOGIC, Locale, Manifest, Port, manifests,
+    Category, EventKind, EventRole, Field, FieldKind, LOGIC, Locale, Manifest, Port, Role,
+    manifests,
 };

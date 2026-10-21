@@ -331,7 +331,33 @@
         "name": "nor.events",
         "version": 2
       },
-      "event": "NorEvent"
+      "event": "NorEvent",
+      "roles": {
+        "begin": {
+          "role": "command"
+        },
+        "address": {
+          "role": "address"
+        },
+        "dummy": {
+          "role": "framing"
+        },
+        "data": {
+          "role": "data"
+        },
+        "status": {
+          "role": "data"
+        },
+        "id": {
+          "role": "data"
+        },
+        "end": {
+          "role": "framing"
+        },
+        "unknown-command": {
+          "role": "error"
+        }
+      }
     }
   ],
   "imports": [
@@ -352,6 +378,17 @@
           "normal": ["cs-release"],
           "partial": "partial",
           "unframed": 0
+        },
+        "roles": {
+          "begin": {
+            "role": "framing"
+          },
+          "word": {
+            "role": "data"
+          },
+          "end": {
+            "role": "framing"
+          }
         }
       },
       "types": [

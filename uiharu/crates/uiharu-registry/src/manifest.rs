@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::sync::OnceLock;
 
 use serde::{Deserialize, Serialize};
-pub use uiharu_ir::Locale;
+pub use uiharu_ir::{EventRole, Locale, Role};
 
 use crate::kinds::KINDS;
 
@@ -113,14 +113,31 @@ pub enum FieldKind {
     Text,
 }
 
-/// A kind of event and its fields.
+/// A kind of event, its role and its fields.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct EventKind {
     /// The `kind` tag.
     pub kind: String,
+    /// What an event of the kind is, whatever the protocol.
+    pub role: Role,
     /// The fields, in the order the contract lists them.
     pub fields: Vec<String>,
+    /// Field values that make an event of the kind an error (see [`EventRole`]).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub error_when: Vec<BTreeMap<String, serde_json::Value>>,
+}
+
+impl EventKind {
+    /// The role `event`, a serialized event of the kind, has: [`Role::Error`] when it meets
+    /// a condition of `error_when`, else the kind's.
+    pub fn role_of(&self, event: &serde_json::Value) -> Role {
+        if EventRole::meets(&self.error_when, event) {
+            Role::Error
+        } else {
+            self.role
+        }
+    }
 }
 
 /// The manifests of every node type, in the order of [`KINDS`].
@@ -360,6 +377,81 @@ mod tests {
                 .collect();
             assert_eq!(declared, kinds, "{}: event kinds", kind.name);
         }
+    }
+
+    #[test]
+    fn error_conditions_name_fields_of_their_kind() {
+        for manifest in manifests() {
+            for event in &manifest.events {
+                for condition in &event.error_when {
+                    assert!(
+                        !condition.is_empty(),
+                        "{}.{}: an empty condition",
+                        manifest.name,
+                        event.kind
+                    );
+                    for field in condition.keys() {
+                        assert!(
+                            event.fields.contains(field),
+                            "{}.{}: no field {field}",
+                            manifest.name,
+                            event.kind
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    /// The conditions name the values as the contracts serialize them.
+    #[test]
+    fn error_conditions_match_serialized_events() {
+        use serde_json::{Value, json, to_value};
+        use uiharu_protocols::{swd, uart, usb};
+        let condition = |name: &str, kind: &str, field: &str| -> Vec<Value> {
+            let manifest = manifests()
+                .iter()
+                .find(|manifest| manifest.name == name)
+                .expect("a manifest");
+            let event = manifest
+                .events
+                .iter()
+                .find(|event| event.kind == kind)
+                .expect("an event kind");
+            event
+                .error_when
+                .iter()
+                .filter_map(|condition| condition.get(field).cloned())
+                .collect()
+        };
+        let serialized = |value: Value| vec![value];
+        assert_eq!(
+            condition("swd", "ack", "value"),
+            serialized(to_value(swd::Ack::Fault).expect("serializes"))
+        );
+        assert_eq!(
+            condition("usb-transactions", "handshake", "pid"),
+            serialized(to_value(usb::Pid::Stall).expect("serializes"))
+        );
+        assert_eq!(
+            condition("uart", "frame", "parity"),
+            serialized(to_value(uart::ParityCheck::Error).expect("serializes"))
+        );
+        let lin = manifests()
+            .iter()
+            .find(|manifest| manifest.name == "lin")
+            .expect("a manifest");
+        let checksum = lin
+            .events
+            .iter()
+            .find(|event| event.kind == "checksum")
+            .expect("an event kind");
+        let either =
+            json!({ "kind": "checksum", "value": 1, "classicOk": false, "enhancedOk": true });
+        let neither =
+            json!({ "kind": "checksum", "value": 1, "classicOk": false, "enhancedOk": false });
+        assert_eq!(checksum.role_of(&either), Role::Check);
+        assert_eq!(checksum.role_of(&neither), Role::Error);
     }
 
     #[test]

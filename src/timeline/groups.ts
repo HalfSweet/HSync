@@ -6,7 +6,7 @@ import { DEFAULT_CATALOG, entryChannels, entryKinds, isEntry, nodeConfig } from 
 import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
 import type { ChannelSummary } from '@/ipc/bindings/ChannelSummary'
 
-/** The buses with colours of their own (DESIGN.md §3.2); every other decoder is `other`. */
+/** The buses whose lines and settings the timeline knows; every other decoder is `other`. */
 export type BusKind = 'i2c' | 'uart' | 'spi' | 'can' | 'other'
 
 export interface ChannelRef {

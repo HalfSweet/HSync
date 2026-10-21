@@ -5,6 +5,7 @@ use serde_json::Value;
 use ts_rs::TS;
 use uiharu_core::{SchemaId, Tick, TickRange};
 
+use crate::roles::{EventRole, KindRoles, RolePainter, RolePart, ScanRegisters};
 use crate::search::Needle;
 use crate::states::StateIndex;
 
@@ -16,6 +17,7 @@ struct Entry {
     offset: usize,
     len: u32,
     kind: u16,
+    role: EventRole,
 }
 
 impl Entry {
@@ -44,6 +46,8 @@ pub struct Store {
     settled: u64,
     ended: Option<u64>,
     states: Option<StateIndex>,
+    roles: KindRoles,
+    scans: ScanRegisters,
 }
 
 /// An event as the interface reads it.
@@ -57,6 +61,8 @@ pub struct EventRow {
     pub end: u64,
     /// The contract's kind of event.
     pub kind: String,
+    /// What the event is, from its kind and, for an error condition, its fields.
+    pub role: EventRole,
     /// The event as the contract serializes it.
     #[ts(type = "Record<string, unknown>")]
     pub payload: Value,
@@ -69,8 +75,14 @@ pub struct EventRow {
 pub enum LaneBlock {
     /// One event.
     Event(EventRow),
-    /// Events too narrow to tell apart at this scale, packed together.
-    Dense { start: u64, end: u64, count: u32 },
+    /// Events too narrow to tell apart at this scale, packed together: an error is packed
+    /// only with other errors. `parts` gives the role covering most of every two pixels.
+    Dense {
+        start: u64,
+        end: u64,
+        count: u32,
+        parts: Vec<RolePart>,
+    },
 }
 
 /// A lane over a viewport.
@@ -119,15 +131,31 @@ struct LaneSpan {
     end: u64,
     /// Different runs of known samples must not pack across a gap.
     continuity: usize,
+    role: EventRole,
 }
 
 struct LaneRun {
     first: LaneSpan,
     end: u64,
     count: u32,
+    painter: RolePainter,
+}
+
+impl LaneRun {
+    fn new(span: LaneSpan, reach: u64, unit: u64) -> Self {
+        let mut painter = RolePainter::new(unit);
+        painter.add(span.start, reach, span.role);
+        Self {
+            first: span,
+            end: reach,
+            count: 1,
+            painter,
+        }
+    }
 }
 
 /// Packs only spans first: parsing a payload is unnecessary for an event in a dense run.
+/// Errors pack only with errors, so that a run of other events never hides one.
 fn pack_lane(
     spans: impl Iterator<Item = LaneSpan>,
     samples_per_pixel: f64,
@@ -147,6 +175,7 @@ fn pack_lane(
             start: run.first.start,
             end: run.end,
             count: run.count,
+            parts: run.painter.finish(run.first.start, run.end),
         }),
         None => {}
     };
@@ -165,13 +194,16 @@ fn pack_lane(
             view.blocks.push(LaneBlock::Event(row(span)));
             continue;
         }
+        let error = span.role == EventRole::Error;
         match &mut run {
             Some(run)
                 if span.continuity == run.first.continuity
+                    && error == (run.first.role == EventRole::Error)
                     && span.start <= run.end.saturating_add(unit) =>
             {
                 run.end = run.end.max(reach);
                 run.count = run.count.saturating_add(1);
+                run.painter.add(span.start, reach, span.role);
             }
             _ => {
                 flush(run.take(), &mut view);
@@ -179,11 +211,7 @@ fn pack_lane(
                     view.truncated = true;
                     return view;
                 }
-                run = Some(LaneRun {
-                    first: span,
-                    end: reach,
-                    count: 1,
-                });
+                run = Some(LaneRun::new(span, reach, unit));
             }
         }
     }
@@ -197,9 +225,12 @@ impl Store {
         Self::default()
     }
 
-    pub(crate) fn for_schema(schema: SchemaId) -> Self {
+    /// A store for a stream of `schema` whose kinds of event are `events`, as the manifest
+    /// of its decoder lists them with their roles.
+    pub(crate) fn for_stream(schema: SchemaId, events: Vec<uiharu_registry::EventKind>) -> Self {
         Self {
             states: (schema.name == "jtag.events").then(StateIndex::default),
+            roles: KindRoles::new(events),
             ..Self::default()
         }
     }
@@ -245,6 +276,10 @@ impl Store {
         {
             states.push(span.start.0, payload);
         }
+        let mut role = self.roles.of(kind, payload);
+        if self.states.is_some() {
+            role = self.scans.role(kind, payload, role);
+        }
         let kind = match self.kinds.iter().position(|known| known == kind) {
             Some(index) => index,
             None => {
@@ -261,6 +296,7 @@ impl Store {
             offset,
             len: u32::try_from(self.text.len() - offset).unwrap_or(u32::MAX),
             kind: u16::try_from(kind).unwrap_or(u16::MAX),
+            role,
         };
         let position = self
             .entries
@@ -336,6 +372,7 @@ impl Store {
             start: entry.start,
             end: entry.end,
             kind: self.kinds[usize::from(entry.kind)].clone(),
+            role: entry.role,
             payload: serde_json::from_slice(self.payload_text(entry)).unwrap_or(Value::Null),
         })
     }
@@ -384,6 +421,7 @@ impl Store {
                     start: entry.start,
                     end: entry.end,
                     continuity: 0,
+                    role: entry.role,
                 },
             )
         });
@@ -398,6 +436,7 @@ impl Store {
                     start,
                     end,
                     continuity,
+                    role: states.role(index),
                 });
             let annotations = pack_lane(spans, samples_per_pixel, limit, |span| {
                 states.row(span.index, span.start, span.end)
@@ -430,19 +469,16 @@ impl Store {
         }
     }
 
-    /// The stretches of `range` holding events, those closer than `resolution` ticks joined.
-    pub fn coverage(&self, range: TickRange, resolution: u64) -> Vec<TickRange> {
-        let mut stretches: Vec<TickRange> = Vec::new();
+    /// The stretches of `range` holding events, in columns of `resolution` ticks: each
+    /// column in the role covering most of it, or an error's when one lies there, and
+    /// neighbouring columns of one role joined.
+    pub fn coverage(&self, range: TickRange, resolution: u64) -> Vec<RolePart> {
+        let mut painter = RolePainter::new(resolution);
         for index in self.overlapping(range) {
             let entry = &self.entries[index];
-            match stretches.last_mut() {
-                Some(last) if entry.start <= last.end.0 + resolution => {
-                    last.end = Tick(last.end.0.max(entry.reach()));
-                }
-                _ => stretches.push(TickRange::new(Tick(entry.start), Tick(entry.reach()))),
-            }
+            painter.add(entry.start, entry.reach(), entry.role);
         }
-        stretches
+        painter.finish(range.start.0, range.end.0)
     }
 
     /// The positions of the events matching `needle`, in time order, at most `limit` of
@@ -502,8 +538,47 @@ mod tests {
                 start: 100,
                 end: 180,
                 kind: "begin".into(),
+                role: EventRole::Data,
                 payload: json!({ "kind": "begin", "tx": 1 }),
             })
+        );
+    }
+
+    fn kind(name: &str, role: uiharu_registry::Role) -> uiharu_registry::EventKind {
+        uiharu_registry::EventKind {
+            kind: name.into(),
+            role,
+            fields: Vec::new(),
+            error_when: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn events_take_the_role_of_their_kind_and_errors_their_conditions() {
+        let i2c = uiharu_registry::manifests()
+            .iter()
+            .find(|manifest| manifest.name == "i2c")
+            .expect("the I²C manifest");
+        let mut store = Store::for_stream(SchemaId::new("i2c.events", 1), i2c.events.clone());
+        let address = |ack: bool| json!({ "kind": "address", "tx": 1, "address": 80, "ack": ack });
+        store.push_event(range(0, 9), &address(true));
+        store.push_event(
+            range(10, 19),
+            &json!({ "kind": "data", "tx": 1, "ack": false }),
+        );
+        store.push_event(range(20, 29), &address(false));
+        store.push_event(range(30, 31), &json!({ "kind": "unheard-of" }));
+        let roles: Vec<EventRole> = (0..store.len())
+            .map(|index| store.row(index).expect("a row").role)
+            .collect();
+        assert_eq!(
+            roles,
+            [
+                EventRole::Address,
+                EventRole::Data,
+                EventRole::Error,
+                EventRole::Data
+            ]
         );
     }
 
@@ -538,7 +613,12 @@ mod tests {
             [LaneBlock::Dense {
                 start: 0,
                 end: 998,
-                count: 100
+                count: 100,
+                parts: vec![RolePart {
+                    start: 0,
+                    end: 998,
+                    role: EventRole::Data
+                }],
             }]
         );
         // At one tick per pixel every frame stands on its own.
@@ -575,16 +655,108 @@ mod tests {
         assert_eq!((page.total, page.offset, page.rows.len()), (10, 10, 0));
     }
 
+    fn part(start: u64, end: u64, role: EventRole) -> RolePart {
+        RolePart { start, end, role }
+    }
+
+    /// Two transactions of an address and three data bytes, 8 ticks each at 10-tick steps.
+    fn transactions() -> Store {
+        let mut store = Store::for_stream(
+            SchemaId::new("test.events", 1),
+            vec![
+                kind("address", uiharu_registry::Role::Address),
+                kind("data", uiharu_registry::Role::Data),
+                kind("error", uiharu_registry::Role::Error),
+            ],
+        );
+        for (index, name) in ["address", "data", "data", "data"]
+            .iter()
+            .cycle()
+            .take(8)
+            .enumerate()
+        {
+            let start = index as u64 * 10;
+            store.push_event(range(start, start + 8), &json!({ "kind": name }));
+        }
+        store
+    }
+
     #[test]
-    fn coverage_joins_close_stretches() {
+    fn dense_items_carry_the_role_of_every_column() {
+        let view = transactions().view(range(0, 100), 5.0, 100);
+        let [LaneBlock::Dense { count, parts, .. }] = &view.blocks[..] else {
+            panic!("one dense item: {:?}", view.blocks);
+        };
+        assert_eq!(*count, 8);
+        assert_eq!(
+            parts,
+            &[
+                part(0, 10, EventRole::Address),
+                part(10, 40, EventRole::Data),
+                part(40, 50, EventRole::Address),
+                part(50, 78, EventRole::Data),
+            ]
+        );
+    }
+
+    #[test]
+    fn errors_are_never_packed_with_other_events() {
+        let mut store = frames(100);
+        store.roles = KindRoles::new(vec![kind("error", uiharu_registry::Role::Error)]);
+        store.push_event(range(505, 506), &json!({ "kind": "error" }));
+        let view = store.view(range(0, 1000), 10.0, 100);
+        assert!(
+            matches!(
+                &view.blocks[..],
+                [
+                    LaneBlock::Dense { end: 508, count: 51, .. },
+                    LaneBlock::Event(row),
+                    LaneBlock::Dense { start: 510, count: 49, .. },
+                ] if row.role == EventRole::Error && row.start == 505
+            ),
+            "{:?}",
+            view.blocks
+        );
+        // Errors close together pack with one another, as errors.
+        store.push_event(range(507, 508), &json!({ "kind": "error" }));
+        let view = store.view(range(0, 1000), 10.0, 100);
+        assert!(
+            matches!(
+                &view.blocks[1],
+                LaneBlock::Dense { count: 2, parts, .. }
+                    if parts.iter().all(|part| part.role == EventRole::Error)
+            ),
+            "{:?}",
+            view.blocks
+        );
+    }
+
+    #[test]
+    fn coverage_paints_columns_by_role() {
         let mut store = frames(3);
         store.push_event(range(100, 108), &json!({ "kind": "frame", "value": 10 }));
         assert_eq!(
             store.coverage(range(0, 200), 5),
-            [range(0, 28), range(100, 108)]
+            [
+                part(0, 30, EventRole::Data),
+                part(100, 110, EventRole::Data)
+            ]
         );
-        assert_eq!(store.coverage(range(0, 200), 100), [range(0, 108)]);
-        assert_eq!(store.coverage(range(104, 200), 1), [range(100, 108)]);
+        assert_eq!(
+            store.coverage(range(0, 200), 100),
+            [part(0, 200, EventRole::Data)]
+        );
+        assert_eq!(
+            store.coverage(range(104, 200), 1),
+            [part(104, 108, EventRole::Data)]
+        );
+        // Columns of 20 ticks: data holds most of each, and the last holds an error.
+        let mut store = transactions();
+        store.push_event(range(75, 76), &json!({ "kind": "error" }));
+        assert_eq!(
+            store.coverage(range(0, 100), 20),
+            [part(0, 60, EventRole::Data), part(60, 80, EventRole::Error)]
+        );
     }
 
     #[test]
@@ -635,7 +807,57 @@ mod tests {
     }
 
     fn jtag() -> Store {
-        Store::for_schema(uiharu_core::SchemaId::new("jtag.events", 1))
+        Store::for_stream(SchemaId::new("jtag.events", 1), Vec::new())
+    }
+
+    #[test]
+    fn jtag_scans_take_the_role_of_their_register_and_states_of_their_column() {
+        let mut store = jtag();
+        state(&mut store, 0, "run-test-idle");
+        state(&mut store, 10, "shift-ir");
+        state(&mut store, 20, "shift-dr");
+        store.push_event(
+            range(10, 14),
+            &json!({ "kind": "scan-begin", "scan": 1, "register": "ir" }),
+        );
+        store.push_event(range(10, 14), &json!({ "kind": "shift", "scan": 1 }));
+        store.push_event(
+            range(20, 30),
+            &json!({ "kind": "scan-begin", "scan": 2, "register": "dr" }),
+        );
+        store.push_event(range(20, 30), &json!({ "kind": "shift", "scan": 2 }));
+        store.push_end(Tick(40));
+        let view = store.view(range(0, 40), 1.0, 100);
+        let scans: Vec<(String, EventRole)> = view
+            .blocks
+            .iter()
+            .filter_map(|block| match block {
+                LaneBlock::Event(row) => Some((row.kind.clone(), row.role)),
+                LaneBlock::Dense { .. } => None,
+            })
+            .collect();
+        let kind = |name: &str, role| (name.to_owned(), role);
+        assert_eq!(
+            scans,
+            [
+                kind("scan-begin", EventRole::Command),
+                kind("shift", EventRole::Command),
+                kind("scan-begin", EventRole::Data),
+                kind("shift", EventRole::Data),
+            ]
+        );
+        let states: Vec<EventRole> = view.annotations.expect("the state lane")[0]
+            .blocks
+            .iter()
+            .map(|block| match block {
+                LaneBlock::Event(row) => row.role,
+                LaneBlock::Dense { .. } => panic!("the states fit separately"),
+            })
+            .collect();
+        assert_eq!(
+            states,
+            [EventRole::Framing, EventRole::Command, EventRole::Data]
+        );
     }
 
     fn state(store: &mut Store, tick: u64, name: &str) {

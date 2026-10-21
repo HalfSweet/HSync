@@ -17,22 +17,28 @@
   "events": [
     {
       "kind": "begin",
+      "role": "address",
       "fields": ["xact", "token", "address", "endpoint", "frame"]
     },
     {
       "kind": "setup",
+      "role": "command",
       "fields": ["xact", "bmRequestType", "bRequest", "wValue", "wIndex", "wLength"]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["xact", "pid", "offset", "bytes"]
     },
     {
       "kind": "handshake",
-      "fields": ["xact", "pid"]
+      "role": "handshake",
+      "fields": ["xact", "pid"],
+      "errorWhen": [{ "pid": "stall" }]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["xact", "reason"]
     }
   ]

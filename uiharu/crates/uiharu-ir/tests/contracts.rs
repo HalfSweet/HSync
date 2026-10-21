@@ -2,11 +2,14 @@
 
 //! A module of contracts alone, for a decoder written by hand, passes the checks without a
 //! decoder; and the checks on a framing hold: a frame carries at least one kind of item, the
-//! item kinds are events naming the frame, the normal ends are reasons.
+//! item kinds are events naming the frame, the normal ends are reasons. Roles name every kind
+//! of event, and their error conditions name fields with values the fields can take.
+
+use std::collections::BTreeMap;
 
 use uiharu_ir::{
-    Contract, EnumVariant, Field, Framing, IR_VERSION, Module, SchemaRef, Type, TypeDef, TypeKind,
-    UnionVariant, validate,
+    Contract, EnumVariant, EventRole, Field, Framing, IR_VERSION, Module, Role, SchemaRef, Type,
+    TypeDef, TypeKind, UnionVariant, validate,
 };
 
 fn field(name: &str, ty: &str) -> Field {
@@ -14,6 +17,13 @@ fn field(name: &str, ty: &str) -> Field {
         name: name.into(),
         ty: Type::named(ty),
         channel: false,
+    }
+}
+
+fn role(role: Role) -> EventRole {
+    EventRole {
+        role,
+        error_when: Vec::new(),
     }
 }
 
@@ -50,6 +60,7 @@ fn i2c() -> Module {
                                 field("tx", "u64"),
                                 field("address", "u16"),
                                 field("read", "bool"),
+                                field("ack", "bool"),
                             ],
                         ),
                         variant("data", vec![field("tx", "u64"), field("byte", "u8")]),
@@ -77,6 +88,18 @@ fn i2c() -> Module {
                 normal: vec!["stop".into(), "restart".into()],
                 unframed: None,
             }),
+            roles: BTreeMap::from([
+                ("begin".into(), role(Role::Framing)),
+                (
+                    "address".into(),
+                    EventRole {
+                        role: Role::Address,
+                        error_when: vec![BTreeMap::from([("ack".into(), false.into())])],
+                    },
+                ),
+                ("data".into(), role(Role::Data)),
+                ("end".into(), role(Role::Framing)),
+            ]),
         }],
         imports: Vec::new(),
         consts: Vec::new(),
@@ -160,4 +183,71 @@ fn the_normal_ends_are_reasons() {
     let mut module = i2c();
     framing_mut(&mut module).normal.clear();
     assert_reports(&module, "framing.normal: a frame has a normal end");
+}
+
+fn roles_mut(module: &mut Module) -> &mut BTreeMap<String, EventRole> {
+    &mut module.contracts[0].roles
+}
+
+#[test]
+fn every_kind_of_event_has_a_role() {
+    let mut module = i2c();
+    roles_mut(&mut module).remove("data");
+    assert_reports(&module, "roles: data has no role");
+}
+
+#[test]
+fn roles_name_kinds_of_event() {
+    let mut module = i2c();
+    roles_mut(&mut module).insert("stop".into(), role(Role::Framing));
+    assert_reports(&module, "roles: stop is not a variant");
+}
+
+#[test]
+fn a_module_without_roles_still_passes() {
+    let mut module = i2c();
+    roles_mut(&mut module).clear();
+    assert_eq!(validate(&module), Vec::new());
+}
+
+#[test]
+fn error_conditions_name_fields_of_the_kind() {
+    let mut module = i2c();
+    let address = roles_mut(&mut module).get_mut("address").expect("a role");
+    address.error_when = vec![BTreeMap::from([("nack".into(), true.into())])];
+    assert_reports(
+        &module,
+        "roles.address.errorWhen: address has no field nack",
+    );
+}
+
+#[test]
+fn error_conditions_take_values_their_fields_can_have() {
+    let mut module = i2c();
+    let roles = roles_mut(&mut module);
+    roles.get_mut("address").expect("a role").error_when =
+        vec![BTreeMap::from([("ack".into(), "no".into())])];
+    roles.get_mut("end").expect("a role").error_when =
+        vec![BTreeMap::from([("reason".into(), "aborted".into())])];
+    let found = messages(&module);
+    assert!(
+        found
+            .iter()
+            .any(|message| message.contains("roles.address.errorWhen: ack is never \"no\"")),
+        "{found:#?}"
+    );
+    assert!(
+        !found.iter().any(|message| message.contains("roles.end")),
+        "an enum field takes the name of a variant: {found:#?}"
+    );
+}
+
+#[test]
+fn an_event_that_meets_a_condition_is_an_error() {
+    let module = i2c();
+    let address = &module.contracts[0].roles["address"];
+    let acked = serde_json::json!({ "kind": "address", "tx": 1, "address": 80, "ack": true });
+    let refused = serde_json::json!({ "kind": "address", "tx": 1, "address": 80, "ack": false });
+    assert_eq!(address.of(&acked), Role::Address);
+    assert_eq!(address.of(&refused), Role::Error);
 }

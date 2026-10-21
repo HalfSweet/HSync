@@ -79,7 +79,10 @@ export type UartEvent =
   | { kind: 'break'; ticks: u64 }
 
 /** The schema of UART event streams. */
-export const uartEvents = eventSchema<UartEvent>('uart.events', 1)
+export const uartEvents = eventSchema<UartEvent>('uart.events', 1).roles({
+  frame: { role: 'data', errorWhen: [{ parity: 'error' }, { framingOk: false }] },
+  break: 'line',
+})
 
 /** The parity bit a character carries. */
 export type Parity = 'none' | 'even' | 'odd' | 'mark' | 'space'

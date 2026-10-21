@@ -134,7 +134,23 @@
         "name": "uart.events",
         "version": 1
       },
-      "event": "UartEvent"
+      "event": "UartEvent",
+      "roles": {
+        "frame": {
+          "role": "data",
+          "errorWhen": [
+            {
+              "parity": "error"
+            },
+            {
+              "framingOk": false
+            }
+          ]
+        },
+        "break": {
+          "role": "line"
+        }
+      }
     }
   ],
   "functions": [

@@ -17,30 +17,38 @@
   "events": [
     {
       "kind": "command",
+      "role": "command",
       "fields": ["tx", "code"]
     },
     {
       "kind": "scratchpad",
-      "fields": ["tx", "bytes", "crcOk", "temperatureRaw", "th", "tl", "config", "resolution"]
+      "role": "data",
+      "fields": ["tx", "bytes", "crcOk", "temperatureRaw", "th", "tl", "config", "resolution"],
+      "errorWhen": [{ "crcOk": false }]
     },
     {
       "kind": "partial-scratchpad",
+      "role": "data",
       "fields": ["tx", "bytes", "temperatureRaw"]
     },
     {
       "kind": "write-scratchpad",
+      "role": "data",
       "fields": ["tx", "th", "tl", "config"]
     },
     {
       "kind": "power-supply",
+      "role": "data",
       "fields": ["tx", "parasite"]
     },
     {
       "kind": "unknown-command",
+      "role": "error",
       "fields": ["tx", "code"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["tx", "reason"]
     }
   ]

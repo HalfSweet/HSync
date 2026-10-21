@@ -27,6 +27,7 @@
   "events": [
     {
       "kind": "edge",
+      "role": "data",
       "fields": ["slope", "sincePrevious"]
     }
   ]

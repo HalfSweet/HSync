@@ -95,7 +95,7 @@ import type { Channel, Tick, u64 } from 'uiharu'
 import { LogicDecoder, atLeast, defineLogicDecoder, eventSchema, mask, over } from 'uiharu'
 
 export type Event = { kind: 'tick'; at: u64 }
-export const events = eventSchema<Event>('test.events', 1)
+export const events = eventSchema<Event>('test.events', 1).roles({ tick: 'data' })
 export interface Config { channel: Channel }
 ${extra}
 class Test extends LogicDecoder<Config, Event> {
@@ -199,12 +199,29 @@ describe('the subset', () => {
   }`),
       'was assigned after it was narrowed',
     ],
+    [
+      'a contract without the roles of its events',
+      snippet(RUN).replace(".roles({ tick: 'data' })", ''),
+      'a contract declares the role of each kind of event',
+    ],
   ])('reports %s', (_what, text, message) => {
     const { ok, diagnostics } = compileSnippet(text)
     expect(ok).toBe(false)
     expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(message)
     expect(diagnostics[0]?.file).toBe(virtualFile)
     expect(diagnostics[0]?.line).toBeGreaterThan(0)
+  })
+
+  test('lowers the roles of a contract, a lone error condition as a list', () => {
+    const text = snippet(RUN).replace(
+      ".roles({ tick: 'data' })",
+      ".roles({ tick: { role: 'check', errorWhen: { at: 0 } } })",
+    )
+    const { module, diagnostics } = lowerSnippet(text)
+    expect(diagnostics).toEqual([])
+    expect(module?.contracts?.[0]?.roles).toEqual({
+      tick: { role: 'check', errorWhen: [{ at: 0 }] },
+    })
   })
 
   test('reports a module with neither a decoder nor a contract', () => {
@@ -267,7 +284,7 @@ import type { Bounded, Channel, Tick, u8, u64 } from 'uiharu'
 import { LogicDecoder, atLeast, defineLogicDecoder, eventSchema, mask, over } from 'uiharu'
 
 export type Event = { kind: 'tick'; at: u64 }
-export const events = eventSchema<Event>('test.events', 1)
+export const events = eventSchema<Event>('test.events', 1).roles({ tick: 'data' })
 export interface Config {
   clk: Channel
   cs: Channel | undefined

@@ -5,7 +5,7 @@ This document specifies how the HSync interface looks and behaves: layout, desig
 ## 1. Principles
 
 - **Grouped by decoder**: a channel sits under the decoder it is bound to; unbound channels go into "Other channels", which collapses as a whole.
-- **One job per colour**: decode blocks use the bus colour, traces use the channel colour; red and amber are only for errors and warnings.
+- **One job per colour**: a decode block's colour says what the event is (its role, the same in every protocol), traces use the channel colour; red and amber are only for errors and warnings.
 - **Decoding lines up with time**: decode blocks and traces share one timeline; the complete results go into the data stream panel, one decoder at a time.
 - **Know where you are**: an overview strip, plus a scale with the trigger point at zero.
 - **Triggers set per channel**: each channel has one trigger slot, and its condition is drawn on its own row.
@@ -67,18 +67,41 @@ The palette is restrained: fills and text are near-neutral greys with a hint of 
 | `--find-strong`            | Current match; on the timeline, drawn as a band at 45% opacity | `#EBD696`             | `#5E5225`             |
 | `--alert` / `--alert-wash` | Error and warning text / fill                                  | `#AC312C` / `#FEF0EE` | `#F28881` / `#381E1C` |
 
-### 3.2 Bus colours
+### 3.2 Event roles
 
-Main colour / decode block fill / darker fill. Within a theme the four buses share lightness and chroma and differ only in hue:
+Every kind of event has a role, and a decode block takes the colour of its event's role, whatever the protocol: an I²C address and a CAN identifier look alike, and a transaction's structure shows even where no text fits. Which decoder a block belongs to is told by its lane, under the decoder's group header.
 
-| Bus  | Light                             | Dark                              |
-| ---- | --------------------------------- | --------------------------------- |
-| I²C  | `#45658D` / `#EFF5FD` / `#DCE7F6` | `#A0C0EB` / `#1C232D` / `#283649` |
-| UART | `#277165` / `#ECF7F5` / `#D6ECE7` | `#8BCDBF` / `#172623` / `#1E3C36` |
-| SPI  | `#665A8A` / `#F5F3FC` / `#E7E3F5` | `#C0B5E7` / `#23212C` / `#373247` |
-| CAN  | `#845169` / `#FBF1F5` / `#F4E0E8` | `#E1ACC4` / `#2B1F24` / `#452D38` |
+| Role        | What it is                                                       | Examples                                                                   |
+| ----------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `framing`   | Where a transaction, frame or scan begins or ends                | START, STOP, repeated START, start and end of a CAN frame, dummy bytes     |
+| `address`   | Whom the traffic is for                                          | I²C address, CAN identifier, LIN header, USB token, SPI NOR address        |
+| `command`   | What is asked                                                    | SPI NOR command, SWD request, USB SETUP request, JTAG instruction shift    |
+| `control`   | What a frame says of itself                                      | CAN control field, USB PD header                                           |
+| `data`      | What the traffic carries                                         | Data bytes, UART characters, JTAG data shift, status register values       |
+| `check`     | A check over the traffic                                         | CRC, checksum                                                              |
+| `handshake` | The other side's answer                                          | CAN acknowledge, SWD acknowledge, USB handshake, SD response               |
+| `line`      | A condition of the line itself                                   | Line reset, break, JTAG reset, suspend and resume                          |
+| `error`     | Something the decoder reports as wrong, or a field value that is | Errors, unknown commands, a wrong parity bit or CRC, an unanswered address |
 
-Other decoders use a neutral generic bus colour: main colour `--ink-2`, fill `--hover`.
+Each role has a mark colour (`--role-<role>`: blocks without room for text, packed runs, the overview strip), a fill (`--role-<role>-fill`: blocks with text) and a deeper fill (`--role-<role>-deep`: the fill's border and emphasised blocks):
+
+| Role        | Light: mark / fill / deep         | Dark: mark / fill / deep          |
+| ----------- | --------------------------------- | --------------------------------- |
+| `framing`   | `#7E8082` / `--hover` / `--sel`   | `#BCBEC0` / `--hover` / `--sel`   |
+| `address`   | `#356BAE` / `#C8E0FF` / `#A9CDFB` | `#4C7FC0` / `#1E3149` / `#254369` |
+| `command`   | `#937ECF` / `#E7E1FE` / `#D5C9FE` | `#A08DDA` / `#38314D` / `#4B3F6C` |
+| `control`   | `#247D46` / `#C6E7CD` / `#A6D9B2` | `#41905B` / `#1B3723` / `#1E4D2D` |
+| `data`      | `#0CA397` / `#C1F1E9` / `#98E2D8` | `#26B2A5` / `#103E39` / `#05544D` |
+| `check`     | `#8F4E8C` / `#F1D2EE` / `#E6B9E2` | `#A2639E` / `#3E263C` / `#573255` |
+| `handshake` | `#929430` / `#E7E9C3` / `#D4D79D` | `#A0A147` / `#373818` / `#4B4B14` |
+| `line`      | ink 20% / `--hover` / `--sel`     | ink 20% / `--hover` / `--sel`     |
+| `error`     | `--alert` / `--alert-wash`        | `--alert` / `--alert-wash`        |
+
+- The six hues (OKLCH 255°, 295°, 152°, 185°, 329°, 110°) share their chroma and two lightness steps, and keep clear of red, amber and the search yellow. Neighbouring roles — those that follow one another on a real bus, such as CAN's identifier, control field, data, CRC and acknowledge — differ by an OKLab ΔE of at least 12, and at least 7 for protanopia and deuteranopia; the gaps between blocks and their text do the rest.
+- `line` takes no hue: its blocks carry diagonal stripes (ink 62% on marks, 24% on fills, 1.5 px every 4 px at 135°), which read in every kind of colour vision.
+- Errors are red and also differ in shape (§6.3), since red and green can look alike.
+- Text on a fill is `--ink` (values) and `--ink-2` (kind names), above 5.9:1 in both themes; an error's text is `--alert`.
+- Decoder group squares and the data stream's tabs are neutral (`--ink-2`), so that no colour means a decoder.
 
 ### 3.3 Channel colours
 
@@ -150,7 +173,7 @@ The SLogic16U3 uses the same capability-driven controls: Stream mode and a 0–6
 
 ## 5. Overview strip
 
-- 58 px high, showing the whole capture; each decoder has a 5 px band marking the stretches where it has data, in its bus colour at opacity 0.62.
+- 58 px high, showing the whole capture; each decoder has a 5 px band marking the stretches where it has data, in columns of one strip pixel each in the mark colour of the role most of its events have (§3.2), at opacity 0.62. Errors are drawn over the band at full opacity, at least 2 px wide, so that they can be found over the whole capture.
 - The current viewport is drawn as a 1.5 px `--ink` frame with a 4 px radius.
 - Ticks are in milliseconds or an adaptive unit; the origin is labelled "Trigger", and the last tick carries the unit ("5 ms").
 - A click moves the viewport's centre there; dragging the viewport frame pans; the wheel zooms.
@@ -162,7 +185,7 @@ The SLogic16U3 uses the same capability-driven controls: Stream mode and a 0–6
 ### 6.1 Ruler and groups
 
 - **Ruler**: sticky at the top, with the unit in the bottom-left corner ("ms", relative to the trigger point). Major ticks carry numbers, minor ticks do not; steps follow the 1-2-5 sequence. The label column stays still during horizontal scrolling. Without a capture it shows no unit or ticks, and "Add decoder" is disabled.
-- **Groups**: each group has one group header row (`--h-lane` high), then its decode lanes, then its trace rows. The group header holds an expand arrow, an 8 px square in the bus colour, the group name (bold), the "Decoder settings" and "Show all decoded results in the data stream" buttons that appear only on hover, and meta information on the right ("100 kHz", "115200 8N1", with an explanatory `title`). Groups are separated by a 1 px divider plus `--gap` padding. The "Other channels" group uses a hollow square with a 1 px outline and shows the channel count on the right.
+- **Groups**: each group has one group header row (`--h-lane` high), then its decode lanes, then its trace rows. The group header holds an expand arrow, an 8 px `--ink-2` square, the group name (bold), the "Decoder settings" and "Show all decoded results in the data stream" buttons that appear only on hover, and meta information on the right ("100 kHz", "115200 8N1", with an explanatory `title`). Groups are separated by a 1 px divider plus `--gap` padding. The "Other channels" group uses a hollow square with a 1 px outline and shows the channel count on the right.
 - **Channel rows**: the label column holds, in order, a 7 px dot in the channel colour, the name, the channel number (`D0`, 11 px monospace, `--ink-3`) and the trigger slot. Narrow rows are for SPI lines, CAN and "Other channels". Channels in a decoder group show their role (SDA, RX…); a channel with a name of its own shows the name, and the role moves before the channel number (`SCL D1`).
 - **Row height**: dragging a channel row's bottom edge in the label column (a 5 px band across the boundary with the row below, `row-resize` cursor, a 1 px `--ink-3` line while hovered or dragged) sets that channel's height in whole pixels, from `--h-trc` to 200 px; a double-click on the edge gives the row back its default height. Heights are kept with the channel colours: in sessions, in `.hsync` captures and for each device between runs. Group headers and decode lanes keep their heights.
 - **Fitting the window**: with "Fit waveform heights to the window" on (§11), the channel rows grow and shrink with the timeline's height, all scaled by one factor so that they keep their proportions, dragged heights included: they fill the room below the ruler exactly, in whole pixels, growing to at most three times their heights (and 200 px) and shrinking until a default wide row is as low as a narrow one (`--h-trc`); beyond either bound the room is left below, or the rows scroll. Group headers, decode lanes and gaps keep their heights. While the rows fit, a dragged row follows the pointer and the others make room, and the height it ends at is kept as its share of the scale.
@@ -178,13 +201,14 @@ The SLogic16U3 uses the same capability-driven controls: Stream mode and a 0–6
 
 ### 6.3 Decode blocks
 
-- Absolutely positioned within the lane, inset 2 px at top and bottom, 3 px radius, padding 0 8 px, 12 px text; bus fill with a border in the darker fill, which turns `--ink-3` on hover.
-- Blocks narrower than 3.2% of the viewport carry no text; a side cut off by the viewport edge loses its rounded corners and border.
+- Absolutely positioned within the lane, inset 2 px at top and bottom, 3 px radius, padding 0 8 px, 12 px text; the fill of the event's role (§3.2) with a border in its deeper fill, which turns `--ink-3` on hover.
+- A block shows its text wherever it fits, however small a share of the viewport it is. A block without room for any text takes its role's mark colour edge to edge, without padding or border, so that narrow blocks stay distinct when zoomed out; a side cut off by the viewport edge loses its rounded corners and border.
 - A selected block is inverted (`--ink` fill, `--canvas` text). Clicking a block makes it the segment and switches the data stream to its decoder; a second click cancels.
 - Decode blocks show only what the bus carried and never guess what it meant: no register reads or writes, no bytes taken for text, no folded runs of a repeated word. For protocol-level meaning, stack the matching decoder (such as the 24xx EEPROM on I²C).
-- **Event blocks, whatever the protocol**: a decoder puts out a stream of events, each of a kind with named fields (an I²C `address` with its address, direction and acknowledge; a UART `frame` with its value; a CAN `id`…). A block carries the kind's name (11 px, bus colour) and up to two main values (monospace, 500): bus numbers and byte arrays first, measurements if there are no bus values, then its first text, then a counter. Scan identifiers, offsets and bit counts must not displace actual data, such as JTAG's TDI and TDO. Numbers show in the decoder's number format (hex by default), quantities in decimal, byte arrays as bytes. Its tip and accessible name list every field. Events with exactly the same span share a block whose tip lists each event, so coincident state changes and scan boundaries do not cover one another. Individual markers stay at least two pixels wide, including events at a single sample or with no duration. Events too narrow to tell apart at the scale (under two pixels, closer than that) pack into one dense block without text, whose tip says how many it holds; zooming in separates them.
+- **Event blocks, whatever the protocol**: a decoder puts out a stream of events, each of a kind with named fields (an I²C `address` with its address, direction and acknowledge; a UART `frame` with its value; a CAN `id`…). A block carries the kind's name (11 px, `--ink-2`) and up to two main values (monospace, 500, `--ink`): bus numbers and byte arrays first, measurements if there are no bus values, then its first text, then a counter. Scan identifiers, offsets and bit counts must not displace actual data, such as JTAG's TDI and TDO. Numbers show in the decoder's number format (hex by default), quantities in decimal, byte arrays as bytes. Its tip and accessible name list every field. Events with exactly the same span share a block whose tip lists each event, so coincident state changes and scan boundaries do not cover one another. Individual markers stay at least two pixels wide, including events at a single sample or with no duration. Events too narrow to tell apart at the scale (under two pixels, closer than that) pack into one dense block without text, whose tip says how many it holds; zooming in separates them. A dense block is painted in columns of two pixels, each in the mark colour of the role covering most of it.
+- **Errors**: an event whose kind is an error, or whose field values are ones its contract defines as wrong (a wrong parity bit, a CRC that does not match, an address no device acknowledged), shows in the `error` role. Errors pack only with errors, never into a run of other events; one too narrow for text spans the lane's full height and stays at least 3 px wide, at every scale. Values a normal exchange can have are never errors: the NACK that ends an I²C read is not one.
 - A decoder's first stream sits on the group's title row; a decoder stacked on it (the EEPROM on I²C) gets a lane of its own below, named after it in the label column.
-- **JTAG states**: each JTAG stream has a separate **TAP states** lane immediately below its data lane. A state occupies the time from entering it until the next state change, capped at a gap or the decoder's known progress; it remains visible when the viewport begins midway through it. The data lane keeps shift data and scan boundary markers, so data and states never cover one another. States use localized names (English uses the standard TAP names, such as `Shift-IR`; Chinese names the operation and register), without a redundant event-kind prefix. State blocks use 4 px horizontal padding; narrow names ellipsize from 40 px onward, and smaller intervals are markers. The tip gives the complete name, both endpoints and duration. Clicking selects the whole interval. The data stream continues to list the original instantaneous state-change events.
+- **JTAG states**: each JTAG stream has a separate **TAP states** lane immediately below its data lane. States take the role of their column of the TAP state diagram: Test-Logic-Reset and Run-Test/Idle `framing`, the instruction register's states `command`, the data register's `data`; Shift-IR and Shift-DR take the deeper fill. On the data lane, a scan's begin and end markers and its shifts take the role of the register it shifts, so that even a thin marker tells an instruction scan from a data scan. A state occupies the time from entering it until the next state change, capped at a gap or the decoder's known progress; it remains visible when the viewport begins midway through it. The data lane keeps shift data and scan boundary markers, so data and states never cover one another. States use localized names (English uses the standard TAP names, such as `Shift-IR`; Chinese names the operation and register), without a redundant event-kind prefix. State blocks use 4 px horizontal padding; narrow names ellipsize from 40 px onward, and smaller intervals are markers. The tip gives the complete name, both endpoints and duration. Clicking selects the whole interval. The data stream continues to list the original instantaneous state-change events.
 - Blocks fill in as the capture is taken: decoding follows the samples, so a running capture already shows what has been decoded.
 
 ### 6.4 Hover readout
@@ -204,7 +228,7 @@ The SLogic16U3 uses the same capability-driven controls: Stream mode and a 0–6
 
 ### 6.6 Segment
 
-- Drag on the ruler to mark a segment: its ends carry two 14 px flags, A and B (`--ink` fill), with an arrowed horizontal line between them labelled with the duration; `--veil` covers the whole segment on every row.
+- Drag on the ruler to mark a segment: its ends carry two 14 px flags, A and B (`--ink` fill), with an arrowed horizontal line between them labelled with the duration; `--veil` covers the whole segment on every row. The duration, here and in the status bar, reads in whole nanoseconds below a microsecond ("20 ns"), in microseconds with one decimal below a millisecond ("540.0 µs") and in milliseconds with four decimals above ("1.0460 ms").
 - The flags sit outside the segment and turn inwards near the viewport edges; when the segment is narrower than 9% of the viewport, the duration sits beside B (beside A when B is near the right edge); when one end of the segment lies outside the viewport, the duration reads "Extends beyond view".
 - A drag shorter than 2 µs counts as a click; a click on the ruler cancels the segment.
 - While a segment exists, the status bar shows its duration; clicking it lists each channel's rising edges, falling edges and edge count within the segment.

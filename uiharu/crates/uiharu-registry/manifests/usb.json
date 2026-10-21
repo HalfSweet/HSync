@@ -31,50 +31,66 @@
   "events": [
     {
       "kind": "begin",
+      "role": "framing",
       "fields": ["pkt"]
     },
     {
       "kind": "pid",
-      "fields": ["pkt", "pid", "ok"]
+      "role": "command",
+      "fields": ["pkt", "pid", "ok"],
+      "errorWhen": [{ "ok": false }]
     },
     {
       "kind": "token",
-      "fields": ["pkt", "address", "endpoint", "crc5", "ok"]
+      "role": "address",
+      "fields": ["pkt", "address", "endpoint", "crc5", "ok"],
+      "errorWhen": [{ "ok": false }]
     },
     {
       "kind": "sof",
-      "fields": ["pkt", "frame", "crc5", "ok"]
+      "role": "control",
+      "fields": ["pkt", "frame", "crc5", "ok"],
+      "errorWhen": [{ "ok": false }]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["pkt", "offset", "bytes"]
     },
     {
       "kind": "data-end",
-      "fields": ["pkt", "crc16", "ok", "length"]
+      "role": "check",
+      "fields": ["pkt", "crc16", "ok", "length"],
+      "errorWhen": [{ "ok": false }]
     },
     {
       "kind": "split",
+      "role": "control",
       "fields": ["pkt", "raw"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["pkt", "reason"]
     },
     {
       "kind": "reset",
+      "role": "line",
       "fields": ["ticks"]
     },
     {
       "kind": "suspend",
+      "role": "line",
       "fields": []
     },
     {
       "kind": "resume",
+      "role": "line",
       "fields": []
     },
     {
       "kind": "keep-alive",
+      "role": "line",
       "fields": []
     }
   ]

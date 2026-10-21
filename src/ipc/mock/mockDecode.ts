@@ -7,8 +7,10 @@ import { entryKinds, entryLabel, isEntry } from '@/decode/catalog'
 
 import type { DecoderLanes } from '../bindings/DecoderLanes'
 import type { DecoderStatus } from '../bindings/DecoderStatus'
+import type { EventRole } from '../bindings/EventRole'
 import type { EventRow } from '../bindings/EventRow'
 import type { LaneBlock } from '../bindings/LaneBlock'
+import type { RolePart } from '../bindings/RolePart'
 import type { SearchHit } from '../bindings/SearchHit'
 import type { SearchResult } from '../bindings/SearchResult'
 import type { StreamPage } from '../bindings/StreamPage'
@@ -41,6 +43,66 @@ const LANE_LIMIT = 4096
 
 /** The first sample after an event, an event without length counting as one sample wide. */
 const reach = (row: EventRow) => Math.max(row.end, row.start + 1)
+
+const ROLES: readonly EventRole[] = [
+  'framing',
+  'address',
+  'command',
+  'control',
+  'data',
+  'check',
+  'handshake',
+  'line',
+  'error',
+]
+
+/** `rows` painted as `RolePainter` paints them: columns of `unit` samples, each in the role
+ * covering most of it or an error's when one lies there, neighbours of one role joined, cut to
+ * `start..end`. */
+function paintRoles(
+  rows: readonly EventRow[],
+  unit: number,
+  start: number,
+  end: number,
+): RolePart[] {
+  const columns = new Map<number, number[]>()
+  for (const row of rows) {
+    const to = reach(row)
+    for (
+      let column = Math.floor(row.start / unit);
+      column <= Math.floor((to - 1) / unit);
+      column++
+    ) {
+      const cover = columns.get(column) ?? ROLES.map(() => 0)
+      const low = Math.max(column * unit, row.start)
+      const high = Math.min((column + 1) * unit, to)
+      const role = ROLES.indexOf(row.role)
+      cover[role] = (cover[role] ?? 0) + Math.max(high - low, 1)
+      columns.set(column, cover)
+    }
+  }
+  const parts: RolePart[] = []
+  for (const column of [...columns.keys()].sort((a, b) => a - b)) {
+    const cover = columns.get(column) ?? []
+    let role: EventRole = 'error'
+    if (!((cover[ROLES.indexOf('error')] ?? 0) > 0)) {
+      let most = 0
+      cover.forEach((ticks, index) => {
+        if (ticks > 0 && ticks >= most) {
+          most = ticks
+          role = ROLES[index] ?? 'data'
+        }
+      })
+    }
+    const from = column * unit
+    const last = parts.at(-1)
+    if (last && last.role === role && last.end === from) last.end = from + unit
+    else parts.push({ start: from, end: from + unit, role })
+  }
+  return parts
+    .map((part) => ({ ...part, start: Math.max(part.start, start), end: Math.min(part.end, end) }))
+    .filter((part) => part.end > part.start)
+}
 
 /** The recording that goes with each of the capture's entries: the one of its first node type. */
 function matched(decoders: unknown): { entry: unknown; recorded: FixtureDecoder | null }[] {
@@ -96,15 +158,20 @@ function overlapping(rows: readonly EventRow[], start: number, end: number): Eve
   return rows.filter((row) => row.start < end && reach(row) > start)
 }
 
-/** The lane over `start..end`, as `Store::view`: narrow events pack into dense blocks. */
+/** The lane over `start..end`, as `Store::view`: narrow events pack into dense blocks, errors
+ * only with errors. */
 function laneView(rows: readonly EventRow[], start: number, end: number, spp: number): StreamView {
   const unit = Math.max(1, Math.floor(spp * 2))
   const blocks: LaneBlock[] = []
-  let run: { first: EventRow; start: number; end: number; count: number } | null = null
+  let run: { rows: EventRow[]; start: number; end: number } | null = null
   const flush = () => {
     if (!run) return
-    if (run.count === 1) blocks.push({ type: 'event', ...run.first })
-    else blocks.push({ type: 'dense', start: run.start, end: run.end, count: run.count })
+    const [first] = run.rows
+    if (run.rows.length === 1 && first) blocks.push({ type: 'event', ...first })
+    else {
+      const parts = paintRoles(run.rows, unit, run.start, run.end)
+      blocks.push({ type: 'dense', start: run.start, end: run.end, count: run.rows.length, parts })
+    }
     run = null
   }
   for (const row of overlapping(rows, start, end)) {
@@ -114,12 +181,13 @@ function laneView(rows: readonly EventRow[], start: number, end: number, spp: nu
       blocks.push({ type: 'event', ...row })
       continue
     }
-    if (run && row.start <= run.end + unit) {
+    const error = row.role === 'error'
+    if (run && error === (run.rows[0]?.role === 'error') && row.start <= run.end + unit) {
       run.end = Math.max(run.end, reach(row))
-      run.count += 1
+      run.rows.push(row)
     } else {
       flush()
-      run = { first: row, start: row.start, end: reach(row), count: 1 }
+      run = { rows: [row], start: row.start, end: reach(row) }
     }
   }
   flush()
@@ -288,17 +356,19 @@ export function mockCoverage(
   start: number,
   end: number,
   resolution: number,
-): [number, number][] | null {
+): RolePart[] | null {
   const recorded = matched(decoders)[index]?.recorded
   if (!recorded) return null
-  const stretches = recorded.streams
-    .flatMap((stream) => overlapping(stream.rows, start, end).map((row) => [row.start, reach(row)]))
-    .sort((a, b) => (a[0] ?? 0) - (b[0] ?? 0))
-  const joined: [number, number][] = []
-  for (const [from = 0, to = 0] of stretches) {
+  const unit = Math.max(1, Math.ceil(resolution))
+  const parts = recorded.streams
+    .flatMap((stream) => paintRoles(overlapping(stream.rows, start, end), unit, start, end))
+    .sort((a, b) => Number(a.role === 'error') - Number(b.role === 'error') || a.start - b.start)
+  const joined: RolePart[] = []
+  for (const part of parts) {
     const last = joined.at(-1)
-    if (last && from <= last[1] + resolution) last[1] = Math.max(last[1], to)
-    else joined.push([from, to])
+    if (last && last.role === part.role && part.start <= last.end + unit) {
+      last.end = Math.max(last.end, part.end)
+    } else joined.push({ ...part })
   }
   return joined
 }

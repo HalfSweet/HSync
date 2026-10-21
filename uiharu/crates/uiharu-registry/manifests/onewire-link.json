@@ -27,14 +27,18 @@
   "events": [
     {
       "kind": "reset",
-      "fields": ["presence"]
+      "role": "line",
+      "fields": ["presence"],
+      "errorWhen": [{ "presence": false }]
     },
     {
       "kind": "bit",
+      "role": "data",
       "fields": ["value"]
     },
     {
       "kind": "bad-slot",
+      "role": "error",
       "fields": ["lowTicks"]
     }
   ]

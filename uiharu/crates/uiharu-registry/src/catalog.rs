@@ -15,7 +15,9 @@ use uiharu_ir::{Category as IrCategory, Module, Type, TypeKind};
 
 use crate::dynamic::{DynReader, TypedReader};
 use crate::kinds::{KINDS, Kind};
-use crate::manifest::{Category, EventKind, Field, FieldKind, LOGIC, Manifest, Port, manifests};
+use crate::manifest::{
+    Category, EventKind, Field, FieldKind, LOGIC, Manifest, Port, Role, manifests,
+};
 
 /// A decoder module loaded into a catalog.
 pub struct LoadedKind {
@@ -371,18 +373,30 @@ fn manifest_of(module: &Module, program: &Program, defaults: &serde_json::Value)
         .contracts
         .iter()
         .find(|contract| contract.schema.name == program.output_schema().name)
-        .and_then(|contract| types().find(|def| def.name == contract.event))
-        .and_then(|def| match &def.kind {
+        .and_then(|contract| {
+            types()
+                .find(|def| def.name == contract.event)
+                .map(|def| (contract, def))
+        })
+        .and_then(|(contract, def)| match &def.kind {
             TypeKind::Union { variants } => Some(
                 variants
                     .iter()
-                    .map(|variant| EventKind {
-                        kind: variant.name.clone(),
-                        fields: variant
-                            .fields
-                            .iter()
-                            .map(|field| field.name.clone())
-                            .collect(),
+                    .map(|variant| {
+                        // A module compiled before roles were declared shows its events as data.
+                        let role = contract.roles.get(&variant.name);
+                        EventKind {
+                            kind: variant.name.clone(),
+                            role: role.map_or(Role::Data, |role| role.role),
+                            fields: variant
+                                .fields
+                                .iter()
+                                .map(|field| field.name.clone())
+                                .collect(),
+                            error_when: role
+                                .map(|role| role.error_when.clone())
+                                .unwrap_or_default(),
+                        }
                     })
                     .collect(),
             ),

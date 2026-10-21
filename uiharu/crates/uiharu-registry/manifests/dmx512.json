@@ -17,22 +17,27 @@
   "events": [
     {
       "kind": "packet-begin",
+      "role": "framing",
       "fields": ["packet", "breakTicks"]
     },
     {
       "kind": "start-code",
+      "role": "command",
       "fields": ["packet", "code"]
     },
     {
       "kind": "slots",
+      "role": "data",
       "fields": ["packet", "offset", "values"]
     },
     {
       "kind": "packet-end",
+      "role": "framing",
       "fields": ["packet", "slots", "reason"]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["packet", "slot"]
     }
   ]

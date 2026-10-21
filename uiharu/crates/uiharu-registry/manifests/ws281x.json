@@ -38,18 +38,22 @@
   "events": [
     {
       "kind": "frame-begin",
+      "role": "framing",
       "fields": ["frame"]
     },
     {
       "kind": "led",
+      "role": "data",
       "fields": ["frame", "index", "bytes"]
     },
     {
       "kind": "frame-end",
+      "role": "framing",
       "fields": ["frame", "leds", "reason"]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["frame", "reason", "bits"]
     }
   ]

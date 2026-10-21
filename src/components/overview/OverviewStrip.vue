@@ -4,12 +4,12 @@ import { computed, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { getBackend } from '@/ipc/backend'
+import type { RolePart } from '@/ipc/bindings/RolePart'
 import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useSearchStore } from '@/stores/search'
 import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
-import { busKind, type BusKind } from '@/timeline/groups'
 import { overviewTicks } from '@/timeline/ticks'
 import { formatTimeShort } from '@/utils/units'
 
@@ -39,22 +39,20 @@ const found = computed(() => {
 
 const percent = (sample: number) => (capture.extent > 0 ? (sample / capture.extent) * 100 : 0)
 
-// Activity of each decoder over the whole capture: one 5 px row per decoder, in its bus colour,
-// over the stretches where it has events at the strip's resolution.
+// Activity of each decoder over the whole capture: one 5 px row per decoder over the stretches
+// where it has events at the strip's resolution, each in the role of most of its events, and
+// its errors over them.
 interface Coverage {
   index: number
-  bus: BusKind
-  stretches: [number, number][]
+  parts: RolePart[]
 }
 
-/** The decoders with streams to mark, each in the colour of the bus it starts with. */
+/** The decoders with streams to mark. */
 const marked = computed(() =>
-  decode.statuses
-    .filter((status) => status.streams.length > 0)
-    .map((status) => ({ index: status.index, bus: busKind(status.kinds[0]) })),
+  decode.statuses.filter((status) => status.streams.length > 0).map((status) => status.index),
 )
 /** Changes when the decoders to mark do, which their statuses may do after the revision. */
-const markedKey = computed(() => marked.value.map(({ index, bus }) => `${index}:${bus}`).join())
+const markedKey = computed(() => marked.value.join())
 
 const coverage = shallowRef<Coverage[]>([])
 let coverageSequence = 0
@@ -76,10 +74,9 @@ watch(
     try {
       const backend = await getBackend()
       const found = await Promise.all(
-        marked.value.map(async ({ index, bus }) => ({
+        marked.value.map(async (index) => ({
           index,
-          bus,
-          stretches: (await backend.decodeCoverage(id, index, 0, extent, extent / pixels)) ?? [],
+          parts: (await backend.decodeCoverage(id, index, 0, extent, extent / pixels)) ?? [],
         })),
       )
       if (current === coverageSequence) coverage.value = found
@@ -90,22 +87,18 @@ watch(
   { immediate: true },
 )
 
-const BAND_COLOR: Record<BusKind, string> = {
-  i2c: 'bg-i2c',
-  uart: 'bg-uart',
-  spi: 'bg-spi',
-  can: 'bg-can',
-  other: 'bg-ink-3',
-}
-
 const bands = computed(() =>
-  coverage.value.flatMap(({ index, bus, stretches }, row) =>
-    stretches.map(([start, end]) => ({
-      key: `${index}:${start}`,
+  coverage.value.flatMap(({ index, parts }, row) =>
+    parts.map((part) => ({
+      key: `${index}:${part.role}:${part.start}`,
       top: 8 + row * 8,
-      left: percent(start),
-      width: Math.max(percent(end) - percent(start), 0.15),
-      color: BAND_COLOR[bus],
+      left: percent(part.start),
+      // An error keeps a width of its own however short, over the stretch around it.
+      width:
+        part.role === 'error'
+          ? `max(${percent(part.end) - percent(part.start)}%, 2px)`
+          : `${Math.max(percent(part.end) - percent(part.start), 0.15)}%`,
+      role: part.role,
     })),
   ),
 )
@@ -199,9 +192,9 @@ function onWheel(event: WheelEvent): void {
       <i
         v-for="band in bands"
         :key="band.key"
-        class="pointer-events-none absolute h-[5px] rounded-[1.5px] opacity-62"
-        :class="band.color"
-        :style="{ top: `${band.top}px`, left: `${band.left}%`, width: `${band.width}%` }"
+        class="pointer-events-none absolute h-[5px] rounded-[1.5px] bg-role [background-image:var(--r-hatch,none)]"
+        :class="[`role-${band.role}`, band.role === 'error' ? 'z-[1]' : 'opacity-62']"
+        :style="{ top: `${band.top}px`, left: `${band.left}%`, width: band.width }"
         aria-hidden="true"
       />
       <i

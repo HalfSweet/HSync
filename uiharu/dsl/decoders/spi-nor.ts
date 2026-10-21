@@ -111,7 +111,16 @@ export type NorEvent =
   | { kind: 'unknown-command'; tx: TxId; opcode: u8 }
 
 /** The schema of SPI NOR event streams. Version 2 carries the single-line command set. */
-export const norEvents = eventSchema<NorEvent>('nor.events', 2)
+export const norEvents = eventSchema<NorEvent>('nor.events', 2).roles({
+  begin: 'command',
+  address: 'address',
+  dummy: 'framing',
+  data: 'data',
+  status: 'data',
+  id: 'data',
+  end: 'framing',
+  'unknown-command': 'error',
+})
 
 /** How many address bytes the commands whose width follows the flash's address mode take. */
 export type AddressBytes =

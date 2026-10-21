@@ -41,10 +41,13 @@
   "events": [
     {
       "kind": "frame",
-      "fields": ["frame", "bits", "data", "parityOk"]
+      "role": "data",
+      "fields": ["frame", "bits", "data", "parityOk"],
+      "errorWhen": [{ "parityOk": false }]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["reason"]
     }
   ]

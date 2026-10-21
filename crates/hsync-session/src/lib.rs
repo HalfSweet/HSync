@@ -44,7 +44,9 @@ pub use hsync_fileio::{
     ImportRequest, Waveform, WaveformFormat, WaveformItem, WaveformItemKind, WaveformSummary,
     read_waveform_file,
 };
-pub use hsync_uiharu::{EventRow, LaneBlock, Position, StreamProgress, StreamView};
+pub use hsync_uiharu::{
+    EventRole, EventRow, LaneBlock, Position, RolePart, StreamProgress, StreamView,
+};
 pub use instrument::{
     CaptureRequest, DeviceState, EndKind, EventSink, Instrument, LivePhase, LiveStatus,
     SessionEvent,

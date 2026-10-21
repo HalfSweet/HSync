@@ -27,6 +27,7 @@
   "events": [
     {
       "kind": "cycle",
+      "role": "data",
       "fields": ["periodTicks", "activeTicks"]
     }
   ]

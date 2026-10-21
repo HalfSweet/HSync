@@ -17,18 +17,24 @@
   "events": [
     {
       "kind": "begin",
-      "fields": ["frame", "address", "function", "exception", "partial"]
+      "role": "address",
+      "fields": ["frame", "address", "function", "exception", "partial"],
+      "errorWhen": [{ "exception": true }]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["frame", "offset", "bytes"]
     },
     {
       "kind": "crc",
-      "fields": ["frame", "value", "ok"]
+      "role": "check",
+      "fields": ["frame", "value", "ok"],
+      "errorWhen": [{ "ok": false }]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["frame", "reason"]
     }
   ]

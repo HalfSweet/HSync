@@ -273,9 +273,36 @@ export interface Schema<E extends Tagged, I> {
   readonly item?: I
 }
 
+/** What an event is to someone reading the bus, whatever the protocol, so that an interface
+ * shows events of the same role alike: where a transaction or frame begins or ends, whom it is
+ * for, what it asks, what a frame says of itself, what it carries, a check over it, the other
+ * side's answer, a condition of the line itself, or something wrong. */
+export type Role =
+  'framing' | 'address' | 'command' | 'control' | 'data' | 'check' | 'handshake' | 'line' | 'error'
+
+/** Values of the fields of an event `V` that, all together, make it an error. */
+export type ErrorCondition<V> = { readonly [F in Exclude<keyof V, 'kind'>]?: V[F] }
+
+/** The role of the events of a kind `V`; with `errorWhen`, an event that meets the condition,
+ * or any one of the conditions, is an error instead, such as a character whose parity is
+ * wrong. */
+export type EventRole<V> =
+  | Role
+  | {
+      readonly role: Role
+      readonly errorWhen: ErrorCondition<V> | readonly ErrorCondition<V>[]
+    }
+
+/** The role of every kind of event of `E`. */
+export type Roles<E extends Tagged> = {
+  readonly [K in E['kind']]: EventRole<Extract<E, { kind: K }>>
+}
+
 /** The contract of a stream as `eventSchema` declares it: unframed, unless `framed` says how
  * it frames its traffic. */
 export interface UnframedSchema<E extends Tagged> extends Schema<E, never> {
+  /** Declares the role of every kind of event; every contract declares them. */
+  roles(roles: Roles<E>): UnframedSchema<E>
   /** Declares the framing: `items` are the kinds of event that carry a frame's items, which
    * the cursor hands out without the frame's id (see `Item`). */
   framed<K extends E['kind'], Id extends string>(
@@ -287,7 +314,8 @@ export interface UnframedSchema<E extends Tagged> extends Schema<E, never> {
 export type ItemOf<S> = S extends Schema<Tagged, infer I> ? I : never
 
 /** Declares the contract of a stream: `name` dotted and lower case (`spi.events`), `version`
- * from 1, a new version for every change that breaks readers. */
+ * from 1, a new version for every change that breaks readers; then the roles of its events
+ * (`roles`) and, for a framed stream, its framing (`framed`). */
 export declare function eventSchema<E extends Tagged>(name: string, version: u32): UnframedSchema<E>
 
 // Ports

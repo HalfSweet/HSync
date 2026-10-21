@@ -25,7 +25,13 @@
       ]
     }
   ],
-  "contracts": [{ "schema": { "name": "pwm.events", "version": 1 }, "event": "PwmEvent" }],
+  "contracts": [
+    {
+      "schema": { "name": "pwm.events", "version": 1 },
+      "event": "PwmEvent",
+      "roles": { "cycle": { "role": "data" } }
+    }
+  ],
   "functions": [
     {
       "name": "isActive",

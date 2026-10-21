@@ -33,14 +33,18 @@
   "events": [
     {
       "kind": "frame",
-      "fields": ["address", "command", "extended", "inverseOk", "raw"]
+      "role": "data",
+      "fields": ["address", "command", "extended", "inverseOk", "raw"],
+      "errorWhen": [{ "inverseOk": false }]
     },
     {
       "kind": "repeat",
+      "role": "framing",
       "fields": []
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["reason", "bits", "raw"]
     }
   ]

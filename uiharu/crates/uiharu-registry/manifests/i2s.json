@@ -51,6 +51,7 @@
   "events": [
     {
       "kind": "sample",
+      "role": "data",
       "fields": ["frame", "channel", "value", "bits", "complete"]
     }
   ]

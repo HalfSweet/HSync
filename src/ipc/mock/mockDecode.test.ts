@@ -77,10 +77,15 @@ describe('mock decoders', () => {
     expect(mockSearch(MOCK_ENTRIES, '  ')).toBeNull()
   })
 
-  it('tells where a decoder has events', () => {
+  it('tells where a decoder has events, and in which roles', () => {
     const coverage = mockCoverage(MOCK_ENTRIES, 1, 0, 131_072, 1000)
     expect(coverage?.length).toBeGreaterThan(0)
-    expect(coverage?.every(([start, end]) => start < end)).toBe(true)
+    expect(coverage?.every(({ start, end }) => start < end)).toBe(true)
+    // CAN's frames show their identifiers, control fields, CRCs and acknowledges apart.
+    const can = mockCoverage(MOCK_ENTRIES, 3, 0, 131_072, 50)
+    expect(new Set(can?.map((part) => part.role))).toEqual(
+      new Set(['framing', 'address', 'control', 'data', 'check', 'handshake']),
+    )
     expect(mockCoverage(MOCK_ENTRIES, 9, 0, 131_072, 1000)).toBeNull()
   })
 })

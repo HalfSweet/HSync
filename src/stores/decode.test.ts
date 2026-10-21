@@ -65,6 +65,7 @@ function lane(start: number, truncated: boolean): DecoderLanes[] {
                 start,
                 end: start + 10,
                 kind: 'word',
+                role: 'data',
                 payload: { kind: 'word', value: 42 },
               },
             ],

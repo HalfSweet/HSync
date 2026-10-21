@@ -57,16 +57,18 @@ export type SpiEvent =
 
 /** The schema of SPI event streams: framed by chip select, a transaction's items are its
  * words. */
-export const spiEvents = eventSchema<SpiEvent>('spi.events', 1).framed({
-  begin: 'begin',
-  items: ['word'],
-  end: 'end',
-  id: 'tx',
-  partial: 'partial',
-  reason: 'reason',
-  normal: ['cs-release'],
-  unframed: 0,
-})
+export const spiEvents = eventSchema<SpiEvent>('spi.events', 1)
+  .roles({ begin: 'framing', word: 'data', end: 'framing' })
+  .framed({
+    begin: 'begin',
+    items: ['word'],
+    end: 'end',
+    id: 'tx',
+    partial: 'partial',
+    reason: 'reason',
+    normal: ['cs-release'],
+    unframed: 0,
+  })
 
 /** One word as both lines carried it, as decoders built on SPI read it. */
 export type SpiWord = ItemOf<typeof spiEvents>

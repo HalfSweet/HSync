@@ -52,12 +52,20 @@ export type I2cEvent =
 /** The schema of I²C event streams: a transaction's items are its addresses, data bytes and
  * repeated STARTs; a STOP ends it normally, as does the START of the next transaction when the
  * transaction was partial. */
-export const i2cEvents = eventSchema<I2cEvent>('i2c.events', 1).framed({
-  begin: 'begin',
-  items: ['address', 'data', 'restart'],
-  end: 'end',
-  id: 'tx',
-  partial: 'partial',
-  reason: 'reason',
-  normal: ['stop', 'restart'],
-})
+export const i2cEvents = eventSchema<I2cEvent>('i2c.events', 1)
+  .roles({
+    begin: 'framing',
+    address: { role: 'address', errorWhen: { ack: false } },
+    data: 'data',
+    restart: 'framing',
+    end: 'framing',
+  })
+  .framed({
+    begin: 'begin',
+    items: ['address', 'data', 'restart'],
+    end: 'end',
+    id: 'tx',
+    partial: 'partial',
+    reason: 'reason',
+    normal: ['stop', 'restart'],
+  })

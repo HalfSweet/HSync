@@ -9,6 +9,7 @@ use serde::Serialize;
 use ts_rs::TS;
 use uiharu_core::{Tick, TickRange};
 
+use crate::roles::RolePart;
 use crate::run::Decoder;
 use crate::search::Needle;
 use crate::store::{EventPage, EventRow, LaneBlock, Store, StreamView};
@@ -51,9 +52,15 @@ fn shift_view(view: &mut StreamView, dropped: SampleIndex) {
     for block in view.blocks.iter_mut().chain(annotations) {
         match block {
             LaneBlock::Event(row) => shift_row(row, dropped),
-            LaneBlock::Dense { start, end, .. } => {
+            LaneBlock::Dense {
+                start, end, parts, ..
+            } => {
                 *start = start.saturating_sub(dropped);
                 *end = end.saturating_sub(dropped);
+                for part in parts {
+                    part.start = part.start.saturating_sub(dropped);
+                    part.end = part.end.saturating_sub(dropped);
+                }
             }
         }
     }
@@ -151,23 +158,22 @@ impl Decoder {
         })
     }
 
-    /// The stretches of `range` where stream `stream` has events, those closer than
-    /// `resolution` samples joined.
+    /// The stretches of `range` where stream `stream` has events, in columns of
+    /// `resolution` samples, each in the role covering most of it (see [`Store::coverage`]).
     pub fn coverage(
         &self,
         stream: usize,
         range: Range<SampleIndex>,
         resolution: u64,
-    ) -> Option<Vec<[SampleIndex; 2]>> {
+    ) -> Option<Vec<RolePart>> {
         self.with_store(stream, |store, dropped| {
             store
                 .coverage(Self::absolute(range, dropped), resolution)
                 .into_iter()
-                .map(|stretch| {
-                    [
-                        stretch.start.0.saturating_sub(dropped),
-                        stretch.end.0.saturating_sub(dropped),
-                    ]
+                .map(|part| RolePart {
+                    start: part.start.saturating_sub(dropped),
+                    end: part.end.saturating_sub(dropped),
+                    ..part
                 })
                 .collect()
         })
@@ -183,7 +189,7 @@ mod tests {
 
     #[test]
     fn retained_state_intervals_shift_to_the_captures_remaining_samples() {
-        let mut store = Store::for_schema(SchemaId::new("jtag.events", 1));
+        let mut store = Store::for_stream(SchemaId::new("jtag.events", 1), Vec::new());
         store.push_event(
             TickRange::one(Tick(20)),
             &json!({ "kind": "state", "state": "shift-ir" }),

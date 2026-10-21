@@ -11,7 +11,7 @@ use hsync_capture::LogicCapture;
 use hsync_core::{ChannelIndex, SampleIndex};
 use parking_lot::{Mutex, RwLock, RwLockReadGuard};
 use uiharu_core::{PushError, SchemaId, SignalItem, Tick};
-use uiharu_registry::{BuildError, Catalog, Description, DynItem, DynReader, FieldKind};
+use uiharu_registry::{BuildError, Catalog, Description, DynItem, DynReader, EventKind, FieldKind};
 
 use crate::feed::{FeedError, Feeder};
 use crate::store::Store;
@@ -163,6 +163,22 @@ pub fn channels_read(description: &Description, catalog: &Catalog) -> BTreeSet<C
     channels
 }
 
+/// The kinds of event, with their roles, of a stream of node type `kind` carrying `schema`:
+/// those of the type's manifest, which lists the events of its first output.
+fn events_of(catalog: &Catalog, kind: &str, schema: SchemaId) -> Vec<EventKind> {
+    catalog
+        .get(kind)
+        .map(|kind| kind.manifest())
+        .filter(|manifest| {
+            manifest
+                .outputs
+                .first()
+                .is_some_and(|output| output.schema == schema.name)
+        })
+        .map(|manifest| manifest.events.clone())
+        .unwrap_or_default()
+}
+
 fn channel_of(value: &serde_json::Value) -> Option<ChannelIndex> {
     value
         .as_u64()
@@ -198,11 +214,15 @@ impl Decoder {
             .streams
             .iter()
             .map(|stream| {
+                let schema = stream.reader.schema();
                 Arc::new(Stream {
                     name: stream.name.clone(),
                     kind: stream.kind.clone(),
-                    schema: stream.reader.schema(),
-                    store: RwLock::new(Store::for_schema(stream.reader.schema())),
+                    schema,
+                    store: RwLock::new(Store::for_stream(
+                        schema,
+                        events_of(catalog, stream.kind.as_str(), schema),
+                    )),
                 })
             })
             .collect();

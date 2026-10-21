@@ -31,6 +31,11 @@ describe('time formatting', () => {
     expect(formatTimeShort(50e-6)).toBe('50 µs')
     expect(formatSpan(540e-6)).toBe('540.0 µs')
     expect(formatSpan(1.046e-3)).toBe('1.0460 ms')
+    // One sample at 50 MHz, rather than 0.0 µs.
+    expect(formatSpan(20e-9)).toBe('20 ns')
+    expect(formatSpan(999.4e-9)).toBe('999 ns')
+    expect(formatSpan(999.6e-9)).toBe('1.0 µs')
+    expect(formatSpan(0)).toBe('0 ns')
     expect(formatTime(-0.00001e-6, 1)).toBe('0.0 ns')
   })
 

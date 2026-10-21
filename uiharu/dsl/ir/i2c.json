@@ -114,6 +114,28 @@
         "reason": "reason",
         "normal": ["stop", "restart"],
         "partial": "partial"
+      },
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "address": {
+          "role": "address",
+          "errorWhen": [
+            {
+              "ack": false
+            }
+          ]
+        },
+        "data": {
+          "role": "data"
+        },
+        "restart": {
+          "role": "framing"
+        },
+        "end": {
+          "role": "framing"
+        }
       }
     }
   ]

@@ -31,26 +31,32 @@
   "events": [
     {
       "kind": "begin",
+      "role": "command",
       "fields": ["op", "tx", "device", "command"]
     },
     {
       "kind": "address",
+      "role": "address",
       "fields": ["op", "wordAddress"]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["op", "offset", "bytes"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["op", "reason", "length"]
     },
     {
       "kind": "ack-poll",
+      "role": "handshake",
       "fields": ["tx", "device", "acked"]
     },
     {
       "kind": "unknown",
+      "role": "error",
       "fields": ["tx", "device"]
     }
   ]

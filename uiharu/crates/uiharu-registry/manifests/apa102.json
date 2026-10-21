@@ -17,18 +17,22 @@
   "events": [
     {
       "kind": "frame-begin",
+      "role": "framing",
       "fields": ["frame"]
     },
     {
       "kind": "led",
+      "role": "data",
       "fields": ["frame", "index", "brightness", "blue", "green", "red"]
     },
     {
       "kind": "frame-end",
+      "role": "framing",
       "fields": ["frame", "leds", "endBits", "reason"]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["frame", "reason"]
     }
   ]

@@ -156,6 +156,17 @@
         "normal": ["cs-release"],
         "partial": "partial",
         "unframed": 0
+      },
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "word": {
+          "role": "data"
+        },
+        "end": {
+          "role": "framing"
+        }
       }
     }
   ],

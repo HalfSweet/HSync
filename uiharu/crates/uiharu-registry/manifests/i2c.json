@@ -26,22 +26,28 @@
   "events": [
     {
       "kind": "begin",
+      "role": "framing",
       "fields": ["tx", "partial"]
     },
     {
       "kind": "address",
-      "fields": ["tx", "address", "tenBit", "read", "ack"]
+      "role": "address",
+      "fields": ["tx", "address", "tenBit", "read", "ack"],
+      "errorWhen": [{ "ack": false }]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["tx", "byte", "ack"]
     },
     {
       "kind": "restart",
+      "role": "framing",
       "fields": ["tx", "droppedBits"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["tx", "reason", "droppedBits"]
     }
   ]

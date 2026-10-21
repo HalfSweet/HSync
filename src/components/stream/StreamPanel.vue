@@ -18,7 +18,6 @@ import { useSearchStore } from '@/stores/search'
 import { useStreamStore, type Listing } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
 import { csvLines } from '@/stream/csv'
-import { busKind, type BusKind } from '@/timeline/groups'
 
 /**
  * The data stream under the timeline (DESIGN.md §9): the events of one decoder's stream, one
@@ -41,14 +40,6 @@ const TIMELINE_MIN = 180
 const list = useTemplateRef<HTMLElement>('list')
 const { height: listHeight } = useElementSize(list)
 const scrollTop = shallowRef(0)
-
-const SQUARES: Record<BusKind, string> = {
-  i2c: 'bg-i2c',
-  uart: 'bg-uart',
-  spi: 'bg-spi',
-  can: 'bg-can',
-  other: 'bg-ink-2',
-}
 
 const labels = useDecoderCopy()
 const typeName = labels.typeName
@@ -76,7 +67,6 @@ const tabs = computed(() =>
     listing,
     key: `${listing.decoder}:${listing.stream}`,
     name: tabName(listing),
-    square: SQUARES[busKind(listing.kind)],
   })),
 )
 
@@ -372,7 +362,7 @@ function onGripUp(): void {
           class="inline-flex items-center gap-1.5 px-2.5 text-small font-medium whitespace-nowrap text-ink-2 hover:text-ink aria-selected:text-ink"
           @click="stream.select(tab.listing.decoder, tab.listing.stream)"
         >
-          <i class="size-2 rounded-2" :class="tab.square" />
+          <i class="size-2 rounded-2 bg-ink-2" />
           <span>{{ tab.name }}</span>
         </button>
       </div>
