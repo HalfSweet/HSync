@@ -47,30 +47,39 @@
   "events": [
     {
       "kind": "begin",
+      "role": "framing",
       "fields": ["frame", "partial"]
     },
     {
       "kind": "id",
+      "role": "address",
       "fields": ["frame", "id", "extended"]
     },
     {
       "kind": "control",
+      "role": "control",
       "fields": ["frame", "remote", "fd", "brs", "esi", "dlc", "length"]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["frame", "offset", "bytes"]
     },
     {
       "kind": "crc",
-      "fields": ["frame", "value", "ok", "stuffCount"]
+      "role": "check",
+      "fields": ["frame", "value", "ok", "stuffCount"],
+      "errorWhen": [{ "ok": false }]
     },
     {
       "kind": "ack",
-      "fields": ["frame", "acked"]
+      "role": "handshake",
+      "fields": ["frame", "acked"],
+      "errorWhen": [{ "acked": false }]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["frame", "reason"]
     }
   ]

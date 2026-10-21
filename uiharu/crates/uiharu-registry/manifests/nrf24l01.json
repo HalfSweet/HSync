@@ -17,18 +17,22 @@
   "events": [
     {
       "kind": "command",
+      "role": "command",
       "fields": ["op", "tx", "command", "register", "registerName", "pipe", "status"]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["op", "direction", "offset", "bytes"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["op", "reason"]
     },
     {
       "kind": "unknown",
+      "role": "error",
       "fields": ["tx", "command", "status"]
     }
   ]

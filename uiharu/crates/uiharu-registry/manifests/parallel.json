@@ -33,6 +33,7 @@
   "events": [
     {
       "kind": "word",
+      "role": "data",
       "fields": ["value", "bits", "initial"]
     }
   ]

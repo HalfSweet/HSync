@@ -46,22 +46,27 @@
   "events": [
     {
       "kind": "state",
+      "role": "framing",
       "fields": ["state"]
     },
     {
       "kind": "reset",
+      "role": "line",
       "fields": ["by"]
     },
     {
       "kind": "scan-begin",
+      "role": "framing",
       "fields": ["scan", "register"]
     },
     {
       "kind": "shift",
+      "role": "data",
       "fields": ["scan", "offset", "tdi", "tdo", "bits"]
     },
     {
       "kind": "scan-end",
+      "role": "framing",
       "fields": ["scan", "bits", "reason"]
     }
   ]

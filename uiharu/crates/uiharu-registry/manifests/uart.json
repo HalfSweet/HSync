@@ -58,10 +58,13 @@
   "events": [
     {
       "kind": "frame",
-      "fields": ["value", "parity", "framingOk"]
+      "role": "data",
+      "fields": ["value", "parity", "framingOk"],
+      "errorWhen": [{ "parity": "error" }, { "framingOk": false }]
     },
     {
       "kind": "break",
+      "role": "line",
       "fields": ["ticks"]
     }
   ]

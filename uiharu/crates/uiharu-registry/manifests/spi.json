@@ -58,14 +58,17 @@
   "events": [
     {
       "kind": "begin",
+      "role": "framing",
       "fields": ["tx", "partial"]
     },
     {
       "kind": "word",
+      "role": "data",
       "fields": ["tx", "mosi", "miso"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["tx", "reason"]
     }
   ]

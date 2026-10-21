@@ -40,14 +40,17 @@
   "events": [
     {
       "kind": "begin",
+      "role": "framing",
       "fields": ["tx", "partial"]
     },
     {
       "kind": "bit",
+      "role": "data",
       "fields": ["tx", "di", "do"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["tx", "bits", "reason", "do"]
     }
   ]

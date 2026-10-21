@@ -23,34 +23,42 @@
   "events": [
     {
       "kind": "begin",
+      "role": "command",
       "fields": ["op", "tx", "command"]
     },
     {
       "kind": "address",
+      "role": "address",
       "fields": ["op", "address", "bytes"]
     },
     {
       "kind": "dummy",
+      "role": "framing",
       "fields": ["op", "bytes"]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["op", "direction", "offset", "bytes"]
     },
     {
       "kind": "status",
+      "role": "data",
       "fields": ["op", "register", "value", "written"]
     },
     {
       "kind": "id",
+      "role": "data",
       "fields": ["op", "scheme", "bytes"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["op", "reason"]
     },
     {
       "kind": "unknown-command",
+      "role": "error",
       "fields": ["tx", "opcode"]
     }
   ]

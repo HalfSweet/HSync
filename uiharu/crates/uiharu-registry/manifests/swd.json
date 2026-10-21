@@ -37,30 +37,40 @@
   "events": [
     {
       "kind": "begin",
+      "role": "framing",
       "fields": ["tx"]
     },
     {
       "kind": "request",
-      "fields": ["tx", "apndp", "rnw", "addr", "parityOk"]
+      "role": "command",
+      "fields": ["tx", "apndp", "rnw", "addr", "parityOk"],
+      "errorWhen": [{ "parityOk": false }]
     },
     {
       "kind": "ack",
-      "fields": ["tx", "value"]
+      "role": "handshake",
+      "fields": ["tx", "value"],
+      "errorWhen": [{ "value": "fault" }]
     },
     {
       "kind": "data",
-      "fields": ["tx", "value", "parityOk", "fromTarget"]
+      "role": "data",
+      "fields": ["tx", "value", "parityOk", "fromTarget"],
+      "errorWhen": [{ "parityOk": false }]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["tx", "reason"]
     },
     {
       "kind": "line-reset",
+      "role": "line",
       "fields": []
     },
     {
       "kind": "switch",
+      "role": "line",
       "fields": ["to"]
     }
   ]

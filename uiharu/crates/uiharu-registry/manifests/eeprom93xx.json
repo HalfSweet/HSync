@@ -29,18 +29,22 @@
   "events": [
     {
       "kind": "instruction",
+      "role": "command",
       "fields": ["op", "tx", "command", "address"]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["op", "direction", "offset", "values"]
     },
     {
       "kind": "status",
+      "role": "handshake",
       "fields": ["op", "tx", "ready"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["op", "reason"]
     }
   ]

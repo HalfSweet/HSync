@@ -17,14 +17,18 @@
   "events": [
     {
       "kind": "instruction",
-      "fields": ["op", "tx", "command", "address", "dataIn", "dataOut", "inSync", "bytes"]
+      "role": "command",
+      "fields": ["op", "tx", "command", "address", "dataIn", "dataOut", "inSync", "bytes"],
+      "errorWhen": [{ "inSync": false }]
     },
     {
       "kind": "unknown",
+      "role": "error",
       "fields": ["tx", "bytes"]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["tx", "reason", "bytes"]
     }
   ]

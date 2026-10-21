@@ -28,22 +28,29 @@
   "events": [
     {
       "kind": "header",
-      "fields": ["frame", "pid", "id", "pidOk"]
+      "role": "address",
+      "fields": ["frame", "pid", "id", "pidOk"],
+      "errorWhen": [{ "pidOk": false }]
     },
     {
       "kind": "data",
+      "role": "data",
       "fields": ["frame", "offset", "bytes"]
     },
     {
       "kind": "checksum",
-      "fields": ["frame", "value", "classicOk", "enhancedOk"]
+      "role": "check",
+      "fields": ["frame", "value", "classicOk", "enhancedOk"],
+      "errorWhen": [{ "classicOk": false, "enhancedOk": false }]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["frame", "reason"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["frame", "reason"]
     }
   ]

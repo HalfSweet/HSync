@@ -26,10 +26,12 @@
   "events": [
     {
       "kind": "frame",
+      "role": "data",
       "fields": ["clause", "op", "phy", "reg", "turnaround", "data", "preambleBits"]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["reason"]
     }
   ]

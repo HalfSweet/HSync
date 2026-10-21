@@ -17,30 +17,40 @@
   "events": [
     {
       "kind": "begin",
-      "fields": ["tx", "presence"]
+      "role": "framing",
+      "fields": ["tx", "presence"],
+      "errorWhen": [{ "presence": false }]
     },
     {
       "kind": "rom-command",
+      "role": "command",
       "fields": ["tx", "code"]
     },
     {
       "kind": "rom",
-      "fields": ["tx", "id", "family", "crcOk"]
+      "role": "address",
+      "fields": ["tx", "id", "family", "crcOk"],
+      "errorWhen": [{ "crcOk": false }]
     },
     {
       "kind": "search",
-      "fields": ["tx", "id", "crcOk", "conflicts", "unanswered"]
+      "role": "address",
+      "fields": ["tx", "id", "crcOk", "conflicts", "unanswered"],
+      "errorWhen": [{ "crcOk": false }]
     },
     {
       "kind": "byte",
+      "role": "data",
       "fields": ["tx", "value"]
     },
     {
       "kind": "bits",
+      "role": "data",
       "fields": ["tx", "value", "count"]
     },
     {
       "kind": "end",
+      "role": "framing",
       "fields": ["tx", "reason"]
     }
   ]

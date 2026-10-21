@@ -26,10 +26,13 @@
   "events": [
     {
       "kind": "frame",
-      "fields": ["direction", "value", "parityOk", "stopOk", "ack"]
+      "role": "data",
+      "fields": ["direction", "value", "parityOk", "stopOk", "ack"],
+      "errorWhen": [{ "parityOk": false }, { "stopOk": false }]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["reason"]
     }
   ]

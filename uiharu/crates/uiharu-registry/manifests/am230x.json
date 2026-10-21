@@ -33,10 +33,13 @@
   "events": [
     {
       "kind": "reading",
-      "fields": ["bytes", "checksumOk", "humidityRaw", "temperatureRaw"]
+      "role": "data",
+      "fields": ["bytes", "checksumOk", "humidityRaw", "temperatureRaw"],
+      "errorWhen": [{ "checksumOk": false }]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["reason"]
     }
   ]

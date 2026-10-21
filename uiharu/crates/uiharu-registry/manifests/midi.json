@@ -17,26 +17,32 @@
   "events": [
     {
       "kind": "channel-message",
+      "role": "data",
       "fields": ["message", "channel", "status", "data1", "data2", "running"]
     },
     {
       "kind": "system-common",
+      "role": "control",
       "fields": ["message", "status", "data1", "data2"]
     },
     {
       "kind": "realtime",
+      "role": "line",
       "fields": ["status", "byte"]
     },
     {
       "kind": "sysex",
+      "role": "data",
       "fields": ["message", "offset", "bytes"]
     },
     {
       "kind": "sysex-end",
+      "role": "framing",
       "fields": ["message", "bytes", "reason"]
     },
     {
       "kind": "error",
+      "role": "error",
       "fields": ["reason", "byte"]
     }
   ]
