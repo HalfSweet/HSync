@@ -47,7 +47,7 @@ export type PwmEvent = {
 }
 
 /** The schema of PWM event streams. */
-export const pwmEvents = eventSchema<PwmEvent>('pwm.events', 1)
+export const pwmEvents = eventSchema<PwmEvent>('pwm.events', 1).roles({ cycle: 'data' })
 
 /** Which level of the line is active. */
 export type Polarity = 'active-high' | 'active-low'

@@ -48,7 +48,12 @@
         "name": "pwm.events",
         "version": 1
       },
-      "event": "PwmEvent"
+      "event": "PwmEvent",
+      "roles": {
+        "cycle": {
+          "role": "data"
+        }
+      }
     }
   ],
   "functions": [

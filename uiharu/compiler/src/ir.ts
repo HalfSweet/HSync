@@ -41,10 +41,19 @@ export interface Framing {
   unframed?: number
 }
 
+export type Role =
+  'framing' | 'address' | 'command' | 'control' | 'data' | 'check' | 'handshake' | 'line' | 'error'
+
+export interface EventRole {
+  role: Role
+  errorWhen?: Record<string, Literal>[]
+}
+
 export interface Contract {
   schema: SchemaRef
   event: string
   framing?: Framing
+  roles?: Record<string, EventRole>
 }
 
 export interface Import {

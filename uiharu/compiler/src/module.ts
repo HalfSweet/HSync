@@ -15,17 +15,20 @@ import type {
   Const,
   Contract,
   Decoder,
+  EventRole,
   Expr,
   Framing,
   Function,
   Import,
   Json,
+  Literal,
   Locale,
   Module,
   Param,
   PropSpec,
   RequireKind,
   RequireSpec,
+  Role,
   StateField,
   Stmt,
   Type,
@@ -230,23 +233,37 @@ class ModuleLowerer {
     this.shape.consts.add(decl.name.text)
   }
 
-  /** The contract an `eventSchema(...)` or `eventSchema(...).framed({...})` initializer declares. */
+  /** The contract an `eventSchema(...).roles({...})` initializer declares, framed by a
+   * `.framed({...})` after it. */
   private contractOf(init: ts.Expression): Contract | undefined {
     let call = init
     let framing: Framing | undefined
-    if (
-      ts.isCallExpression(call) &&
-      ts.isPropertyAccessExpression(call.expression) &&
-      call.expression.name.text === 'framed'
-    ) {
+    let roles: Record<string, EventRole> | undefined
+    const method = (expression: ts.Expression, name: string): expression is ts.CallExpression =>
+      ts.isCallExpression(expression) &&
+      ts.isPropertyAccessExpression(expression.expression) &&
+      expression.expression.name.text === name
+    if (method(call, 'framed')) {
       const arg = call.arguments[0]
       if (!arg || !ts.isObjectLiteralExpression(arg))
         throw new CompileError(call, 'framed takes an object')
       framing = this.framingOf(arg)
-      call = call.expression.expression
+      call = (call.expression as ts.PropertyAccessExpression).expression
+    }
+    if (method(call, 'roles')) {
+      const arg = call.arguments[0]
+      if (!arg) throw new CompileError(call, 'roles takes an object')
+      roles = rolesOf(arg)
+      call = (call.expression as ts.PropertyAccessExpression).expression
     }
     if (!ts.isCallExpression(call) || !ts.isIdentifier(call.expression)) return undefined
     if (this.types.libName(call.expression) !== 'eventSchema') return undefined
+    if (!roles) {
+      throw new CompileError(
+        init,
+        'a contract declares the role of each kind of event: .roles({…})',
+      )
+    }
     const typeArg = call.typeArguments?.[0]
     if (!typeArg || !ts.isTypeReferenceNode(typeArg) || !ts.isIdentifier(typeArg.typeName)) {
       throw new CompileError(call, 'eventSchema names its event type: eventSchema<Event>(…)')
@@ -260,6 +277,7 @@ class ModuleLowerer {
       event: typeArg.typeName.text,
     }
     if (framing) contract.framing = framing
+    contract.roles = roles
     return contract
   }
 
@@ -1070,6 +1088,59 @@ function jsonValue(node: ts.Expression): Json | undefined {
 
 function isJsonObject(value: Json): value is { [key: string]: Json } {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+const ROLES: readonly Role[] = [
+  'framing',
+  'address',
+  'command',
+  'control',
+  'data',
+  'check',
+  'handshake',
+  'line',
+  'error',
+]
+
+/** The roles of a contract's events by kind: a role, or a role with the conditions that make
+ * an event an error, one or a list of them, each an object of literal field values. */
+function rolesOf(node: ts.Expression): Record<string, EventRole> {
+  const value = jsonValue(node)
+  if (value === undefined || !isJsonObject(value)) {
+    throw new CompileError(node, 'roles is an object of literals by kind of event')
+  }
+  const role = (held: Json, kind: string): Role => {
+    if (typeof held !== 'string' || !ROLES.includes(held as Role)) {
+      throw new CompileError(node, `roles.${kind}: ${JSON.stringify(held)} is not a role`)
+    }
+    return held as Role
+  }
+  const out: Record<string, EventRole> = {}
+  for (const [kind, held] of Object.entries(value)) {
+    if (!isJsonObject(held)) {
+      out[kind] = { role: role(held, kind) }
+      continue
+    }
+    const { role: named, errorWhen, ...rest } = held
+    if (Object.keys(rest).length > 0 || errorWhen === undefined) {
+      throw new CompileError(node, `roles.${kind} is a role, or a role and errorWhen`)
+    }
+    const conditions = Array.isArray(errorWhen) ? errorWhen : [errorWhen]
+    out[kind] = {
+      role: role(named ?? null, kind),
+      errorWhen: conditions.map((condition) => {
+        if (
+          !isJsonObject(condition) ||
+          Object.keys(condition).length === 0 ||
+          !Object.values(condition).every((field) => typeof field !== 'object' || field === null)
+        ) {
+          throw new CompileError(node, `roles.${kind}.errorWhen holds objects of field values`)
+        }
+        return condition as Record<string, Literal>
+      }),
+    }
+  }
+  return out
 }
 
 /** The decoder's copy by language tag: an object of locale blocks, all literals. */
