@@ -46,8 +46,19 @@ fn read(path: &Path) -> String {
 
 #[test]
 fn the_generated_crate_is_up_to_date() {
-    let ir_dir = root().join("../../dsl/ir");
-    let out_dir = root().join("../uiharu-dsl-protocols/src");
+    assert_generated(
+        root().join("../../dsl/ir"),
+        root().join("../uiharu-dsl-protocols/src"),
+    );
+}
+
+#[test]
+fn backend_acceptance_sources_are_up_to_date() {
+    let fixture = root().join("../uiharu-interp/tests/fixtures/backend");
+    assert_generated(fixture.join("ir"), fixture.join("generated"));
+}
+
+fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
     let mut files: Vec<PathBuf> = std::fs::read_dir(&ir_dir)
         .expect("the IR directory")
         .map(|entry| entry.expect("an entry").path())

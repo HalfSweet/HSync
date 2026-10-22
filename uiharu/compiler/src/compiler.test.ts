@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, test } from 'vitest'
 
+import { backendFixtureIr, backendFixtures } from './backend-fixtures.ts'
 import { lowerModule } from './module.ts'
 import { loadProject, moduleFiles, type Diagnostic } from './program.ts'
 
@@ -40,13 +41,13 @@ describe('the modules', () => {
   const files = moduleFiles(project)
 
   test('are the contracts and the decoders', () => {
-    expect(files.map((file) => path.basename(file.fileName))).toEqual([
-      'i2c.ts',
-      'pwm.ts',
-      'spi-nor.ts',
-      'spi.ts',
-      'uart.ts',
-    ])
+    const declared = ['contracts', 'decoders'].flatMap((directory) =>
+      fs
+        .readdirSync(path.join(dsl, directory))
+        .filter((name) => name.endsWith('.ts'))
+        .map((name) => `${directory}/${name}`),
+    )
+    expect(files.map((file) => path.relative(dsl, file.fileName)).sort()).toEqual(declared.sort())
   })
 
   test('pwm lowers to the IR written by hand', () => {
@@ -86,6 +87,12 @@ describe('the modules', () => {
       expect(module).toEqual(read(path.join(dsl, 'ir', `${name}.json`)))
     },
   )
+})
+
+test('backend acceptance sources lower to their checked-in IR', () => {
+  for (const module of backendFixtures()) {
+    expect(module).toEqual(read(path.join(backendFixtureIr, `${module.name}.json`)))
+  }
 })
 
 /** A decoder module around `body`, the class body, and `extra` top-level statements. */
@@ -210,6 +217,58 @@ describe('the subset', () => {
     expect(diagnostics.map((diagnostic) => diagnostic.message).join('\n')).toContain(message)
     expect(diagnostics[0]?.file).toBe(virtualFile)
     expect(diagnostics[0]?.line).toBeGreaterThan(0)
+  })
+
+  test('targets nested switch breaks and continues independently of enclosing loops', () => {
+    const { module, diagnostics } = lowerSnippet(
+      snippet(`${RUN}
+      helper(value: u64): u64 {
+        let count: u64 = 0
+        for (let i: u64 = 0; i < 3; i++) {
+          switch (value) {
+            case 0:
+              if (i === 0) break
+              if (i === 1) continue
+              for (let j: u64 = 0; j < 2; j++) {
+                if (j === 0) break
+              }
+              count += 10
+              break
+            default:
+              count += 1
+              break
+          }
+          count += 1
+        }
+        return count
+      }`),
+    )
+    expect(diagnostics).toEqual([])
+    const helper = module?.decoder?.methods.find((method) => method.name === 'helper')
+    const loop = helper?.body[1]
+    expect(loop?.stmt).toBe('for')
+    if (loop?.stmt !== 'for') throw new Error('helper contains the counted loop')
+    const exit = loop.body[0]
+    expect(exit?.stmt).toBe('loop')
+    if (exit?.stmt !== 'loop') throw new Error('switch has its own exit target')
+    expect(exit.label).toBeDefined()
+    expect(loop.label).toBeDefined()
+    const match = exit.body[0]
+    if (match?.stmt !== 'match') throw new Error('switch lowers to a match')
+    const body = match.arms[0]?.body
+    expect(body?.[0]).toMatchObject({
+      stmt: 'if',
+      then: [{ stmt: 'break', label: exit.label }],
+    })
+    expect(body?.[1]).toMatchObject({
+      stmt: 'if',
+      then: [{ stmt: 'continue', label: loop.label }],
+    })
+    expect(body?.[2]).toMatchObject({
+      stmt: 'for',
+      body: [{ stmt: 'if', then: [{ stmt: 'break' }] }],
+    })
+    expect(exit.body[1]).toMatchObject({ stmt: 'break' })
   })
 
   test('lowers the roles of a contract, a lone error condition as a list', () => {

@@ -1,0 +1,10 @@
+{
+  "extends": "../../dsl/tsconfig.json",
+  "include": ["./*.ts"],
+  "compilerOptions": {
+    "tsBuildInfoFile": "../../../node_modules/.tmp/tsconfig.uiharu-backend-fixtures.tsbuildinfo",
+    "paths": {
+      "uiharu": ["../../dsl/src/index.ts"]
+    }
+  }
+}

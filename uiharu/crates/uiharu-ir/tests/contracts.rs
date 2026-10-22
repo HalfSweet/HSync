@@ -17,6 +17,7 @@ fn field(name: &str, ty: &str) -> Field {
         name: name.into(),
         ty: Type::named(ty),
         channel: false,
+        json: None,
     }
 }
 
@@ -148,6 +149,37 @@ fn a_module_declares_a_decoder_or_a_contract() {
     let mut module = i2c();
     module.contracts.clear();
     assert_reports(&module, "a module declares a decoder or a contract");
+}
+
+#[test]
+fn an_import_and_local_contract_cannot_disagree_about_one_schema_identity() {
+    let mut module = i2c();
+    let mut imported = module.contracts[0].clone();
+    imported.roles.clear();
+    module.imports.push(
+        serde_json::from_value(serde_json::json!({
+            "module": "other-i2c", "types": [], "contract": imported
+        }))
+        .expect("the import parses"),
+    );
+    assert_reports(
+        &module,
+        "i2c.events@1 has conflicting contract declarations",
+    );
+    module.imports[0].contract.schema.version = 2;
+    assert_eq!(validate(&module), Vec::new());
+}
+
+#[test]
+fn repeated_identical_contract_metadata_is_unambiguous() {
+    let mut module = i2c();
+    module.imports.push(
+        serde_json::from_value(serde_json::json!({
+            "module": "other-i2c", "types": [], "contract": module.contracts[0]
+        }))
+        .expect("the import parses"),
+    );
+    assert_eq!(validate(&module), Vec::new());
 }
 
 #[test]
