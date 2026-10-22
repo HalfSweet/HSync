@@ -5,7 +5,7 @@
 
 use uiharu_core::{Levels, LogicBlock, LogicBlockBuilder, Tick};
 
-use super::decoder::MdioConfig;
+use super::decoder::{MdioConfig, ReadEdge};
 
 /// The fields of a management frame as the codes it sends, two bits for ST, OP and the
 /// turnaround, the first bit in bit 1; any codes may be given, those of no frame included.
@@ -93,9 +93,10 @@ impl Frame {
 
 /// Builds the samples of a management interface one bit at a time.
 ///
-/// A bit is half a period with MDC low, MDIO taking the bit's level as it falls, then half a
-/// period with MDC high: MDIO is stable at the rising edge, which reads it. Between bits MDC
-/// may stop low; MDIO idles high, released to its pull-up.
+/// By default a bit is half a period with MDC low, then half high; MDIO is stable
+/// at the rising edge. Selecting the falling read edge mirrors MDC so the data
+/// remains stable at that edge instead. Between bits MDC may stop in its idle
+/// level; MDIO idles high, released to its pull-up.
 #[derive(Debug)]
 pub struct MdioWaveform {
     config: MdioConfig,
@@ -107,8 +108,8 @@ pub struct MdioWaveform {
 
 impl MdioWaveform {
     /// A waveform on `channels` channels for lines wired as `config`, clocked at
-    /// `half_period` samples per half period, starting at `start` with MDC low and MDIO
-    /// released.
+    /// `half_period` samples per half period, starting at `start` with MDC in its idle
+    /// level and MDIO released.
     pub fn new(config: MdioConfig, channels: u8, half_period: u64, start: Tick) -> Self {
         let mut waveform = Self {
             builder: LogicBlockBuilder::new(start, channels),
@@ -117,6 +118,10 @@ impl MdioWaveform {
             config,
         };
         waveform.set(waveform.config.mdio, true);
+        waveform.set(
+            waveform.config.mdc,
+            waveform.config.read_edge == ReadEdge::Falling,
+        );
         waveform
     }
 
@@ -152,16 +157,16 @@ impl MdioWaveform {
         self.set(self.config.mdio, true);
     }
 
-    /// One MDC period carrying `high` on MDIO; MDC rises half a period in.
+    /// One MDC period carrying `high`; the configured read edge is half a period in.
     pub fn bit(&mut self, high: bool) {
         let (mdc, mdio) = (self.config.mdc, self.config.mdio);
-        self.set(mdc, false);
+        self.set(mdc, self.config.read_edge == ReadEdge::Falling);
         self.set(mdio, high);
         self.hold(self.half_period);
-        self.set(mdc, true);
+        self.set(mdc, self.config.read_edge == ReadEdge::Rising);
         self.hold(self.half_period);
         // The falling edge comes with the next sample.
-        self.set(mdc, false);
+        self.set(mdc, self.config.read_edge == ReadEdge::Falling);
     }
 
     /// One period per bit of `bits`.

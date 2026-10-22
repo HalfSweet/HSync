@@ -15,4 +15,4 @@ pub use decoder::{
     MAX_TURNAROUND, OverrunDetect, SELECTION_ALERT, SWD_TO_DS, SWD_TO_JTAG, Swd, SwdConfig,
     SwdConfigError,
 };
-pub use events::{Ack, EndReason, Interface, SWD_EVENTS, SwdEvent, TxId};
+pub use events::{Ack, AckExt, EndReason, Interface, SWD_EVENTS, SwdEvent, TxId};

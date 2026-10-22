@@ -14,7 +14,7 @@
 
 use uiharu_core::{Event, Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
-use super::events::{Ack, EndReason, Interface, SwdEvent, TxId};
+use super::events::{Ack, AckExt, EndReason, Interface, SwdEvent, TxId};
 
 /// A packet request, as the host sent it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -41,7 +41,7 @@ pub struct Data {
 }
 
 /// One field of a packet.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Field {
     /// The request.
     Request(Request),
@@ -49,6 +49,17 @@ pub enum Field {
     Ack(Ack),
     /// The data phase.
     Data(Data),
+}
+
+impl std::hash::Hash for Field {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Self::Request(request) => request.hash(state),
+            Self::Ack(ack) => ack.bits().hash(state),
+            Self::Data(data) => data.hash(state),
+        }
+    }
 }
 
 /// What [`Packet::field_or_end`] finds.

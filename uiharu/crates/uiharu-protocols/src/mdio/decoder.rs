@@ -11,6 +11,7 @@ use uiharu_core::{
     Tick, TickRange,
 };
 
+use super::OpExt;
 use super::events::{Clause, ErrorReason, MdioEvent, Op};
 
 /// The ones of a preamble. As many in a row put the decoder in sync, and the count a frame
@@ -21,6 +22,17 @@ pub const PREAMBLE_BITS: u8 = 32;
 /// data.
 pub const FRAME_BITS: u8 = 32;
 
+/// The MDC edge at which MDIO is sampled.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReadEdge {
+    /// Sample when MDC rises (the IEEE 802.3 profile).
+    #[default]
+    Rising,
+    /// Sample when MDC falls (an explicit capture interpretation option).
+    Falling,
+}
+
 /// How the management interface is wired. A description may leave fields out: they take the
 /// defaults.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -30,11 +42,18 @@ pub struct MdioConfig {
     pub mdc: u8,
     /// The management data input/output channel.
     pub mdio: u8,
+    /// The clock edge used to read each bit.
+    #[serde(rename = "readEdge")]
+    pub read_edge: ReadEdge,
 }
 
 impl Default for MdioConfig {
     fn default() -> Self {
-        Self { mdc: 0, mdio: 1 }
+        Self {
+            mdc: 0,
+            mdio: 1,
+            read_edge: ReadEdge::Rising,
+        }
     }
 }
 
@@ -141,7 +160,7 @@ const fn decode_start(st: u32, op: u32) -> Option<(Clause, Op)> {
 /// Whether the turnaround bits `turnaround`, the first in bit 1, keep the rule of `op`: the
 /// station sends `10` when it goes on driving; the device drives the second bit `0` when it
 /// takes over, the first being nobody's.
-const fn turnaround_ok(op: Op, turnaround: u32) -> bool {
+fn turnaround_ok(op: Op, turnaround: u32) -> bool {
     if op.device_drives() {
         turnaround & 0b01 == 0
     } else {
@@ -345,7 +364,7 @@ async fn run(mut signal: SignalCursor, mut out: Outbox<MdioEvent>, config: MdioC
                 levels,
             } => {
                 if changed.has(config.mdc)
-                    && levels.high(config.mdc)
+                    && levels.high(config.mdc) == (config.read_edge == ReadEdge::Rising)
                     && let Some((at, event)) = decoder.bit(tick, levels.high(config.mdio))
                 {
                     out.emit(at, event).await;
@@ -380,20 +399,42 @@ mod tests {
         assert_eq!(MdioConfig::default().validate(), Ok(()));
         let bad = |config: MdioConfig| config.validate().expect_err("rejected");
         assert_eq!(
-            bad(MdioConfig { mdc: 3, mdio: 3 }),
+            bad(MdioConfig {
+                mdc: 3,
+                mdio: 3,
+                ..MdioConfig::default()
+            }),
             MdioConfigError::DuplicateChannel(3)
         );
         assert_eq!(
-            bad(MdioConfig { mdc: 0, mdio: 64 }),
+            bad(MdioConfig {
+                mdc: 0,
+                mdio: 64,
+                ..MdioConfig::default()
+            }),
             MdioConfigError::Channel(64)
         );
-        assert!(Mdio::new(MdioConfig { mdc: 7, mdio: 7 }).is_err());
+        assert!(
+            Mdio::new(MdioConfig {
+                mdc: 7,
+                mdio: 7,
+                ..MdioConfig::default()
+            })
+            .is_err()
+        );
     }
 
     #[test]
     fn descriptions_may_leave_fields_out() {
         let config: MdioConfig = serde_json::from_str(r#"{"mdio": 5}"#).expect("parses");
-        assert_eq!(config, MdioConfig { mdc: 0, mdio: 5 });
+        assert_eq!(
+            config,
+            MdioConfig {
+                mdc: 0,
+                mdio: 5,
+                ..MdioConfig::default()
+            }
+        );
         let whole: MdioConfig = serde_json::from_str("{}").expect("parses");
         assert_eq!(whole, MdioConfig::default());
         assert!(serde_json::from_str::<MdioConfig>(r#"{"clock": 0}"#).is_err());
@@ -401,7 +442,12 @@ mod tests {
 
     #[test]
     fn the_input_requires_the_channels_read() {
-        let mdio = Mdio::new(MdioConfig { mdc: 4, mdio: 9 }).expect("valid");
+        let mdio = Mdio::new(MdioConfig {
+            mdc: 4,
+            mdio: 9,
+            ..MdioConfig::default()
+        })
+        .expect("valid");
         let spec = mdio.spec();
         assert_eq!(spec.inputs[0].name, "logic");
         assert_eq!(spec.outputs[0].name, "events");

@@ -16,6 +16,8 @@ pub use bus::{
     LinkBus, LinkError, LinkNext, Next, OneWireBus, Read, ReadError, Rom, Search, Transaction,
     TxItem,
 };
-pub use events::{EndReason, LinkEvent, ONEWIRE_EVENTS, ONEWIRE_LINK, OneWireEvent, TxId};
+pub use events::{
+    EndReason, LinkEvent, ONEWIRE_EVENTS, ONEWIRE_LINK, OneWireEvent, OneWireEventExt, TxId,
+};
 pub use link::{LinkConfig, LinkConfigError, OneWireLink, Speed};
 pub use network::OneWireNetwork;

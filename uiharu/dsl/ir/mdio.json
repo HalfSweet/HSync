@@ -1,0 +1,95 @@
+{
+  "ir": 1,
+  "name": "mdio",
+  "types": [
+    {
+      "name": "Clause",
+      "type": "numeric-enum",
+      "variants": [
+        {
+          "name": "c22",
+          "value": 22
+        },
+        {
+          "name": "c45",
+          "value": 45
+        }
+      ]
+    },
+    {
+      "name": "Op",
+      "type": "enum",
+      "variants": ["read", "write", "address", "post-read-increment"]
+    },
+    {
+      "name": "ErrorReason",
+      "type": "enum",
+      "variants": ["start", "turnaround", "aborted"]
+    },
+    {
+      "name": "MdioEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "frame",
+          "fields": [
+            {
+              "name": "clause",
+              "type": "Clause"
+            },
+            {
+              "name": "op",
+              "type": "Op"
+            },
+            {
+              "name": "phy",
+              "type": "u8"
+            },
+            {
+              "name": "reg",
+              "type": "u8"
+            },
+            {
+              "name": "turnaround",
+              "type": "u8"
+            },
+            {
+              "name": "data",
+              "type": "u16"
+            },
+            {
+              "name": "preambleBits",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "error",
+          "fields": [
+            {
+              "name": "reason",
+              "type": "ErrorReason"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "mdio.events",
+        "version": 1
+      },
+      "event": "MdioEvent",
+      "roles": {
+        "frame": {
+          "role": "data"
+        },
+        "error": {
+          "role": "framing"
+        }
+      }
+    }
+  ]
+}

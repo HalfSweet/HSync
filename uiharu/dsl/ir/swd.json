@@ -1,0 +1,166 @@
+{
+  "ir": 1,
+  "name": "swd",
+  "types": [
+    {
+      "name": "Ack",
+      "type": "external-enum",
+      "variants": [
+        {
+          "name": "ok"
+        },
+        {
+          "name": "wait"
+        },
+        {
+          "name": "fault"
+        },
+        {
+          "name": "other",
+          "payload": "u8"
+        }
+      ]
+    },
+    {
+      "name": "EndReason",
+      "type": "enum",
+      "variants": ["complete", "wait", "fault", "protocol-error", "aborted"]
+    },
+    {
+      "name": "Interface",
+      "type": "enum",
+      "variants": ["swd", "jtag", "dormant"]
+    },
+    {
+      "name": "SwdEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "begin",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "request",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "apndp",
+              "type": "bool"
+            },
+            {
+              "name": "rnw",
+              "type": "bool"
+            },
+            {
+              "name": "addr",
+              "type": "u8"
+            },
+            {
+              "name": "parityOk",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "ack",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "value",
+              "type": "Ack"
+            }
+          ]
+        },
+        {
+          "name": "data",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "value",
+              "type": "u32"
+            },
+            {
+              "name": "parityOk",
+              "type": "bool"
+            },
+            {
+              "name": "fromTarget",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "EndReason"
+            }
+          ]
+        },
+        {
+          "name": "line-reset"
+        },
+        {
+          "name": "switch",
+          "fields": [
+            {
+              "name": "to",
+              "type": "Interface"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "swd.events",
+        "version": 1
+      },
+      "event": "SwdEvent",
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "request": {
+          "role": "command"
+        },
+        "ack": {
+          "role": "handshake"
+        },
+        "data": {
+          "role": "data"
+        },
+        "end": {
+          "role": "framing"
+        },
+        "line-reset": {
+          "role": "line"
+        },
+        "switch": {
+          "role": "control"
+        }
+      }
+    }
+  ]
+}

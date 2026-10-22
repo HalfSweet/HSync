@@ -16,3 +16,6 @@ pub use events::{
     ChannelStatus, CommonStatus, EndReason, ErrorReason, MIDI_EVENTS, MessageId, MidiEvent,
     RealtimeStatus, SYSEX_BATCH,
 };
+
+/// Helpers retained by the native physical MIDI producer.
+pub use events::{ChannelStatusExt, CommonStatusExt, MidiEventExt, RealtimeStatusExt};

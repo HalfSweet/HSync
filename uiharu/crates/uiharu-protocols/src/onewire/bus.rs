@@ -19,6 +19,7 @@
 
 use uiharu_core::{Event, Inbox, Item, ProgressSink, Provenance, Tick, TickRange};
 
+use super::OneWireEventExt;
 use super::events::{EndReason, LinkEvent, OneWireEvent, TxId};
 
 /// What ended a run of bits read through [`LinkBus::bit`].
@@ -482,10 +483,7 @@ pub struct Transaction<'a> {
 impl Transaction<'_> {
     /// The transaction's id.
     pub fn id(&self) -> TxId {
-        self.bus
-            .current
-            .as_ref()
-            .map_or(TxId(0), |current| current.tx)
+        self.bus.current.as_ref().map_or(0, |current| current.tx)
     }
 
     /// Whether a slave answered the reset that began the transaction.

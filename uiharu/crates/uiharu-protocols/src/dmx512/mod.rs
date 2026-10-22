@@ -15,3 +15,6 @@ pub mod synth;
 
 pub use decoder::{BAUD, Dmx512};
 pub use events::{DMX512_EVENTS, Dmx512Event, EndReason, PacketId, SLOT_BATCH};
+
+/// Helpers for the generated DMX event contract.
+pub use events::Dmx512EventExt;

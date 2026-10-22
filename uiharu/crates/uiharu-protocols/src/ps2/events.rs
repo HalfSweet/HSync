@@ -6,66 +6,10 @@
 //! The stream is unframed: a frame is one event, decided at its last clock edge, so there is no
 //! `begin` or `end`. A frame that could not be read to its end is an `error` instead.
 
-use serde::{Deserialize, Serialize};
-use uiharu_core::{EventSchema, SchemaId};
+pub use uiharu_dsl_protocols::ps2::{Direction, ErrorReason, Ps2Event};
 
 /// The schema of PS/2 event streams.
-pub const PS2_EVENTS: SchemaId = SchemaId::new("ps2.events", 1);
-
-/// Which side sent a frame.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Direction {
-    /// The keyboard or mouse sent it, clocking it out itself.
-    DeviceToHost,
-    /// The host sent it after a request to send, the device clocking it in.
-    HostToDevice,
-}
-
-/// Why a frame could not be read.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum ErrorReason {
-    /// The device clocked a frame whose start bit was 1.
-    Start,
-    /// The frame stopped before its last clock: the host took the clock, the clock paused, or
-    /// a gap or the end of the samples cut it off.
-    Aborted,
-}
-
-/// What travels on a PS/2 event stream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
-)]
-pub enum Ps2Event {
-    /// A frame: a start bit, eight data bits least significant first, an odd parity bit and a
-    /// stop bit, and for a frame the host sent the device's acknowledge.
-    Frame {
-        /// Who sent it.
-        direction: Direction,
-        /// The data bits, the first one on the line as bit 0.
-        value: u8,
-        /// Whether the parity bit makes the number of 1s among the data and parity bits odd.
-        parity_ok: bool,
-        /// Whether the stop bit was 1.
-        stop_ok: bool,
-        /// For a frame the host sent, whether the device pulled the data line low on the clock
-        /// after the stop bit; `None` for a frame the device sent, which has no acknowledge.
-        ack: Option<bool>,
-    },
-    /// A frame that could not be read.
-    Error {
-        /// What went wrong.
-        reason: ErrorReason,
-    },
-}
-
-impl EventSchema for Ps2Event {
-    const SCHEMA: SchemaId = PS2_EVENTS;
-}
+pub const PS2_EVENTS: uiharu_core::SchemaId = <Ps2Event as uiharu_core::EventSchema>::SCHEMA;
 
 #[cfg(test)]
 mod tests {

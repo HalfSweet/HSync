@@ -13,4 +13,5 @@ pub use bus::{Bit, JtagBus, Line, Next, Read, ReadError, Scan};
 pub use decoder::{InitialState, Jtag, JtagConfig, JtagConfigError, RESET_CLOCKS};
 pub use events::{
     EndReason, JTAG_EVENTS, JtagEvent, Register, ResetBy, SHIFT_BATCH_BITS, ScanId, TapState,
+    TapStateExt,
 };

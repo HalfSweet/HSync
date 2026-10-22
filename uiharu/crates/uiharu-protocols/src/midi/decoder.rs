@@ -61,8 +61,8 @@ use uiharu_core::{
 };
 
 use super::events::{
-    ChannelStatus, CommonStatus, EndReason, ErrorReason, MessageId, MidiEvent, RealtimeStatus,
-    SYSEX_BATCH,
+    ChannelStatus, ChannelStatusExt, CommonStatus, CommonStatusExt, EndReason, ErrorReason,
+    MessageId, MidiEvent, RealtimeStatus, RealtimeStatusExt, SYSEX_BATCH,
 };
 use crate::uart::UartEvent;
 
@@ -231,7 +231,7 @@ impl Messages {
     }
 
     fn next_message(&mut self) -> MessageId {
-        let id = MessageId(self.next_id);
+        let id = self.next_id;
         self.next_id += 1;
         id
     }
