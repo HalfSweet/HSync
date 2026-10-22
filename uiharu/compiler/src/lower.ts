@@ -11,7 +11,7 @@ import ts from 'typescript'
 
 import type { Arm, BinaryOp, Expr, Literal, Op, Stmt, Type, TypeDef } from './ir.ts'
 import { CompileError } from './program.ts'
-import type { Types } from './types.ts'
+import { integerLiteral, type Types } from './types.ts'
 
 /** What the lowering knows about the decoder a method belongs to. */
 export interface DecoderShape {
@@ -231,7 +231,84 @@ export class Lowerer {
     return this.statements([node])
   }
 
+  /** A switch exit is represented with a labelled, single-iteration IR loop. */
+  private readonly controlLabels = new Map<ts.Node, string>()
+
+  private controlLabel(node: ts.Node): string {
+    if (ts.isLabeledStatement(node.parent)) {
+      this.controlLabels.set(node, node.parent.label.text)
+      return node.parent.label.text
+    }
+    let label = this.controlLabels.get(node)
+    if (label === undefined) {
+      // The source position makes generated labels unique, including nested switches.
+      label = `switch_exit_${node.pos}`
+      let root: ts.Node = node
+      while (root.parent) root = root.parent
+      const labels = new Set<string>()
+      const visit = (child: ts.Node) => {
+        if (ts.isLabeledStatement(child)) labels.add(child.label.text)
+        ts.forEachChild(child, visit)
+      }
+      visit(root)
+      while (
+        [...labels].some(
+          (source) =>
+            source.replaceAll('_', '').toLowerCase() ===
+            String(label).replaceAll('_', '').toLowerCase(),
+        )
+      )
+        label += '_exit'
+      this.controlLabels.set(node, label)
+    }
+    return label
+  }
+
+  private isLoop(node: ts.Node): boolean {
+    return ts.isForStatement(node) || ts.isForOfStatement(node) || ts.isWhileStatement(node)
+  }
+
+  /** Whether this switch has a break beyond the trailing case break already elided. */
+  private switchNeedsExit(node: ts.SwitchStatement): boolean {
+    const containsBreak = (child: ts.Node): boolean => {
+      if (ts.isBreakStatement(child)) return !child.label
+      if (this.isLoop(child) || ts.isSwitchStatement(child)) return false
+      return ts.forEachChild(child, containsBreak) ?? false
+    }
+    return node.caseBlock.clauses.some((clause) => {
+      const statements =
+        clause.statements.length === 1 && ts.isBlock(clause.statements[0] as ts.Node)
+          ? (clause.statements[0] as ts.Block).statements
+          : clause.statements
+      return statements.some(
+        (statement, index) =>
+          !(
+            index === statements.length - 1 &&
+            ts.isBreakStatement(statement) &&
+            !statement.label
+          ) && containsBreak(statement),
+      )
+    })
+  }
+
   private statement(node: ts.Statement): Stmt[] {
+    const lowered = this.statementInner(node)
+    const label = this.controlLabels.get(node)
+    if (label && this.isLoop(node)) {
+      const [loop] = lowered
+      if (
+        loop &&
+        (loop.stmt === 'loop' ||
+          loop.stmt === 'while' ||
+          loop.stmt === 'for' ||
+          loop.stmt === 'for-each')
+      )
+        return [{ ...loop, label }]
+    }
+    return lowered
+  }
+
+  private statementInner(node: ts.Statement): Stmt[] {
     if (ts.isVariableStatement(node)) return this.variables(node.declarationList)
     if (ts.isExpressionStatement(node)) return [this.expressionStatement(node.expression)]
     if (ts.isIfStatement(node)) {
@@ -245,13 +322,44 @@ export class Lowerer {
     }
     if (ts.isLabeledStatement(node)) {
       const [inner, ...rest] = this.statement(node.statement)
-      if (rest.length || !inner || !('label' in inner)) {
+      if (
+        rest.length ||
+        !inner ||
+        !(
+          inner.stmt === 'loop' ||
+          inner.stmt === 'while' ||
+          inner.stmt === 'for' ||
+          inner.stmt === 'for-each'
+        )
+      ) {
         throw new CompileError(node, 'a label names a loop')
       }
       return [{ ...inner, label: node.label.text }]
     }
-    if (ts.isBreakStatement(node)) return [{ stmt: 'break', ...label(node.label) }]
-    if (ts.isContinueStatement(node)) return [{ stmt: 'continue', ...label(node.label) }]
+    if (ts.isBreakStatement(node)) {
+      if (!node.label) {
+        for (let target = node.parent; target; target = target.parent) {
+          if (this.isLoop(target)) break
+          if (ts.isSwitchStatement(target)) {
+            return [{ stmt: 'break', label: this.controlLabel(target) }]
+          }
+        }
+      }
+      return [{ stmt: 'break', ...label(node.label) }]
+    }
+    if (ts.isContinueStatement(node)) {
+      if (!node.label) {
+        let crossesSwitchExit = false
+        for (let target = node.parent; target; target = target.parent) {
+          if (this.isLoop(target)) {
+            if (crossesSwitchExit) return [{ stmt: 'continue', label: this.controlLabel(target) }]
+            break
+          }
+          if (ts.isSwitchStatement(target) && this.switchNeedsExit(target)) crossesSwitchExit = true
+        }
+      }
+      return [{ stmt: 'continue', ...label(node.label) }]
+    }
     if (ts.isReturnStatement(node)) {
       return [
         node.expression
@@ -320,6 +428,12 @@ export class Lowerer {
       }
       const compound = COMPOUND_OPS[op]
       if (compound) {
+        if (this.types.numericEnumOf(this.types.declaredType(bare.left))) {
+          throw new CompileError(
+            bare,
+            'numeric enums support equality and switch, not arithmetic or ordering',
+          )
+        }
         // A narrowed option is written as a whole: its new value is computed from the binding.
         const key = this.key(bare.left)
         if (key !== undefined && this.narrowing(key)?.kind === 'some') {
@@ -335,6 +449,12 @@ export class Lowerer {
     if (ts.isPostfixUnaryExpression(bare) || ts.isPrefixUnaryExpression(bare)) {
       const step = incrementOf(bare)
       if (step) {
+        if (this.types.numericEnumOf(this.types.declaredType(step.target))) {
+          throw new CompileError(
+            bare,
+            'numeric enums support equality and switch, not arithmetic or ordering',
+          )
+        }
         return {
           stmt: 'assign',
           target: this.target(step.target),
@@ -383,6 +503,35 @@ export class Lowerer {
 
   // Conditions
 
+  /** The payload variants tested by an external enum's native TypeScript typeof guard. */
+  private externalCategory(
+    node: ts.BinaryExpression,
+  ): { place: ts.Expression; variants: string[]; is: boolean } | undefined {
+    const left = unparen(node.left)
+    const right = unparen(node.right)
+    const typeOf = ts.isTypeOfExpression(left)
+      ? left
+      : ts.isTypeOfExpression(right)
+        ? right
+        : undefined
+    const category = typeOf === left ? right : left
+    if (!typeOf || !ts.isStringLiteral(category) || !['object', 'string'].includes(category.text)) {
+      return undefined
+    }
+    const name = this.types.externalEnumOf(this.types.declaredType(typeOf.expression))
+    const def = name === undefined ? undefined : this.module.types.get(name)
+    if (def?.type !== 'external-enum') return undefined
+    return {
+      place: typeOf.expression,
+      variants: def.variants
+        .filter((variant) => variant.payload !== undefined)
+        .map((variant) => variant.name),
+      is:
+        (node.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken) ===
+        (category.text === 'object'),
+    }
+  }
+
   /** What a condition says: a test of an option, of a union's kind, or anything else. */
   private split(node: ts.Expression): Cond {
     const bare = unparen(node)
@@ -390,9 +539,43 @@ export class Lowerer {
       const op = bare.operatorToken.kind
       const equal = op === ts.SyntaxKind.EqualsEqualsEqualsToken
       const unequal = op === ts.SyntaxKind.ExclamationEqualsEqualsToken
+      if (
+        op === ts.SyntaxKind.InKeyword &&
+        ts.isStringLiteral(bare.left) &&
+        this.types.externalEnumOf(this.types.declaredType(bare.right))
+      ) {
+        const name = this.types.externalEnumOf(this.types.declaredType(bare.right))
+        const def = name === undefined ? undefined : this.module.types.get(name)
+        if (
+          def?.type !== 'external-enum' ||
+          !def.variants.some(
+            (variant) =>
+              variant.name === (bare.left as ts.StringLiteral).text &&
+              variant.payload !== undefined,
+          )
+        ) {
+          throw new CompileError(bare.left, 'in names an external enum payload variant')
+        }
+        return { kind: 'variant', place: bare.right, name: bare.left.text, is: true }
+      }
       if (equal || unequal) {
         const left = unparen(bare.left)
         const right = unparen(bare.right)
+        const category = this.externalCategory(bare)
+        if (category?.variants.length === 1) {
+          return {
+            kind: 'variant',
+            place: category.place,
+            name: category.variants[0] as string,
+            is: category.is,
+          }
+        }
+        if (ts.isStringLiteral(right) && this.types.externalEnumOf(this.types.declaredType(left))) {
+          return { kind: 'variant', place: left, name: right.text, is: equal }
+        }
+        if (ts.isStringLiteral(left) && this.types.externalEnumOf(this.types.declaredType(right))) {
+          return { kind: 'variant', place: right, name: left.text, is: equal }
+        }
         if (isUndefined(right) && this.key(left) !== undefined) {
           return { kind: 'some', place: left, present: unequal }
         }
@@ -507,19 +690,28 @@ export class Lowerer {
 
   private switchStatement(node: ts.SwitchStatement): Stmt {
     const subject = unparen(node.expression)
+    const subjectType = this.types.declaredType(subject)
+    const external = this.types.externalEnumOf(subjectType)
     const onKind =
       ts.isPropertyAccessExpression(subject) &&
       subject.name.text === 'kind' &&
       this.types.isTaggedUnion(this.types.declaredType(subject.expression))
         ? subject.expression
-        : undefined
+        : external
+          ? subject
+          : undefined
     const value = this.expr(onKind ?? subject)
     const arms: Arm[] = []
     let pending: Literal[] = []
     let pendingDefault = false
     for (const clause of node.caseBlock.clauses) {
       if (ts.isDefaultClause(clause)) pendingDefault = true
-      else pending.push(this.caseValue(clause.expression))
+      else {
+        const value = this.caseValue(clause.expression)
+        const numeric =
+          typeof value === 'number' ? this.types.numericVariant(subjectType, value) : undefined
+        pending.push(numeric?.name ?? value)
+      }
       if (!clause.statements.length) continue
       const statements =
         clause.statements.length === 1 && ts.isBlock(clause.statements[0] as ts.Node)
@@ -528,11 +720,6 @@ export class Lowerer {
       const body = [...statements]
       const last = body[body.length - 1]
       if (last && ts.isBreakStatement(last) && !last.label) body.pop()
-      for (const stmt of body) {
-        if (ts.isBreakStatement(stmt)) {
-          throw new CompileError(stmt, 'a case leaves by returning, or by its last statement')
-        }
-      }
       if (onKind) {
         for (const name of pending) {
           const binds = new Map<string, string>()
@@ -563,7 +750,19 @@ export class Lowerer {
     if (pending.length || pendingDefault) {
       throw new CompileError(node, 'the last case of a switch has a body')
     }
-    return { stmt: 'match', value, arms }
+    // TS checks every explicit case before selecting default, regardless of its source position.
+    arms.sort(
+      (a, b) => Number(a.pattern.pattern === 'default') - Number(b.pattern.pattern === 'default'),
+    )
+    const match: Stmt = { stmt: 'match', value, arms }
+    const exitLabel = this.controlLabels.get(node)
+    return exitLabel
+      ? {
+          stmt: 'loop',
+          label: exitLabel,
+          body: [match, { stmt: 'break' }],
+        }
+      : match
   }
 
   private caseValue(node: ts.Expression): Literal {
@@ -610,7 +809,13 @@ export class Lowerer {
     if (!step || step.op !== 'add' || this.leaf(step.target) !== counter) {
       throw new CompileError(node.incrementor, 'a counted loop steps by `i++`')
     }
-    const from = this.expr(decl.initializer)
+    let from = this.expr(decl.initializer)
+    // The IR range derives its counter width from its bounds. Preserve an explicit
+    // source counter width even when both bounds are otherwise untyped literals.
+    const counterType = decl.type ? this.types.mapNode(decl.type) : undefined
+    if (typeof counterType === 'string' && ['u8', 'u16', 'u32', 'u64'].includes(counterType)) {
+      from = { expr: 'cast', value: from, to: counterType }
+    }
     let to = this.expr(cond.right)
     if (cond.operatorToken.kind === ts.SyntaxKind.LessThanEqualsToken) {
       to = { expr: 'binary', op: 'add', left: to, right: { expr: 'lit', value: 1 } }
@@ -642,7 +847,8 @@ export class Lowerer {
     if (substituted) return substituted
     const bare = unparen(node)
     if (bare !== node) return this.expr(bare)
-    if (ts.isNumericLiteral(bare)) return { expr: 'lit', value: numeric(bare) }
+    if (ts.isNumericLiteral(bare))
+      return this.number(bare, this.types.checker.getContextualType(bare))
     if (bare.kind === ts.SyntaxKind.TrueKeyword) return { expr: 'lit', value: true }
     if (bare.kind === ts.SyntaxKind.FalseKeyword) return { expr: 'lit', value: false }
     if (ts.isStringLiteral(bare) || ts.isNoSubstitutionTemplateLiteral(bare)) {
@@ -684,21 +890,55 @@ export class Lowerer {
       return { expr: 'array', items: bare.elements.map((element) => this.expr(element)) }
     }
     if (ts.isAsExpression(bare)) {
+      if (
+        this.types.numericEnumOf(this.types.checker.getTypeFromTypeNode(bare.type)) ||
+        this.types.numericEnumOf(this.types.declaredType(bare.expression))
+      ) {
+        throw new CompileError(
+          bare,
+          'numeric enums are constructed from declared literals, not casts',
+        )
+      }
       return { expr: 'cast', value: this.expr(bare.expression), to: this.types.mapNode(bare.type) }
     }
     throw new CompileError(bare, `${ts.SyntaxKind[bare.kind]} is not in the subset`)
   }
 
   private string(node: ts.StringLiteralLike, type: ts.Type | undefined): Expr {
+    const external = type === undefined ? undefined : this.types.externalEnumOf(type)
+    if (external !== undefined) return { expr: 'variant', type: external, kind: node.text }
     const enumName = type === undefined ? undefined : this.types.enumOf(type)
     if (enumName !== undefined) return { expr: 'enum', type: enumName, value: node.text }
     return { expr: 'text', value: node.text }
+  }
+
+  private number(node: ts.NumericLiteral, type: ts.Type | undefined): Expr {
+    const variant = type === undefined ? undefined : this.types.numericVariant(type, numeric(node))
+    return variant
+      ? { expr: 'enum', type: variant.type, value: variant.name }
+      : { expr: 'lit', value: numeric(node) }
   }
 
   private template(node: ts.TemplateExpression): Expr {
     const parts: Expr[] = []
     if (node.head.text) parts.push({ expr: 'text', value: node.head.text })
     for (const span of node.templateSpans) {
+      const type = this.types.checker.getTypeAtLocation(span.expression)
+      const mapped = this.types.map(type)
+      const scalar =
+        typeof mapped === 'string' &&
+        (['bool', 'u8', 'u16', 'u32', 'u64', 'text'].includes(mapped) ||
+          ['enum', 'numeric-enum'].includes(this.module.types.get(mapped)?.type ?? ''))
+      // Arithmetic on width-tagged operands has TS's plain number type; the backend
+      // retains their integer widths (for example MAX_CHANNELS - 1 in a diagnostic).
+      const numberExpression = type.flags & ts.TypeFlags.NumberLike
+      const external = this.types.externalEnumOf(this.types.declaredType(span.expression))
+      if (external || (!scalar && !numberExpression)) {
+        throw new CompileError(
+          span.expression,
+          'a template interpolation is boolean, an integer, text or a scalar enum; narrow or coalesce optional values first',
+        )
+      }
       parts.push(this.expr(span.expression))
       if (span.literal.text) parts.push({ expr: 'text', value: span.literal.text })
     }
@@ -750,11 +990,12 @@ export class Lowerer {
       const narrowed = this.narrowing(receiverKey)
       if (narrowed?.kind === 'variant') {
         if (name === 'kind') throw new CompileError(node, 'the kind is known here')
-        let bind = narrowed.binds.get(name)
+        const field = this.types.externalEnumOf(this.types.declaredType(receiver)) ? 'value' : name
+        let bind = narrowed.binds.get(field)
         if (bind === undefined) {
           bind = this.fresh(name)
           if (bind !== name) bind = this.fresh(`${this.leaf(receiver)}_${name}`)
-          narrowed.binds.set(name, bind)
+          narrowed.binds.set(field, bind)
           this.addLocal(bind)
         }
         return { expr: 'local', name: bind }
@@ -948,11 +1189,23 @@ export class Lowerer {
 
   private binary(node: ts.BinaryExpression): Expr {
     const op = node.operatorToken.kind
+    if (op === ts.SyntaxKind.InKeyword && this.split(node).kind === 'variant') {
+      return this.test(this.split(node))
+    }
     if (op === ts.SyntaxKind.QuestionQuestionToken) {
+      const type = this.types.checker.getNonNullableType(this.types.declaredType(node.left))
+      const fallback = unparen(node.right)
       return {
         expr: 'intrinsic',
         name: 'unwrap-or',
-        args: [this.expr(node.left), this.expr(node.right)],
+        args: [
+          this.expr(node.left),
+          ts.isNumericLiteral(fallback)
+            ? this.number(fallback, type)
+            : ts.isStringLiteral(fallback)
+              ? this.string(fallback, type)
+              : this.expr(node.right),
+        ],
       }
     }
     if (op === ts.SyntaxKind.AmpersandAmpersandToken) {
@@ -970,6 +1223,15 @@ export class Lowerer {
     const mapped = BINARY_OPS[op]
     if (!mapped) {
       throw new CompileError(node.operatorToken, `${ts.tokenToString(op)} is not in the subset`)
+    }
+    if (
+      this.types.numericEnumOf(this.types.declaredType(node.left)) ||
+      this.types.numericEnumOf(this.types.declaredType(node.right))
+    ) {
+      throw new CompileError(
+        node,
+        'numeric enums support equality and switch, not arithmetic or ordering',
+      )
     }
     return { expr: 'binary', op: mapped, left: this.expr(node.left), right: this.expr(node.right) }
   }
@@ -1070,9 +1332,40 @@ export class Lowerer {
   private equality(node: ts.BinaryExpression, equal: boolean): Expr {
     const cond = this.split(node)
     if (cond.kind !== 'bool') return this.test(cond)
+    const category = this.externalCategory(node)
+    if (category) {
+      const tests: Expr[] = category.variants.map((variant) => ({
+        expr: 'if-variant',
+        value: this.expr(category.place),
+        variant,
+        then: { expr: 'lit', value: true },
+        else: { expr: 'lit', value: false },
+      }))
+      const test = tests.reduce<Expr>(
+        (left, right) => ({ expr: 'binary', op: 'or', left, right }),
+        { expr: 'lit', value: false },
+      )
+      return category.is ? test : { expr: 'unary', op: 'not', value: test }
+    }
     const left = unparen(node.left)
     const right = unparen(node.right)
     const op: BinaryOp = equal ? 'eq' : 'ne'
+    if (ts.isNumericLiteral(right) && this.types.numericEnumOf(this.types.declaredType(left))) {
+      return {
+        expr: 'binary',
+        op,
+        left: this.expr(left),
+        right: this.number(right, this.types.declaredType(left)),
+      }
+    }
+    if (ts.isNumericLiteral(left) && this.types.numericEnumOf(this.types.declaredType(right))) {
+      return {
+        expr: 'binary',
+        op,
+        left: this.number(left, this.types.declaredType(right)),
+        right: this.expr(right),
+      }
+    }
     // A string literal is an enum value, of the other side's enum.
     if (ts.isStringLiteral(right)) {
       return {
@@ -1169,6 +1462,25 @@ export class Lowerer {
   private object(node: ts.ObjectLiteralExpression): Expr {
     const contextual = this.types.checker.getContextualType(node)
     if (!contextual) throw new CompileError(node, 'an object literal needs a type from its context')
+    const external = this.types.externalEnumOf(contextual)
+    if (external !== undefined) {
+      const [property] = node.properties
+      if (
+        node.properties.length !== 1 ||
+        !property ||
+        (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) ||
+        !ts.isIdentifier(property.name)
+      ) {
+        throw new CompileError(node, 'an external enum payload has one named property')
+      }
+      const value = ts.isPropertyAssignment(property) ? property.initializer : property.name
+      return {
+        expr: 'variant',
+        type: external,
+        kind: property.name.text,
+        fields: { value: this.expr(value) },
+      }
+    }
     const union = this.types.unionOf(contextual)
     const fields: Record<string, Expr> = {}
     let kind: string | undefined
@@ -1237,7 +1549,7 @@ function isReference(node: ts.Expression): boolean {
 }
 
 function numeric(node: ts.NumericLiteral): number {
-  return Number(node.text.replace(/_/g, ''))
+  return integerLiteral(node)
 }
 
 function label(node: ts.Identifier | undefined): { label?: string } {

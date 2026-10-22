@@ -7,12 +7,17 @@
  */
 
 export type Type =
-  string | { option: Type } | { array: Type; bound: number } | { batch: Type; bound: number }
+  | string
+  | { option: Type }
+  | { array: Type; bound: number }
+  | { batch: Type; bound: number }
+  | { fixedArray: Type; length: number }
 
 export interface Field {
   name: string
   type: Type
   channel?: true
+  json?: 'hex-u64'
 }
 
 export interface UnionVariant {
@@ -23,6 +28,8 @@ export interface UnionVariant {
 export type TypeDef =
   | { name: string; type: 'record'; fields: Field[] }
   | { name: string; type: 'enum'; variants: string[] }
+  | { name: string; type: 'numeric-enum'; variants: { name: string; value: number }[] }
+  | { name: string; type: 'external-enum'; variants: { name: string; payload?: Type }[] }
   | { name: string; type: 'union'; variants: UnionVariant[] }
 
 export interface SchemaRef {

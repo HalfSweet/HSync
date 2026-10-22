@@ -64,6 +64,10 @@ pub enum TypeKind {
     Record { fields: Vec<Field> },
     /// A set of names, written as text in events and configurations.
     Enum { variants: Vec<EnumVariant> },
+    /// A named set of unsigned integers, serialized as JSON numbers.
+    NumericEnum { variants: Vec<NumericEnumVariant> },
+    /// Serde's externally tagged enum: a unit name or a one-key payload object.
+    ExternalEnum { variants: Vec<ExternalEnumVariant> },
     /// A tagged union: variants with fields, tagged by `kind`.
     Union { variants: Vec<UnionVariant> },
 }
@@ -72,6 +76,23 @@ pub enum TypeKind {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct EnumVariant(pub String);
+
+/// A numeric enum's logical name and unsigned wire value.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct NumericEnumVariant {
+    pub name: String,
+    pub value: u64,
+}
+
+/// An externally tagged enum variant; no payload means a unit variant.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ExternalEnumVariant {
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payload: Option<Type>,
+}
 
 /// A variant of a union.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -94,6 +115,17 @@ pub struct Field {
     /// offers as one).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub channel: bool,
+    /// A wire representation for this field, independent of its in-memory type.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json: Option<FieldJson>,
+}
+
+/// A field's non-default JSON representation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum FieldJson {
+    /// A hexadecimal string with a `0x` prefix for a `u64` field; numbers also deserialize.
+    HexU64,
 }
 
 /// A type: a primitive or a declared type by name, an option, a bounded array or a batch.
@@ -107,6 +139,12 @@ pub enum Type {
     Option { option: Box<Type> },
     /// At most `bound` items.
     Array { array: Box<Type>, bound: u32 },
+    /// Exactly `length` items, represented by a Rust array.
+    FixedArray {
+        #[serde(rename = "fixedArray")]
+        fixed_array: Box<Type>,
+        length: u32,
+    },
     /// A batch of at most `bound` items with the provenance of what it holds.
     Batch { batch: Box<Type>, bound: u32 },
 }

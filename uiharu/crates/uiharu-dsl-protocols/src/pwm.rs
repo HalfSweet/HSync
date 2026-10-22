@@ -94,7 +94,7 @@ impl PwmConfig {
     /// What the decoder's input requires of the output it reads.
     pub fn requires(&self) -> Requires {
         let config = self;
-        Requires::new().at_least("channels", i64::from(Int::wadd(config.channel, 1)))
+        Requires::new().at_least("channels", i64::from(Int::wadd(config.channel, 1u8)))
     }
 }
 
@@ -107,7 +107,7 @@ pub fn validate(config: &PwmConfig) -> Option<String> {
         Some(format!(
             "channel {} is out of range; channels are 0 to {}",
             config.channel,
-            Int::wsub(MAX_CHANNELS, 1)
+            Int::wsub(MAX_CHANNELS, 1u8)
         ))
     } else {
         None

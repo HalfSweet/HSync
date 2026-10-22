@@ -194,13 +194,13 @@ impl UartConfig {
     pub fn requires(&self) -> Requires {
         let config = self;
         Requires::new()
-            .at_least("channels", i64::from(Int::wadd(config.line, 1)))
-            .at_least("rateHz", i64::from(Int::wmul(2, config.baud)))
+            .at_least("channels", i64::from(Int::wadd(config.line, 1u8)))
+            .at_least("rateHz", i64::from(Int::wmul(2u32, config.baud)))
     }
 }
 
 pub fn parity_bit(parity: Parity, value: u16) -> Option<bool> {
-    let odd_ones: bool = (Int::rem0((u64::from(value).count_ones() as u8), 2) == 1);
+    let odd_ones: bool = (Int::rem0((u64::from(value).count_ones() as u8), 2u8) == 1u8);
     match parity {
         Parity::None => {
             return None;
@@ -223,39 +223,39 @@ pub fn parity_bit(parity: Parity, value: u16) -> Option<bool> {
 pub fn half_bits(stop_bits: StopBits) -> u8 {
     match stop_bits {
         StopBits::One => {
-            return 2;
+            return 2u8;
         }
         StopBits::OneAndAHalf => {
-            return 3;
+            return 3u8;
         }
         StopBits::Two => {
-            return 4;
+            return 4u8;
         }
     }
 }
 
 pub fn length(config: &UartConfig) -> u64 {
     let whole: u64 = Int::wadd(
-        Int::wadd(1, u64::from(config.data_bits)),
+        Int::wadd(1u64, u64::from(config.data_bits)),
         u64::from(u8::from((config.parity != Parity::None))),
     );
     return Int::wadd(
-        Int::wmul(200, whole),
-        Int::wmul(100, u64::from(half_bits(config.stop_bits))),
+        Int::wmul(200u64, whole),
+        Int::wmul(100u64, u64::from(half_bits(config.stop_bits))),
     );
 }
 
 pub fn validate(config: &UartConfig) -> Option<String> {
-    if (config.baud == 0) {
+    if (config.baud == 0u32) {
         return Some(String::from("the baud rate must be above zero"));
     }
-    if ((config.data_bits < 5) || (config.data_bits > 9)) {
+    if ((config.data_bits < 5u8) || (config.data_bits > 9u8)) {
         return Some(format!(
             "{} data bits; 5 to 9 are supported",
             config.data_bits
         ));
     }
-    if ((config.sample_point < 1) || (config.sample_point > 99)) {
+    if ((config.sample_point < 1u8) || (config.sample_point > 99u8)) {
         return Some(format!(
             "a sample point at {}% of the bit; 1% to 99% are supported",
             config.sample_point
@@ -265,7 +265,7 @@ pub fn validate(config: &UartConfig) -> Option<String> {
         return Some(format!(
             "channel {} is out of range; channels are 0 to {}",
             config.line,
-            Int::wsub(MAX_CHANNELS, 1)
+            Int::wsub(MAX_CHANNELS, 1u8)
         ));
     }
     return None;
@@ -273,7 +273,7 @@ pub fn validate(config: &UartConfig) -> Option<String> {
 
 pub fn timing_of(config: &UartConfig, rate: u64) -> Option<Timing> {
     let baud: u64 = u64::from(config.baud);
-    if ((baud > 0) && (Int::div0(rate, baud) >= 2)) {
+    if ((baud > 0u64) && (Int::div0(rate, baud) >= 2u64)) {
         return Some(Timing {
             rate,
             baud,
@@ -284,20 +284,20 @@ pub fn timing_of(config: &UartConfig, rate: u64) -> Option<Timing> {
 }
 
 pub fn ticks(timing: &Timing, position: u64) -> u64 {
-    return mul_div(timing.rate, position, Int::wmul(200, timing.baud));
+    return mul_div(timing.rate, position, Int::wmul(200u64, timing.baud));
 }
 
 pub fn bit_point(timing: &Timing, bit: u64) -> u64 {
     return ticks(
         &*timing,
-        Int::wadd(Int::wmul(200, bit), Int::wmul(2, timing.sample_point)),
+        Int::wadd(Int::wmul(200u64, bit), Int::wmul(2u64, timing.sample_point)),
     );
 }
 
 pub fn half_bit_point(timing: &Timing, bit: u64) -> u64 {
     return ticks(
         &*timing,
-        Int::wadd(Int::wmul(200, bit), timing.sample_point),
+        Int::wadd(Int::wmul(200u64, bit), timing.sample_point),
     );
 }
 
@@ -402,15 +402,15 @@ impl State {
         start: u64,
     ) -> Result<Option<Found>, Cut> {
         let config: UartConfig = self.config;
-        let start_bit: u64 = bit_point(&*timing, 0);
-        if ((start_bit > 0) && self.read(io, start, start_bit).await?) {
+        let start_bit: u64 = bit_point(&*timing, 0u64);
+        if ((start_bit > 0u64) && self.read(io, start, start_bit).await?) {
             return Ok(None);
         }
         let data_bits: u64 = u64::from(config.data_bits);
-        let mut value: u16 = 0;
-        for i in (0 as u64)..(data_bits as u64) {
+        let mut value: u16 = 0u16;
+        for i in ((0u64 as u64) as u64)..(data_bits as u64) {
             let one: u16 = u16::from(u8::from(
-                self.read(io, start, bit_point(&*timing, Int::wadd(1, i)))
+                self.read(io, start, bit_point(&*timing, Int::wadd(1u64, i)))
                     .await?,
             ));
             value = if (config.bit_order == BitOrder::LsbFirst) {
@@ -419,13 +419,13 @@ impl State {
                 (Int::shl(value, 1) | one)
             };
         }
-        let mut next: u64 = Int::wadd(1, data_bits);
-        let mut all_space: bool = (value == 0);
+        let mut next: u64 = Int::wadd(1u64, data_bits);
+        let mut all_space: bool = (value == 0u16);
         let mut parity: Option<ParityCheck> = None;
         let wanted: Option<bool> = parity_bit(config.parity, value);
         if let Some(wanted_2) = wanted {
             let bit: bool = self.read(io, start, bit_point(&*timing, next)).await?;
-            next = Int::wadd(next, 1);
+            next = Int::wadd(next, 1u64);
             all_space = (all_space && (!bit));
             parity = if (bit == wanted_2) {
                 Some(ParityCheck::Ok)
@@ -437,9 +437,9 @@ impl State {
             None
         } else {
             if (config.stop_bits == StopBits::Two) {
-                Some(bit_point(&*timing, Int::wadd(next, 1)))
+                Some(bit_point(&*timing, Int::wadd(next, 1u64)))
             } else {
-                Some(half_bit_point(&*timing, Int::wadd(next, 1)))
+                Some(half_bit_point(&*timing, Int::wadd(next, 1u64)))
             }
         };
         let mut framing_ok: bool = true;

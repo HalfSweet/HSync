@@ -48,7 +48,12 @@ export class Types {
 
   /** The symbol an identifier refers to, through import aliases. */
   symbolOf(node: ts.Node): ts.Symbol | undefined {
-    let symbol = this.checker.getSymbolAtLocation(node)
+    let symbol =
+      ts.isIdentifier(node) &&
+      ts.isShorthandPropertyAssignment(node.parent) &&
+      node.parent.name === node
+        ? this.checker.getShorthandAssignmentValueSymbol(node.parent)
+        : this.checker.getSymbolAtLocation(node)
     if (symbol && symbol.flags & ts.SymbolFlags.Alias) {
       symbol = this.checker.getAliasedSymbol(symbol)
     }
@@ -115,9 +120,89 @@ export class Types {
   /** The name of the enum a type is, for a union of string literals declared under a name. */
   enumOf(type: ts.Type): string | undefined {
     const bare = this.checker.getNonNullableType(type)
+    const numeric = this.numericEnumOf(bare)
+    if (numeric) return numeric
     const members = bare.isUnion() ? bare.types : [bare]
     if (!members.every((member) => member.isStringLiteral())) return undefined
     return this.isUser(bare.aliasSymbol) ? bare.aliasSymbol?.name : undefined
+  }
+
+  /** A numeric enum retains its declared names independently of its numeric wire values. */
+  numericEnumOf(type: ts.Type): string | undefined {
+    const declaration = this.aliasDeclaration(type)
+    if (!declaration) return undefined
+    const node = unparenthesize(declaration.type)
+    if (this.isNumericEnumHelper(node)) return declaration.name.text
+    if (ts.isUnionTypeNode(node) && node.types.map(unparenthesize).every(isNumericType)) {
+      return declaration.name.text
+    }
+    return undefined
+  }
+
+  /** An externally tagged enum mixes unit strings with single-property payload objects. */
+  externalEnumOf(type: ts.Type): string | undefined {
+    const declaration = this.aliasDeclaration(type)
+    if (!declaration) return undefined
+    const node = unparenthesize(declaration.type)
+    if (!ts.isUnionTypeNode(node)) return undefined
+    const members = node.types.map(unparenthesize)
+    const hasUnit = members.some(isStringType)
+    const hasPayload = members.some((member) => ts.isTypeLiteralNode(member))
+    return hasUnit &&
+      hasPayload &&
+      members.every(
+        (member) =>
+          isStringType(member) ||
+          (ts.isTypeLiteralNode(member) &&
+            member.members.length === 1 &&
+            ts.isPropertySignature(member.members[0] as ts.Node) &&
+            (member.members[0] as ts.PropertySignature).name.getText() !== 'kind'),
+      )
+      ? declaration.name.text
+      : undefined
+  }
+
+  /** A numeric literal's logical variant name in its contextual enum. */
+  numericVariant(type: ts.Type, value: number): { type: string; name: string } | undefined {
+    const declaration = this.aliasDeclaration(type)
+    if (!declaration || !this.numericEnumOf(type)) return undefined
+    const def = this.alias(declaration)
+    if (def?.type !== 'numeric-enum') return undefined
+    const variant = def.variants.find((variant) => variant.value === value)
+    return variant ? { type: def.name, name: variant.name } : undefined
+  }
+
+  private aliasDeclaration(type: ts.Type): ts.TypeAliasDeclaration | undefined {
+    const bare = this.checker.getNonNullableType(type)
+    if (!this.isUser(bare.aliasSymbol)) return undefined
+    return bare.aliasSymbol?.declarations?.find(ts.isTypeAliasDeclaration)
+  }
+
+  private isNumericEnumHelper(node: ts.TypeNode): node is ts.TypeReferenceNode {
+    return ts.isTypeReferenceNode(node) && this.libName(node.typeName) === 'NumericEnum'
+  }
+
+  /** Whether a type directly marks a field's hexadecimal JSON representation. */
+  isHex(type: ts.Type): boolean {
+    return type
+      .getProperties()
+      .some((property) => String(property.escapedName).startsWith('__@hex'))
+  }
+
+  /** Hexadecimal representation belongs to a direct u64 field, never a nested value type. */
+  checkHex(type: ts.Type, at: ts.Node, field = false): void {
+    const contains = (part: ts.Type): boolean => {
+      if (this.isHex(part)) return true
+      if (part.isUnion()) return part.types.some(contains)
+      if (this.checker.isTupleType(part)) {
+        return this.checker.getTypeArguments(part as ts.TypeReference).some(contains)
+      }
+      if (part.aliasTypeArguments) return part.aliasTypeArguments.some(contains)
+      return false
+    }
+    if (contains(type) && !(field && this.isHex(type) && this.widthOf(type) === 64)) {
+      throw new CompileError(at, 'HexU64 is only supported as the direct type of a u64 field')
+    }
   }
 
   /** Whether a type is object types tagged by `kind`, declared under a name or not (the items
@@ -163,13 +248,42 @@ export class Types {
     if (width !== undefined) return `u${width}`
     const enumName = this.enumOf(bare)
     if (enumName !== undefined) return enumName
+    const external = this.externalEnumOf(bare)
+    if (external !== undefined) return external
     if (bare.flags & ts.TypeFlags.StringLike) return 'text'
     const union = this.unionOf(bare)
     if (union !== undefined) return union
+    if (this.checker.isTupleType(bare)) {
+      const tuple = bare as ts.TupleTypeReference
+      const members = this.checker.getTypeArguments(tuple)
+      if (
+        !members.length ||
+        members.length > 32 ||
+        tuple.target.elementFlags.some((flag) => flag !== ts.ElementFlags.Required)
+      ) {
+        return undefined
+      }
+      const mapped = members.map((member) => this.map(member))
+      const first = mapped[0]
+      if (
+        first === undefined ||
+        mapped.some((member) => JSON.stringify(member) !== JSON.stringify(first))
+      ) {
+        return undefined
+      }
+      return { fixedArray: first, length: members.length }
+    }
     if (bare.aliasSymbol && this.isLib(bare.aliasSymbol) && bare.aliasSymbol.name === 'Bounded') {
       const [item, bound] = bare.aliasTypeArguments ?? []
       const itemType = item === undefined ? undefined : this.map(item)
-      if (itemType === undefined || bound === undefined || !bound.isNumberLiteral()) {
+      if (
+        itemType === undefined ||
+        bound === undefined ||
+        !bound.isNumberLiteral() ||
+        !Number.isSafeInteger(bound.value) ||
+        bound.value < 1 ||
+        bound.value > 0xffff_ffff
+      ) {
         return undefined
       }
       return { array: itemType, bound: bound.value }
@@ -194,8 +308,11 @@ export class Types {
   }
 
   /** The IR type of a type annotation, which must have one. */
-  mapNode(node: ts.TypeNode): Type {
-    const mapped = this.map(this.checker.getTypeFromTypeNode(node))
+  mapNode(node: ts.TypeNode, field = false): Type {
+    const type = this.checker.getTypeFromTypeNode(node)
+    this.checkHex(type, node, field)
+    this.checkFixedArray(type, node)
+    const mapped = this.map(type)
     if (mapped === undefined) {
       throw new CompileError(
         node,
@@ -203,6 +320,20 @@ export class Types {
       )
     }
     return mapped
+  }
+
+  /** Native serde array derives support exact arrays through length 32. */
+  checkFixedArray(type: ts.Type, at: ts.Node): void {
+    const bare = this.checker.getNonNullableType(type)
+    if (this.checker.isTupleType(bare)) {
+      const members = this.checker.getTypeArguments(bare as ts.TupleTypeReference)
+      if (members.length < 1 || members.length > 32) {
+        throw new CompileError(
+          at,
+          'a fixed array has no IR type outside lengths 1..32, the native serde array limit',
+        )
+      }
+    }
   }
 
   /** Whether a type annotation names `Channel`. */
@@ -230,6 +361,7 @@ export class Types {
           fields: this.fields(statement.members, statement),
         })
       } else if (ts.isTypeAliasDeclaration(statement)) {
+        this.checkFixedArray(this.checker.getTypeFromTypeNode(statement.type), statement.type)
         const def = this.alias(statement)
         if (def) defs.push(def)
       }
@@ -239,7 +371,30 @@ export class Types {
 
   private alias(statement: ts.TypeAliasDeclaration): TypeDef | undefined {
     const name = statement.name.text
-    const node = statement.type
+    const node = unparenthesize(statement.type)
+    if (this.isNumericEnumHelper(node)) {
+      const values = node.typeArguments?.[0]
+      if (!values || !ts.isTypeLiteralNode(values)) {
+        throw new CompileError(node, 'NumericEnum declares named numeric literal properties')
+      }
+      const variants = values.members.map((member) => {
+        if (
+          !ts.isPropertySignature(member) ||
+          !ts.isIdentifier(member.name) ||
+          !member.type ||
+          !isNumericType(member.type) ||
+          member.questionToken
+        ) {
+          throw new CompileError(
+            member,
+            'NumericEnum variants have names and unsigned integer literals',
+          )
+        }
+        return { name: member.name.text, value: numericTypeValue(member.type) }
+      })
+      this.checkNumericVariants(variants, node)
+      return { name, type: 'numeric-enum', variants }
+    }
     if (ts.isTypeLiteralNode(node)) {
       const variant = this.variant(node)
       if (variant) return { name, type: 'union', variants: [variant] }
@@ -247,6 +402,14 @@ export class Types {
     }
     if (ts.isUnionTypeNode(node)) {
       const members = node.types.map(unparenthesize)
+      if (members.every(isNumericType)) {
+        const variants = members.map((member) => {
+          const value = numericTypeValue(member)
+          return { name: `value${value}`, value }
+        })
+        this.checkNumericVariants(variants, node)
+        return { name, type: 'numeric-enum', variants }
+      }
       if (
         members.every(
           (member) => ts.isLiteralTypeNode(member) && ts.isStringLiteral(member.literal),
@@ -260,6 +423,19 @@ export class Types {
           ),
         }
       }
+      if (this.externalEnumOf(this.checker.getTypeFromTypeNode(node))) {
+        const variants = members.map((member) => {
+          if (isStringType(member)) return { name: (member.literal as ts.StringLiteral).text }
+          const field = this.fields((member as ts.TypeLiteralNode).members, member)[0] as Field
+          if (field.json)
+            throw new CompileError(member, 'an external enum payload cannot use HexU64')
+          return { name: field.name, payload: field.type }
+        })
+        if (new Set(variants.map((variant) => variant.name)).size !== variants.length) {
+          throw new CompileError(node, 'external enum variant names are unique')
+        }
+        return { name, type: 'external-enum', variants }
+      }
       if (members.every((member) => ts.isTypeLiteralNode(member))) {
         const variants = members.map((member) => {
           const variant = this.variant(member)
@@ -270,6 +446,21 @@ export class Types {
       }
     }
     return undefined
+  }
+
+  private checkNumericVariants(variants: { name: string; value: number }[], at: ts.Node): void {
+    if (
+      !variants.length ||
+      variants.some((variant) => !Number.isSafeInteger(variant.value) || variant.value < 0)
+    ) {
+      throw new CompileError(at, 'numeric enums have unsigned safe integer wire values')
+    }
+    if (
+      new Set(variants.map((variant) => variant.value)).size !== variants.length ||
+      new Set(variants.map((variant) => variant.name)).size !== variants.length
+    ) {
+      throw new CompileError(at, 'numeric enum names and wire values are unique')
+    }
   }
 
   /** The variant an object type with a `kind` literal is; `undefined` without one. */
@@ -302,7 +493,8 @@ export class Types {
       }
       const name = ts.isIdentifier(member.name) ? member.name.text : undefined
       if (name === undefined) throw new CompileError(member, 'a field has a plain name')
-      const field: Field = { name, type: this.mapNode(member.type) }
+      const field: Field = { name, type: this.mapNode(member.type, true) }
+      if (this.isHex(this.checker.getTypeFromTypeNode(member.type))) field.json = 'hex-u64'
       if (this.isChannelNode(member.type)) field.channel = true
       return field
     })
@@ -311,4 +503,28 @@ export class Types {
 
 function unparenthesize(node: ts.TypeNode): ts.TypeNode {
   return ts.isParenthesizedTypeNode(node) ? unparenthesize(node.type) : node
+}
+
+function isStringType(node: ts.TypeNode): node is ts.LiteralTypeNode {
+  return ts.isLiteralTypeNode(node) && ts.isStringLiteral(node.literal)
+}
+
+function isNumericType(node: ts.TypeNode): node is ts.LiteralTypeNode {
+  return ts.isLiteralTypeNode(node) && ts.isNumericLiteral(node.literal)
+}
+
+function numericTypeValue(node: ts.TypeNode): number {
+  return integerLiteral((node as ts.LiteralTypeNode).literal as ts.NumericLiteral)
+}
+
+/** JSON-backed IR numbers must retain every bit of the source literal. */
+export function integerLiteral(node: ts.NumericLiteral): number {
+  const value = Number(node.text.replace(/_/g, ''))
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new CompileError(
+      node,
+      'an integer literal must be an unsigned safe integer; assemble wider u64 values with shifts',
+    )
+  }
+  return value
 }

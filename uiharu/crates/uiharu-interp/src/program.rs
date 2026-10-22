@@ -55,6 +55,8 @@ pub enum Const {
     Bool(bool),
     Int(u64),
     Enum(u16),
+    /// A unit variant of an externally tagged enum.
+    UnitVariant(u16),
     Text(Arc<str>),
 }
 

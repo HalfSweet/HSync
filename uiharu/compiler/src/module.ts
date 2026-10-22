@@ -36,7 +36,7 @@ import type {
 } from './ir.ts'
 import { Lowerer, type DecoderShape, type ModuleShape } from './lower.ts'
 import { CompileError, diagnose, typeErrors, type Diagnostic, type Project } from './program.ts'
-import { Types } from './types.ts'
+import { integerLiteral, Types } from './types.ts'
 
 /** The hooks whose parameters a method may leave out, with the parameters' names and types. */
 const HOOKS: Record<string, Param[]> = {
@@ -273,7 +273,7 @@ class ModuleLowerer {
       throw new CompileError(call, 'eventSchema takes the name and the version as literals')
     }
     const contract: Contract = {
-      schema: { name: name.text, version: Number(version.text) },
+      schema: { name: name.text, version: integerLiteral(version) },
       event: typeArg.typeName.text,
     }
     if (framing) contract.framing = framing
@@ -320,7 +320,7 @@ class ModuleLowerer {
     if (unframed) {
       if (!ts.isNumericLiteral(unframed))
         throw new CompileError(unframed, 'framing.unframed is a number')
-      framing.unframed = Number(unframed.text.replace(/_/g, ''))
+      framing.unframed = integerLiteral(unframed)
     }
     return framing
   }
@@ -417,14 +417,12 @@ class ModuleLowerer {
     if (!contract) throw new CompileError(node, `${node.text} is not a schema`)
     const source = decl.getSourceFile()
     if (source === this.file) return { contract, foreign: false }
-    this.importContract(source, contract)
+    this.importContract(source, contract, node)
     return { contract, foreign: true }
   }
 
   /** Imports a contract declared in `source`, with the types its events are made of. */
-  private importContract(source: ts.SourceFile, contract: Contract) {
-    if (this.imports.some((existing) => existing.contract.schema.name === contract.schema.name))
-      return
+  private importContract(source: ts.SourceFile, contract: Contract, at: ts.Node) {
     const defs = this.types.collect(source)
     const byName = new Map(defs.map((def) => [def.name, def]))
     const needed = new Set<string>()
@@ -437,18 +435,36 @@ class ModuleLowerer {
         for (const variant of def.variants)
           for (const field of variant.fields ?? []) visitType(field.type)
       }
+      if (def.type === 'external-enum') {
+        for (const variant of def.variants) if (variant.payload) visitType(variant.payload)
+      }
     }
     const visitType = (type: Type) => {
       if (typeof type === 'string') visit(type)
       else if ('option' in type) visitType(type.option)
       else if ('array' in type) visitType(type.array)
+      else if ('fixedArray' in type) visitType(type.fixedArray)
       else visitType(type.batch)
     }
     visit(contract.event)
     const types = defs.filter((def) => needed.has(def.name))
-    for (const def of types) this.shape.types.set(def.name, def)
     const entry: Import = { module: path.basename(source.fileName, '.ts'), contract }
     if (types.length) entry.types = types
+    const existing = this.imports.find(
+      (existing) =>
+        existing.contract.schema.name === contract.schema.name &&
+        existing.contract.schema.version === contract.schema.version,
+    )
+    if (existing) {
+      if (JSON.stringify(existing) !== JSON.stringify(entry)) {
+        throw new CompileError(
+          at,
+          `${contract.schema.name}@${contract.schema.version} has conflicting contract declarations or owners`,
+        )
+      }
+      return
+    }
+    for (const def of types) this.shape.types.set(def.name, def)
     this.imports.push(entry)
   }
 
@@ -494,6 +510,8 @@ class ModuleLowerer {
     }
     type = this.checker.getAwaitedType(type) ?? type
     if (type.flags & (ts.TypeFlags.Void | ts.TypeFlags.Undefined)) return undefined
+    this.types.checkHex(type, node.type ?? node)
+    this.types.checkFixedArray(type, node.type ?? node)
     const mapped = this.types.map(type)
     if (mapped === undefined)
       throw new CompileError(node.type ?? node, 'the return type has no IR type')
@@ -752,7 +770,7 @@ class ModuleLowerer {
     while (ts.isParenthesizedExpression(node)) node = node.expression
     if (ts.isCallExpression(node) && node.arguments.length === 1) {
       const arg = node.arguments[0] as ts.Expression
-      if (ts.isNumericLiteral(arg)) return Number(arg.text.replace(/_/g, ''))
+      if (ts.isNumericLiteral(arg)) return integerLiteral(arg)
       if (ts.isIdentifier(arg)) {
         const symbol = this.types.symbolOf(arg)
         const decl = symbol?.valueDeclaration
@@ -762,7 +780,7 @@ class ModuleLowerer {
           decl.initializer &&
           ts.isNumericLiteral(decl.initializer)
         ) {
-          return Number(decl.initializer.text.replace(/_/g, ''))
+          return integerLiteral(decl.initializer)
         }
       }
     }
@@ -1032,7 +1050,7 @@ function methodAsArrow(method: ts.MethodDeclaration): ts.Expression {
 function literalValue(node: ts.Expression): boolean | number | string | undefined {
   let bare = node
   while (ts.isParenthesizedExpression(bare)) bare = bare.expression
-  if (ts.isNumericLiteral(bare)) return Number(bare.text.replace(/_/g, ''))
+  if (ts.isNumericLiteral(bare)) return integerLiteral(bare)
   if (ts.isStringLiteral(bare) || ts.isNoSubstitutionTemplateLiteral(bare)) return bare.text
   if (bare.kind === ts.SyntaxKind.TrueKeyword) return true
   if (bare.kind === ts.SyntaxKind.FalseKeyword) return false

@@ -25,6 +25,7 @@ pub enum Ty {
     Cursor,
     Option(Box<Ty>),
     Array(Box<Ty>, u32),
+    FixedArray(Box<Ty>, u32),
     Batch(Box<Ty>, u32),
     /// A declared record, enum or union.
     Named(String),
@@ -60,6 +61,10 @@ impl Ty {
             },
             Type::Option { option } => Ty::Option(Box::new(Ty::from_ir(option))),
             Type::Array { array, bound } => Ty::Array(Box::new(Ty::from_ir(array)), *bound),
+            Type::FixedArray {
+                fixed_array,
+                length,
+            } => Ty::FixedArray(Box::new(Ty::from_ir(fixed_array)), *length),
             Type::Batch { batch, bound } => Ty::Batch(Box::new(Ty::from_ir(batch)), *bound),
         }
     }
@@ -104,6 +109,7 @@ impl Ty {
             Ty::Cursor => "cursor".into(),
             Ty::Option(inner) => format!("option<{}>", inner.describe()),
             Ty::Array(item, bound) => format!("array<{}, {bound}>", item.describe()),
+            Ty::FixedArray(item, length) => format!("fixed-array<{}, {length}>", item.describe()),
             Ty::Batch(item, bound) => format!("batch<{}, {bound}>", item.describe()),
             Ty::Named(name) => name.clone(),
             Ty::Edge => "edge".into(),
@@ -123,6 +129,8 @@ pub struct FieldDef {
     pub ty: Ty,
     /// Whether a configuration field is a channel of the source.
     pub channel: bool,
+    /// A field's wire representation, independent of its arithmetic type.
+    pub json: Option<uiharu_ir::FieldJson>,
 }
 
 /// A record: fields in declaration order.
@@ -137,6 +145,8 @@ pub struct RecordDef {
 pub struct EnumDef {
     pub name: String,
     pub variants: Vec<String>,
+    /// Explicit numeric wire values, in the same order as `variants`.
+    pub numbers: Option<Vec<u64>>,
 }
 
 /// A variant of a union.
@@ -151,6 +161,8 @@ pub struct VariantDef {
 pub struct UnionDef {
     pub name: String,
     pub variants: Vec<VariantDef>,
+    /// Unit strings and single-key newtype objects rather than a `kind` tag.
+    pub external: bool,
 }
 
 /// A declared type, by its index in the table.
@@ -179,6 +191,7 @@ fn fields_of(fields: &[uiharu_ir::Field]) -> Vec<FieldDef> {
             name: field.name.clone(),
             ty: Ty::from_ir(&field.ty),
             channel: field.channel,
+            json: field.json,
         })
         .collect()
 }
@@ -265,17 +278,55 @@ impl TypeTable {
                 self.enums.push(EnumDef {
                     name: def.name.clone(),
                     variants: variants.iter().map(|variant| variant.0.clone()).collect(),
+                    numbers: None,
                 });
                 TypeRef::Enum(self.enums.len() - 1)
             }
             TypeKind::Union { variants } => {
                 self.unions.push(UnionDef {
                     name: def.name.clone(),
+                    external: false,
                     variants: variants
                         .iter()
                         .map(|variant| VariantDef {
                             name: variant.name.clone(),
                             fields: fields_of(&variant.fields),
+                        })
+                        .collect(),
+                });
+                TypeRef::Union(self.unions.len() - 1)
+            }
+            TypeKind::NumericEnum { variants } => {
+                self.enums.push(EnumDef {
+                    name: def.name.clone(),
+                    variants: variants
+                        .iter()
+                        .map(|variant| variant.name.clone())
+                        .collect(),
+                    numbers: Some(variants.iter().map(|variant| variant.value).collect()),
+                });
+                TypeRef::Enum(self.enums.len() - 1)
+            }
+            TypeKind::ExternalEnum { variants } => {
+                self.unions.push(UnionDef {
+                    name: def.name.clone(),
+                    external: true,
+                    variants: variants
+                        .iter()
+                        .map(|variant| VariantDef {
+                            name: variant.name.clone(),
+                            fields: variant
+                                .payload
+                                .as_ref()
+                                .map(|ty| {
+                                    vec![FieldDef {
+                                        name: "value".into(),
+                                        ty: Ty::from_ir(ty),
+                                        channel: false,
+                                        json: None,
+                                    }]
+                                })
+                                .unwrap_or_default(),
                         })
                         .collect(),
                 });
@@ -337,7 +388,10 @@ impl TypeTable {
             Ty::Bool | Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64 | Ty::IntLit | Ty::Text | Ty::Unit => {
                 true
             }
-            Ty::Option(inner) | Ty::Array(inner, _) | Ty::Taken(inner) => self.is_data(inner),
+            Ty::Option(inner)
+            | Ty::Array(inner, _)
+            | Ty::FixedArray(inner, _)
+            | Ty::Taken(inner) => self.is_data(inner),
             Ty::Mask
             | Ty::Levels
             | Ty::Range
@@ -388,6 +442,7 @@ pub fn timed_variant(name: &str) -> Option<(u16, Vec<FieldDef>)> {
         name: name.to_owned(),
         ty,
         channel: false,
+        json: None,
     };
     match name {
         "edge" => Some((
