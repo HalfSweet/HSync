@@ -2,8 +2,11 @@
 
 //! `uiharu-codegen <ir-dir> <out-dir> [--check]`: generates the Rust modules of every IR file
 //! in `ir-dir` into `out-dir` (`<name>.rs` and `lib.rs`), formatted with `rustfmt`; with
-//! `--check`, exits 1 when a file is missing or out of date.
+//! `--check`, exits 1 when a file is missing, out of date or unexpected. The output directory
+//! is wholly generated: normal generation removes obsolete Rust files, leaving other files
+//! untouched.
 
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -55,7 +58,36 @@ fn run(ir_dir: &Path, out_dir: &Path, check: bool) -> Result<(), String> {
     }
     let names: Vec<String> = modules.iter().map(module_name).collect();
     outputs.push((out_dir.join("lib.rs"), generate_lib(&names)));
+    let expected: BTreeSet<PathBuf> = outputs.iter().map(|(path, _)| path.clone()).collect();
+    let mut obsolete = Vec::new();
+    match std::fs::read_dir(out_dir) {
+        Ok(entries) => {
+            for entry in entries {
+                let path = entry
+                    .map_err(|error| format!("{}: {error}", out_dir.display()))?
+                    .path();
+                if path.is_file()
+                    && path.extension().is_some_and(|ext| ext == "rs")
+                    && !expected.contains(&path)
+                {
+                    obsolete.push(path);
+                }
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(format!("{}: {error}", out_dir.display())),
+    }
+    obsolete.sort();
     let mut stale = 0;
+    if check {
+        for path in &obsolete {
+            eprintln!(
+                "{} is unexpected; regenerate with uiharu-codegen",
+                path.display()
+            );
+            stale += 1;
+        }
+    }
     for (path, source) in outputs {
         let formatted = rustfmt(&source).map_err(|error| format!("{}: {error}", path.display()))?;
         if check {
@@ -75,7 +107,13 @@ fn run(ir_dir: &Path, out_dir: &Path, check: bool) -> Result<(), String> {
         eprintln!("wrote {}", path.display());
     }
     if stale > 0 {
-        return Err(format!("{stale} file(s) out of date"));
+        return Err(format!("{stale} file(s) out of date or unexpected"));
+    }
+    if !check {
+        for path in obsolete {
+            std::fs::remove_file(&path).map_err(|error| format!("{}: {error}", path.display()))?;
+            eprintln!("removed {}", path.display());
+        }
     }
     Ok(())
 }

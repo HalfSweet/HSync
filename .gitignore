@@ -12,6 +12,10 @@ src-tauri/gen/schemas/
 coverage/
 *.tsbuildinfo
 
+# Decoder IR is regenerated from TypeScript by pnpm dsl:compile.
+/uiharu/dsl/ir/
+/uiharu/crates/uiharu-interp/tests/fixtures/backend/ir/
+
 # Logs
 *.log
 npm-debug.log*

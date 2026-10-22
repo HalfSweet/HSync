@@ -1,31 +1,29 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /**
- * The compiler's command line: lowers every module of `uiharu/dsl/contracts/` and
- * `uiharu/dsl/decoders/` to the IR and writes `uiharu/dsl/ir/<name>.json`, formatted as the
- * repository formats JSON.
+ * The compiler's command line: lowers the production modules and backend acceptance
+ * fixtures to disposable, ignored IR. All sources must compile before outputs are written.
  *
- *   node uiharu/compiler/src/main.ts            write the IR files
- *   node uiharu/compiler/src/main.ts --check    exit 1 when a file is missing or out of date
+ *   pnpm dsl:compile    write the IR files, removing obsolete JSON
+ *   pnpm dsl:check      compile IR and check the tracked Rust generated from it
  */
 
-import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import * as prettier from 'prettier'
-
+import { backendFixtureIr, backendFixtures } from './backend-fixtures.ts'
+import type { Module } from './ir.ts'
 import { lowerModule } from './module.ts'
 import { formatDiagnostic, loadProject, moduleFiles } from './program.ts'
+import { writeIrModules } from './write-ir.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const dsl = path.resolve(here, '..', '..', 'dsl')
-const check = process.argv.includes('--check')
 
 const project = loadProject(path.join(dsl, 'tsconfig.json'))
 const outDir = path.join(dsl, 'ir')
 let failed = false
-let stale = 0
+const modules: Module[] = []
 for (const file of moduleFiles(project)) {
   const { module, diagnostics } = lowerModule(project, file)
   for (const diagnostic of diagnostics) console.error(formatDiagnostic(diagnostic))
@@ -33,22 +31,9 @@ for (const file of moduleFiles(project)) {
     failed = true
     continue
   }
-  const target = path.join(outDir, `${module.name}.json`)
-  const options = (await prettier.resolveConfig(target)) ?? {}
-  const text = await prettier.format(JSON.stringify(module, null, 2), {
-    ...options,
-    filepath: target,
-  })
-  if (check) {
-    const current = fs.existsSync(target) ? fs.readFileSync(target, 'utf8') : undefined
-    if (current !== text) {
-      console.error(`${path.relative(process.cwd(), target)} is out of date; run pnpm dsl:compile`)
-      stale += 1
-    }
-    continue
-  }
-  fs.mkdirSync(outDir, { recursive: true })
-  fs.writeFileSync(target, text)
-  console.error(`wrote ${path.relative(process.cwd(), target)}`)
+  modules.push(module)
 }
-if (failed || stale) process.exit(1)
+if (failed) process.exit(1)
+const fixtures = backendFixtures()
+await writeIrModules(outDir, modules)
+await writeIrModules(backendFixtureIr, fixtures)

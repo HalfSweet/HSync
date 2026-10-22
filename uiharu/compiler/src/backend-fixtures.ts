@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 /** Load the backend acceptance sources virtually, without production decoder registration.
- * Regenerate their checked-in IR with `node uiharu/compiler/src/backend-fixtures.ts`. */
+ * Regenerate their local IR together with production modules using `pnpm dsl:compile`. */
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import * as prettier from 'prettier'
-
 import type { Module } from './ir.ts'
 import { lowerModule } from './module.ts'
 import { formatDiagnostic, loadProject } from './program.ts'
+import { writeIrModules } from './write-ir.ts'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const dsl = path.resolve(here, '../../dsl')
@@ -39,14 +38,5 @@ export function backendFixtures(): Module[] {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  for (const module of backendFixtures()) {
-    const target = path.join(backendFixtureIr, `${module.name}.json`)
-    const text = await prettier.format(JSON.stringify(module, null, 2), {
-      ...((await prettier.resolveConfig(target)) ?? {}),
-      filepath: target,
-    })
-    fs.mkdirSync(backendFixtureIr, { recursive: true })
-    fs.writeFileSync(target, text)
-    console.error(`wrote ${path.relative(process.cwd(), target)}`)
-  }
+  await writeIrModules(backendFixtureIr, backendFixtures())
 }
