@@ -95,3 +95,10 @@ The events of the stream settle in order, and they are the same however the samp
 - The decoder does not follow the session's state — whether programming was enabled, which extended address or page is loaded — and checks no echo but Programming Enable's.
 - Without RESET connected, a capture that starts after the session's Programming Enable, or a gap inside it, decodes nothing until the next Programming Enable; a gap inside a word also leaves the SPI words unaligned until a gap ends between words.
 - The instruction sets of the older AT90S devices, and the TPI, PDI and UPDI programming interfaces, are out of scope.
+
+The optional TypeScript [`avr-isp-device`](avr-isp-device.md) layer combines
+observed signature addresses0–2 and labels a small manufacturer-verified device
+table. The transport DTO is declared in `dsl/contracts/avr-isp.ts`, preserving
+exact four-byte arrays and wire JSON; its source API aliases are documented
+with the overlay. Extra MISO reply-echo warnings require bytes not exposed by
+the current transport contract and remain a documented information gap.

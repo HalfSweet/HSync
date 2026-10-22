@@ -74,3 +74,19 @@ A bit's tick is the tick MDC rose; a span ends one tick after its last bit. A bi
 - Only the 32-bit frames of clauses 22 and 45 are decoded; vendor extensions of other lengths are not.
 - A capture that begins, or resumes after a gap, in traffic without preambles stays out of sync until a preamble comes.
 - The decoder judges the frame format only; it does not check that a device at `phy` exists, apart from what the turnaround shows.
+
+## Sampling edge and canonical contract
+
+`readEdge` is `rising` by default and can be `falling` to preserve an explicitly
+selected capture interpretation (including the DSView import default). Both
+options sample the chosen clock edge and keep identical frame validation,
+preamble resynchronization and bounded streaming behavior. The waveform
+synthesizer follows this choice. Independent manually assembled frame vectors
+check both edges and fragmented scheduling in `tests/mdio.rs`.
+
+The frame types now come from `dsl/contracts/mdio.ts`, retaining exactly numeric
+Clause 22/45 JSON validation and the public `Clause::C22`/`C45` variants. Import
+`ClauseExt` for `clause.number()` or `Clause::from_number(n)` (the latter replaces
+`Clause::try_from(n)`); generated `clause.value()` is also available. Import
+`OpExt` for `op.device_drives()`. This ownership change enables the TypeScript
+`cfp` consumer without a parallel lower bus or a JSON adapter.
