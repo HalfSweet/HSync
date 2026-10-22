@@ -84,8 +84,8 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      # Decoder tests read locally generated IR at runtime.
-      - run: pnpm dsl:compile
+      # Generate decoder Rust before formatting/compilation, and IR for runtime tests.
+      - run: pnpm dsl:generate
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked

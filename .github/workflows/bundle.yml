@@ -67,7 +67,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust-targets }}
+          components: rustfmt
       - uses: Swatinem/rust-cache@v2
+      # tauri-action invokes the CLI directly, bypassing the local pnpm tauri wrapper.
+      - run: pnpm dsl:generate
       - name: Check the updater key is set
         if: inputs.release-id != ''
         shell: bash
