@@ -18,21 +18,82 @@ const i2c = typeOf('i2c')
 const eeprom = typeOf('eeprom24xx')
 
 describe('the built-in catalog', () => {
-  it('lists every node type with its ports', () => {
-    expect(DEFAULT_CATALOG).toHaveLength(37)
+  it('lists unique node types with their ports', () => {
+    expect(new Set(DEFAULT_CATALOG.map((type) => type.name)).size).toBe(DEFAULT_CATALOG.length)
     expect(uart?.inputs[0]?.schema).toBe('logic.samples')
     expect(uart?.outputs[0]).toEqual({ port: 'events', schema: 'uart.events' })
     expect(baseTypes(DEFAULT_CATALOG).map((type) => type.name)).toContain('uart')
     expect(baseTypes(DEFAULT_CATALOG).map((type) => type.name)).not.toContain('eeprom24xx')
   })
 
+  it('offers the new transports and the Arm JTAG debug layer', () => {
+    const bases = baseTypes(DEFAULT_CATALOG).map((type) => type.name)
+    expect(bases).toEqual(expect.arrayContaining(['qspi', 'sdcard-sd', 'swim']))
+    expect(bases).not.toContain('jtag-dp')
+    const jtag = typeOf('jtag')!
+    const debug = typeOf('jtag-dp')!
+    expect(stackableOn(jtag, DEFAULT_CATALOG).map((type) => type.name)).toContain('jtag-dp')
+    const entry = buildEntry(jtag, {}, [{ type: debug, config: {} }])
+    expect(entry.connections?.[1]).toEqual({ from: 'jtag.events', to: 'jtag-dp.bus' })
+    expect(entry.expose?.['jtag-dp']).toBe('jtag-dp.events')
+  })
+
   it('knows which types stack on which', () => {
-    expect(stackableOn(i2c!, DEFAULT_CATALOG).map((type) => type.name)).toEqual(['eeprom24xx'])
+    expect(stackableOn(i2c!, DEFAULT_CATALOG).map((type) => type.name)).toContain('eeprom24xx')
     expect(stackableOn(typeOf('spi')!, DEFAULT_CATALOG).map((type) => type.name)).toContain(
       'spi-nor',
     )
     expect(stackableOn(uart!, DEFAULT_CATALOG).map((type) => type.name)).toContain('modbus-rtu')
     expect(stackableOn(eeprom!, DEFAULT_CATALOG)).toEqual([])
+  })
+
+  it('offers device profiles with localized options and a three-layer Modbus path', () => {
+    expect(stackableOn(i2c!, DEFAULT_CATALOG).map((type) => type.name)).toEqual(
+      expect.arrayContaining(['ds1307', 'lm75', 'mcp230xx', 'edid', 'ltc26x7', 'atsha204a']),
+    )
+    const sensor = typeOf('lm75')!
+    expect(sensor.locales?.['en-US']?.fields.resolution).toBeTruthy()
+    expect(sensor.locales?.['zh-CN']?.fields.resolution).toBeTruthy()
+    const rtu = typeOf('modbus-rtu')!
+    const pdu = typeOf('modbus-pdu')!
+    expect(stackableOn(rtu, DEFAULT_CATALOG).map((type) => type.name)).toContain('modbus-pdu')
+    const entry = buildEntry(uart!, {}, [
+      { type: rtu, config: {} },
+      { type: pdu, config: { direction: 'response' } },
+    ])
+    expect(entry.connections).toEqual([
+      { from: 'source', to: 'uart.logic' },
+      { from: 'uart.events', to: 'modbus-rtu.uart' },
+      { from: 'modbus-rtu.events', to: 'modbus-pdu.bus' },
+    ])
+    expect(entry.nodes['modbus-pdu']?.config).toEqual({ direction: 'response' })
+  })
+
+  it.each([
+    ['cjtag', 'jtag-chain', 'jtag-dp', 'arm-memap'],
+    ['swd', 'swd-dp'],
+    ['spi', 'avr-isp', 'avr-isp-device'],
+    ['onewire-link', 'onewire', 'ds2408'],
+    ['onewire-link', 'onewire', 'ds243x'],
+    ['onewire-link', 'onewire', 'ds28ea00'],
+    ['mdio', 'cfp'],
+    ['am230x', 'am230x-values'],
+    ['uart', 'midi', 'midi-semantics'],
+    ['uart', 'dmx512-analysis'],
+    ['uart', 'lin-profile'],
+  ])('offers the completed %s chain with compatible ports', (...names) => {
+    const types = names.map((name) => typeOf(name)!)
+    for (const type of types) expect(type, names.join(' → ')).toBeDefined()
+    const entry = buildEntry(
+      types[0]!,
+      {},
+      types.slice(1).map((type) => ({ type, config: {} })),
+    )
+    expect(entryKinds(entry)).toEqual(names)
+    expect(entry.connections).toHaveLength(names.length)
+    const leaf = types.at(-1)!
+    expect(leaf.locales?.['en-US']?.name).toBeTruthy()
+    expect(leaf.locales?.['zh-CN']?.name).toBeTruthy()
   })
 })
 

@@ -278,3 +278,142 @@ fn renamed_channels_are_saved_with_their_names() {
     assert_eq!(reopened.channels[0].name, "0");
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn imported_decoder_metadata_survives_edits_and_hsync_save_reopen() {
+    let raw = json!([
+        {"id":"future-bus","label":"Original unsupported bus", "options":{"opaque":[1,2]},
+            "stacked decoders":[{"id":"future-layer","options":{"keep":true}}]},
+        {"id":"1:i2c","channel":[{"scl":1},{"sda":0}],
+            "options":{"address_format":"shifted","future_option":123},
+            "stacked decoders":[{"id":"future-chip","options":{"other":"raw"}}]}
+    ]);
+    let (mut workspace, _) = fresh();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    // This is the same backend entry point used when applying a .dsc session.
+    let imported = workspace
+        .set_decoders(opened.id, raw.clone())
+        .expect("imports session entries");
+    let entries = imported.decoders.expect("preserved entries");
+    assert_eq!(entries[0]["import"]["raw"], raw[0]);
+    assert_eq!(entries[1]["import"]["raw"], raw[1]);
+    let statuses = workspace.decoding(opened.id).expect("decoding").statuses();
+    assert!(
+        statuses[0].streams.is_empty(),
+        "unsupported imports create no decoder worker"
+    );
+    assert_eq!(
+        statuses[0].error.as_ref().expect("diagnostic").code,
+        "decode.import.unsupportedDecoder"
+    );
+    // Editing the runnable entry's label/display must not erase the inert import beside it.
+    let mut edited = entries;
+    edited[1]["label"] = json!("Edited label");
+    edited[1]["show"] = json!({"numbers":"dec"});
+    let changed = workspace
+        .set_decoders(opened.id, edited.clone())
+        .expect("unrelated edit");
+    assert_eq!(changed.decoders, Some(edited.clone()));
+    let path = temp("preserved-imports.hsync");
+    workspace.save(opened.id, &path, json!({})).expect("saves");
+    let (mut other, _) = fresh();
+    let reopened = other.open_file(&path).expect("reopens");
+    assert_eq!(reopened.decoders, Some(edited));
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn original_dsl_decoder_entries_survive_conversion_and_hsync_round_trip() {
+    let source = hsync_fileio::read_dsl_file(&demo_path()).expect("demo document");
+    let originals = json!([
+        {"id":"future-bus","options":{"unknown":true}},
+        {"id":"uart","channel":[{"rxtx":5}],"options":{"baudrate":115200,"future_option":99}}
+    ]);
+    let names = BTreeMap::new();
+    let session = json!({});
+    let request = hsync_fileio::DslWriteRequest {
+        driver: "DSLogic",
+        channel_names: &names,
+        session: &session,
+        decoders: &originals,
+        hsync_decoders: None,
+    };
+    let dsl = temp("original-imports.dsl");
+    hsync_fileio::write_dsl_file(&dsl, &source.capture, &request, &mut |_| true)
+        .expect("fixture DSL");
+    let (mut workspace, _) = fresh();
+    let opened = workspace
+        .open_file(&dsl)
+        .expect("opens original DSL entries");
+    let entries = opened.decoders.clone().expect("entries");
+    assert_eq!(entries[0]["import"]["raw"], originals[0]);
+    assert_eq!(entries[1]["import"]["raw"], originals[1]);
+    let hsync = temp("original-imports.hsync");
+    workspace.save(opened.id, &hsync, json!({})).expect("saves");
+    let (mut other, _) = fresh();
+    assert_eq!(
+        other.open_file(&hsync).expect("reopens").decoders,
+        Some(entries)
+    );
+    let _ = std::fs::remove_file(dsl);
+    let _ = std::fs::remove_file(hsync);
+}
+
+#[test]
+fn dsview_first_capture_preset_retains_originals_through_save_and_reopen() {
+    let raw = json!([{"id":"future-bus", "options":{"keep":{"nested":[1,2]}},
+        "stacked decoders":[{"id":"future-layer"}]}]);
+    let source = hsync_fileio::read_dsl_file(&demo_path()).expect("samples");
+    let (mut workspace, _) = fresh();
+    let live = workspace.begin_live(
+        hsync_session::CaptureSource::Device {
+            driver: "virtual-demo".into(),
+            model: "Demo".into(),
+        },
+        source.capture,
+        false,
+        Some(hsync_driver::CapturePreset {
+            channel_names: BTreeMap::new(),
+            decoders: Some(raw.clone()),
+        }),
+    );
+    assert_eq!(
+        live.summary.decoders.as_ref().expect("preserved")[0]["import"]["raw"],
+        raw[0]
+    );
+    let path = temp("preset-imports.hsync");
+    workspace
+        .rename_channel(live.summary.id, 0, "Unrelated edit")
+        .expect("renames");
+    workspace
+        .save(live.summary.id, &path, json!({}))
+        .expect("saves");
+    let (mut other, _) = fresh();
+    let reopened = other.open_file(&path).expect("reopens");
+    assert_eq!(
+        reopened.decoders.as_ref().expect("retained")[0]["import"]["raw"],
+        raw[0]
+    );
+    assert_eq!(reopened.channels[0].name, "Unrelated edit");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn changing_import_execution_state_rebuilds_even_when_the_graph_is_unchanged() {
+    let (mut workspace, _) = fresh();
+    let opened = workspace.open_demo(&demo_path()).expect("demo");
+    let disabled = json!([{"nodes":{"i2c":{"type":"i2c"}},
+        "connections":[{"from":"source","to":"i2c.logic"}],"expose":{"i2c":"i2c.events"},
+        "import":{"format":"dsview","raw":{"id":"i2c"},"runnable":false,"diagnostics":[]}}]);
+    workspace
+        .set_decoders(opened.id, disabled.clone())
+        .expect("disabled metadata");
+    let before = workspace.decoding(opened.id).expect("set");
+    let mut enabled = disabled;
+    enabled[0]["import"]["runnable"] = json!(true);
+    workspace
+        .set_decoders(opened.id, enabled)
+        .expect("enable translated graph");
+    let after = workspace.decoding(opened.id).expect("new set");
+    assert!(!Arc::ptr_eq(&before, &after));
+}

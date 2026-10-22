@@ -385,14 +385,18 @@ fn entries_that_cannot_run_are_reported() {
             json!([missing, unknown, malformed, { "id": "counter", "channel": [{ "data": 1 }] }]),
         )
         .expect("set");
-    // DSView's counter has no uiharu decoder and is left out.
+    // DSView's unsupported counter is retained as inert metadata, with a localized diagnostic.
     assert_eq!(
         summary
             .decoders
             .as_ref()
             .and_then(Value::as_array)
             .map(Vec::len),
-        Some(3)
+        Some(4)
+    );
+    assert_eq!(
+        summary.decoders.as_ref().expect("entries")[3]["import"]["raw"],
+        json!({"id":"counter","channel":[{"data":1}]})
     );
     let statuses = workspace.decoding(opened.id).expect("decoders").statuses();
     let states: Vec<DecodeState> = statuses.iter().map(|s| s.state).collect();
@@ -400,6 +404,7 @@ fn entries_that_cannot_run_are_reported() {
         states,
         [
             DecodeState::MissingChannels,
+            DecodeState::Invalid,
             DecodeState::Invalid,
             DecodeState::Invalid
         ]
@@ -413,7 +418,8 @@ fn entries_that_cannot_run_are_reported() {
         [
             "error.decode.missingChannels",
             "error.decode.invalid",
-            "error.decode.invalid"
+            "error.decode.invalid",
+            "decode.import.unsupportedDecoder"
         ]
     );
     assert_eq!(
@@ -465,6 +471,7 @@ fn a_loaded_decoder_module_stands_in_for_the_decoder_of_its_name() {
     let opened = workspace.open_demo(&demo_path()).expect("demo");
     decoded(&events, opened.id, 4);
     assert!(workspace.modules().is_empty());
+    let builtins = workspace.catalog();
     assert!(
         workspace
             .catalog()
@@ -501,12 +508,18 @@ fn a_loaded_decoder_module_stands_in_for_the_decoder_of_its_name() {
     );
     assert_eq!(locales["en-US"].events["break"], "Break");
     assert_eq!(locales["en-US"].event_fields["framingOk"], "Framing OK");
-    assert!(
-        catalog
+    for entry in catalog.iter().filter(|entry| entry.name != "uart") {
+        let builtin = builtins
             .iter()
-            .filter(|entry| entry.name != "uart")
-            .all(|entry| entry.locales.is_none())
-    );
+            .find(|original| original.name == entry.name)
+            .expect("the other built-in remains present");
+        assert_eq!(
+            entry.locales, builtin.locales,
+            "{} keeps its localized copy",
+            entry.name
+        );
+        assert!(entry.module.is_none());
+    }
     assert_eq!(
         catalog.iter().filter(|entry| entry.name == "uart").count(),
         1

@@ -203,7 +203,7 @@ describe('layoutRows', () => {
       () => false,
       () => 3,
       undefined,
-      (_group, stream) => ['jtag', 'spi', 'jtag'][stream] ?? null,
+      (_group, stream) => ['jtag.events', 'spi.events', 'jtag.events'][stream] ?? null,
     )
     expect(
       opened.rows
@@ -222,6 +222,14 @@ describe('layoutRows', () => {
   it('hides JTAG state lanes and channel rows when the group is collapsed', () => {
     const closed = layoutRows(jtag, COMFORTABLE_METRICS, () => true)
     expect(closed.rows.map((row) => row.kind)).toEqual(['gap', 'header', 'gap'])
+  })
+
+  it('reserves TAP state lanes for cJTAG and chain outputs sharing the JTAG schema', () => {
+    for (const type of ['cjtag', 'jtag-chain']) {
+      const groups = [{ ...jtag[0]!, type }]
+      const opened = layoutRows(groups, COMFORTABLE_METRICS, () => false)
+      expect(opened.rows.filter((row) => row.annotation === 'states')).toHaveLength(1)
+    }
   })
 
   it('keeps the state lane height fixed when fitting JTAG channels to the window', () => {
