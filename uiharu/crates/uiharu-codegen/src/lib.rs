@@ -7,7 +7,7 @@
 //! contracts, its configuration, its free functions, the node that the graph runs and the
 //! state struct with the decoder's methods, hooked into the runtime's main loop through the
 //! decoder trait of its kind. [`generate_lib`] writes the crate root listing the modules. The
-//! output is meant to be formatted with `rustfmt` and checked in.
+//! output is a disposable build artifact formatted with `rustfmt`; TypeScript stays authoritative.
 
 #![forbid(unsafe_code)]
 

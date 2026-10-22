@@ -184,4 +184,4 @@ You need:
 - [Rust](https://rustup.rs/) (stable)
 - [Tauri's system dependencies](https://tauri.app/start/prerequisites/) for your platform
 
-Decoder TypeScript sources and generated Rust are tracked; generated IR is disposable local output. Run `pnpm dsl:compile` before direct Cargo tests; `pnpm test` prepares IR automatically. See the [DSL workflow](uiharu/docs/dsl.md) for generation and freshness checks.
+Decoder TypeScript sources are tracked; generated IR and Rust are disposable local output. Run `pnpm dsl:generate` before direct workspace Cargo commands. `pnpm tauri dev`, `pnpm tauri build` and `pnpm bundle` generate automatically; `pnpm test` prepares only IR. See the [DSL workflow](uiharu/docs/dsl.md) for setup and checks.

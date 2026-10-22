@@ -28,17 +28,17 @@ For a built-in DSL decoder, re-export its generated module from `uiharu-protocol
 and register the generated node, configuration and event type in `uiharu-registry`.
 Declare both application locales in the TS module. Export its catalog metadata
 with `cargo run -p uiharu-registry --example export_decoder_manifests -- <name>`
-after compiling the DSL and generating Rust; format and include the resulting
+after running `pnpm dsl:generate`; format and include the resulting
 `manifests/<name>.json`. Registry tests compare every registered DSL decoder with
 its loaded IR, including ports, events, configuration, defaults and localized copy.
 The generated and interpreted paths must also pass the same independent protocol
 vectors and streaming-invariance tests.
 
-Generated IR is ignored, disposable local output. Run `pnpm dsl:compile` before direct Cargo tests, interpreted CLI decoding or metadata export; `pnpm test`, `pnpm test:watch` and `pnpm bindings` prepare it automatically. Regenerate and commit Rust with the TypeScript sources using [the DSL workflow](dsl.md). Keep the independent, hand-authored `uiharu-ir/tests/fixtures/pwm.json` tracked.
+Generated IR and Rust are ignored, disposable local output. Run `pnpm dsl:generate` before direct workspace Cargo commands, CLI tools, interpreted decoding or metadata export. `pnpm test` and `pnpm test:watch` prepare only IR; `pnpm bindings` generates Rust too. Commit the TypeScript sources and keep the handwritten production `src/lib.rs` wrapper and independent `uiharu-ir/tests/fixtures/pwm.json` tracked. See [the DSL workflow](dsl.md) for setup, output paths and checks.
 
 ## The contract
 
-The contract is the event stream between layers — what a decoder emits and what decoders built on it read. Design it for the bus, not for the protocols above it. It is written in Rust (`src/<name>/events.rs`, as `src/microwire/` does) or declared in the DSL — a module under `uiharu/dsl/contracts/` with the event type, its enums and the `eventSchema` call (`contracts/i2c.ts` is the model, [dsl.md](dsl.md) §2.3 describes the declaration), compiled with `pnpm dsl:compile` and generated with `uiharu-codegen`, its types re-exported from the decoder's module as `src/i2c/mod.rs` does — which is what a decoder written in the DSL needs in order to read it. The rules below describe what the contract says, whichever way it is written.
+The contract is the event stream between layers — what a decoder emits and what decoders built on it read. Design it for the bus, not for the protocols above it. It is written in Rust (`src/<name>/events.rs`, as `src/microwire/` does) or declared in the DSL — a module under `uiharu/dsl/contracts/` with the event type, its enums and the `eventSchema` call (`contracts/i2c.ts` is the model, [dsl.md](dsl.md) §2.3 describes the declaration), compiled and generated with `pnpm dsl:generate`, its types re-exported from the decoder's module as `src/i2c/mod.rs` does — which is what a decoder written in the DSL needs in order to read it. The rules below describe what the contract says, whichever way it is written.
 
 - Every kind of event has a role, declared with the contract (`.roles({…})` in the DSL) or, for a contract written in Rust, in the node type's manifest (`crates/uiharu-registry/manifests/<type>.json`: `"role"` beside the kind's `"fields"`, with `"errorWhen"` for the field values that make an event an error). [dsl.md](dsl.md) §2.3 lists the roles. Pick the one a reader of the bus would give the event, whatever its name: SPI NOR's `begin` carries the opcode and is a `command`, a USB transaction's `begin` carries the token and is an `address`. Mark as errors only the values the specification defines as wrong — a parity bit, a CRC, an address nobody acknowledged — and never a value a normal exchange can have.
 
