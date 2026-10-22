@@ -1,0 +1,4012 @@
+{
+  "ir": 1,
+  "name": "ds2408",
+  "types": [
+    {
+      "name": "Config",
+      "type": "record",
+      "fields": []
+    },
+    {
+      "name": "Command",
+      "type": "enum",
+      "variants": [
+        "read-registers",
+        "channel-read",
+        "channel-write",
+        "conditional-search",
+        "reset-latches",
+        "disable-test",
+        "unknown"
+      ]
+    },
+    {
+      "name": "Field",
+      "type": "enum",
+      "variants": ["register", "pio-sample", "pio-output", "confirmation", "raw"]
+    },
+    {
+      "name": "Check",
+      "type": "enum",
+      "variants": ["inverse", "crc16", "confirmation"]
+    },
+    {
+      "name": "Reason",
+      "type": "enum",
+      "variants": ["truncated", "input-error", "address", "family"]
+    },
+    {
+      "name": "Event",
+      "type": "union",
+      "variants": [
+        {
+          "name": "rom",
+          "fields": [
+            {
+              "name": "id",
+              "type": "u64",
+              "json": "hex-u64"
+            },
+            {
+              "name": "crcOk",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "command",
+          "fields": [
+            {
+              "name": "code",
+              "type": "u8"
+            },
+            {
+              "name": "command",
+              "type": "Command"
+            }
+          ]
+        },
+        {
+          "name": "address",
+          "fields": [
+            {
+              "name": "address",
+              "type": "u16"
+            }
+          ]
+        },
+        {
+          "name": "data",
+          "fields": [
+            {
+              "name": "field",
+              "type": "Field"
+            },
+            {
+              "name": "address",
+              "type": {
+                "option": "u16"
+              }
+            },
+            {
+              "name": "value",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "check",
+          "fields": [
+            {
+              "name": "check",
+              "type": "Check"
+            },
+            {
+              "name": "ok",
+              "type": "bool"
+            },
+            {
+              "name": "value",
+              "type": "u16"
+            }
+          ]
+        },
+        {
+          "name": "error",
+          "fields": [
+            {
+              "name": "reason",
+              "type": "Reason"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "ds2408.events",
+        "version": 1
+      },
+      "event": "Event",
+      "roles": {
+        "rom": {
+          "role": "address",
+          "errorWhen": [
+            {
+              "crcOk": false
+            }
+          ]
+        },
+        "command": {
+          "role": "command"
+        },
+        "address": {
+          "role": "address"
+        },
+        "data": {
+          "role": "data"
+        },
+        "check": {
+          "role": "check",
+          "errorWhen": [
+            {
+              "ok": false
+            }
+          ]
+        },
+        "error": {
+          "role": "error"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "onewire",
+      "contract": {
+        "schema": {
+          "name": "onewire.events",
+          "version": 1
+        },
+        "event": "OneWireEvent",
+        "roles": {
+          "begin": {
+            "role": "framing"
+          },
+          "rom-command": {
+            "role": "command"
+          },
+          "rom": {
+            "role": "address",
+            "errorWhen": [
+              {
+                "crcOk": false
+              }
+            ]
+          },
+          "search": {
+            "role": "address",
+            "errorWhen": [
+              {
+                "crcOk": false
+              }
+            ]
+          },
+          "byte": {
+            "role": "data"
+          },
+          "bits": {
+            "role": "data"
+          },
+          "end": {
+            "role": "framing"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "EndReason",
+          "type": "enum",
+          "variants": ["reset", "bad-slot", "aborted"]
+        },
+        {
+          "name": "OneWireEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "begin",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "presence",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "rom-command",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "code",
+                  "type": "u8"
+                }
+              ]
+            },
+            {
+              "name": "rom",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "id",
+                  "type": "u64",
+                  "json": "hex-u64"
+                },
+                {
+                  "name": "family",
+                  "type": "u8"
+                },
+                {
+                  "name": "crcOk",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "search",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "id",
+                  "type": "u64",
+                  "json": "hex-u64"
+                },
+                {
+                  "name": "crcOk",
+                  "type": "bool"
+                },
+                {
+                  "name": "conflicts",
+                  "type": "u8"
+                },
+                {
+                  "name": "unanswered",
+                  "type": "u8"
+                }
+              ]
+            },
+            {
+              "name": "byte",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "value",
+                  "type": "u8"
+                }
+              ]
+            },
+            {
+              "name": "bits",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "value",
+                  "type": "u8"
+                },
+                {
+                  "name": "count",
+                  "type": "u8"
+                }
+              ]
+            },
+            {
+              "name": "end",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "reason",
+                  "type": "EndReason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "crc16",
+      "body": [
+        {
+          "stmt": "let",
+          "name": "value",
+          "value": {
+            "expr": "binary",
+            "op": "bit-xor",
+            "left": {
+              "expr": "local",
+              "name": "crc"
+            },
+            "right": {
+              "expr": "local",
+              "name": "byte"
+            }
+          },
+          "mutable": true,
+          "type": "u16"
+        },
+        {
+          "stmt": "for",
+          "var": "bit",
+          "from": {
+            "expr": "cast",
+            "value": {
+              "expr": "lit",
+              "value": 0
+            },
+            "to": "u8"
+          },
+          "to": {
+            "expr": "lit",
+            "value": 8
+          },
+          "body": [
+            {
+              "stmt": "assign",
+              "target": {
+                "expr": "local",
+                "name": "value"
+              },
+              "value": {
+                "expr": "ternary",
+                "cond": {
+                  "expr": "binary",
+                  "op": "ne",
+                  "left": {
+                    "expr": "binary",
+                    "op": "bit-and",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                },
+                "then": {
+                  "expr": "binary",
+                  "op": "bit-xor",
+                  "left": {
+                    "expr": "binary",
+                    "op": "shr",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 40961
+                  }
+                },
+                "else": {
+                  "expr": "binary",
+                  "op": "shr",
+                  "left": {
+                    "expr": "local",
+                    "name": "value"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "local",
+            "name": "value"
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "crc",
+          "type": "u16"
+        },
+        {
+          "name": "byte",
+          "type": "u8"
+        }
+      ],
+      "ret": "u16"
+    },
+    {
+      "name": "command",
+      "body": [
+        {
+          "stmt": "match",
+          "value": {
+            "expr": "local",
+            "name": "code"
+          },
+          "arms": [
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [240]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-registers"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [245]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "channel-read"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [90]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "channel-write"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [204]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "conditional-search"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [195]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "reset-latches"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [60]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "disable-test"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "default"
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "unknown"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "params": [
+        {
+          "name": "code",
+          "type": "u8"
+        }
+      ],
+      "ret": "Command"
+    },
+    {
+      "name": "crc8",
+      "body": [
+        {
+          "stmt": "let",
+          "name": "value",
+          "value": {
+            "expr": "binary",
+            "op": "bit-xor",
+            "left": {
+              "expr": "local",
+              "name": "crc"
+            },
+            "right": {
+              "expr": "local",
+              "name": "byte"
+            }
+          },
+          "mutable": true,
+          "type": "u8"
+        },
+        {
+          "stmt": "for",
+          "var": "bit",
+          "from": {
+            "expr": "cast",
+            "value": {
+              "expr": "lit",
+              "value": 0
+            },
+            "to": "u8"
+          },
+          "to": {
+            "expr": "lit",
+            "value": 8
+          },
+          "body": [
+            {
+              "stmt": "assign",
+              "target": {
+                "expr": "local",
+                "name": "value"
+              },
+              "value": {
+                "expr": "ternary",
+                "cond": {
+                  "expr": "binary",
+                  "op": "ne",
+                  "left": {
+                    "expr": "binary",
+                    "op": "bit-and",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                },
+                "then": {
+                  "expr": "binary",
+                  "op": "bit-xor",
+                  "left": {
+                    "expr": "binary",
+                    "op": "shr",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 140
+                  }
+                },
+                "else": {
+                  "expr": "binary",
+                  "op": "shr",
+                  "left": {
+                    "expr": "local",
+                    "name": "value"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 1
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "local",
+            "name": "value"
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "crc",
+          "type": "u8"
+        },
+        {
+          "name": "byte",
+          "type": "u8"
+        }
+      ],
+      "ret": "u8"
+    }
+  ],
+  "decoder": {
+    "name": "ds2408",
+    "category": "device",
+    "config": {
+      "type": "Config",
+      "defaults": {}
+    },
+    "input": {
+      "kind": "stream",
+      "schema": {
+        "name": "onewire.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "ds2408.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "hold",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "p",
+            "value": {
+              "expr": "self",
+              "field": "pending"
+            },
+            "type": {
+              "option": "provenance"
+            }
+          },
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "local",
+              "name": "p"
+            },
+            "bind": "p_2",
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "p_2"
+                    },
+                    "name": "span"
+                  },
+                  "name": "start"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "none"
+            }
+          }
+        ],
+        "ret": {
+          "option": "u64"
+        }
+      },
+      {
+        "name": "clear",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "active"
+            },
+            "value": {
+              "expr": "lit",
+              "value": false
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "enabled"
+            },
+            "value": {
+              "expr": "lit",
+              "value": false
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "code"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "phase"
+            },
+            "value": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "pending"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "special"
+            },
+            "value": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "rom"
+            },
+            "value": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "romCrc"
+            },
+            "value": {
+              "expr": "lit",
+              "value": 0
+            }
+          }
+        ]
+      },
+      {
+        "name": "incomplete",
+        "body": [
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "binary",
+              "op": "or",
+              "left": {
+                "expr": "if-some",
+                "value": {
+                  "expr": "self",
+                  "field": "pending"
+                },
+                "bind": "_present",
+                "some": {
+                  "expr": "lit",
+                  "value": true
+                },
+                "none": {
+                  "expr": "lit",
+                  "value": false
+                }
+              },
+              "right": {
+                "expr": "binary",
+                "op": "or",
+                "left": {
+                  "expr": "binary",
+                  "op": "and",
+                  "left": {
+                    "expr": "if-some",
+                    "value": {
+                      "expr": "self",
+                      "field": "code"
+                    },
+                    "bind": "code",
+                    "some": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "code"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 90
+                      }
+                    },
+                    "none": {
+                      "expr": "lit",
+                      "value": false
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "ne",
+                    "left": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 0
+                    }
+                  }
+                },
+                "right": {
+                  "expr": "binary",
+                  "op": "or",
+                  "left": {
+                    "expr": "binary",
+                    "op": "and",
+                    "left": {
+                      "expr": "if-some",
+                      "value": {
+                        "expr": "self",
+                        "field": "code"
+                      },
+                      "bind": "code",
+                      "some": {
+                        "expr": "binary",
+                        "op": "eq",
+                        "left": {
+                          "expr": "local",
+                          "name": "code"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 240
+                        }
+                      },
+                      "none": {
+                        "expr": "lit",
+                        "value": false
+                      }
+                    },
+                    "right": {
+                      "expr": "binary",
+                      "op": "lt",
+                      "left": {
+                        "expr": "self",
+                        "field": "phase"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 2
+                      }
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "or",
+                    "left": {
+                      "expr": "binary",
+                      "op": "and",
+                      "left": {
+                        "expr": "if-some",
+                        "value": {
+                          "expr": "self",
+                          "field": "code"
+                        },
+                        "bind": "code",
+                        "some": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "code"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 204
+                          }
+                        },
+                        "none": {
+                          "expr": "lit",
+                          "value": false
+                        }
+                      },
+                      "right": {
+                        "expr": "binary",
+                        "op": "lt",
+                        "left": {
+                          "expr": "self",
+                          "field": "phase"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 2
+                        }
+                      }
+                    },
+                    "right": {
+                      "expr": "binary",
+                      "op": "ne",
+                      "left": {
+                        "expr": "self",
+                        "field": "special"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 0
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "ret": "bool"
+      },
+      {
+        "name": "close",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "method",
+              "name": "incomplete",
+              "args": []
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "error",
+                      "fields": {
+                        "reason": {
+                          "expr": "enum",
+                          "type": "Reason",
+                          "value": "truncated"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "method",
+              "name": "clear",
+              "args": []
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "at",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "onGap",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "close",
+                "args": [
+                  {
+                    "expr": "intrinsic",
+                    "name": "over",
+                    "args": [
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "range"
+                        },
+                        "name": "start"
+                      },
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "range"
+                        },
+                        "name": "start"
+                      },
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "range"
+                        },
+                        "name": "start"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "range",
+            "type": "range"
+          }
+        ]
+      },
+      {
+        "name": "onEnd",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "close",
+                "args": [
+                  {
+                    "expr": "intrinsic",
+                    "name": "over",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "tick"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "tick"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "tick"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tick",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "byte",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "ne",
+              "left": {
+                "expr": "self",
+                "field": "special"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 0
+              }
+            },
+            "then": [
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "le",
+                  "left": {
+                    "expr": "self",
+                    "field": "special"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 8
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "if-some",
+                    "value": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "bind": "pending",
+                    "then": [],
+                    "else": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "pending"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "at"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "rom"
+                    },
+                    "op": "bit-or",
+                    "value": {
+                      "expr": "binary",
+                      "op": "shl",
+                      "left": {
+                        "expr": "cast",
+                        "value": {
+                          "expr": "local",
+                          "name": "b"
+                        },
+                        "to": "u64"
+                      },
+                      "right": {
+                        "expr": "cast",
+                        "value": {
+                          "expr": "binary",
+                          "op": "mul",
+                          "left": {
+                            "expr": "binary",
+                            "op": "sub",
+                            "left": {
+                              "expr": "self",
+                              "field": "special"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 1
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 8
+                          }
+                        },
+                        "to": "u64"
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "romCrc"
+                    },
+                    "value": {
+                      "expr": "call",
+                      "name": "crc8",
+                      "args": [
+                        {
+                          "expr": "self",
+                          "field": "romCrc"
+                        },
+                        {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "special"
+                    },
+                    "op": "add",
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "self",
+                        "field": "special"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 9
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "let",
+                        "name": "p",
+                        "value": {
+                          "expr": "self",
+                          "field": "pending"
+                        },
+                        "type": {
+                          "option": "provenance"
+                        }
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "rom",
+                              "fields": {
+                                "id": {
+                                  "expr": "self",
+                                  "field": "rom"
+                                },
+                                "crcOk": {
+                                  "expr": "binary",
+                                  "op": "eq",
+                                  "left": {
+                                    "expr": "self",
+                                    "field": "romCrc"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 0
+                                  }
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "if-some",
+                              "value": {
+                                "expr": "local",
+                                "name": "p"
+                              },
+                              "bind": "p_2",
+                              "some": {
+                                "expr": "intrinsic",
+                                "name": "over",
+                                "args": [
+                                  {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "field",
+                                      "of": {
+                                        "expr": "local",
+                                        "name": "p_2"
+                                      },
+                                      "name": "span"
+                                    },
+                                    "name": "start"
+                                  },
+                                  {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "field",
+                                      "of": {
+                                        "expr": "local",
+                                        "name": "at"
+                                      },
+                                      "name": "span"
+                                    },
+                                    "name": "end"
+                                  },
+                                  {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "local",
+                                      "name": "at"
+                                    },
+                                    "name": "settled"
+                                  }
+                                ]
+                              },
+                              "none": {
+                                "expr": "local",
+                                "name": "at"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "pending"
+                        },
+                        "value": {
+                          "expr": "none"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "command",
+                      "fields": {
+                        "code": {
+                          "expr": "local",
+                          "name": "b"
+                        },
+                        "command": {
+                          "expr": "ternary",
+                          "cond": {
+                            "expr": "binary",
+                            "op": "eq",
+                            "left": {
+                              "expr": "local",
+                              "name": "b"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 60
+                            }
+                          },
+                          "then": {
+                            "expr": "enum",
+                            "type": "Command",
+                            "value": "disable-test"
+                          },
+                          "else": {
+                            "expr": "enum",
+                            "type": "Command",
+                            "value": "unknown"
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "special"
+                },
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "enabled"
+                },
+                "value": {
+                  "expr": "lit",
+                  "value": false
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "code",
+            "value": {
+              "expr": "self",
+              "field": "code"
+            },
+            "type": {
+              "option": "u8"
+            }
+          },
+          {
+            "stmt": "let-some",
+            "bind": "code_2",
+            "value": {
+              "expr": "local",
+              "name": "code"
+            },
+            "else": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "code"
+                },
+                "value": {
+                  "expr": "local",
+                  "name": "b"
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "crc"
+                },
+                "value": {
+                  "expr": "call",
+                  "name": "crc16",
+                  "args": [
+                    {
+                      "expr": "lit",
+                      "value": 0
+                    },
+                    {
+                      "expr": "local",
+                      "name": "b"
+                    }
+                  ]
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "phase"
+                },
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "count"
+                },
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "command",
+                      "fields": {
+                        "code": {
+                          "expr": "local",
+                          "name": "b"
+                        },
+                        "command": {
+                          "expr": "call",
+                          "name": "command",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "b"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "or",
+              "left": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "code_2"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 240
+                }
+              },
+              "right": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "code_2"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 204
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "self",
+                    "field": "phase"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "address"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "b"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "crc"
+                    },
+                    "value": {
+                      "expr": "call",
+                      "name": "crc16",
+                      "args": [
+                        {
+                          "expr": "self",
+                          "field": "crc"
+                        },
+                        {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "self",
+                    "field": "phase"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 1
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "address"
+                    },
+                    "op": "bit-or",
+                    "value": {
+                      "expr": "binary",
+                      "op": "shl",
+                      "left": {
+                        "expr": "cast",
+                        "value": {
+                          "expr": "local",
+                          "name": "b"
+                        },
+                        "to": "u16"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 8
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "crc"
+                    },
+                    "value": {
+                      "expr": "call",
+                      "name": "crc16",
+                      "args": [
+                        {
+                          "expr": "self",
+                          "field": "crc"
+                        },
+                        {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": 2
+                    }
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "p",
+                    "value": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "type": {
+                      "option": "provenance"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "value": {
+                      "expr": "none"
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "address",
+                          "fields": {
+                            "address": {
+                              "expr": "self",
+                              "field": "address"
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "if-some",
+                          "value": {
+                            "expr": "local",
+                            "name": "p"
+                          },
+                          "bind": "p_2",
+                          "some": {
+                            "expr": "intrinsic",
+                            "name": "over",
+                            "args": [
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "p_2"
+                                  },
+                                  "name": "span"
+                                },
+                                "name": "start"
+                              },
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "at"
+                                  },
+                                  "name": "span"
+                                },
+                                "name": "end"
+                              },
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "local",
+                                  "name": "at"
+                                },
+                                "name": "settled"
+                              }
+                            ]
+                          },
+                          "none": {
+                            "expr": "local",
+                            "name": "at"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "or",
+                      "left": {
+                        "expr": "binary",
+                        "op": "and",
+                        "left": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "code_2"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 204
+                          }
+                        },
+                        "right": {
+                          "expr": "binary",
+                          "op": "or",
+                          "left": {
+                            "expr": "binary",
+                            "op": "lt",
+                            "left": {
+                              "expr": "self",
+                              "field": "address"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 139
+                            }
+                          },
+                          "right": {
+                            "expr": "binary",
+                            "op": "gt",
+                            "left": {
+                              "expr": "self",
+                              "field": "address"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 141
+                            }
+                          }
+                        }
+                      },
+                      "right": {
+                        "expr": "binary",
+                        "op": "and",
+                        "left": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "code_2"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 240
+                          }
+                        },
+                        "right": {
+                          "expr": "binary",
+                          "op": "gt",
+                          "left": {
+                            "expr": "self",
+                            "field": "address"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 143
+                          }
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "error",
+                              "fields": {
+                                "reason": {
+                                  "expr": "enum",
+                                  "type": "Reason",
+                                  "value": "address"
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "local",
+                              "name": "at"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "and",
+                  "left": {
+                    "expr": "binary",
+                    "op": "and",
+                    "left": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "code_2"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 240
+                      }
+                    },
+                    "right": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "self",
+                        "field": "address"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 144
+                      }
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "lt",
+                    "left": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 4
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "self",
+                        "field": "phase"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 2
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "low"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "phase"
+                        },
+                        "value": {
+                          "expr": "lit",
+                          "value": 3
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "pending"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "at"
+                        }
+                      },
+                      {
+                        "stmt": "return"
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "p",
+                    "value": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "type": {
+                      "option": "provenance"
+                    }
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "value",
+                    "value": {
+                      "expr": "binary",
+                      "op": "bit-or",
+                      "left": {
+                        "expr": "self",
+                        "field": "low"
+                      },
+                      "right": {
+                        "expr": "binary",
+                        "op": "shl",
+                        "left": {
+                          "expr": "cast",
+                          "value": {
+                            "expr": "local",
+                            "name": "b"
+                          },
+                          "to": "u16"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 8
+                        }
+                      }
+                    },
+                    "type": "u16"
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "check",
+                          "fields": {
+                            "check": {
+                              "expr": "enum",
+                              "type": "Check",
+                              "value": "crc16"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "ok": {
+                              "expr": "binary",
+                              "op": "eq",
+                              "left": {
+                                "expr": "local",
+                                "name": "value"
+                              },
+                              "right": {
+                                "expr": "binary",
+                                "op": "bit-xor",
+                                "left": {
+                                  "expr": "self",
+                                  "field": "crc"
+                                },
+                                "right": {
+                                  "expr": "lit",
+                                  "value": 65535
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "if-some",
+                          "value": {
+                            "expr": "local",
+                            "name": "p"
+                          },
+                          "bind": "p_2",
+                          "some": {
+                            "expr": "intrinsic",
+                            "name": "over",
+                            "args": [
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "p_2"
+                                  },
+                                  "name": "span"
+                                },
+                                "name": "start"
+                              },
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "at"
+                                  },
+                                  "name": "span"
+                                },
+                                "name": "end"
+                              },
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "local",
+                                  "name": "at"
+                                },
+                                "name": "settled"
+                              }
+                            ]
+                          },
+                          "none": {
+                            "expr": "local",
+                            "name": "at"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "value": {
+                      "expr": "none"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": 4
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "let",
+                "name": "address",
+                "value": {
+                  "expr": "self",
+                  "field": "address"
+                },
+                "type": "u16"
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "data",
+                      "fields": {
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "register"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "and",
+                  "left": {
+                    "expr": "binary",
+                    "op": "and",
+                    "left": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "code_2"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 240
+                      }
+                    },
+                    "right": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "self",
+                        "field": "phase"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 2
+                      }
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "lt",
+                    "left": {
+                      "expr": "local",
+                      "name": "address"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 144
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "crc"
+                    },
+                    "value": {
+                      "expr": "call",
+                      "name": "crc16",
+                      "args": [
+                        {
+                          "expr": "self",
+                          "field": "crc"
+                        },
+                        {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "address"
+                    },
+                    "op": "add",
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "and",
+                      "left": {
+                        "expr": "binary",
+                        "op": "and",
+                        "left": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "code_2"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 204
+                          }
+                        },
+                        "right": {
+                          "expr": "binary",
+                          "op": "ge",
+                          "left": {
+                            "expr": "local",
+                            "name": "address"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 139
+                          }
+                        }
+                      },
+                      "right": {
+                        "expr": "binary",
+                        "op": "le",
+                        "left": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 141
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "address"
+                        },
+                        "op": "add",
+                        "value": {
+                          "expr": "lit",
+                          "value": 1
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "code_2"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 245
+              }
+            },
+            "then": [
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "lt",
+                  "left": {
+                    "expr": "self",
+                    "field": "count"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 32
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "data",
+                          "fields": {
+                            "field": {
+                              "expr": "enum",
+                              "type": "Field",
+                              "value": "pio-sample"
+                            },
+                            "address": {
+                              "expr": "none"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "b"
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "at"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "crc"
+                    },
+                    "value": {
+                      "expr": "call",
+                      "name": "crc16",
+                      "args": [
+                        {
+                          "expr": "self",
+                          "field": "crc"
+                        },
+                        {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "count"
+                    },
+                    "op": "add",
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "self",
+                    "field": "count"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 32
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "low"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "b"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "count"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": 33
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "let",
+                "name": "p",
+                "value": {
+                  "expr": "self",
+                  "field": "pending"
+                },
+                "type": {
+                  "option": "provenance"
+                }
+              },
+              {
+                "stmt": "let",
+                "name": "value",
+                "value": {
+                  "expr": "binary",
+                  "op": "bit-or",
+                  "left": {
+                    "expr": "self",
+                    "field": "low"
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "shl",
+                    "left": {
+                      "expr": "cast",
+                      "value": {
+                        "expr": "local",
+                        "name": "b"
+                      },
+                      "to": "u16"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 8
+                    }
+                  }
+                },
+                "type": "u16"
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "check",
+                      "fields": {
+                        "check": {
+                          "expr": "enum",
+                          "type": "Check",
+                          "value": "crc16"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        },
+                        "ok": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "value"
+                          },
+                          "right": {
+                            "expr": "binary",
+                            "op": "bit-xor",
+                            "left": {
+                              "expr": "self",
+                              "field": "crc"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 65535
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "if-some",
+                      "value": {
+                        "expr": "local",
+                        "name": "p"
+                      },
+                      "bind": "p_2",
+                      "some": {
+                        "expr": "intrinsic",
+                        "name": "over",
+                        "args": [
+                          {
+                            "expr": "field",
+                            "of": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "p_2"
+                              },
+                              "name": "span"
+                            },
+                            "name": "start"
+                          },
+                          {
+                            "expr": "field",
+                            "of": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "at"
+                              },
+                              "name": "span"
+                            },
+                            "name": "end"
+                          },
+                          {
+                            "expr": "field",
+                            "of": {
+                              "expr": "local",
+                              "name": "at"
+                            },
+                            "name": "settled"
+                          }
+                        ]
+                      },
+                      "none": {
+                        "expr": "local",
+                        "name": "at"
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "pending"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "count"
+                },
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "crc"
+                },
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "code_2"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 90
+              }
+            },
+            "then": [
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "self",
+                    "field": "phase"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "low"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "b"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "data",
+                          "fields": {
+                            "field": {
+                              "expr": "enum",
+                              "type": "Field",
+                              "value": "pio-output"
+                            },
+                            "address": {
+                              "expr": "none"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "b"
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "at"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "self",
+                    "field": "phase"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 1
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "let",
+                    "name": "p",
+                    "value": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "type": {
+                      "option": "provenance"
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "check",
+                          "fields": {
+                            "check": {
+                              "expr": "enum",
+                              "type": "Check",
+                              "value": "inverse"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "b"
+                            },
+                            "ok": {
+                              "expr": "binary",
+                              "op": "eq",
+                              "left": {
+                                "expr": "local",
+                                "name": "b"
+                              },
+                              "right": {
+                                "expr": "binary",
+                                "op": "bit-xor",
+                                "left": {
+                                  "expr": "self",
+                                  "field": "low"
+                                },
+                                "right": {
+                                  "expr": "lit",
+                                  "value": 255
+                                }
+                              }
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "if-some",
+                          "value": {
+                            "expr": "local",
+                            "name": "p"
+                          },
+                          "bind": "p_2",
+                          "some": {
+                            "expr": "intrinsic",
+                            "name": "over",
+                            "args": [
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "p_2"
+                                  },
+                                  "name": "span"
+                                },
+                                "name": "start"
+                              },
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "at"
+                                  },
+                                  "name": "span"
+                                },
+                                "name": "end"
+                              },
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "local",
+                                  "name": "at"
+                                },
+                                "name": "settled"
+                              }
+                            ]
+                          },
+                          "none": {
+                            "expr": "local",
+                            "name": "at"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "pending"
+                    },
+                    "value": {
+                      "expr": "none"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": 2
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "self",
+                    "field": "phase"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 2
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "check",
+                          "fields": {
+                            "check": {
+                              "expr": "enum",
+                              "type": "Check",
+                              "value": "confirmation"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "b"
+                            },
+                            "ok": {
+                              "expr": "binary",
+                              "op": "eq",
+                              "left": {
+                                "expr": "local",
+                                "name": "b"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 170
+                              }
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "at"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "phase"
+                    },
+                    "value": {
+                      "expr": "lit",
+                      "value": 3
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "data",
+                      "fields": {
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "pio-sample"
+                        },
+                        "address": {
+                          "expr": "none"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "b"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "phase"
+                },
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "code_2"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 195
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "check",
+                      "fields": {
+                        "check": {
+                          "expr": "enum",
+                          "type": "Check",
+                          "value": "confirmation"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "b"
+                        },
+                        "ok": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "b"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 170
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "Event",
+                  "kind": "data",
+                  "fields": {
+                    "field": {
+                      "expr": "enum",
+                      "type": "Field",
+                      "value": "raw"
+                    },
+                    "address": {
+                      "expr": "none"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "b"
+                    }
+                  }
+                },
+                "at": {
+                  "expr": "local",
+                  "name": "at"
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "b",
+            "type": "u8"
+          },
+          {
+            "name": "at",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "body": [
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "r",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "next"
+                  }
+                }
+              },
+              {
+                "stmt": "let",
+                "name": "e",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "r"
+                  },
+                  "name": "event"
+                },
+                "type": "OneWireEvent"
+              },
+              {
+                "stmt": "let",
+                "name": "at",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "r"
+                  },
+                  "name": "at"
+                },
+                "type": "provenance"
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "e"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "begin",
+                      "binds": {
+                        "presence": "presence"
+                      }
+                    },
+                    "body": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "method",
+                          "name": "clear",
+                          "args": []
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "active"
+                        },
+                        "value": {
+                          "expr": "lit",
+                          "value": true
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "enabled"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "presence"
+                        }
+                      },
+                      {
+                        "stmt": "continue"
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": []
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "unary",
+                  "op": "not",
+                  "value": {
+                    "expr": "self",
+                    "field": "active"
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "continue"
+                  }
+                ]
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "e"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "rom-command",
+                      "binds": {
+                        "code": "code"
+                      }
+                    },
+                    "body": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "enabled"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "and",
+                          "left": {
+                            "expr": "self",
+                            "field": "enabled"
+                          },
+                          "right": {
+                            "expr": "binary",
+                            "op": "or",
+                            "left": {
+                              "expr": "binary",
+                              "op": "eq",
+                              "left": {
+                                "expr": "local",
+                                "name": "code"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 204
+                              }
+                            },
+                            "right": {
+                              "expr": "binary",
+                              "op": "or",
+                              "left": {
+                                "expr": "binary",
+                                "op": "eq",
+                                "left": {
+                                  "expr": "local",
+                                  "name": "code"
+                                },
+                                "right": {
+                                  "expr": "lit",
+                                  "value": 60
+                                }
+                              },
+                              "right": {
+                                "expr": "binary",
+                                "op": "or",
+                                "left": {
+                                  "expr": "binary",
+                                  "op": "eq",
+                                  "left": {
+                                    "expr": "local",
+                                    "name": "code"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 85
+                                  }
+                                },
+                                "right": {
+                                  "expr": "binary",
+                                  "op": "or",
+                                  "left": {
+                                    "expr": "binary",
+                                    "op": "eq",
+                                    "left": {
+                                      "expr": "local",
+                                      "name": "code"
+                                    },
+                                    "right": {
+                                      "expr": "lit",
+                                      "value": 105
+                                    }
+                                  },
+                                  "right": {
+                                    "expr": "binary",
+                                    "op": "or",
+                                    "left": {
+                                      "expr": "binary",
+                                      "op": "eq",
+                                      "left": {
+                                        "expr": "local",
+                                        "name": "code"
+                                      },
+                                      "right": {
+                                        "expr": "lit",
+                                        "value": 51
+                                      }
+                                    },
+                                    "right": {
+                                      "expr": "binary",
+                                      "op": "eq",
+                                      "left": {
+                                        "expr": "local",
+                                        "name": "code"
+                                      },
+                                      "right": {
+                                        "expr": "lit",
+                                        "value": 150
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "code"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 150
+                          }
+                        },
+                        "then": [
+                          {
+                            "stmt": "assign",
+                            "target": {
+                              "expr": "self",
+                              "field": "special"
+                            },
+                            "value": {
+                              "expr": "lit",
+                              "value": 1
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "continue"
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": []
+                  }
+                ]
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "e"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "rom",
+                      "binds": {
+                        "crcOk": "crcOk",
+                        "family": "family",
+                        "id": "id"
+                      }
+                    },
+                    "body": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "enabled"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "and",
+                          "left": {
+                            "expr": "self",
+                            "field": "enabled"
+                          },
+                          "right": {
+                            "expr": "binary",
+                            "op": "and",
+                            "left": {
+                              "expr": "local",
+                              "name": "crcOk"
+                            },
+                            "right": {
+                              "expr": "binary",
+                              "op": "eq",
+                              "left": {
+                                "expr": "local",
+                                "name": "family"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 41
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "rom",
+                              "fields": {
+                                "id": {
+                                  "expr": "local",
+                                  "name": "id"
+                                },
+                                "crcOk": {
+                                  "expr": "local",
+                                  "name": "crcOk"
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "local",
+                              "name": "at"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "binary",
+                          "op": "ne",
+                          "left": {
+                            "expr": "local",
+                            "name": "family"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 41
+                          }
+                        },
+                        "then": [
+                          {
+                            "stmt": "expr",
+                            "expr": {
+                              "expr": "await",
+                              "op": {
+                                "op": "emit",
+                                "event": {
+                                  "expr": "variant",
+                                  "type": "Event",
+                                  "kind": "error",
+                                  "fields": {
+                                    "reason": {
+                                      "expr": "enum",
+                                      "type": "Reason",
+                                      "value": "family"
+                                    }
+                                  }
+                                },
+                                "at": {
+                                  "expr": "local",
+                                  "name": "at"
+                                }
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "continue"
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": []
+                  }
+                ]
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "e"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "end"
+                    },
+                    "body": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "close",
+                            "args": [
+                              {
+                                "expr": "local",
+                                "name": "at"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "continue"
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": []
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "unary",
+                  "op": "not",
+                  "value": {
+                    "expr": "self",
+                    "field": "enabled"
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "continue"
+                  }
+                ]
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "e"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "byte",
+                      "binds": {
+                        "value": "value"
+                      }
+                    },
+                    "body": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "byte",
+                            "args": [
+                              {
+                                "expr": "local",
+                                "name": "value"
+                              },
+                              {
+                                "expr": "local",
+                                "name": "at"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": []
+                  }
+                ]
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "e"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "bits"
+                    },
+                    "body": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "error",
+                              "fields": {
+                                "reason": {
+                                  "expr": "enum",
+                                  "type": "Reason",
+                                  "value": "input-error"
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "local",
+                              "name": "at"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "method",
+                          "name": "clear",
+                          "args": []
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": []
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "DS2408",
+        "summary": "PIO registers, channel samples, complemented writes and CRC16",
+        "fields": {},
+        "events": {
+          "rom": "Rom",
+          "command": "Command",
+          "address": "Address",
+          "data": "Data",
+          "check": "Check",
+          "error": "Error"
+        },
+        "eventFields": {
+          "id": "Id",
+          "crcOk": "Crcok",
+          "code": "Code",
+          "command": "Command",
+          "address": "Address",
+          "field": "Field",
+          "value": "Value",
+          "check": "Check",
+          "ok": "Ok",
+          "reason": "Reason"
+        }
+      },
+      "zh-CN": {
+        "name": "DS2408",
+        "summary": "PIO寄存器、通道采样、互补写入和CRC16",
+        "fields": {},
+        "events": {
+          "rom": "ROM编码",
+          "command": "功能命令",
+          "address": "目标地址",
+          "data": "数据",
+          "check": "完整性校验",
+          "error": "协议错误"
+        },
+        "eventFields": {
+          "id": "ROM编码",
+          "crcOk": "CRC有效",
+          "code": "命令码",
+          "command": "功能命令",
+          "address": "目标地址",
+          "field": "数据字段",
+          "value": "数值",
+          "check": "完整性校验",
+          "ok": "校验有效",
+          "reason": "错误原因"
+        }
+      }
+    },
+    "state": [
+      {
+        "name": "active",
+        "type": "bool",
+        "init": {
+          "expr": "lit",
+          "value": false
+        }
+      },
+      {
+        "name": "enabled",
+        "type": "bool",
+        "init": {
+          "expr": "lit",
+          "value": false
+        }
+      },
+      {
+        "name": "code",
+        "type": {
+          "option": "u8"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "phase",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "address",
+        "type": "u16",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "crc",
+        "type": "u16",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "low",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "count",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "pending",
+        "type": {
+          "option": "provenance"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "special",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "rom",
+        "type": "u64",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "romCrc",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      }
+    ]
+  }
+}
