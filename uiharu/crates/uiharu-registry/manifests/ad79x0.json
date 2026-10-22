@@ -1,0 +1,104 @@
+{
+  "name": "ad79x0",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ad79x0.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "ten_bit",
+      "kind": "bool"
+    },
+    {
+      "name": "reference_microvolts",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "mode",
+      "role": "control",
+      "fields": ["tx", "mode", "clocks"]
+    },
+    {
+      "kind": "sample",
+      "role": "data",
+      "fields": ["tx", "code", "bits", "leading", "trailing", "microvolts", "valid"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "AD79X0",
+      "summary": "AD7910/7920 conversion voltage, padding checks and power-down requests",
+      "fields": {
+        "reference_microvolts": "Reference voltage (µV)",
+        "ten_bit": "AD7910 10-bit mode"
+      },
+      "events": {
+        "begin": "Begin",
+        "end": "End",
+        "mode": "Mode",
+        "sample": "Sample"
+      },
+      "eventFields": {
+        "bits": "Bits",
+        "clocks": "Clocks",
+        "code": "Code",
+        "leading": "Leading",
+        "microvolts": "Voltage (µV)",
+        "mode": "Mode",
+        "reason": "Reason",
+        "trailing": "Trailing",
+        "tx": "Transaction",
+        "valid": "Valid"
+      }
+    },
+    "zh-CN": {
+      "name": "AD79X0",
+      "summary": "解析AD7910/7920转换电压、填充位检查及掉电请求",
+      "fields": {
+        "reference_microvolts": "参考电压（微伏）",
+        "ten_bit": "AD7910十位模式"
+      },
+      "events": {
+        "begin": "开始",
+        "end": "结束",
+        "mode": "模式",
+        "sample": "采样"
+      },
+      "eventFields": {
+        "bits": "位数",
+        "clocks": "时钟数",
+        "code": "编码",
+        "leading": "前导位",
+        "microvolts": "电压（微伏）",
+        "mode": "模式",
+        "reason": "结束原因",
+        "trailing": "尾随位",
+        "tx": "事务号",
+        "valid": "有效"
+      }
+    }
+  }
+}

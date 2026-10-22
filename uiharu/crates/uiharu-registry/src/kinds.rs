@@ -22,6 +22,7 @@ use uiharu_protocols::ir_rc5::{Rc5, Rc5Config, Rc5Event};
 use uiharu_protocols::ir_rc6::{Rc6, Rc6Config, Rc6Event};
 use uiharu_protocols::ir_sirc::{Sirc, SircConfig, SircEvent};
 use uiharu_protocols::jtag::{Jtag, JtagConfig, JtagEvent};
+use uiharu_protocols::jtag_dp::{JtagDp, JtagDpConfig, JtagDpEvent};
 use uiharu_protocols::lin::{Lin, LinConfig, LinEvent};
 use uiharu_protocols::mdio::{Mdio, MdioConfig, MdioEvent};
 use uiharu_protocols::microwire::{Microwire, MicrowireConfig, MicrowireEvent};
@@ -32,10 +33,13 @@ use uiharu_protocols::onewire::{LinkConfig, LinkEvent, OneWireEvent, OneWireLink
 use uiharu_protocols::parallel::{Parallel, ParallelConfig, ParallelEvent};
 use uiharu_protocols::ps2::{Ps2, Ps2Config, Ps2Event};
 use uiharu_protocols::pwm::{Pwm, PwmConfig, PwmEvent};
+use uiharu_protocols::qspi::{Qspi, QspiConfig, QspiEvent};
+use uiharu_protocols::sdcard_sd::{SdcardSd, SdcardSdConfig, SdcardSdEvent};
 use uiharu_protocols::sdcard_spi::{SdCardSpi, SdCardSpiConfig, SdEvent};
 use uiharu_protocols::spi::{Spi, SpiConfig, SpiEvent};
 use uiharu_protocols::spi_nor::{NorEvent, SpiNor, SpiNorConfig};
 use uiharu_protocols::swd::{Swd, SwdConfig, SwdEvent};
+use uiharu_protocols::swim::{Swim, SwimConfig, SwimEvent};
 use uiharu_protocols::timing::{Timing, TimingConfig, TimingEvent};
 use uiharu_protocols::uart::{Uart, UartConfig, UartEvent};
 use uiharu_protocols::usb::{TransactionEvent, UsbConfig, UsbEvent, UsbPackets, UsbTransactions};
@@ -349,8 +353,194 @@ fn build_eeprom93xx(value: &serde_json::Value) -> Result<Box<dyn Node>, String> 
     build_node(value, Eeprom93xx::new)
 }
 
+fn build_qspi(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Qspi::new)
+}
+fn build_sdcard_sd(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, SdcardSd::new)
+}
+fn build_swim(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    build_node(value, Swim::new)
+}
+fn build_jtag_dp(value: &serde_json::Value) -> Result<Box<dyn Node>, String> {
+    let config: JtagDpConfig = config(value)?;
+    Ok(Box::new(JtagDp::new(config)))
+}
+
+// Generated nodes use the same typed readers and dynamic bridges as handwritten nodes.
+// The metadata comes from the TS declaration through `export_decoder_manifests`.
+macro_rules! dsl_kind {
+    ($name:literal, $module:ident, $node:ident, $config:ident, $event:ident) => {
+        Kind {
+            name: $name,
+            manifest: include_str!(concat!("../manifests/", $name, ".json")),
+            build: |value| build_node(value, uiharu_protocols::$module::$node::new),
+            defaults: defaults_of::<uiharu_protocols::$module::$config>,
+            open: open_as::<uiharu_protocols::$module::$event>,
+            kinds: kinds_of::<uiharu_protocols::$module::$event>,
+            bridge: bridge_of::<uiharu_protocols::$module::$event>,
+        }
+    };
+}
+
 /// Every node type, by the name a description uses.
 pub const KINDS: &[Kind] = &[
+    Kind {
+        name: "cjtag",
+        manifest: include_str!("../manifests/cjtag.json"),
+        build: |value| build_node(value, uiharu_protocols::cjtag::Cjtag::new),
+        defaults: defaults_of::<uiharu_protocols::cjtag::CjtagConfig>,
+        open: open_as::<JtagEvent>,
+        kinds: kinds_of::<JtagEvent>,
+        bridge: bridge_of::<JtagEvent>,
+    },
+    dsl_kind!("swd-dp", swd_dp, SwdDp, SwdDpConfig, Event),
+    dsl_kind!(
+        "avr-isp-device",
+        avr_isp_device,
+        AvrIspDevice,
+        AvrIspDeviceConfig,
+        Event
+    ),
+    dsl_kind!("am230x-values", am230x_values, Am230xValues, Config, Event),
+    dsl_kind!("cfp", cfp, Cfp, Config, Event),
+    dsl_kind!("ds2408", ds2408, Ds2408, Config, Event),
+    dsl_kind!("ds243x", ds243x, Ds243x, Config, Event),
+    dsl_kind!("ds28ea00", ds28ea00, Ds28ea00, Config, Event),
+    dsl_kind!(
+        "midi-semantics",
+        midi_semantics,
+        MidiSemantics,
+        Config,
+        Event
+    ),
+    dsl_kind!(
+        "dmx512-analysis",
+        dmx512_analysis,
+        Dmx512Analysis,
+        Config,
+        Event
+    ),
+    dsl_kind!("lin-profile", lin_profile, LinProfile, Config, Event),
+    dsl_kind!("swim-stm8", swim_stm8, SwimStm8, SwimStm8Config, SwimEvent),
+    dsl_kind!(
+        "arm-etmv3",
+        arm_etmv3,
+        ArmEtmv3,
+        ArmEtmv3Config,
+        ArmEtmv3Event
+    ),
+    dsl_kind!("smbus", smbus, Smbus, Config, Event),
+    dsl_kind!("ps2-device", ps2_device, Ps2Device, Config, Event),
+    dsl_kind!("xn297", xn297, Xn297, Config, Event),
+    dsl_kind!(
+        "jtag-stm32",
+        jtag_stm32,
+        JtagStm32,
+        JtagStm32Config,
+        JtagStm32Event
+    ),
+    dsl_kind!(
+        "jtag-ejtag",
+        jtag_ejtag,
+        JtagEjtag,
+        JtagEjtagConfig,
+        JtagEjtagEvent
+    ),
+    dsl_kind!("c2", c2, C2, Config, Event),
+    dsl_kind!("avr-pdi", avr_pdi, AvrPdi, Config, Event),
+    dsl_kind!("fsi", fsi, Fsi, Config, Event),
+    dsl_kind!(
+        "jtag-chain",
+        jtag_chain,
+        JtagChain,
+        JtagChainConfig,
+        JtagEvent
+    ),
+    dsl_kind!("ad79x0", ad79x0, Ad79x0, Config, DeviceEvent),
+    dsl_kind!(
+        "arm-trace-transport",
+        arm_trace_transport,
+        ArmTraceTransport,
+        ArmTraceTransportConfig,
+        TraceByteEvent
+    ),
+    dsl_kind!("arm-itm", arm_itm, ArmItm, ArmItmConfig, ArmItmEvent),
+    dsl_kind!(
+        "eeprom24xx-memory",
+        eeprom24xx_memory,
+        Eeprom24xxMemory,
+        Config,
+        Event
+    ),
+    dsl_kind!("aud", aud, Aud, Config, Event),
+    dsl_kind!(
+        "qspi-flash",
+        qspi_flash,
+        QspiFlash,
+        QspiFlashConfig,
+        FlashEvent
+    ),
+    dsl_kind!("ad5626", ad5626, Ad5626, Config, DeviceEvent),
+    dsl_kind!("adf435x", adf435x, Adf435x, Config, DeviceEvent),
+    dsl_kind!("ltc242x", ltc242x, Ltc242x, Config, DeviceEvent),
+    dsl_kind!("tlc5620", tlc5620, Tlc5620, Config, DeviceEvent),
+    dsl_kind!("rfm12", rfm12, Rfm12, Config, Event),
+    dsl_kind!("max7219", max7219, Max7219, Config, Event),
+    dsl_kind!("max72xx", max72xx, Max72xx, Config, Event),
+    dsl_kind!("cc1101", cc1101, Cc1101, Config, Event),
+    dsl_kind!("enc28j60", enc28j60, Enc28j60, Config, Event),
+    dsl_kind!("ade77xx", ade77xx, Ade77xx, Config, Event),
+    dsl_kind!("nrf905", nrf905, Nrf905, Config, Event),
+    dsl_kind!("st25r39xx-spi", st25r39xx_spi, St25r39xxSpi, Config, Event),
+    dsl_kind!("adns5020", adns5020, Adns5020, Config, Event),
+    dsl_kind!("a7105", a7105, A7105, Config, Event),
+    dsl_kind!("mrf24j40", mrf24j40, Mrf24j40, Config, Event),
+    dsl_kind!("adxl345-spi", adxl345_spi, Adxl345Spi, Config, Event),
+    dsl_kind!("st7735", st7735, St7735, Config, Event),
+    dsl_kind!("st7789", st7789, St7789, Config, Event),
+    dsl_kind!("sd-registers", sd_registers, SdRegisters, Config, Event),
+    dsl_kind!("spi-tpm", spi_tpm, SpiTpm, Config, Event),
+    dsl_kind!("x2444m", x2444m, X2444m, Config, Event),
+    dsl_kind!("sd-native", sd_native, SdNative, Config, Event),
+    dsl_kind!("rgb-led-spi", rgb_led_spi, RgbLedSpi, Config, Event),
+    dsl_kind!("sda2506", sda2506, Sda2506, Config, Event),
+    dsl_kind!("adxl345", adxl345, Adxl345, DeviceConfig, DeviceEvent),
+    dsl_kind!("ds1307", ds1307, Ds1307, DeviceConfig, DeviceEvent),
+    dsl_kind!("lm75", lm75, Lm75, DeviceConfig, DeviceEvent),
+    dsl_kind!("mcp230xx", mcp230xx, Mcp230xx, DeviceConfig, DeviceEvent),
+    dsl_kind!("mlx90614", mlx90614, Mlx90614, DeviceConfig, DeviceEvent),
+    dsl_kind!("pca9571", pca9571, Pca9571, DeviceConfig, DeviceEvent),
+    dsl_kind!("rtc8564", rtc8564, Rtc8564, DeviceConfig, DeviceEvent),
+    dsl_kind!("tca6408a", tca6408a, Tca6408a, DeviceConfig, DeviceEvent),
+    dsl_kind!("edid", edid, Edid, DeviceConfig, DeviceEvent),
+    dsl_kind!("ltc26x7", ltc26x7, Ltc26x7, DeviceConfig, DeviceEvent),
+    dsl_kind!("mxc6225xu", mxc6225xu, Mxc6225xu, DeviceConfig, DeviceEvent),
+    dsl_kind!("nunchuk", nunchuk, Nunchuk, DeviceConfig, DeviceEvent),
+    dsl_kind!("atsha204a", atsha204a, Atsha204a, DeviceConfig, DeviceEvent),
+    dsl_kind!("xfp", xfp, Xfp, DeviceConfig, DeviceEvent),
+    dsl_kind!(
+        "amulet-ascii",
+        amulet_ascii,
+        AmuletAscii,
+        DeviceConfig,
+        DeviceEvent
+    ),
+    dsl_kind!("pan1321", pan1321, Pan1321, DeviceConfig, DeviceEvent),
+    dsl_kind!(
+        "arm-memap",
+        arm_memap,
+        ArmMemap,
+        ArmMemapConfig,
+        ArmMemapEvent
+    ),
+    dsl_kind!(
+        "modbus-pdu",
+        modbus_pdu,
+        ModbusPdu,
+        ModbusPduConfig,
+        ModbusPduEvent
+    ),
     Kind {
         name: "spi",
         manifest: include_str!("../manifests/spi.json"),
@@ -683,5 +873,41 @@ pub const KINDS: &[Kind] = &[
         open: open_as::<Eeprom93xxEvent>,
         kinds: kinds_of::<Eeprom93xxEvent>,
         bridge: bridge_of::<Eeprom93xxEvent>,
+    },
+    Kind {
+        name: "qspi",
+        manifest: include_str!("../manifests/qspi.json"),
+        build: build_qspi,
+        defaults: defaults_of::<QspiConfig>,
+        open: open_as::<QspiEvent>,
+        kinds: kinds_of::<QspiEvent>,
+        bridge: bridge_of::<QspiEvent>,
+    },
+    Kind {
+        name: "sdcard-sd",
+        manifest: include_str!("../manifests/sdcard-sd.json"),
+        build: build_sdcard_sd,
+        defaults: defaults_of::<SdcardSdConfig>,
+        open: open_as::<SdcardSdEvent>,
+        kinds: kinds_of::<SdcardSdEvent>,
+        bridge: bridge_of::<SdcardSdEvent>,
+    },
+    Kind {
+        name: "swim",
+        manifest: include_str!("../manifests/swim.json"),
+        build: build_swim,
+        defaults: defaults_of::<SwimConfig>,
+        open: open_as::<SwimEvent>,
+        kinds: kinds_of::<SwimEvent>,
+        bridge: bridge_of::<SwimEvent>,
+    },
+    Kind {
+        name: "jtag-dp",
+        manifest: include_str!("../manifests/jtag-dp.json"),
+        build: build_jtag_dp,
+        defaults: defaults_of::<JtagDpConfig>,
+        open: open_as::<JtagDpEvent>,
+        kinds: kinds_of::<JtagDpEvent>,
+        bridge: bridge_of::<JtagDpEvent>,
     },
 ];

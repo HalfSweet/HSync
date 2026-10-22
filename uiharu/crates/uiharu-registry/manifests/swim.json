@@ -1,0 +1,79 @@
+{
+  "name": "swim",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "swim.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "clock_hz",
+      "kind": "integer",
+      "min": 1,
+      "max": 100000000
+    },
+    {
+      "name": "speed",
+      "kind": "enum",
+      "values": ["low", "high"]
+    },
+    {
+      "name": "start_active",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["value", "parityOk", "ack"],
+      "errorWhen": [
+        {
+          "parityOk": false
+        }
+      ]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["direction", "field", "value", "parityOk", "ack", "address"],
+      "errorWhen": [
+        {
+          "parityOk": false
+        }
+      ]
+    },
+    {
+      "kind": "reset",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "entry",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "calibration",
+      "role": "control",
+      "fields": ["clockHz", "lowTicks", "after"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason", "partial"]
+    }
+  ]
+}

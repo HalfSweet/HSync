@@ -1,0 +1,176 @@
+{
+  "name": "fsi",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "fsi.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clock",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "inverted",
+      "kind": "bool"
+    },
+    {
+      "name": "turnaround",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "response_timeout",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "start_aligned",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "break",
+      "role": "control",
+      "fields": ["cycles"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["packet", "exchange", "slave", "command", "read", "bytes", "address", "related"]
+    },
+    {
+      "kind": "response",
+      "role": "handshake",
+      "fields": ["packet", "exchange", "slave", "status", "related"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["packet", "exchange", "read", "index", "value"]
+    },
+    {
+      "kind": "interrupt",
+      "role": "control",
+      "fields": ["packet", "levels", "dma"]
+    },
+    {
+      "kind": "crc",
+      "role": "check",
+      "fields": ["packet", "host", "received", "expected", "ok"],
+      "errorWhen": [
+        {
+          "ok": false
+        }
+      ]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["packet", "exchange", "reason", "success"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "OpenFSI",
+      "summary": "CRC-checked address commands, busy polling and response context",
+      "fields": {
+        "clock": "FSI clock",
+        "data": "FSI data",
+        "inverted": "Electrically inverted data",
+        "response_timeout": "Response timeout cycles",
+        "start_aligned": "Start at a known command boundary",
+        "turnaround": "Turnaround cycles"
+      },
+      "events": {
+        "break": "BREAK",
+        "byte": "Data byte",
+        "command": "Command",
+        "crc": "CRC4",
+        "end": "Packet end",
+        "interrupt": "Interrupt / DMA",
+        "response": "Response"
+      },
+      "eventFields": {
+        "address": "Known byte address",
+        "bytes": "Data bytes",
+        "command": "Command",
+        "cycles": "Cycles",
+        "dma": "DMA control",
+        "exchange": "Exchange",
+        "expected": "Expected CRC",
+        "host": "Host command",
+        "index": "Byte index",
+        "levels": "Interrupt levels",
+        "ok": "CRC OK",
+        "packet": "Packet",
+        "read": "Read",
+        "reason": "End reason",
+        "received": "Received CRC",
+        "related": "Known association",
+        "slave": "Slave ID",
+        "status": "Response status",
+        "success": "Valid acknowledgement",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "OpenFSI",
+      "summary": "地址命令CRC、忙状态轮询及响应关联",
+      "fields": {
+        "clock": "FSI时钟",
+        "data": "FSI数据",
+        "inverted": "数据电平反相",
+        "response_timeout": "响应超时周期",
+        "start_aligned": "从已知命令边界开始",
+        "turnaround": "换向周期"
+      },
+      "events": {
+        "break": "BREAK",
+        "byte": "数据字节",
+        "command": "命令",
+        "crc": "CRC4",
+        "end": "数据包结束",
+        "interrupt": "中断/DMA",
+        "response": "响应"
+      },
+      "eventFields": {
+        "address": "已知字节地址",
+        "bytes": "数据字节数",
+        "command": "命令",
+        "cycles": "周期数",
+        "dma": "DMA控制",
+        "exchange": "交互编号",
+        "expected": "预期CRC",
+        "host": "主机命令",
+        "index": "字节索引",
+        "levels": "中断电平",
+        "ok": "CRC正确",
+        "packet": "数据包",
+        "read": "读取",
+        "reason": "结束原因",
+        "received": "接收CRC",
+        "related": "关联已知",
+        "slave": "从机ID",
+        "status": "响应状态",
+        "success": "有效确认",
+        "value": "数值"
+      }
+    }
+  }
+}

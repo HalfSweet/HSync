@@ -1,0 +1,69 @@
+{
+  "name": "qspi",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "qspi.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "cs",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channels",
+      "max": 4
+    },
+    {
+      "name": "mode",
+      "kind": "integer",
+      "min": 0,
+      "max": 3
+    },
+    {
+      "name": "word_bits",
+      "kind": "integer",
+      "min": 1,
+      "max": 32
+    },
+    {
+      "name": "cs_active_low",
+      "kind": "bool"
+    },
+    {
+      "name": "lsb_first",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "word",
+      "role": "data",
+      "fields": ["tx", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason", "droppedBits"]
+    }
+  ]
+}

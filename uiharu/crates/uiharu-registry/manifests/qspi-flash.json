@@ -1,0 +1,311 @@
+{
+  "name": "qspi-flash",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "qspi-flash.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "command_mode",
+      "kind": "enum",
+      "values": ["spi", "qpi"]
+    },
+    {
+      "name": "qpi_dummy_clocks",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "dtr_quad_dummy_clocks",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "cs",
+      "kind": "channel"
+    },
+    {
+      "name": "io0",
+      "kind": "channel"
+    },
+    {
+      "name": "io1",
+      "kind": "channel"
+    },
+    {
+      "name": "io2",
+      "kind": "channel"
+    },
+    {
+      "name": "io3",
+      "kind": "channel"
+    },
+    {
+      "name": "address_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "quad_dummy_clocks",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "mode",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "mode-request",
+      "role": "control",
+      "fields": ["tx", "from", "to", "quadEnable", "followed"]
+    },
+    {
+      "kind": "address-mode",
+      "role": "control",
+      "fields": ["tx", "bytes", "reset"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "read", "lanes"]
+    },
+    {
+      "kind": "address",
+      "role": "address",
+      "fields": ["tx", "value", "bits", "lanes"]
+    },
+    {
+      "kind": "mode",
+      "role": "data",
+      "fields": ["tx", "value"]
+    },
+    {
+      "kind": "dummy",
+      "role": "framing",
+      "fields": ["tx", "clocks"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "value", "read", "lanes"]
+    },
+    {
+      "kind": "sfdp-header",
+      "role": "data",
+      "fields": ["tx", "signature", "valid", "minor", "major", "parameterHeaders"]
+    },
+    {
+      "kind": "sfdp-parameter",
+      "role": "data",
+      "fields": ["tx", "index", "id", "minor", "major", "dwords", "pointer"]
+    },
+    {
+      "kind": "density",
+      "role": "data",
+      "fields": ["tx", "raw", "bits"]
+    },
+    {
+      "kind": "erase",
+      "role": "command",
+      "fields": ["tx", "address", "bytes"]
+    },
+    {
+      "kind": "status",
+      "role": "data",
+      "fields": ["tx", "register", "value", "written"]
+    },
+    {
+      "kind": "status-bit",
+      "role": "data",
+      "fields": ["tx", "field", "value"]
+    },
+    {
+      "kind": "unknown-command",
+      "role": "framing",
+      "fields": ["tx", "opcode"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason", "droppedBits"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "SPI / QSPI NOR flash",
+      "summary": "NOR SDR/QPI/DTR phases, erase/status fields and SFDP discovery",
+      "fields": {
+        "address_bytes": "Address Bytes",
+        "clk": "Clock channel",
+        "command_mode": "Command width",
+        "cs": "Chip-select channel",
+        "dtr_quad_dummy_clocks": "DTR quad dummy clocks",
+        "io0": "IO0 channel",
+        "io1": "IO1 channel",
+        "io2": "IO2 channel",
+        "io3": "IO3 channel",
+        "mode": "Mode",
+        "qpi_dummy_clocks": "QPI dummy clocks",
+        "quad_dummy_clocks": "Quad Dummy Clocks"
+      },
+      "values": {
+        "command_mode": {
+          "qpi": "QPI",
+          "spi": "SPI"
+        }
+      },
+      "events": {
+        "address": "Address",
+        "address-mode": "Address mode request",
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "density": "Density",
+        "dummy": "Dummy",
+        "end": "End",
+        "erase": "Erase",
+        "mode": "Mode",
+        "mode-request": "Command mode request",
+        "sfdp-header": "Sfdp header",
+        "sfdp-parameter": "Sfdp parameter",
+        "status": "Status",
+        "status-bit": "Status bit",
+        "unknown-command": "Unknown command"
+      },
+      "eventFields": {
+        "address": "Address",
+        "bits": "Bits",
+        "bytes": "Bytes",
+        "clocks": "Clocks",
+        "droppedBits": "Dropped Bits",
+        "dwords": "Dwords",
+        "field": "Field",
+        "followed": "Parser followed request",
+        "from": "Previous command mode",
+        "id": "Id",
+        "index": "Index",
+        "lanes": "Lanes",
+        "major": "Major",
+        "minor": "Minor",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "parameterHeaders": "Parameter Headers",
+        "partial": "Partial",
+        "pointer": "Pointer",
+        "quadEnable": "Observed quad enable",
+        "raw": "Raw",
+        "read": "Read",
+        "reason": "Reason",
+        "register": "Register",
+        "reset": "Reset sequence",
+        "signature": "Signature",
+        "to": "Requested command mode",
+        "tx": "Transaction",
+        "valid": "Valid",
+        "value": "Value",
+        "written": "Written"
+      }
+    },
+    "zh-CN": {
+      "name": "SPI / QSPI NOR 闪存",
+      "summary": "解析NOR SDR、QPI、DTR阶段、擦除和状态字段及SFDP发现信息",
+      "fields": {
+        "address_bytes": "地址字节数",
+        "clk": "时钟通道",
+        "command_mode": "命令宽度",
+        "cs": "片选通道",
+        "dtr_quad_dummy_clocks": "DTR四线空时钟数",
+        "io0": "IO0通道",
+        "io1": "IO1通道",
+        "io2": "IO2通道",
+        "io3": "IO3通道",
+        "mode": "模式",
+        "qpi_dummy_clocks": "QPI空时钟数",
+        "quad_dummy_clocks": "四线空时钟数"
+      },
+      "values": {
+        "command_mode": {
+          "qpi": "QPI",
+          "spi": "SPI"
+        }
+      },
+      "events": {
+        "address": "地址",
+        "address-mode": "地址模式请求",
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "density": "存储容量",
+        "dummy": "空位",
+        "end": "结束",
+        "erase": "擦除请求",
+        "mode": "模式",
+        "mode-request": "命令模式请求",
+        "sfdp-header": "SFDP头",
+        "sfdp-parameter": "SFDP参数头",
+        "status": "状态",
+        "status-bit": "状态位",
+        "unknown-command": "未知命令"
+      },
+      "eventFields": {
+        "address": "地址",
+        "bits": "位数",
+        "bytes": "字节数",
+        "clocks": "时钟数",
+        "droppedBits": "丢弃位数",
+        "dwords": "双字数量",
+        "field": "字段",
+        "followed": "解码器跟随请求",
+        "from": "原命令模式",
+        "id": "标识符",
+        "index": "序号",
+        "lanes": "数据线数",
+        "major": "主版本",
+        "minor": "次版本",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "parameterHeaders": "参数头数量",
+        "partial": "不完整",
+        "pointer": "表地址",
+        "quadEnable": "观测四线使能",
+        "raw": "原始值",
+        "read": "读取",
+        "reason": "结束原因",
+        "register": "寄存器",
+        "reset": "复位序列",
+        "signature": "签名",
+        "to": "请求命令模式",
+        "tx": "事务号",
+        "valid": "有效",
+        "value": "数值",
+        "written": "已写入"
+      }
+    }
+  }
+}

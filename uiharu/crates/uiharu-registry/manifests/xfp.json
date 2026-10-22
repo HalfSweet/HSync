@@ -1,0 +1,169 @@
+{
+  "name": "xfp",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "i2c.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "xfp.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "initial_table",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "address",
+      "fields": ["op", "tx", "read", "ack"],
+      "errorWhen": [
+        {
+          "ack": false
+        }
+      ]
+    },
+    {
+      "kind": "pointer",
+      "role": "address",
+      "fields": ["op", "register", "ack"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["op", "register", "value", "read", "ack"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["op", "register", "field", "value", "negative", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "auxiliary-type",
+      "role": "control",
+      "fields": ["op", "channel", "code", "type"]
+    },
+    {
+      "kind": "link",
+      "role": "data",
+      "fields": ["op", "register", "medium", "meters", "greaterThan", "specified"]
+    },
+    {
+      "kind": "description",
+      "role": "data",
+      "fields": ["op", "register", "code", "description"]
+    },
+    {
+      "kind": "threshold",
+      "role": "data",
+      "fields": ["op", "register", "channel", "level", "value", "negative"]
+    },
+    {
+      "kind": "capability",
+      "role": "control",
+      "fields": ["op", "register", "name", "enabled"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["op", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "XFP management",
+      "summary": "Thresholds, control, diagnostics and page-one transceiver/link/identity fields",
+      "fields": {
+        "address": "I²C address",
+        "initial_table": "Initial upper memory table"
+      },
+      "events": {
+        "auxiliary-type": "Auxiliary monitor type",
+        "begin": "Address",
+        "byte": "Register byte",
+        "capability": "Module capability",
+        "description": "Physical interface",
+        "end": "End",
+        "field": "Decoded field",
+        "link": "Supported link length",
+        "pointer": "Register pointer",
+        "threshold": "Alarm/warning threshold"
+      },
+      "eventFields": {
+        "ack": "Acknowledged",
+        "channel": "Threshold channel",
+        "code": "Code",
+        "description": "Description",
+        "enabled": "Enabled",
+        "field": "Field",
+        "greaterThan": "Strict lower bound",
+        "level": "Threshold level",
+        "medium": "Medium",
+        "meters": "Meters",
+        "name": "Capability",
+        "negative": "Negative",
+        "op": "Operation",
+        "read": "Read",
+        "reason": "Reason",
+        "register": "Register",
+        "specified": "Length specified",
+        "tx": "I²C transaction",
+        "type": "Monitor type",
+        "valid": "Valid",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "XFP management",
+      "summary": "诊断测量、内存表选择和序列标识",
+      "fields": {
+        "address": "I²C 地址",
+        "initial_table": "初始上部内存表"
+      },
+      "events": {
+        "auxiliary-type": "辅助监测类型",
+        "begin": "地址",
+        "byte": "寄存器字节",
+        "capability": "模块能力",
+        "description": "物理接口",
+        "end": "结束",
+        "field": "解码字段",
+        "link": "支持的链路长度",
+        "pointer": "寄存器指针",
+        "threshold": "告警/警告阈值"
+      },
+      "eventFields": {
+        "ack": "应答",
+        "field": "字段",
+        "negative": "负数",
+        "op": "操作号",
+        "read": "读取",
+        "reason": "原因",
+        "register": "寄存器",
+        "tx": "I²C 事务",
+        "valid": "有效",
+        "value": "值"
+      }
+    }
+  }
+}

@@ -1,0 +1,130 @@
+{
+  "name": "st7789",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "st7789.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "cs",
+      "kind": "channel"
+    },
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "dc",
+      "kind": "channel"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx", "partial"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "value"]
+    },
+    {
+      "kind": "parameter",
+      "role": "data",
+      "fields": ["tx", "command", "offset", "value"]
+    },
+    {
+      "kind": "window",
+      "role": "address",
+      "fields": ["tx", "column", "first", "last"]
+    },
+    {
+      "kind": "pixel",
+      "role": "data",
+      "fields": ["tx", "offset", "value", "bits"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "aborted", "droppedBits"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "ST7789",
+      "summary": "ST7789 four-wire commands, address windows and RGB pixels",
+      "fields": {
+        "clk": "Clock channel",
+        "cs": "Chip-select channel",
+        "data": "Data",
+        "dc": "Data/command channel"
+      },
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "end": "End",
+        "parameter": "Parameter",
+        "pixel": "Pixel",
+        "window": "Window"
+      },
+      "eventFields": {
+        "aborted": "Aborted",
+        "bits": "Bits",
+        "column": "Column",
+        "command": "Command",
+        "droppedBits": "Dropped Bits",
+        "first": "First",
+        "last": "Last",
+        "offset": "Offset",
+        "partial": "Partial",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "ST7789",
+      "summary": "解析ST7789四线命令、地址窗口及RGB像素",
+      "fields": {
+        "clk": "时钟通道",
+        "cs": "片选通道",
+        "data": "数据通道",
+        "dc": "数据/命令通道"
+      },
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "end": "结束",
+        "parameter": "参数",
+        "pixel": "像素",
+        "window": "地址窗口"
+      },
+      "eventFields": {
+        "aborted": "中断",
+        "bits": "位数",
+        "column": "列地址",
+        "command": "命令",
+        "droppedBits": "丢弃位数",
+        "first": "起始地址",
+        "last": "结束地址",
+        "offset": "偏移",
+        "partial": "不完整",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

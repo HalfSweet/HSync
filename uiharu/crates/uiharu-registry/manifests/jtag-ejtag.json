@@ -1,0 +1,174 @@
+{
+  "name": "jtag-ejtag",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "jtag.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "jtag-ejtag.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "ir_bits",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "reset",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "instruction",
+      "role": "control",
+      "fields": ["scan", "value", "register", "captureOk"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["scan", "register", "dataIn", "dataOut"]
+    },
+    {
+      "kind": "idcode",
+      "role": "address",
+      "fields": ["scan", "value", "version", "part", "manufacturer", "lsbOk"]
+    },
+    {
+      "kind": "implementation",
+      "role": "control",
+      "fields": ["scan", "value", "version"]
+    },
+    {
+      "kind": "control",
+      "role": "control",
+      "fields": [
+        "scan",
+        "dataIn",
+        "dataOut",
+        "pracc",
+        "prnw",
+        "resetOccurred",
+        "debugMode",
+        "doze",
+        "halt"
+      ]
+    },
+    {
+      "kind": "processor-completion-request",
+      "role": "control",
+      "fields": ["scan", "address", "dataIn", "dataOut", "prnw"]
+    },
+    {
+      "kind": "fastdata",
+      "role": "data",
+      "fields": ["scan", "completionRequested", "successFlag", "completed", "dataIn", "dataOut"]
+    },
+    {
+      "kind": "bypass",
+      "role": "data",
+      "fields": ["scan", "dataIn", "dataOut"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["scan", "bits", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "MIPS32 EJTAG",
+      "summary": "Observed EJTAG registers, processor-access requests and FASTDATA flags",
+      "fields": {
+        "ir_bits": "Instruction register width"
+      },
+      "events": {
+        "bypass": "Bypass",
+        "control": "Control status",
+        "error": "Error",
+        "fastdata": "FASTDATA",
+        "idcode": "Device ID",
+        "implementation": "Implementation",
+        "instruction": "Instruction",
+        "processor-completion-request": "Processor access completion request",
+        "register": "Register",
+        "reset": "Reset"
+      },
+      "eventFields": {
+        "address": "Observed address",
+        "bits": "Bits",
+        "captureOk": "IR capture valid",
+        "completed": "Transport completed",
+        "completionRequested": "Completion requested",
+        "dataIn": "Probe data in",
+        "dataOut": "Captured data out",
+        "debugMode": "Debug mode",
+        "doze": "Doze",
+        "halt": "Halt",
+        "lsbOk": "ID low bit valid",
+        "manufacturer": "Manufacturer",
+        "part": "Part",
+        "pracc": "Processor access pending",
+        "prnw": "PrNW flag",
+        "reason": "Reason",
+        "register": "Register",
+        "resetOccurred": "Reset occurred",
+        "scan": "Scan",
+        "successFlag": "Success flag",
+        "value": "Value",
+        "version": "Version"
+      }
+    },
+    "zh-CN": {
+      "name": "MIPS32 EJTAG",
+      "summary": "EJTAG 寄存器、处理器访问请求及 FASTDATA 标志",
+      "fields": {
+        "ir_bits": "指令寄存器宽度"
+      },
+      "events": {
+        "bypass": "旁路",
+        "control": "控制状态",
+        "error": "错误",
+        "fastdata": "FASTDATA",
+        "idcode": "设备 ID",
+        "implementation": "实现",
+        "instruction": "指令",
+        "processor-completion-request": "处理器访问完成请求",
+        "register": "寄存器",
+        "reset": "复位"
+      },
+      "eventFields": {
+        "address": "观察到的地址",
+        "bits": "位数",
+        "captureOk": "IR 捕获有效",
+        "completed": "传输完成",
+        "completionRequested": "请求完成",
+        "dataIn": "探针写入数据",
+        "dataOut": "捕获读出数据",
+        "debugMode": "调试模式",
+        "doze": "休眠",
+        "halt": "暂停",
+        "lsbOk": "ID 最低位有效",
+        "manufacturer": "制造商",
+        "part": "部件",
+        "pracc": "处理器访问待处理",
+        "prnw": "PrNW 标志",
+        "reason": "原因",
+        "register": "寄存器",
+        "resetOccurred": "已复位",
+        "scan": "扫描",
+        "successFlag": "成功标志",
+        "value": "值",
+        "version": "版本"
+      }
+    }
+  }
+}

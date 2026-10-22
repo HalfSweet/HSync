@@ -1,0 +1,97 @@
+{
+  "name": "pan1321",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "uart.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "pan1321.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "max_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "command",
+      "fields": ["frame", "code"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["frame", "offset", "value"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["frame", "field", "value", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["frame", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "PAN1321 SPP AT",
+      "summary": "SPP AT command identifiers, modes, status and counted JSDA payloads",
+      "fields": {
+        "max_bytes": "Maximum message bytes"
+      },
+      "events": {
+        "begin": "Begin",
+        "byte": "Byte",
+        "end": "End",
+        "field": "Field"
+      },
+      "eventFields": {
+        "code": "Command",
+        "field": "Field",
+        "frame": "Frame",
+        "offset": "Offset",
+        "reason": "End reason",
+        "valid": "Valid",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "PAN1321 SPP AT",
+      "summary": "SPP AT 命令、模式、状态及定长 JSDA 数据",
+      "fields": {
+        "max_bytes": "消息字节上限"
+      },
+      "events": {
+        "begin": "开始",
+        "byte": "字节",
+        "end": "结束",
+        "field": "字段"
+      },
+      "eventFields": {
+        "code": "命令",
+        "field": "字段",
+        "frame": "帧",
+        "offset": "偏移",
+        "reason": "结束原因",
+        "valid": "有效",
+        "value": "值"
+      }
+    }
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "name": "rgb-led-spi",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "rgb-led-spi.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "order",
+      "kind": "enum",
+      "values": ["rgb", "rbg", "grb", "gbr", "brg", "bgr"]
+    },
+    {
+      "name": "framed",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "pixel",
+      "role": "data",
+      "fields": ["tx", "index", "red", "green", "blue"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "pixels", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "RGB-LED-SPI",
+      "summary": "Clocked RGB byte triplets with explicit channel order",
+      "fields": {
+        "framed": "Restart triplets on chip select",
+        "order": "Order"
+      },
+      "values": {
+        "order": {
+          "bgr": "BGR",
+          "brg": "BRG",
+          "gbr": "GBR",
+          "grb": "GRB",
+          "rbg": "RBG",
+          "rgb": "RGB"
+        }
+      },
+      "events": {
+        "end": "End",
+        "pixel": "Pixel"
+      },
+      "eventFields": {
+        "blue": "Blue",
+        "green": "Green",
+        "index": "Index",
+        "pixels": "Pixels",
+        "reason": "Reason",
+        "red": "Red",
+        "tx": "Transaction"
+      }
+    },
+    "zh-CN": {
+      "name": "RGB-LED-SPI",
+      "summary": "按指定颜色顺序解析时钟驱动RGB字节组",
+      "fields": {
+        "framed": "片选重新对齐像素",
+        "order": "颜色顺序"
+      },
+      "values": {
+        "order": {
+          "bgr": "BGR",
+          "brg": "BRG",
+          "gbr": "GBR",
+          "grb": "GRB",
+          "rbg": "RBG",
+          "rgb": "RGB"
+        }
+      },
+      "events": {
+        "end": "结束",
+        "pixel": "像素"
+      },
+      "eventFields": {
+        "blue": "蓝色",
+        "green": "绿色",
+        "index": "序号",
+        "pixels": "像素数",
+        "reason": "结束原因",
+        "red": "红色",
+        "tx": "事务号"
+      }
+    }
+  }
+}

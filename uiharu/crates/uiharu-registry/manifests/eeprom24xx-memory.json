@@ -1,0 +1,193 @@
+{
+  "name": "eeprom24xx-memory",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "i2c.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "eeprom24xx-memory.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "chip",
+      "kind": "enum",
+      "values": [
+        "generic",
+        "24c02",
+        "24c04",
+        "24c08",
+        "24c16",
+        "24c32",
+        "24c64",
+        "24c128",
+        "24c256",
+        "24c512",
+        "34aa04"
+      ]
+    },
+    {
+      "name": "address",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "capacity",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "page_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "address_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "block_bits",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "initial_counter",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295,
+      "optional": true
+    },
+    {
+      "name": "initial_bank",
+      "kind": "integer",
+      "min": 0,
+      "max": 255,
+      "optional": true
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "command",
+      "fields": ["op", "tx", "read", "ack", "device"]
+    },
+    {
+      "kind": "address",
+      "role": "address",
+      "fields": ["op", "value", "ack"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["op", "address", "value", "read", "ack", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "bank",
+      "role": "control",
+      "fields": ["op", "bank", "readback", "valid"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["op", "reason", "writeRequested"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "24xx EEPROM memory",
+      "summary": "Chip geometry, memory addresses, page wrapping and 34AA04 bank selection",
+      "fields": {
+        "address": "I²C base address",
+        "address_bytes": "Generic address bytes",
+        "block_bits": "Generic control block bits",
+        "capacity": "Generic capacity (bytes)",
+        "chip": "Chip profile",
+        "initial_bank": "Initial 34AA04 bank (optional)",
+        "initial_counter": "Initial counter (optional)",
+        "page_bytes": "Generic page bytes"
+      },
+      "values": {
+        "chip": {
+          "generic": "Generic geometry"
+        }
+      },
+      "events": {
+        "address": "Memory address",
+        "bank": "Bank selection",
+        "begin": "Begin",
+        "data": "Data byte",
+        "end": "End"
+      },
+      "eventFields": {
+        "ack": "Acknowledged",
+        "address": "Memory address",
+        "bank": "Bank",
+        "device": "Device",
+        "op": "Operation",
+        "read": "Read",
+        "readback": "Readback",
+        "reason": "End reason",
+        "tx": "I²C transaction",
+        "valid": "Valid",
+        "value": "Value",
+        "writeRequested": "Write ended with STOP"
+      }
+    },
+    "zh-CN": {
+      "name": "24xx EEPROM存储器",
+      "summary": "型号几何参数、存储地址、页内回绕及34AA04存储区选择",
+      "fields": {
+        "address": "I²C基地址",
+        "address_bytes": "通用地址字节数",
+        "block_bits": "通用控制块位数",
+        "capacity": "通用容量（字节）",
+        "chip": "型号",
+        "initial_bank": "初始34AA04存储区（可选）",
+        "initial_counter": "初始地址计数器（可选）",
+        "page_bytes": "通用页字节数"
+      },
+      "values": {
+        "chip": {
+          "generic": "通用几何参数"
+        }
+      },
+      "events": {
+        "address": "存储地址",
+        "bank": "存储区选择",
+        "begin": "开始",
+        "data": "数据字节",
+        "end": "结束"
+      },
+      "eventFields": {
+        "ack": "应答",
+        "address": "存储地址",
+        "bank": "存储区",
+        "device": "设备",
+        "op": "操作号",
+        "read": "读取",
+        "readback": "读回",
+        "reason": "结束原因",
+        "tx": "I²C事务",
+        "valid": "有效",
+        "value": "数值",
+        "writeRequested": "写入以STOP结束"
+      }
+    }
+  }
+}

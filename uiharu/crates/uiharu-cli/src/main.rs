@@ -71,6 +71,9 @@ impl From<uiharu_registry::BuildError> for Failure {
     fn from(error: uiharu_registry::BuildError) -> Self {
         match error {
             uiharu_registry::BuildError::Description(message) => Failure::Usage(message),
+            error @ uiharu_registry::BuildError::Configuration { .. } => {
+                Failure::Usage(error.to_string())
+            }
             uiharu_registry::BuildError::Graph(error) => Failure::Graph(error),
         }
     }

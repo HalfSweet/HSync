@@ -1,0 +1,70 @@
+{
+  "name": "x2444m",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "x2444m.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "command",
+      "fields": ["tx", "opcode", "address"]
+    },
+    {
+      "kind": "word",
+      "role": "data",
+      "fields": ["tx", "read", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "X2444M",
+      "summary": "X2444 instruction, address and 16-bit NOVRAM transfers",
+      "events": {
+        "begin": "Begin",
+        "end": "End",
+        "word": "Word"
+      },
+      "eventFields": {
+        "address": "Address",
+        "opcode": "Opcode",
+        "read": "Read",
+        "reason": "Reason",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "X2444M",
+      "summary": "解析X2444指令、地址及16位NOVRAM传输",
+      "events": {
+        "begin": "开始",
+        "end": "结束",
+        "word": "数据字"
+      },
+      "eventFields": {
+        "address": "地址",
+        "opcode": "操作码",
+        "read": "读取",
+        "reason": "结束原因",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

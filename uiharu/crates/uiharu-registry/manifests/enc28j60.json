@@ -1,0 +1,145 @@
+{
+  "name": "enc28j60",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "enc28j60.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "dummy_mode",
+      "kind": "enum",
+      "values": ["auto", "mac-mii", "ethernet"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "address", "read", "status"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "address", "value", "read"]
+    },
+    {
+      "kind": "operation",
+      "role": "command",
+      "fields": ["tx", "operation"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "address", "field", "value"]
+    },
+    {
+      "kind": "register",
+      "role": "command",
+      "fields": ["tx", "address", "bank", "name"]
+    },
+    {
+      "kind": "bank",
+      "role": "data",
+      "fields": ["tx", "bank", "knownMask"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "ENC28J60",
+      "summary": "ENC28J60 bank tracking, named registers, automatic MAC/MII dummy reads and buffers",
+      "fields": {
+        "dummy_mode": "Register read dummy handling"
+      },
+      "values": {
+        "dummy_mode": {
+          "auto": "Follow observed bank",
+          "ethernet": "Ethernet (no dummy byte)",
+          "mac-mii": "MAC/MII (one dummy byte)"
+        }
+      },
+      "events": {
+        "bank": "Bank",
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "field": "Field",
+        "operation": "Operation",
+        "register": "Register"
+      },
+      "eventFields": {
+        "address": "Address",
+        "bank": "Bank",
+        "field": "Field",
+        "knownMask": "Known bank-bit mask",
+        "name": "Register name",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "operation": "Operation",
+        "read": "Read",
+        "reason": "Reason",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "ENC28J60",
+      "summary": "解析ENC28J60寄存器分组、命名寄存器、自动MAC/MII空字节及缓冲区操作",
+      "fields": {
+        "dummy_mode": "寄存器读取空字节模式"
+      },
+      "values": {
+        "dummy_mode": {
+          "auto": "自动跟随已知分组",
+          "ethernet": "以太网（无空字节）",
+          "mac-mii": "MAC/MII（一个空字节）"
+        }
+      },
+      "events": {
+        "bank": "寄存器分组",
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束",
+        "field": "字段",
+        "operation": "操作",
+        "register": "寄存器"
+      },
+      "eventFields": {
+        "address": "地址",
+        "bank": "寄存器分组",
+        "field": "字段",
+        "knownMask": "已知分组位掩码",
+        "name": "寄存器名称",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "operation": "操作",
+        "read": "读取",
+        "reason": "结束原因",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

@@ -1,0 +1,123 @@
+{
+  "name": "lm75",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "i2c.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "lm75.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "resolution",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "address",
+      "fields": ["op", "tx", "read", "ack"],
+      "errorWhen": [
+        {
+          "ack": false
+        }
+      ]
+    },
+    {
+      "kind": "pointer",
+      "role": "address",
+      "fields": ["op", "register", "ack"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["op", "register", "value", "read", "ack"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["op", "register", "field", "value", "negative", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["op", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "LM75",
+      "summary": "9–12-bit temperature and thermostat registers",
+      "fields": {
+        "address": "I²C address",
+        "resolution": "Temperature bits (9–12)"
+      },
+      "events": {
+        "begin": "Address",
+        "byte": "Register byte",
+        "end": "End",
+        "field": "Decoded field",
+        "pointer": "Register pointer"
+      },
+      "eventFields": {
+        "ack": "Acknowledged",
+        "field": "Field",
+        "negative": "Negative",
+        "op": "Operation",
+        "read": "Read",
+        "reason": "Reason",
+        "register": "Register",
+        "tx": "I²C transaction",
+        "valid": "Valid",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "LM75",
+      "summary": "9 位温度和温控寄存器",
+      "fields": {
+        "address": "I²C 地址",
+        "resolution": "温度位数（9–12）"
+      },
+      "events": {
+        "begin": "地址",
+        "byte": "寄存器字节",
+        "end": "结束",
+        "field": "解码字段",
+        "pointer": "寄存器指针"
+      },
+      "eventFields": {
+        "ack": "应答",
+        "field": "字段",
+        "negative": "负数",
+        "op": "操作号",
+        "read": "读取",
+        "reason": "原因",
+        "register": "寄存器",
+        "tx": "I²C 事务",
+        "valid": "有效",
+        "value": "值"
+      }
+    }
+  }
+}

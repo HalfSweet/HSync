@@ -21,6 +21,10 @@ pub enum BuildError {
     /// that names nothing.
     #[error("{0}")]
     Description(String),
+    /// A decoder refused its configuration. Keep its diagnostic separate from the
+    /// node name so embedding applications can localize a decoder's message key.
+    #[error("node {node}: {message}")]
+    Configuration { node: String, message: String },
     /// The graph refused the wiring.
     #[error(transparent)]
     Graph(#[from] GraphError),
@@ -141,9 +145,12 @@ pub fn build_with(description: &Description, catalog: &Catalog) -> Result<Built,
         let kind = catalog
             .get(&node.kind)
             .ok_or_else(|| wrong(format!("node {name}: unknown type {}", node.kind)))?;
-        let (built, fault) = kind
-            .build(&node.config)
-            .map_err(|error| wrong(format!("node {name}: {error}")))?;
+        let (built, fault) =
+            kind.build(&node.config)
+                .map_err(|message| BuildError::Configuration {
+                    node: name.clone(),
+                    message,
+                })?;
         if let Some(fault) = fault {
             monitored.push((name.clone(), fault));
         }
@@ -379,6 +386,310 @@ mod tests {
                 "{loaded:?}"
             );
             check_flash(&nor, spi_events);
+        }
+    }
+
+    #[test]
+    fn new_transport_paths_build_and_expose_typed_readers() {
+        for name in [
+            "qspi",
+            "sdcard-sd",
+            "swim",
+            "swim-stm8",
+            "aud",
+            "c2",
+            "avr-pdi",
+            "fsi",
+            "sd-native",
+            "st7735",
+            "st7789",
+            "sda2506",
+            "tlc5620",
+        ] {
+            let description: Description = serde_json::from_value(serde_json::json!({
+                "source": { "channels": 8, "rate": 16000000 },
+                "nodes": { "transport": { "type": name } },
+                "connections": [{ "from": "source", "to": "transport.logic" }],
+                "expose": { "result": "transport.events" }
+            }))
+            .expect("description");
+            let built = build(&description).expect("transport builds");
+            assert_eq!(built.streams.len(), 1);
+            assert_eq!(built.streams[0].kind, name);
+            if [
+                "swim-stm8",
+                "aud",
+                "c2",
+                "avr-pdi",
+                "fsi",
+                "sd-native",
+                "st7735",
+                "st7789",
+                "sda2506",
+                "tlc5620",
+            ]
+            .contains(&name)
+            {
+                let mut catalog = Catalog::new();
+                catalog.load(&module(name)).expect("loads transport IR");
+                assert_eq!(
+                    build_with(&description, &catalog)
+                        .expect("loaded transport builds")
+                        .streams[0]
+                        .kind,
+                    name
+                );
+            }
+        }
+        let description = parse(
+            r#"{
+            "source": { "channels": 4, "rate": 16000000 },
+            "nodes": { "tap": { "type": "jtag" }, "debug": { "type": "jtag-dp" } },
+            "connections": [
+                { "from": "source", "to": "tap.logic" },
+                { "from": "tap.events", "to": "debug.bus" }
+            ],
+            "expose": { "debug": "debug.events" }
+        }"#,
+        );
+        assert_eq!(
+            build(&description).expect("JTAG debug builds").streams[0].kind,
+            "jtag-dp"
+        );
+        let mut missing = description;
+        missing.nodes.get_mut("tap").expect("tap").config = serde_json::json!({"tdo":null});
+        assert!(
+            matches!(build(&missing), Err(BuildError::Graph(GraphError::Requirement { key, .. })) if key == "tdo")
+        );
+    }
+
+    #[test]
+    fn jtag_device_profiles_build_as_compiled_or_loaded_layers() {
+        for name in ["jtag-ejtag", "jtag-stm32"] {
+            let description: Description = serde_json::from_value(serde_json::json!({
+                "source": { "channels": 4, "rate": 16000000 },
+                "nodes": { "tap": { "type": "jtag" }, "device": { "type": name } },
+                "connections": [
+                    { "from": "source", "to": "tap.logic" },
+                    { "from": "tap.events", "to": "device.bus" }
+                ],
+                "expose": { "result": "device.events" }
+            }))
+            .expect("description");
+            for loaded in [false, true] {
+                let mut catalog = Catalog::new();
+                if loaded {
+                    catalog.load(&module(name)).expect("loads JTAG device IR");
+                }
+                assert_eq!(
+                    build_with(&description, &catalog).expect("builds").streams[0].kind,
+                    name
+                );
+                let mut missing = description.clone();
+                missing.nodes.get_mut("tap").expect("tap").config = serde_json::json!({"tdi":null});
+                assert!(matches!(build_with(&missing, &catalog),
+                    Err(BuildError::Graph(GraphError::Requirement { key, .. })) if key == "tdi"));
+            }
+        }
+    }
+
+    #[test]
+    fn jtag_chain_and_memap_connect_through_four_mixed_layers() {
+        let description = parse(
+            r#"{
+            "source": { "channels": 4, "rate": 16000000 },
+            "nodes": {
+                "tap": { "type": "jtag" },
+                "chain": { "type": "jtag-chain" },
+                "debug": { "type": "jtag-dp" },
+                "memory": { "type": "arm-memap" }
+            },
+            "connections": [
+                { "from": "source", "to": "tap.logic" },
+                { "from": "tap.events", "to": "chain.bus" },
+                { "from": "chain.events", "to": "debug.bus" },
+                { "from": "debug.events", "to": "memory.bus" }
+            ],
+            "expose": { "memory": "memory.events" }
+        }"#,
+        );
+        for modules in [
+            vec![],
+            vec!["jtag-chain"],
+            vec!["arm-memap"],
+            vec!["jtag-chain", "arm-memap"],
+        ] {
+            let mut catalog = Catalog::new();
+            for name in modules {
+                catalog.load(&module(name)).expect("loads IR");
+            }
+            let built = build_with(&description, &catalog).expect("four-layer graph builds");
+            assert_eq!(built.streams[0].kind, "arm-memap");
+        }
+    }
+
+    #[test]
+    fn device_profiles_connect_as_compiled_and_loaded_nodes() {
+        for name in [
+            "adxl345",
+            "ds1307",
+            "lm75",
+            "mcp230xx",
+            "mlx90614",
+            "pca9571",
+            "rtc8564",
+            "tca6408a",
+            "edid",
+            "ltc26x7",
+            "mxc6225xu",
+            "nunchuk",
+            "atsha204a",
+            "xfp",
+            "eeprom24xx-memory",
+            "smbus",
+        ] {
+            let description: Description = serde_json::from_value(serde_json::json!({
+                "source": { "channels": 2, "rate": 1000000 },
+                "nodes": {
+                    "bus": { "type": "i2c" },
+                    "device": { "type": name }
+                },
+                "connections": [
+                    { "from": "source", "to": "bus.logic" },
+                    { "from": "bus.events", "to": "device.bus" }
+                ],
+                "expose": { "device": "device.events" }
+            }))
+            .expect("device graph");
+            let compiled = build(&description).unwrap_or_else(|error| panic!("{name}: {error}"));
+            assert_eq!(compiled.streams[0].kind, name);
+            let mut catalog = Catalog::new();
+            catalog.load(&module(name)).expect("loads device IR");
+            let loaded = build_with(&description, &catalog)
+                .unwrap_or_else(|error| panic!("loaded {name}: {error}"));
+            assert_eq!(loaded.streams[0].kind, name);
+        }
+    }
+
+    #[test]
+    fn ps2_device_profiles_connect_in_both_execution_modes() {
+        for mode in ["keyboard-set2", "mouse"] {
+            let description: Description = serde_json::from_value(serde_json::json!({
+                "source":{"channels":2,"rate":1000000},
+                "nodes":{"bus":{"type":"ps2"},"device":{"type":"ps2-device","config":{"mode":mode}}},
+                "connections":[{"from":"source","to":"bus.logic"},{"from":"bus.events","to":"device.bus"}],
+                "expose":{"device":"device.events"}
+            })).expect("PS/2 graph");
+            build(&description).expect("compiled PS/2 device graph");
+            let mut catalog = Catalog::new();
+            catalog
+                .load(&module("ps2-device"))
+                .expect("loads PS/2 device IR");
+            build_with(&description, &catalog).expect("loaded PS/2 device graph");
+        }
+    }
+
+    #[test]
+    fn modbus_pdu_connects_through_three_layers_in_both_execution_modes() {
+        let description = parse(
+            r#"{
+            "source": { "channels": 1, "rate": 1000000 },
+            "nodes": {
+                "line": { "type": "uart" },
+                "rtu": { "type": "modbus-rtu" },
+                "pdu": { "type": "modbus-pdu" }
+            },
+            "connections": [
+                { "from": "source", "to": "line.logic" },
+                { "from": "line.events", "to": "rtu.uart" },
+                { "from": "rtu.events", "to": "pdu.bus" }
+            ],
+            "expose": { "pdu": "pdu.events" }
+        }"#,
+        );
+        assert_eq!(
+            build(&description).expect("compiled PDU graph").streams[0].kind,
+            "modbus-pdu"
+        );
+        let mut catalog = Catalog::new();
+        catalog.load(&module("modbus-pdu")).expect("loads PDU IR");
+        assert_eq!(
+            build_with(&description, &catalog)
+                .expect("loaded PDU graph")
+                .streams[0]
+                .kind,
+            "modbus-pdu"
+        );
+    }
+
+    #[test]
+    fn spi_profiles_require_their_word_width_in_both_execution_modes() {
+        for (name, bits) in [
+            ("ad5626", 1),
+            ("ad79x0", 1),
+            ("adf435x", 1),
+            ("ltc242x", 1),
+            ("x2444m", 1),
+            ("a7105", 8),
+            ("adns5020", 8),
+            ("adxl345-spi", 8),
+            ("ade77xx", 8),
+            ("cc1101", 8),
+            ("enc28j60", 8),
+            ("max7219", 8),
+            ("max72xx", 8),
+            ("mrf24j40", 8),
+            ("nrf905", 8),
+            ("rfm12", 8),
+            ("sd-registers", 8),
+            ("spi-tpm", 8),
+            ("st25r39xx-spi", 8),
+            ("rgb-led-spi", 8),
+            ("xn297", 8),
+        ] {
+            let mut description: Description = serde_json::from_value(serde_json::json!({
+                "source":{"channels":4,"rate":10000000},
+                "nodes":{"bus":{"type":"spi","config":{"word_bits":bits}}, "device":{"type":name}},
+                "connections":[{"from":"source","to":"bus.logic"},{"from":"bus.events","to":"device.bus"}],
+                "expose":{"decoded":"device.events"}
+            })).expect("SPI graph");
+            let mut loaded = Catalog::new();
+            loaded.load(&module(name)).expect("loads IR");
+            for catalog in [Catalog::new(), loaded] {
+                build_with(&description, &catalog)
+                    .unwrap_or_else(|error| panic!("{name}: {error}"));
+                description.nodes.get_mut("bus").expect("bus").config["word_bits"] =
+                    serde_json::json!(7);
+                assert!(
+                    matches!(build_with(&description, &catalog), Err(BuildError::Graph(GraphError::Requirement { key, .. })) if key == "wordBits")
+                );
+                description.nodes.get_mut("bus").expect("bus").config["word_bits"] =
+                    serde_json::json!(bits);
+            }
+        }
+    }
+
+    #[test]
+    fn trace_transport_feeds_itm_and_etm_with_compiled_and_loaded_contracts() {
+        for name in ["arm-itm", "arm-etmv3"] {
+            let description: Description = serde_json::from_value(serde_json::json!({
+                "source":{"channels":1,"rate":100000000},
+                "nodes":{"line":{"type":"uart"},"trace":{"type":"arm-trace-transport","config":{"format":"tpiu"}},"packets":{"type":name}},
+                "connections":[{"from":"source","to":"line.logic"},{"from":"line.events","to":"trace.bus"},{"from":"trace.events","to":"packets.bus"}],
+                "expose":{"packets":"packets.events"}
+            })).expect("trace graph");
+            for modules in [
+                vec![],
+                vec!["arm-trace-transport"],
+                vec![name],
+                vec!["arm-trace-transport", name],
+            ] {
+                let mut catalog = Catalog::new();
+                for name in modules {
+                    catalog.load(&module(name)).expect("loads IR");
+                }
+                build_with(&description, &catalog).expect("trace contracts connect");
+            }
         }
     }
 

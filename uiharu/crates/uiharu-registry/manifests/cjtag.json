@@ -1,0 +1,144 @@
+{
+  "name": "cjtag",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "jtag.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clock",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "start_aligned",
+      "kind": "bool"
+    },
+    {
+      "name": "format",
+      "kind": "enum",
+      "values": ["oscan0", "oscan1"]
+    },
+    {
+      "name": "ready_ones",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "delay_cycles",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "max_stall_cycles",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    }
+  ],
+  "events": [
+    {
+      "kind": "state",
+      "role": "framing",
+      "fields": ["state"]
+    },
+    {
+      "kind": "reset",
+      "role": "line",
+      "fields": ["by"]
+    },
+    {
+      "kind": "scan-begin",
+      "role": "framing",
+      "fields": ["scan", "register"]
+    },
+    {
+      "kind": "shift",
+      "role": "data",
+      "fields": ["scan", "offset", "tdi", "tdo", "bits"]
+    },
+    {
+      "kind": "scan-end",
+      "role": "framing",
+      "fields": ["scan", "bits", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "cJTAG OScan0/1",
+      "summary": "Two-wire OScan0/1 with bounded ready stalls and observed activation",
+      "fields": {
+        "clock": "TCKC",
+        "data": "TMSC",
+        "delay_cycles": "Fixed delay clocks",
+        "format": "Initial scan format",
+        "max_stall_cycles": "Maximum ready clocks",
+        "ready_ones": "Consecutive ready bits",
+        "start_aligned": "Capture starts at a known nTDI phase"
+      },
+      "events": {
+        "reset": "Reset",
+        "scan-begin": "Scan begin",
+        "scan-end": "Scan end",
+        "shift": "Shift bit",
+        "state": "TAP state"
+      },
+      "eventFields": {
+        "bits": "Bits",
+        "by": "Reset source",
+        "offset": "Bit offset",
+        "reason": "End reason",
+        "register": "Register",
+        "scan": "Scan",
+        "state": "State",
+        "tdi": "TDI bits",
+        "tdo": "TDO bits"
+      }
+    },
+    "zh-CN": {
+      "name": "cJTAG OScan0/1",
+      "summary": "双线OScan0/1扫描，支持有界就绪等待与观测激活",
+      "fields": {
+        "clock": "TCKC",
+        "data": "TMSC",
+        "delay_cycles": "固定延迟周期",
+        "format": "初始扫描格式",
+        "max_stall_cycles": "最大就绪周期",
+        "ready_ones": "连续就绪位数",
+        "start_aligned": "采集从已知nTDI相位开始"
+      },
+      "events": {
+        "reset": "复位",
+        "scan-begin": "扫描开始",
+        "scan-end": "扫描结束",
+        "shift": "移位位",
+        "state": "TAP状态"
+      },
+      "eventFields": {
+        "bits": "位数",
+        "by": "复位源",
+        "offset": "位偏移",
+        "reason": "结束原因",
+        "register": "寄存器",
+        "scan": "扫描",
+        "state": "状态",
+        "tdi": "TDI位",
+        "tdo": "TDO位"
+      }
+    }
+  }
+}

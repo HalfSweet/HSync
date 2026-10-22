@@ -1,0 +1,95 @@
+{
+  "name": "rfm12",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "rfm12.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "control",
+      "role": "command",
+      "fields": ["tx", "command", "status", "opcode"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "command"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "field", "value"]
+    },
+    {
+      "kind": "wake-period",
+      "role": "data",
+      "fields": ["tx", "microseconds"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "RFM12",
+      "summary": "RFM12B named commands, radio parameters and returned status bits",
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "control": "Control",
+        "end": "End",
+        "field": "Field",
+        "wake-period": "Wake period"
+      },
+      "eventFields": {
+        "command": "Command",
+        "field": "Field",
+        "microseconds": "Duration (µs)",
+        "opcode": "Opcode",
+        "reason": "Reason",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "RFM12",
+      "summary": "解析RFM12B命令、射频参数及返回状态位",
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "control": "控制字",
+        "end": "结束",
+        "field": "字段",
+        "wake-period": "唤醒周期"
+      },
+      "eventFields": {
+        "command": "命令",
+        "field": "字段",
+        "microseconds": "时长（微秒）",
+        "opcode": "操作码",
+        "reason": "结束原因",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

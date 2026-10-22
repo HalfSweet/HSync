@@ -1,0 +1,201 @@
+{
+  "name": "ade77xx",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ade77xx.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "model",
+      "kind": "enum",
+      "values": ["ade7753", "ade7758"]
+    },
+    {
+      "name": "framed",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "address", "read", "status"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "address", "value", "read"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["tx", "register", "read", "bits", "raw", "negative", "magnitude"]
+    },
+    {
+      "kind": "mode",
+      "role": "control",
+      "fields": [
+        "tx",
+        "highPassDisabled",
+        "lowPassDisabled",
+        "cfDisabled",
+        "sagDisabled",
+        "suspended",
+        "temperatureStart",
+        "reset",
+        "lineCycle",
+        "channel1Disabled",
+        "channel2Disabled",
+        "swap",
+        "sampleRate",
+        "waveform",
+        "positiveOnly"
+      ]
+    },
+    {
+      "kind": "gain",
+      "role": "control",
+      "fields": ["tx", "channel1", "channel2", "inputRange"]
+    },
+    {
+      "kind": "operational-mode",
+      "role": "control",
+      "fields": ["tx", "highPassDisabled", "lowPassDisabled", "cfDisabled", "disableMode", "reset"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "ADE77XX",
+      "summary": "ADE7753/7758 register widths, signed codes and MODE/GAIN controls",
+      "fields": {
+        "framed": "Restart commands on chip select",
+        "model": "Model"
+      },
+      "values": {
+        "model": {
+          "ade7753": "ADE7753",
+          "ade7758": "ADE7758"
+        }
+      },
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "gain": "Gain",
+        "mode": "Mode",
+        "operational-mode": "Operational mode",
+        "register": "Register"
+      },
+      "eventFields": {
+        "address": "Address",
+        "bits": "Bits",
+        "cfDisabled": "Cf Disabled",
+        "channel1": "Channel1",
+        "channel1Disabled": "Channel1 Disabled",
+        "channel2": "Channel2",
+        "channel2Disabled": "Channel2 Disabled",
+        "disableMode": "Channel disable mode",
+        "highPassDisabled": "High Pass Disabled",
+        "inputRange": "Input Range",
+        "lineCycle": "Line Cycle",
+        "lowPassDisabled": "Low Pass Disabled",
+        "magnitude": "Magnitude",
+        "negative": "Negative",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "positiveOnly": "Positive Only",
+        "raw": "Raw",
+        "read": "Read",
+        "reason": "Reason",
+        "register": "Register",
+        "reset": "Reset",
+        "sagDisabled": "Sag Disabled",
+        "sampleRate": "Sample Rate",
+        "status": "Status",
+        "suspended": "Suspended",
+        "swap": "Swap",
+        "temperatureStart": "Temperature Start",
+        "tx": "Transaction",
+        "value": "Value",
+        "waveform": "Waveform"
+      }
+    },
+    "zh-CN": {
+      "name": "ADE77XX",
+      "summary": "解析ADE7753/7758寄存器宽度、有符号编码及模式和增益控制",
+      "fields": {
+        "framed": "片选重新对齐命令",
+        "model": "芯片型号"
+      },
+      "values": {
+        "model": {
+          "ade7753": "ADE7753",
+          "ade7758": "ADE7758"
+        }
+      },
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束",
+        "gain": "增益",
+        "mode": "模式",
+        "operational-mode": "运行模式",
+        "register": "寄存器"
+      },
+      "eventFields": {
+        "address": "地址",
+        "bits": "位数",
+        "cfDisabled": "CF输出禁用",
+        "channel1": "通道1",
+        "channel1Disabled": "通道1禁用",
+        "channel2": "通道2",
+        "channel2Disabled": "通道2禁用",
+        "disableMode": "通道禁用模式",
+        "highPassDisabled": "高通滤波禁用",
+        "inputRange": "输入量程",
+        "lineCycle": "线路周期",
+        "lowPassDisabled": "低通滤波禁用",
+        "magnitude": "绝对值",
+        "negative": "负数",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "positiveOnly": "仅累积正值",
+        "raw": "原始值",
+        "read": "读取",
+        "reason": "结束原因",
+        "register": "寄存器",
+        "reset": "复位",
+        "sagDisabled": "电压跌落检测禁用",
+        "sampleRate": "采样速率",
+        "status": "状态",
+        "suspended": "已挂起",
+        "swap": "交换通道",
+        "temperatureStart": "启动温度转换",
+        "tx": "事务号",
+        "value": "数值",
+        "waveform": "波形选择"
+      }
+    }
+  }
+}

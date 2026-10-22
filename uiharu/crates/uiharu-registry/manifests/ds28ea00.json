@@ -1,0 +1,167 @@
+{
+  "name": "ds28ea00",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "onewire.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ds28ea00.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "rom",
+      "role": "address",
+      "fields": ["id", "crcOk"],
+      "errorWhen": [
+        {
+          "crcOk": false
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["code", "command"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["index", "value"]
+    },
+    {
+      "kind": "temperature",
+      "role": "data",
+      "fields": ["raw", "microCelsius", "negative", "resolution", "crcOk"],
+      "errorWhen": [
+        {
+          "crcOk": false
+        }
+      ]
+    },
+    {
+      "kind": "pio",
+      "role": "data",
+      "fields": ["a", "b", "latchA", "latchB", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "chain",
+      "role": "control",
+      "fields": ["state", "inverseOk"],
+      "errorWhen": [
+        {
+          "inverseOk": false
+        }
+      ]
+    },
+    {
+      "kind": "status",
+      "role": "control",
+      "fields": ["value", "count"]
+    },
+    {
+      "kind": "check",
+      "role": "check",
+      "fields": ["check", "ok", "value"],
+      "errorWhen": [
+        {
+          "ok": false
+        }
+      ]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "DS28EA00",
+      "summary": "Thermometer scratchpad, PIO and chain commands",
+      "events": {
+        "chain": "Chain",
+        "check": "Check",
+        "command": "Command",
+        "data": "Data",
+        "error": "Error",
+        "pio": "Pio",
+        "rom": "Rom",
+        "status": "Status",
+        "temperature": "Temperature"
+      },
+      "eventFields": {
+        "a": "A",
+        "b": "B",
+        "check": "Check",
+        "code": "Code",
+        "command": "Command",
+        "count": "Count",
+        "crcOk": "Crcok",
+        "id": "Id",
+        "index": "Index",
+        "inverseOk": "Inverseok",
+        "latchA": "Latcha",
+        "latchB": "Latchb",
+        "microCelsius": "Microcelsius",
+        "negative": "Negative temperature",
+        "ok": "Ok",
+        "raw": "Raw",
+        "reason": "Reason",
+        "resolution": "Resolution",
+        "state": "State",
+        "valid": "Valid",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "DS28EA00",
+      "summary": "温度暂存器、PIO和链控制命令",
+      "events": {
+        "chain": "链控制",
+        "check": "完整性校验",
+        "command": "功能命令",
+        "data": "数据",
+        "error": "协议错误",
+        "pio": "PIO状态",
+        "rom": "ROM编码",
+        "status": "完成状态",
+        "temperature": "温度"
+      },
+      "eventFields": {
+        "a": "PIOA电平",
+        "b": "PIOB电平",
+        "check": "完整性校验",
+        "code": "命令码",
+        "command": "功能命令",
+        "count": "位数",
+        "crcOk": "CRC有效",
+        "id": "ROM编码",
+        "index": "字节索引",
+        "inverseOk": "反码有效",
+        "latchA": "PIOA锁存",
+        "latchB": "PIOB锁存",
+        "microCelsius": "温度绝对值（微摄氏度）",
+        "negative": "负温度",
+        "ok": "校验有效",
+        "raw": "原始温度",
+        "reason": "错误原因",
+        "resolution": "分辨率",
+        "state": "链状态",
+        "valid": "状态有效",
+        "value": "数值"
+      }
+    }
+  }
+}

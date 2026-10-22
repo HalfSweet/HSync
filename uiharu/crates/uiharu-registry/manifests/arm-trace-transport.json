@@ -1,0 +1,93 @@
+{
+  "name": "arm-trace-transport",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "uart.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "trace-byte.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "format",
+      "kind": "enum",
+      "values": ["raw", "tpiu"]
+    },
+    {
+      "name": "trace_id",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "start_aligned",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["value"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "Arm trace transport",
+      "summary": "Raw SWO bytes or one CoreSight TPIU formatter trace source",
+      "fields": {
+        "format": "Trace transport format",
+        "start_aligned": "Assume a formatter frame boundary at the start",
+        "trace_id": "Trace source ID"
+      },
+      "values": {
+        "format": {
+          "raw": "Raw trace bytes",
+          "tpiu": "TPIU formatted stream"
+        }
+      },
+      "events": {
+        "byte": "Trace byte",
+        "error": "Transport error"
+      },
+      "eventFields": {
+        "reason": "Reason",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "Arm 跟踪传输",
+      "summary": "原始 SWO 字节或 CoreSight TPIU 格式器跟踪源",
+      "fields": {
+        "format": "跟踪传输格式",
+        "start_aligned": "假定起点位于格式帧边界",
+        "trace_id": "跟踪源 ID"
+      },
+      "values": {
+        "format": {
+          "raw": "原始跟踪字节",
+          "tpiu": "TPIU 格式化流"
+        }
+      },
+      "events": {
+        "byte": "跟踪字节",
+        "error": "传输错误"
+      },
+      "eventFields": {
+        "reason": "原因",
+        "value": "值"
+      }
+    }
+  }
+}

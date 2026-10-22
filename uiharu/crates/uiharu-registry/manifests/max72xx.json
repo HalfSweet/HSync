@@ -1,0 +1,131 @@
+{
+  "name": "max72xx",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "max72xx.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["tx", "slot", "address", "value"]
+    },
+    {
+      "kind": "digit",
+      "role": "data",
+      "fields": ["tx", "slot", "digit", "segments", "decimalPoint"]
+    },
+    {
+      "kind": "decode-mode",
+      "role": "control",
+      "fields": ["tx", "slot", "mask"]
+    },
+    {
+      "kind": "intensity",
+      "role": "control",
+      "fields": ["tx", "slot", "level"]
+    },
+    {
+      "kind": "scan-limit",
+      "role": "control",
+      "fields": ["tx", "slot", "lastDigit"]
+    },
+    {
+      "kind": "shutdown",
+      "role": "control",
+      "fields": ["tx", "slot", "enabled"]
+    },
+    {
+      "kind": "display-test",
+      "role": "control",
+      "fields": ["tx", "slot", "enabled"]
+    },
+    {
+      "kind": "warning",
+      "role": "control",
+      "fields": ["tx", "slot", "address", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "MAX72XX",
+      "summary": "MAX7219/MAX7221 daisy-chain words and display register fields",
+      "events": {
+        "begin": "Begin",
+        "decode-mode": "Decode mode",
+        "digit": "Digit",
+        "display-test": "Display test",
+        "end": "End",
+        "intensity": "Intensity",
+        "register": "Register",
+        "scan-limit": "Scan limit",
+        "shutdown": "Shutdown",
+        "warning": "Warning"
+      },
+      "eventFields": {
+        "address": "Address",
+        "decimalPoint": "Decimal Point",
+        "digit": "Digit",
+        "enabled": "Enabled",
+        "lastDigit": "Last Digit",
+        "level": "Level",
+        "mask": "Mask",
+        "reason": "Reason",
+        "segments": "Segments",
+        "slot": "Slot",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "MAX72XX",
+      "summary": "解析MAX7219/MAX7221级联字及显示寄存器字段",
+      "events": {
+        "begin": "开始",
+        "decode-mode": "译码模式",
+        "digit": "数位",
+        "display-test": "显示测试",
+        "end": "结束",
+        "intensity": "亮度",
+        "register": "寄存器",
+        "scan-limit": "扫描位数",
+        "shutdown": "关断",
+        "warning": "警告"
+      },
+      "eventFields": {
+        "address": "地址",
+        "decimalPoint": "小数点",
+        "digit": "数位",
+        "enabled": "启用",
+        "lastDigit": "末尾数位",
+        "level": "等级",
+        "mask": "掩码",
+        "reason": "结束原因",
+        "segments": "段码",
+        "slot": "链中序号",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

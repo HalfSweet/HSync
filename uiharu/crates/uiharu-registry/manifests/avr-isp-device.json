@@ -1,0 +1,76 @@
+{
+  "name": "avr-isp-device",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "avrisp.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "avr-isp-device.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "signature-byte",
+      "role": "data",
+      "fields": ["op", "tx", "index", "value"]
+    },
+    {
+      "kind": "signature",
+      "role": "address",
+      "fields": ["tx", "value", "manufacturer", "family", "part", "vendor", "device"]
+    },
+    {
+      "kind": "sync-warning",
+      "role": "error",
+      "fields": ["op", "tx"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "AVR ISP signatures",
+      "summary": "Observed manufacturer and device signature with programming-enable echo warning",
+      "events": {
+        "signature": "Device signature",
+        "signature-byte": "Signature byte",
+        "sync-warning": "Programming-enable echo mismatch"
+      },
+      "eventFields": {
+        "device": "Device",
+        "family": "Family byte",
+        "index": "Signature address",
+        "manufacturer": "Manufacturer byte",
+        "op": "Instruction",
+        "part": "Part byte",
+        "tx": "Session",
+        "value": "Value",
+        "vendor": "Vendor"
+      }
+    },
+    "zh-CN": {
+      "name": "AVR ISP签名",
+      "summary": "观测厂商和器件签名，并检查编程使能回显",
+      "events": {
+        "signature": "器件签名",
+        "signature-byte": "签名字节",
+        "sync-warning": "编程使能回显不符"
+      },
+      "eventFields": {
+        "device": "器件",
+        "family": "系列字节",
+        "index": "签名地址",
+        "manufacturer": "厂商字节",
+        "op": "指令",
+        "part": "型号字节",
+        "tx": "会话",
+        "value": "数值",
+        "vendor": "厂商"
+      }
+    }
+  }
+}

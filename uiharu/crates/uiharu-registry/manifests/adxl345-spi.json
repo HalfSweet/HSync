@@ -1,0 +1,92 @@
+{
+  "name": "adxl345-spi",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "adxl345-spi.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "address", "read", "status"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "address", "value", "read"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "address", "field", "value", "negative"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "ADXL345-SPI",
+      "summary": "ADXL345 signed raw XYZ samples, power/range and FIFO controls",
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "field": "Field"
+      },
+      "eventFields": {
+        "address": "Address",
+        "field": "Field",
+        "negative": "Negative",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "read": "Read",
+        "reason": "Reason",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "ADXL345-SPI",
+      "summary": "解析ADXL345有符号XYZ原始采样、电源、量程及FIFO控制",
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束",
+        "field": "字段"
+      },
+      "eventFields": {
+        "address": "地址",
+        "field": "字段",
+        "negative": "负数",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "read": "读取",
+        "reason": "结束原因",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

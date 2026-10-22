@@ -1,0 +1,126 @@
+{
+  "name": "st25r39xx-spi",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "st25r39xx-spi.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "address", "read", "status"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["tx", "space", "address", "register", "value", "read"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "address", "value", "read"]
+    },
+    {
+      "kind": "direct",
+      "role": "command",
+      "fields": ["tx", "command"]
+    },
+    {
+      "kind": "space",
+      "role": "address",
+      "fields": ["tx", "space"]
+    },
+    {
+      "kind": "operation",
+      "role": "command",
+      "fields": ["tx", "operation"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "address", "field", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "ST25R39XX-SPI",
+      "summary": "ST25R3916/17 register spaces, FIFO, direct commands and status",
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "direct": "Direct",
+        "end": "End",
+        "field": "Field",
+        "operation": "Operation",
+        "register": "Register",
+        "space": "Space"
+      },
+      "eventFields": {
+        "address": "Address",
+        "command": "Command",
+        "field": "Field",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "operation": "Operation",
+        "read": "Read",
+        "reason": "Reason",
+        "register": "Register name",
+        "space": "Space",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "ST25R39XX-SPI",
+      "summary": "解析ST25R3916/17寄存器空间、FIFO、直接命令及状态",
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "direct": "直接命令",
+        "end": "结束",
+        "field": "字段",
+        "operation": "操作",
+        "register": "寄存器",
+        "space": "寄存器空间"
+      },
+      "eventFields": {
+        "address": "地址",
+        "command": "命令",
+        "field": "字段",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "operation": "操作",
+        "read": "读取",
+        "reason": "结束原因",
+        "register": "寄存器名称",
+        "space": "寄存器空间",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

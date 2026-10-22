@@ -1,0 +1,175 @@
+{
+  "name": "arm-itm",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "trace-byte.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "arm-itm.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "start_aligned",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "sync",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "overflow",
+      "role": "line",
+      "fields": []
+    },
+    {
+      "kind": "software",
+      "role": "data",
+      "fields": ["port", "page", "bytes", "value"]
+    },
+    {
+      "kind": "hardware",
+      "role": "data",
+      "fields": ["source", "bytes", "value"]
+    },
+    {
+      "kind": "event-counter",
+      "role": "control",
+      "fields": ["flags"]
+    },
+    {
+      "kind": "exception",
+      "role": "control",
+      "fields": ["exception", "action"]
+    },
+    {
+      "kind": "pc",
+      "role": "address",
+      "fields": ["value"]
+    },
+    {
+      "kind": "sleep",
+      "role": "line",
+      "fields": []
+    },
+    {
+      "kind": "timestamp",
+      "role": "control",
+      "fields": ["delta", "control"]
+    },
+    {
+      "kind": "global-low",
+      "role": "control",
+      "fields": ["fragment", "significantBits", "wrap", "clockChange"]
+    },
+    {
+      "kind": "global-high",
+      "role": "control",
+      "fields": ["fragment", "timestampBits"]
+    },
+    {
+      "kind": "extension",
+      "role": "control",
+      "fields": ["hardware", "value"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["header", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "Arm ITM / DWT",
+      "summary": "Unformatted SWO bytes, source packets and local timestamps; synchronize before decoding",
+      "fields": {
+        "start_aligned": "Assume a packet boundary at the start"
+      },
+      "events": {
+        "error": "Error",
+        "event-counter": "Event counter",
+        "exception": "Exception",
+        "extension": "Extension",
+        "global-high": "Global timestamp high fragment",
+        "global-low": "Global timestamp low fragment",
+        "hardware": "DWT source",
+        "overflow": "Overflow",
+        "pc": "PC sample",
+        "sleep": "Sleep",
+        "software": "Instrumentation",
+        "sync": "Synchronization",
+        "timestamp": "Local timestamp"
+      },
+      "eventFields": {
+        "action": "Exception action",
+        "bytes": "Bytes",
+        "clockChange": "Clock changed",
+        "control": "Timestamp control",
+        "delta": "Timestamp delta",
+        "exception": "Exception number",
+        "flags": "Flags",
+        "fragment": "Timestamp fragment",
+        "hardware": "Hardware source",
+        "header": "Header",
+        "page": "Port page",
+        "port": "Port",
+        "reason": "Reason",
+        "significantBits": "Significant low bits",
+        "source": "Source",
+        "timestampBits": "Timestamp width",
+        "value": "Value",
+        "wrap": "Upper timestamp changed"
+      }
+    },
+    "zh-CN": {
+      "name": "Arm ITM / DWT",
+      "summary": "未格式化 SWO 字节、源数据包及局部时间戳；同步后解码",
+      "fields": {
+        "start_aligned": "假定起点位于数据包边界"
+      },
+      "events": {
+        "error": "错误",
+        "event-counter": "事件计数器",
+        "exception": "异常",
+        "extension": "扩展",
+        "global-high": "全局时间戳高位片段",
+        "global-low": "全局时间戳低位片段",
+        "hardware": "DWT 源",
+        "overflow": "溢出",
+        "pc": "PC 采样",
+        "sleep": "休眠",
+        "software": "软件跟踪",
+        "sync": "同步",
+        "timestamp": "局部时间戳"
+      },
+      "eventFields": {
+        "action": "异常动作",
+        "bytes": "字节数",
+        "clockChange": "时钟已变化",
+        "control": "时间戳控制",
+        "delta": "时间戳增量",
+        "exception": "异常编号",
+        "flags": "标志",
+        "fragment": "时间戳片段",
+        "hardware": "硬件源",
+        "header": "头部",
+        "page": "端口页",
+        "port": "端口",
+        "reason": "原因",
+        "significantBits": "有效低位数",
+        "source": "源编号",
+        "timestampBits": "时间戳宽度",
+        "value": "值",
+        "wrap": "时间戳高位已变化"
+      }
+    }
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "name": "ad5626",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ad5626.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "dac",
+      "role": "data",
+      "fields": ["tx", "code", "microvolts"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "AD5626",
+      "summary": "AD5626 12-bit DAC codes and nominal output microvolts",
+      "events": {
+        "begin": "Begin",
+        "dac": "Dac",
+        "end": "End"
+      },
+      "eventFields": {
+        "code": "Code",
+        "microvolts": "Voltage (µV)",
+        "reason": "Reason",
+        "tx": "Transaction"
+      }
+    },
+    "zh-CN": {
+      "name": "AD5626",
+      "summary": "解析AD5626的12位DAC编码及标称输出微伏值",
+      "events": {
+        "begin": "开始",
+        "dac": "DAC输出",
+        "end": "结束"
+      },
+      "eventFields": {
+        "code": "编码",
+        "microvolts": "电压（微伏）",
+        "reason": "结束原因",
+        "tx": "事务号"
+      }
+    }
+  }
+}

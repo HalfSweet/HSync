@@ -21,6 +21,11 @@
     {
       "name": "mdio",
       "kind": "channel"
+    },
+    {
+      "name": "readEdge",
+      "kind": "enum",
+      "values": ["rising", "falling"]
     }
   ],
   "events": [

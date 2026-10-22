@@ -1,0 +1,531 @@
+{
+  "name": "sd-native",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "sd-native.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "cmd",
+      "kind": "channel"
+    },
+    {
+      "name": "dat0",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "dat1",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "dat2",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "dat3",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "width",
+      "kind": "enum",
+      "values": ["one", "four", "auto"]
+    },
+    {
+      "name": "block_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    }
+  ],
+  "events": [
+    {
+      "kind": "card-status",
+      "role": "control",
+      "fields": [
+        "token",
+        "format",
+        "value",
+        "relativeAddress",
+        "currentState",
+        "readyForData",
+        "appCommand",
+        "crcOk",
+        "endOk"
+      ],
+      "errorWhen": [
+        {
+          "crcOk": false
+        },
+        {
+          "endOk": false
+        }
+      ]
+    },
+    {
+      "kind": "status-field",
+      "role": "control",
+      "fields": ["token", "field", "value"]
+    },
+    {
+      "kind": "relative-address",
+      "role": "address",
+      "fields": ["token", "address", "status", "crcOk", "endOk"],
+      "errorWhen": [
+        {
+          "crcOk": false
+        },
+        {
+          "endOk": false
+        }
+      ]
+    },
+    {
+      "kind": "interface-condition",
+      "role": "control",
+      "fields": [
+        "token",
+        "voltage",
+        "voltageRange",
+        "pattern",
+        "expectedPattern",
+        "patternOk",
+        "voltageOk",
+        "reserved",
+        "crcOk",
+        "endOk"
+      ],
+      "errorWhen": [
+        {
+          "crcOk": false
+        },
+        {
+          "endOk": false
+        },
+        {
+          "patternOk": false
+        },
+        {
+          "voltageOk": false
+        }
+      ]
+    },
+    {
+      "kind": "ocr",
+      "role": "control",
+      "fields": ["token", "value", "ready", "highCapacity", "voltageWindow", "endOk"]
+    },
+    {
+      "kind": "scr",
+      "role": "data",
+      "fields": [
+        "block",
+        "raw",
+        "structure",
+        "sdSpec",
+        "dataAfterErase",
+        "security",
+        "busWidths",
+        "spec3",
+        "extendedSecurity",
+        "spec4",
+        "specExtension",
+        "commandSupport",
+        "vendorData",
+        "crcOk",
+        "supported"
+      ],
+      "errorWhen": [
+        {
+          "crcOk": false
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["token", "host", "index", "argument", "crc", "crcOk", "endOk"]
+    },
+    {
+      "kind": "cid",
+      "role": "data",
+      "fields": [
+        "token",
+        "productName",
+        "manufacturer",
+        "oem",
+        "revision",
+        "serial",
+        "year",
+        "month",
+        "crcOk",
+        "endOk"
+      ]
+    },
+    {
+      "kind": "csd",
+      "role": "data",
+      "fields": [
+        "token",
+        "taac",
+        "nsac",
+        "transferSpeed",
+        "commandClasses",
+        "readPartial",
+        "writeMisalign",
+        "readMisalign",
+        "dsrImplemented",
+        "readCurrentMin",
+        "readCurrentMax",
+        "writeCurrentMin",
+        "writeCurrentMax",
+        "sizeMultiplier",
+        "eraseSingleBlock",
+        "eraseSectorBlocks",
+        "writeProtectGroupSectors",
+        "writeProtectGroupEnabled",
+        "writeSpeedFactor",
+        "writeBlockBits",
+        "writePartial",
+        "fileFormatGroup",
+        "copied",
+        "permanentWriteProtect",
+        "temporaryWriteProtect",
+        "fileFormat",
+        "registerCrc",
+        "structure",
+        "size",
+        "blocks",
+        "readBlockBits",
+        "supported",
+        "crcOk",
+        "endOk"
+      ]
+    },
+    {
+      "kind": "data-begin",
+      "role": "framing",
+      "fields": ["block", "read", "command", "bytes", "lanes"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["block", "offset", "value"]
+    },
+    {
+      "kind": "data-crc",
+      "role": "check",
+      "fields": ["block", "lane", "value", "expected", "ok"],
+      "errorWhen": [
+        {
+          "ok": false
+        }
+      ]
+    },
+    {
+      "kind": "data-status",
+      "role": "handshake",
+      "fields": ["block", "status", "accepted", "endOk"]
+    },
+    {
+      "kind": "busy",
+      "role": "handshake",
+      "fields": ["block", "ticks"]
+    },
+    {
+      "kind": "data-end",
+      "role": "framing",
+      "fields": ["block", "reason"]
+    },
+    {
+      "kind": "bus-width",
+      "role": "control",
+      "fields": ["lanes", "applied"]
+    },
+    {
+      "kind": "aborted-command",
+      "role": "framing",
+      "fields": ["token", "bits"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "SD card (commands and data)",
+      "summary": "SD SDR commands, CID/CSD, read/write CRC and card busy periods",
+      "fields": {
+        "block_bytes": "Block Bytes",
+        "clk": "Clock channel",
+        "cmd": "Cmd",
+        "dat0": "Dat0",
+        "dat1": "Dat1",
+        "dat2": "Dat2",
+        "dat3": "Dat3",
+        "width": "Width"
+      },
+      "values": {
+        "width": {
+          "auto": "Follow accepted ACMD6",
+          "four": "Four data lines",
+          "one": "One data line"
+        }
+      },
+      "events": {
+        "aborted-command": "Aborted command",
+        "bus-width": "Bus width",
+        "busy": "Busy",
+        "card-status": "Card status",
+        "cid": "Cid",
+        "command": "Command",
+        "csd": "Csd",
+        "data": "Data",
+        "data-begin": "Data begin",
+        "data-crc": "Data crc",
+        "data-end": "Data end",
+        "data-status": "Data status",
+        "interface-condition": "Card interface condition",
+        "ocr": "Operating conditions",
+        "relative-address": "Published relative address",
+        "scr": "SCR register",
+        "status-field": "Card status field"
+      },
+      "eventFields": {
+        "accepted": "Accepted",
+        "address": "Relative card address",
+        "appCommand": "Application command accepted",
+        "applied": "Applied",
+        "argument": "Argument",
+        "bits": "Bits",
+        "block": "Block",
+        "blocks": "Blocks",
+        "busWidths": "Supported bus widths",
+        "bytes": "Bytes",
+        "command": "Command",
+        "commandClasses": "Command class mask",
+        "commandSupport": "Supported commands",
+        "copied": "Copy flag",
+        "crc": "CRC",
+        "crcOk": "CRC valid",
+        "currentState": "Current card state",
+        "dataAfterErase": "Erased data is one",
+        "dsrImplemented": "DSR implemented",
+        "endOk": "End Ok",
+        "eraseSectorBlocks": "Erase sector write blocks",
+        "eraseSingleBlock": "Single-block erase",
+        "expected": "Expected",
+        "expectedPattern": "Expected check pattern",
+        "extendedSecurity": "Extended security",
+        "field": "Status field",
+        "fileFormat": "File format code",
+        "fileFormatGroup": "File format group",
+        "format": "Response format",
+        "highCapacity": "High-capacity card",
+        "host": "Host",
+        "index": "Index",
+        "lane": "Lane",
+        "lanes": "Lanes",
+        "manufacturer": "Manufacturer",
+        "month": "Month",
+        "nsac": "NSAC clock-count code",
+        "oem": "OEM",
+        "offset": "Offset",
+        "ok": "Ok",
+        "pattern": "Echoed check pattern",
+        "patternOk": "Check pattern matches",
+        "permanentWriteProtect": "Permanent write protection",
+        "productName": "Product name bytes",
+        "raw": "Raw SCR",
+        "read": "Read",
+        "readBlockBits": "Read Block Bits",
+        "readCurrentMax": "Maximum-voltage read-current code",
+        "readCurrentMin": "Minimum-voltage read-current code",
+        "readMisalign": "Read block misalignment",
+        "readPartial": "Partial read blocks",
+        "ready": "Power-up complete",
+        "readyForData": "Ready for data",
+        "reason": "Reason",
+        "registerCrc": "Register CRC7",
+        "relativeAddress": "Relative card address",
+        "reserved": "Reserved bits",
+        "revision": "Revision",
+        "sdSpec": "SD specification code",
+        "security": "Security version",
+        "serial": "Serial",
+        "size": "Size",
+        "sizeMultiplier": "Capacity multiplier code",
+        "spec3": "Version 3 or later",
+        "spec4": "Version 4 or later",
+        "specExtension": "Specification extension",
+        "status": "Status",
+        "structure": "Structure",
+        "supported": "Supported",
+        "taac": "TAAC access-time code",
+        "temporaryWriteProtect": "Temporary write protection",
+        "ticks": "Ticks",
+        "token": "Token",
+        "transferSpeed": "Maximum transfer-rate code",
+        "value": "Value",
+        "vendorData": "Manufacturer data",
+        "voltage": "Voltage code",
+        "voltageOk": "Voltage matches request",
+        "voltageRange": "Accepted voltage range",
+        "voltageWindow": "Supply-voltage window mask",
+        "writeBlockBits": "Write block length exponent",
+        "writeCurrentMax": "Maximum-voltage write-current code",
+        "writeCurrentMin": "Minimum-voltage write-current code",
+        "writeMisalign": "Write block misalignment",
+        "writePartial": "Partial write blocks",
+        "writeProtectGroupEnabled": "Group write protection",
+        "writeProtectGroupSectors": "Write-protect group sectors",
+        "writeSpeedFactor": "Write/read time factor code",
+        "year": "Year"
+      }
+    },
+    "zh-CN": {
+      "name": "SD 卡（命令与数据）",
+      "summary": "解析SD SDR命令、CID/CSD、读写CRC及卡忙时段",
+      "fields": {
+        "block_bytes": "块字节数",
+        "clk": "时钟通道",
+        "cmd": "CMD通道",
+        "dat0": "DAT0通道",
+        "dat1": "DAT1通道",
+        "dat2": "DAT2通道",
+        "dat3": "DAT3通道",
+        "width": "数据线数"
+      },
+      "values": {
+        "width": {
+          "auto": "跟随ACMD6",
+          "four": "四线",
+          "one": "一线"
+        }
+      },
+      "events": {
+        "aborted-command": "命令中断",
+        "bus-width": "总线宽度",
+        "busy": "卡忙",
+        "card-status": "卡状态",
+        "cid": "CID标识",
+        "command": "命令",
+        "csd": "CSD配置",
+        "data": "数据通道",
+        "data-begin": "数据开始",
+        "data-crc": "数据CRC",
+        "data-end": "数据结束",
+        "data-status": "数据状态",
+        "interface-condition": "卡接口条件",
+        "ocr": "操作条件",
+        "relative-address": "公布的相对地址",
+        "scr": "SCR配置寄存器",
+        "status-field": "卡状态字段"
+      },
+      "eventFields": {
+        "accepted": "已接受",
+        "address": "相对卡地址",
+        "appCommand": "已接受应用命令",
+        "applied": "已应用",
+        "argument": "参数",
+        "bits": "位数",
+        "block": "块编号",
+        "blocks": "512字节块数",
+        "busWidths": "支持的数据线宽度",
+        "bytes": "字节数",
+        "command": "命令",
+        "commandClasses": "命令类别掩码",
+        "commandSupport": "支持的命令",
+        "copied": "副本标志",
+        "crc": "CRC",
+        "crcOk": "CRC有效",
+        "currentState": "当前卡状态",
+        "dataAfterErase": "擦除后数据为一",
+        "dsrImplemented": "实现DSR寄存器",
+        "endOk": "结束位有效",
+        "eraseSectorBlocks": "每擦除扇区的写块数",
+        "eraseSingleBlock": "支持单块擦除",
+        "expected": "预期值",
+        "expectedPattern": "预期校验模式",
+        "extendedSecurity": "扩展安全能力",
+        "field": "状态字段",
+        "fileFormat": "文件格式编码",
+        "fileFormatGroup": "文件格式组",
+        "format": "应答格式",
+        "highCapacity": "高容量卡",
+        "host": "主机发送",
+        "index": "序号",
+        "lane": "数据线",
+        "lanes": "数据线数",
+        "manufacturer": "制造商",
+        "month": "月份",
+        "nsac": "NSAC时钟计数编码",
+        "oem": "OEM",
+        "offset": "偏移",
+        "ok": "正确",
+        "pattern": "回显校验模式",
+        "patternOk": "校验模式匹配",
+        "permanentWriteProtect": "永久写保护",
+        "productName": "产品名字节",
+        "raw": "原始SCR",
+        "read": "读取",
+        "readBlockBits": "读块位数",
+        "readCurrentMax": "最高电压读取电流编码",
+        "readCurrentMin": "最低电压读取电流编码",
+        "readMisalign": "允许读块地址未对齐",
+        "readPartial": "支持部分读块",
+        "ready": "上电完成",
+        "readyForData": "可传输数据",
+        "reason": "结束原因",
+        "registerCrc": "寄存器CRC7",
+        "relativeAddress": "相对卡地址",
+        "reserved": "保留位",
+        "revision": "版本",
+        "sdSpec": "SD规范版本编码",
+        "security": "安全规范版本",
+        "serial": "序列号",
+        "size": "容量字段",
+        "sizeMultiplier": "容量倍数编码",
+        "spec3": "支持3.0及以上版本",
+        "spec4": "支持4.0及以上版本",
+        "specExtension": "规范扩展版本",
+        "status": "状态",
+        "structure": "结构版本",
+        "supported": "支持的格式",
+        "taac": "TAAC访问时间编码",
+        "temporaryWriteProtect": "临时写保护",
+        "ticks": "采样周期数",
+        "token": "令牌号",
+        "transferSpeed": "最大传输速率编码",
+        "value": "数值",
+        "vendorData": "制造商数据",
+        "voltage": "电压编码",
+        "voltageOk": "电压与请求匹配",
+        "voltageRange": "接受的电压范围",
+        "voltageWindow": "供电电压窗口掩码",
+        "writeBlockBits": "写块长度指数",
+        "writeCurrentMax": "最高电压写入电流编码",
+        "writeCurrentMin": "最低电压写入电流编码",
+        "writeMisalign": "允许写块地址未对齐",
+        "writePartial": "支持部分写块",
+        "writeProtectGroupEnabled": "支持组写保护",
+        "writeProtectGroupSectors": "每写保护组的扇区数",
+        "writeSpeedFactor": "写入与读取时间倍数编码",
+        "year": "年份"
+      }
+    }
+  }
+}

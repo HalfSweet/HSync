@@ -1,0 +1,132 @@
+{
+  "name": "c2",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "c2.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clock",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "max_wait_cycles",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "start_aligned",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "reset",
+      "role": "control",
+      "fields": ["ticks"]
+    },
+    {
+      "kind": "instruction",
+      "role": "command",
+      "fields": ["op", "command"]
+    },
+    {
+      "kind": "length",
+      "role": "control",
+      "fields": ["op", "bytes"]
+    },
+    {
+      "kind": "wait",
+      "role": "handshake",
+      "fields": ["op", "cycles", "ready"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["op", "index", "value", "address", "read"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["op", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "Silicon Labs C2",
+      "summary": "C2 reset, address/data frames and bounded variable WAIT",
+      "fields": {
+        "clock": "C2CK",
+        "data": "C2D",
+        "max_wait_cycles": "Maximum WAIT cycles",
+        "start_aligned": "Start at a known START boundary"
+      },
+      "events": {
+        "byte": "Byte",
+        "end": "End",
+        "instruction": "Instruction",
+        "length": "Data length",
+        "reset": "Reset",
+        "wait": "WAIT"
+      },
+      "eventFields": {
+        "address": "Address register",
+        "bytes": "Byte count",
+        "command": "Instruction",
+        "cycles": "WAIT cycles",
+        "index": "Byte index",
+        "op": "Operation",
+        "read": "Read",
+        "ready": "Ready",
+        "reason": "End reason",
+        "ticks": "Reset low ticks",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "Silicon Labs C2",
+      "summary": "C2复位、地址/数据帧及有界等待",
+      "fields": {
+        "clock": "C2CK",
+        "data": "C2D",
+        "max_wait_cycles": "最大等待周期",
+        "start_aligned": "从已知START边界开始"
+      },
+      "events": {
+        "byte": "字节",
+        "end": "结束",
+        "instruction": "指令",
+        "length": "数据长度",
+        "reset": "复位",
+        "wait": "等待"
+      },
+      "eventFields": {
+        "address": "地址寄存器",
+        "bytes": "字节数",
+        "command": "指令",
+        "cycles": "等待周期",
+        "index": "字节索引",
+        "op": "操作号",
+        "read": "读取",
+        "ready": "就绪",
+        "reason": "结束原因",
+        "ticks": "复位低电平采样数",
+        "value": "数值"
+      }
+    }
+  }
+}

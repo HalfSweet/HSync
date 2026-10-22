@@ -1,0 +1,252 @@
+{
+  "name": "smbus",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "i2c.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "smbus.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535,
+      "optional": true
+    },
+    {
+      "name": "mode",
+      "kind": "enum",
+      "values": [
+        "raw",
+        "quick",
+        "send-byte",
+        "receive-byte",
+        "write-byte",
+        "write-word",
+        "read-byte",
+        "read-word",
+        "process-call",
+        "block-write",
+        "block-read",
+        "block-process-call",
+        "host-notify",
+        "write-32",
+        "read-32",
+        "write-64",
+        "read-64"
+      ]
+    },
+    {
+      "name": "pec",
+      "kind": "bool"
+    },
+    {
+      "name": "max_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "max_block_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx", "address", "mode", "pec"]
+    },
+    {
+      "kind": "address",
+      "role": "address",
+      "fields": ["tx", "address", "read", "ack"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["tx", "read", "index", "value", "ack"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "value"]
+    },
+    {
+      "kind": "count",
+      "role": "control",
+      "fields": ["tx", "read", "value", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "value",
+      "role": "data",
+      "fields": ["tx", "read", "bytes", "low", "high"]
+    },
+    {
+      "kind": "notify",
+      "role": "control",
+      "fields": ["tx", "device"]
+    },
+    {
+      "kind": "pec",
+      "role": "check",
+      "fields": ["tx", "value", "expected", "ok"],
+      "errorWhen": [
+        {
+          "ok": false
+        }
+      ]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "mode", "reason", "lengthOk", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "SMBus transactions",
+      "summary": "Explicit byte, word, block and Host Notify profiles with optional PEC",
+      "fields": {
+        "address": "Target address filter",
+        "max_block_bytes": "Maximum block count",
+        "max_bytes": "Maximum message bytes",
+        "mode": "Transaction profile",
+        "pec": "Final PEC byte"
+      },
+      "values": {
+        "mode": {
+          "block-process-call": "Block process call",
+          "block-read": "Block read",
+          "block-write": "Block write",
+          "host-notify": "Host Notify",
+          "process-call": "Process call",
+          "quick": "Quick command",
+          "raw": "Raw transaction",
+          "read-32": "Read 32 bits",
+          "read-64": "Read 64 bits",
+          "read-byte": "Read byte",
+          "read-word": "Read word",
+          "receive-byte": "Receive byte",
+          "send-byte": "Send byte",
+          "write-32": "Write 32 bits",
+          "write-64": "Write 64 bits",
+          "write-byte": "Write byte",
+          "write-word": "Write word"
+        }
+      },
+      "events": {
+        "address": "Address",
+        "begin": "Message",
+        "byte": "Payload byte",
+        "command": "Command",
+        "count": "Block count",
+        "end": "Message end",
+        "notify": "Host Notify",
+        "pec": "PEC",
+        "value": "Scalar value"
+      },
+      "eventFields": {
+        "ack": "Acknowledged",
+        "address": "Address",
+        "bytes": "Width in bytes",
+        "device": "Notifying address",
+        "expected": "Expected PEC",
+        "high": "High 32 bits",
+        "index": "Byte index",
+        "lengthOk": "Length valid",
+        "low": "Low 32 bits",
+        "mode": "Profile",
+        "ok": "PEC valid",
+        "pec": "PEC enabled",
+        "read": "Read",
+        "reason": "End reason",
+        "tx": "Transaction",
+        "valid": "Transaction valid",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "SMBus事务",
+      "summary": "显式字节、字、块和主机通知格式及可选PEC校验",
+      "fields": {
+        "address": "目标地址筛选",
+        "max_block_bytes": "块计数上限",
+        "max_bytes": "消息字节上限",
+        "mode": "事务格式",
+        "pec": "末尾PEC字节"
+      },
+      "values": {
+        "mode": {
+          "block-process-call": "块处理调用",
+          "block-read": "块读取",
+          "block-write": "块写入",
+          "host-notify": "主机通知",
+          "process-call": "处理调用",
+          "quick": "快速命令",
+          "raw": "原始事务",
+          "read-32": "读32位",
+          "read-64": "读64位",
+          "read-byte": "读字节",
+          "read-word": "读字",
+          "receive-byte": "接收字节",
+          "send-byte": "发送字节",
+          "write-32": "写32位",
+          "write-64": "写64位",
+          "write-byte": "写字节",
+          "write-word": "写字"
+        }
+      },
+      "events": {
+        "address": "地址",
+        "begin": "消息",
+        "byte": "数据字节",
+        "command": "命令",
+        "count": "块计数",
+        "end": "消息结束",
+        "notify": "主机通知",
+        "pec": "PEC",
+        "value": "标量值"
+      },
+      "eventFields": {
+        "ack": "已应答",
+        "address": "地址",
+        "bytes": "字节宽度",
+        "device": "通知设备地址",
+        "expected": "预期PEC",
+        "high": "高32位",
+        "index": "字节索引",
+        "lengthOk": "长度有效",
+        "low": "低32位",
+        "mode": "格式",
+        "ok": "PEC有效",
+        "pec": "启用PEC",
+        "read": "读取",
+        "reason": "结束原因",
+        "tx": "事务",
+        "valid": "事务有效",
+        "value": "数值"
+      }
+    }
+  }
+}
