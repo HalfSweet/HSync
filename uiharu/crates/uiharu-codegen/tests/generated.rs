@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The tracked generated Rust is what the backend writes from freshly compiled TypeScript
-//! intermediates. Run `pnpm dsl:compile` before these tests to prepare production and backend
-//! fixture IR. When generated Rust differs, regenerate it with `uiharu-codegen` and commit
-//! the Rust output; the intermediate JSON is not tracked.
+//! Disposable Rust outputs are reproducible from freshly compiled TypeScript intermediates.
+//! Prepare production and backend fixture IR and Rust with `pnpm dsl:generate` before Cargo
+//! tests. Neither generated JSON nor generated Rust is tracked.
 
 use std::collections::BTreeSet;
 use std::io::Write;
@@ -43,22 +42,22 @@ fn rustfmt(source: &str) -> String {
 fn read(path: &Path) -> String {
     std::fs::read_to_string(path).unwrap_or_else(|error| {
         panic!(
-            "{} reads: {error}; prepare missing IR with `pnpm dsl:compile` before Cargo tests",
+            "{} reads: {error}; run `pnpm dsl:generate` before Cargo tests",
             path.display()
         )
     })
 }
 
 #[test]
-fn the_generated_crate_is_up_to_date() {
+fn production_rust_generation_is_reproducible() {
     assert_generated(
         root().join("../../dsl/ir"),
-        root().join("../uiharu-dsl-protocols/src"),
+        root().join("../uiharu-dsl-protocols/src/generated"),
     );
 }
 
 #[test]
-fn backend_acceptance_sources_are_up_to_date() {
+fn backend_fixture_rust_generation_is_reproducible() {
     let fixture = root().join("../uiharu-interp/tests/fixtures/backend");
     assert_generated(fixture.join("ir"), fixture.join("generated"));
 }
@@ -67,7 +66,7 @@ fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
     let mut files: Vec<PathBuf> = std::fs::read_dir(&ir_dir)
         .unwrap_or_else(|error| {
             panic!(
-                "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+                "{} reads: {error}; run `pnpm dsl:generate` before Cargo tests",
                 ir_dir.display()
             )
         })
@@ -77,7 +76,7 @@ fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
     files.sort();
     assert!(
         !files.is_empty(),
-        "no freshly compiled modules under {}; run `pnpm dsl:compile` before Cargo tests",
+        "no freshly compiled modules under {}; run `pnpm dsl:generate` before Cargo tests",
         ir_dir.display()
     );
     let mut names = Vec::new();
@@ -102,7 +101,7 @@ fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
         assert_eq!(
             read(&target),
             rustfmt(&source),
-            "{} is out of date: regenerate with uiharu-codegen",
+            "{} differs from regenerated output; run `pnpm dsl:generate`",
             target.display()
         );
         names.push(module_name(&module));
@@ -122,6 +121,6 @@ fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
     assert_eq!(
         read(&out_dir.join("lib.rs")),
         rustfmt(&generate_lib(&names)),
-        "lib.rs is out of date: regenerate with uiharu-codegen"
+        "lib.rs differs from regenerated output; run `pnpm dsl:generate`"
     );
 }

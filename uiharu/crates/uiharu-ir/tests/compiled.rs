@@ -2,7 +2,7 @@
 
 //! Freshly compiled TypeScript intermediates (`uiharu/dsl/ir/*.json`) parse and pass the
 //! checks: the contract between the TypeScript front end and Rust backends. Prepare these
-//! ignored files with `pnpm dsl:compile` before running Cargo tests.
+//! ignored files with `pnpm dsl:generate` before running Cargo tests.
 
 use std::path::PathBuf;
 
@@ -18,7 +18,7 @@ fn every_compiled_module_passes_the_checks() {
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
         .unwrap_or_else(|error| {
             panic!(
-                "{} is readable: {error}; run `pnpm dsl:compile` before Cargo tests",
+                "{} is readable: {error}; run `pnpm dsl:generate` before Cargo tests",
                 dir.display()
             )
         })
@@ -28,7 +28,7 @@ fn every_compiled_module_passes_the_checks() {
     files.sort();
     assert!(
         !files.is_empty(),
-        "the compiler has written modules to {}; run `pnpm dsl:compile` before Cargo tests",
+        "the compiler has written modules to {}; run `pnpm dsl:generate` before Cargo tests",
         dir.display()
     );
     for path in files {

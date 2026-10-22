@@ -460,13 +460,13 @@ fn counts_edges_in_a_segment_as_dsview() {
     assert!(hsync_session::edges(&capture, 0, 10, &[99]).is_err());
 }
 
-/// The freshly compiled TS intermediate for `name`, prepared by `pnpm dsl:compile`.
+/// The freshly compiled TS intermediate for `name`, prepared by `pnpm dsl:generate`.
 fn module_path(name: &str) -> PathBuf {
     let path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../uiharu/dsl/ir/{name}.json"));
     assert!(
         path.is_file(),
-        "{} is missing; run `pnpm dsl:compile` before Cargo tests",
+        "{} is missing; run `pnpm dsl:generate` before Cargo tests",
         path.display()
     );
     path

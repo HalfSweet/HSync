@@ -81,7 +81,7 @@ fn a_capture_file_carries_the_decoder_modules_its_decoders_name() {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../uiharu/dsl/ir/uart.json");
     assert!(
         module_path.is_file(),
-        "{} is missing; run `pnpm dsl:compile` before Cargo tests",
+        "{} is missing; run `pnpm dsl:generate` before Cargo tests",
         module_path.display()
     );
     let (mut workspace, events) = fresh();
