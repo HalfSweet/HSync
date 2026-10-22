@@ -54,9 +54,16 @@ impl Fields {
     };
 }
 
-impl Command {
+/// Serial programming instruction-set operations for the canonical command type.
+pub trait CommandExt: Sized {
+    /// All 23 commands in contract order.
+    const ALL: [Command; 23];
+    /// Recognize the first two instruction bytes.
+    fn from_bytes(first: u8, second: u8) -> Option<Command>;
+}
+impl CommandExt for Command {
     /// Every instruction, in the order of the contract.
-    pub const ALL: [Command; 23] = [
+    const ALL: [Command; 23] = [
         Command::ProgrammingEnable,
         Command::ChipErase,
         Command::PollRdyBsy,
@@ -85,7 +92,7 @@ impl Command {
     /// The instruction whose first two bytes are `first` and `second`, if the set lists it.
     /// The second byte only counts where the set fixes it; where it is an address byte, any
     /// value names the instruction.
-    pub const fn from_bytes(first: u8, second: u8) -> Option<Command> {
+    fn from_bytes(first: u8, second: u8) -> Option<Command> {
         Some(match (first, second) {
             (0xac, 0x53) => Command::ProgrammingEnable,
             (0xac, 0x80) => Command::ChipErase,
@@ -113,9 +120,12 @@ impl Command {
             _ => return None,
         })
     }
-
-    /// What the instruction's bytes carry.
-    pub(crate) const fn fields(self) -> Fields {
+}
+pub(crate) trait CommandFields {
+    fn fields(self) -> Fields;
+}
+impl CommandFields for Command {
+    fn fields(self) -> Fields {
         match self {
             Command::ProgrammingEnable => Fields::ECHO,
             Command::ChipErase => Fields::NONE,

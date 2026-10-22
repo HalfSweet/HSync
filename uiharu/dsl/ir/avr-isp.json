@@ -1,0 +1,150 @@
+{
+  "ir": 1,
+  "name": "avr-isp",
+  "types": [
+    {
+      "name": "Command",
+      "type": "enum",
+      "variants": [
+        "programming-enable",
+        "chip-erase",
+        "poll-rdy-bsy",
+        "load-extended-address",
+        "load-program-memory-page-high",
+        "load-program-memory-page-low",
+        "load-eeprom-memory-page",
+        "read-program-memory-high",
+        "read-program-memory-low",
+        "read-eeprom-memory",
+        "read-lock-bits",
+        "read-signature-byte",
+        "read-fuse-bits",
+        "read-fuse-high-bits",
+        "read-extended-fuse-bits",
+        "read-calibration-byte",
+        "write-program-memory-page",
+        "write-eeprom-memory",
+        "write-eeprom-memory-page",
+        "write-lock-bits",
+        "write-fuse-bits",
+        "write-fuse-high-bits",
+        "write-extended-fuse-bits"
+      ]
+    },
+    {
+      "name": "ErrorReason",
+      "type": "enum",
+      "variants": ["incomplete", "aborted"]
+    },
+    {
+      "name": "IspEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "instruction",
+          "fields": [
+            {
+              "name": "op",
+              "type": "u64"
+            },
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "command",
+              "type": "Command"
+            },
+            {
+              "name": "address",
+              "type": {
+                "option": "u16"
+              }
+            },
+            {
+              "name": "dataIn",
+              "type": {
+                "option": "u8"
+              }
+            },
+            {
+              "name": "dataOut",
+              "type": {
+                "option": "u8"
+              }
+            },
+            {
+              "name": "inSync",
+              "type": {
+                "option": "bool"
+              }
+            },
+            {
+              "name": "bytes",
+              "type": {
+                "fixedArray": "u8",
+                "length": 4
+              }
+            }
+          ]
+        },
+        {
+          "name": "unknown",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "bytes",
+              "type": {
+                "fixedArray": "u8",
+                "length": 4
+              }
+            }
+          ]
+        },
+        {
+          "name": "error",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "ErrorReason"
+            },
+            {
+              "name": "bytes",
+              "type": {
+                "array": "u8",
+                "bound": 3
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "avrisp.events",
+        "version": 1
+      },
+      "event": "IspEvent",
+      "roles": {
+        "instruction": {
+          "role": "command"
+        },
+        "unknown": {
+          "role": "data"
+        },
+        "error": {
+          "role": "error"
+        }
+      }
+    }
+  ]
+}

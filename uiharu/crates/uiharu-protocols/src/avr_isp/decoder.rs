@@ -13,7 +13,8 @@ use uiharu_core::{
     OutputSpec, Props, Provenance, Requires, Tick,
 };
 
-use super::events::{Command, ErrorReason, INSTRUCTION_BYTES, IspEvent, OpId};
+use super::events::{Command, ErrorReason, INSTRUCTION_BYTES, IspEvent};
+use super::instructions::{CommandExt, CommandFields};
 use crate::spi::{EndReason, SpiEvent, TxId};
 
 /// Programming Enable's first two bytes. Where the decoder does not know where instructions
@@ -167,7 +168,7 @@ impl Instructions {
             return IspEvent::Unknown { tx: self.tx, bytes };
         };
         let fields = command.fields();
-        let op = OpId(self.next_op);
+        let op = self.next_op;
         self.next_op += 1;
         IspEvent::Instruction {
             op,
@@ -311,7 +312,7 @@ mod tests {
         assert_eq!(
             event,
             IspEvent::Instruction {
-                op: OpId(1),
+                op: 1,
                 tx,
                 command: Command::ReadSignatureByte,
                 address: Some(1),

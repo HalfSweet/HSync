@@ -51,6 +51,7 @@ use uiharu_core::{
 
 use super::events::{
     EndReason, JtagEvent, ResetBy, SHIFT_BATCH_BITS, SHIFT_BATCH_BYTES, ScanId, TapState,
+    TapStateExt,
 };
 
 /// Rising edges with TMS high that reset the controller from any state.
@@ -340,7 +341,7 @@ impl Decoder {
 
     fn begin_scan(&mut self, state: TapState) -> Option<JtagEvent> {
         let register = state.register()?;
-        let id = ScanId(self.next_scan);
+        let id = self.next_scan;
         self.next_scan += 1;
         self.scan = Some(Scan {
             id,

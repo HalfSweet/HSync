@@ -132,7 +132,7 @@ impl NetOut {
     }
 
     async fn begin(&mut self, presence: bool, at: Provenance) -> TxId {
-        let tx = TxId(self.next_tx);
+        let tx = self.next_tx;
         self.next_tx += 1;
         self.emit(at, OneWireEvent::Begin { tx, presence }).await;
         tx

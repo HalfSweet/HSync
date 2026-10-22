@@ -8,7 +8,7 @@ use uiharu_core::{Levels, LogicBlock, LogicBlockBuilder, Tick};
 use super::decoder::{
     ACTIVATE_SWD, JTAG_TO_SWD, SELECTION_ALERT, SWD_TO_DS, SWD_TO_JTAG, SwdConfig,
 };
-use super::events::{Ack, Interface};
+use super::events::{Ack, AckExt, Interface};
 
 /// One packet as the host sends it and the target answers it, with knobs for the errors a
 /// decoder must notice.

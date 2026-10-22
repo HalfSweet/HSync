@@ -84,7 +84,7 @@ use uiharu_core::{
     Tick, TickRange,
 };
 
-use super::events::{Ack, EndReason, Interface, SwdEvent, TxId};
+use super::events::{Ack, AckExt, EndReason, Interface, SwdEvent, TxId};
 
 /// Clocks in a row with SWDIO high that make a line reset.
 pub const LINE_RESET_CLOCKS: u32 = 50;
@@ -148,6 +148,9 @@ pub struct SwdConfig {
     /// Whether overrun detection (CTRL/STAT.ORUNDETECT) is on, which makes WAIT and FAULT
     /// carry a data phase.
     pub overrun_detect: OverrunDetect,
+    /// Wait for an observed line reset before looking for packets. When false, scan for
+    /// request headers at capture start and after loss or protocol errors.
+    pub strict_start: bool,
 }
 
 impl Default for SwdConfig {
@@ -157,6 +160,7 @@ impl Default for SwdConfig {
             swdio: 1,
             turnaround: 1,
             overrun_detect: OverrunDetect::Auto,
+            strict_start: true,
         }
     }
 }
@@ -661,6 +665,7 @@ struct Decoder {
     orundetect: bool,
     /// SELECT.DPBANKSEL: which register a debug port access to `0x4` reaches.
     dpbanksel: u8,
+    strict_start: bool,
     mode: Mode,
     run: Run,
     select: Option<Select>,
@@ -679,7 +684,12 @@ impl Decoder {
             overrun: config.overrun_detect,
             orundetect: config.overrun_detect == OverrunDetect::On,
             dpbanksel: 0,
-            mode: Mode::Unaligned,
+            strict_start: config.strict_start,
+            mode: if config.strict_start {
+                Mode::Unaligned
+            } else {
+                Mode::Swd
+            },
             run: Run::default(),
             select: None,
             packet: None,
@@ -787,7 +797,7 @@ impl Decoder {
         if run.start && self.mode == Mode::Swd {
             // The run began with a Start bit: decode it again as a packet, with this bit when
             // it belongs to the request.
-            let tx = TxId(self.next_tx);
+            let tx = self.next_tx;
             self.next_tx += 1;
             self.packet = Some(Packet::new(tx, self.trn, self.orundetect));
             let ones = (run.count as usize).min(REQUEST_BITS);
@@ -992,7 +1002,11 @@ impl Decoder {
             return;
         };
         if reason == EndReason::ProtocolError {
-            self.mode = Mode::Unaligned;
+            self.mode = if self.strict_start {
+                Mode::Unaligned
+            } else {
+                Mode::Swd
+            };
         } else {
             // The bits of a packet that ended well do not count toward a line reset.
             self.run = Run::default();
@@ -1014,7 +1028,11 @@ impl Decoder {
             self.replay.len, 0,
             "the wire is read only once the replay is done"
         );
-        self.mode = Mode::Unaligned;
+        self.mode = if self.strict_start {
+            Mode::Unaligned
+        } else {
+            Mode::Swd
+        };
         self.wake.reset();
         let run = std::mem::take(&mut self.run);
         let select = self.select.take();

@@ -9,8 +9,8 @@
 //! manageable devices, whose frames start with `00` and address a register in two steps. The
 //! rules:
 //!
-//! - every bit is MDIO's level at the tick MDC rises; MDC's falling edges and MDIO's own
-//!   changes are not looked at, so MDC may run between frames or stop;
+//! - every bit is MDIO's level at the selected MDC edge (rising by default, falling
+//!   when configured); MDIO's own changes are not looked at, so MDC may run between frames or stop;
 //! - a frame is 32 bits after its preamble: ST (2 bits), OP (2), PHYAD — PRTAD in clause 45 —
 //!   (5), REGAD — DEVAD in clause 45 — (5), the turnaround TA (2) and the data (16), every
 //!   field most significant bit first. ST `01` is clause 22, whose OP is `10` for a read and
@@ -52,5 +52,7 @@ mod decoder;
 mod events;
 pub mod synth;
 
-pub use decoder::{FRAME_BITS, Mdio, MdioConfig, MdioConfigError, PREAMBLE_BITS};
-pub use events::{Clause, ErrorReason, MDIO_EVENTS, MdioEvent, Op, UnknownClause};
+pub use decoder::{FRAME_BITS, Mdio, MdioConfig, MdioConfigError, PREAMBLE_BITS, ReadEdge};
+pub use events::{
+    Clause, ClauseExt, ErrorReason, MDIO_EVENTS, MdioEvent, Op, OpExt, UnknownClause,
+};

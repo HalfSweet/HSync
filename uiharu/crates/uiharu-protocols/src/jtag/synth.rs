@@ -6,7 +6,7 @@
 use uiharu_core::{Levels, LogicBlock, LogicBlockBuilder, Tick};
 
 use super::decoder::{JtagConfig, RESET_CLOCKS};
-use super::events::{Register, TapState};
+use super::events::{Register, TapState, TapStateExt};
 
 /// Builds the samples of a test access port one clock at a time.
 ///

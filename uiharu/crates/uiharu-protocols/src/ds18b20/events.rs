@@ -157,7 +157,7 @@ mod tests {
 
     #[test]
     fn serializes_as_the_contract_spells_it() {
-        let tx = TxId(7);
+        let tx = 7;
         assert_eq!(
             json(&Ds18b20Event::Command { tx, code: 0x44 }),
             r#"{"kind":"command","tx":7,"code":68}"#

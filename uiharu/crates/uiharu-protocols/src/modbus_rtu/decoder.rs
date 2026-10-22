@@ -279,7 +279,7 @@ impl Frames {
             .resumed
             .take()
             .is_some_and(|resumed| resumed.until(byte.at.span.start) < self.silences.inter_frame);
-        let id = FrameId(self.next_id);
+        let id = self.next_id;
         self.next_id += 1;
         self.open = Some(Open {
             id,

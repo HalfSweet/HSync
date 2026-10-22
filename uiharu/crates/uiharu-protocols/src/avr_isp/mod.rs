@@ -54,3 +54,5 @@ pub mod synth;
 
 pub use decoder::{AvrIsp, SYNC_BYTES};
 pub use events::{AVR_ISP_EVENTS, Command, ErrorReason, INSTRUCTION_BYTES, IspEvent, OpId};
+
+pub use instructions::CommandExt;

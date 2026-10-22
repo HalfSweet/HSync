@@ -3,11 +3,11 @@
 //! Making MIDI traffic: the bytes of messages, for the UART synthesizer to send at
 //! [`Midi::BAUD`](super::Midi::BAUD).
 
-use super::events::{ChannelStatus, CommonStatus};
+use super::events::{ChannelStatus, ChannelStatusExt, CommonStatus, CommonStatusExt};
 
 /// The status byte of a channel message `status` on `channel`, 0 to 15 for MIDI channels 1 to
 /// 16.
-pub const fn channel_status(status: ChannelStatus, channel: u8) -> u8 {
+pub fn channel_status(status: ChannelStatus, channel: u8) -> u8 {
     (status.code() << 4) | (channel & 0x0f)
 }
 

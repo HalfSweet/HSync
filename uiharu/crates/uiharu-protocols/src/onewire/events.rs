@@ -44,103 +44,19 @@ impl EventSchema for LinkEvent {
     const SCHEMA: SchemaId = ONEWIRE_LINK;
 }
 
-/// A transaction: from one reset to the next. Numbered from 1 by the network decoder.
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
-)]
-#[serde(transparent)]
-pub struct TxId(pub u64);
+/// Canonical generated network types. Transaction IDs are transparent numeric aliases.
+pub use uiharu_dsl_protocols::onewire::{EndReason, OneWireEvent};
 
-/// Why a transaction ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum EndReason {
-    /// The next reset: the normal end of a transaction.
-    Reset,
-    /// A bad slot: the bits after it can no longer be told apart.
-    BadSlot,
-    /// The samples ended or were lost while the transaction was under way.
-    Aborted,
-}
+/// A transaction number, serialized transparently as an unsigned integer.
+pub type TxId = u64;
 
-/// What travels on a 1-Wire network-layer stream.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(
-    tag = "kind",
-    rename_all = "kebab-case",
-    rename_all_fields = "camelCase"
-)]
-pub enum OneWireEvent {
-    /// A reset began a transaction.
-    Begin {
-        /// The transaction that begins.
-        tx: TxId,
-        /// Whether a slave answered the reset with a presence pulse.
-        presence: bool,
-    },
-    /// The first byte of the transaction: the ROM command.
-    RomCommand {
-        /// The transaction.
-        tx: TxId,
-        /// The command's code, such as `0x55` for Match ROM.
-        code: u8,
-    },
-    /// The 64-bit ROM code that Read ROM read or Match ROM sent.
-    Rom {
-        /// The transaction.
-        tx: TxId,
-        /// The ROM code, its first bit on the line as bit 0: the family code is the low byte,
-        /// the CRC the high byte. Written as a hexadecimal string in JSON (`"0x…"`).
-        #[serde(with = "uiharu_core::hex_u64")]
-        id: u64,
-        /// The family code, the first byte of the ROM code.
-        family: u8,
-        /// Whether the last byte is the CRC-8 of the first seven.
-        crc_ok: bool,
-    },
-    /// A Search ROM or Alarm Search ran its 64 triplets.
-    Search {
-        /// The transaction.
-        tx: TxId,
-        /// The direction bits the master wrote, the first as bit 0: the ROM code it selected.
-        /// Written as a hexadecimal string in JSON (`"0x…"`).
-        #[serde(with = "uiharu_core::hex_u64")]
-        id: u64,
-        /// Whether the last byte of `id` is the CRC-8 of the first seven.
-        crc_ok: bool,
-        /// Triplets where devices disagreed (bit and complement both 0) and the master chose.
-        conflicts: u8,
-        /// Triplets where no device answered (bit and complement both 1).
-        unanswered: u8,
-    },
-    /// A byte after the ROM level, least significant bit first on the line.
-    Byte {
-        /// The transaction.
-        tx: TxId,
-        /// The byte.
-        value: u8,
-    },
-    /// The bits after the last whole byte when the transaction ended: fewer than eight.
-    Bits {
-        /// The transaction.
-        tx: TxId,
-        /// The bits, the first as bit 0.
-        value: u8,
-        /// How many there are, 1 to 7.
-        count: u8,
-    },
-    /// The transaction ended.
-    End {
-        /// The transaction.
-        tx: TxId,
-        /// Why it ended.
-        reason: EndReason,
-    },
-}
-
-impl OneWireEvent {
+/// Helpers on the canonical generated network event.
+pub trait OneWireEventExt {
     /// The transaction the event belongs to.
-    pub fn tx(&self) -> TxId {
+    fn tx(&self) -> TxId;
+}
+impl OneWireEventExt for OneWireEvent {
+    fn tx(&self) -> TxId {
         match self {
             OneWireEvent::Begin { tx, .. }
             | OneWireEvent::RomCommand { tx, .. }
@@ -151,10 +67,6 @@ impl OneWireEvent {
             | OneWireEvent::End { tx, .. } => *tx,
         }
     }
-}
-
-impl EventSchema for OneWireEvent {
-    const SCHEMA: SchemaId = ONEWIRE_EVENTS;
 }
 
 #[cfg(test)]
@@ -183,7 +95,7 @@ mod tests {
 
     #[test]
     fn network_events_serialize_as_the_contract_spells_them() {
-        let tx = TxId(2);
+        let tx = 2;
         assert_eq!(
             json(&OneWireEvent::Begin {
                 tx,

@@ -156,7 +156,7 @@ impl Packets {
             settled: at.settled,
         };
         self.close(EndReason::Break, end).await;
-        let packet = PacketId(self.next_id);
+        let packet = self.next_id;
         self.next_id += 1;
         self.open = Some(Open {
             id: packet,
