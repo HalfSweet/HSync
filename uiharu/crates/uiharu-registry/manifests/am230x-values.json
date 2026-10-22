@@ -1,0 +1,85 @@
+{
+  "name": "am230x-values",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "am230x.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "am230x-values.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "model",
+      "kind": "enum",
+      "values": ["am2302", "dht11"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "reading",
+      "role": "data",
+      "fields": ["humidityMilliPercent", "temperatureMilliCelsius", "negative", "valid"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "AM230x engineering values",
+      "summary": "AM2302/DHT22 and classic DHT11 humidity and temperature",
+      "fields": {
+        "model": "Sensor model"
+      },
+      "values": {
+        "model": {
+          "am2302": "AM2302 / DHT22",
+          "dht11": "Classic DHT11"
+        }
+      },
+      "events": {
+        "error": "Invalid reading",
+        "reading": "Sensor reading"
+      },
+      "eventFields": {
+        "humidityMilliPercent": "Humidity (milli-percent)",
+        "negative": "Negative temperature",
+        "reason": "Error reason",
+        "temperatureMilliCelsius": "Temperature (milli-Celsius)",
+        "valid": "In range"
+      }
+    },
+    "zh-CN": {
+      "name": "AM230x工程值",
+      "summary": "AM2302/DHT22和经典DHT11温湿度",
+      "fields": {
+        "model": "传感器型号"
+      },
+      "values": {
+        "model": {
+          "am2302": "AM2302 / DHT22",
+          "dht11": "经典DHT11"
+        }
+      },
+      "events": {
+        "error": "无效读数",
+        "reading": "传感器读数"
+      },
+      "eventFields": {
+        "humidityMilliPercent": "湿度（千分之一百分比）",
+        "negative": "负温度",
+        "reason": "错误原因",
+        "temperatureMilliCelsius": "温度（毫摄氏度）",
+        "valid": "范围有效"
+      }
+    }
+  }
+}

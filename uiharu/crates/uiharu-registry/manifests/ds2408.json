@@ -1,0 +1,109 @@
+{
+  "name": "ds2408",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "onewire.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ds2408.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "rom",
+      "role": "address",
+      "fields": ["id", "crcOk"],
+      "errorWhen": [
+        {
+          "crcOk": false
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["code", "command"]
+    },
+    {
+      "kind": "address",
+      "role": "address",
+      "fields": ["address"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["field", "address", "value"]
+    },
+    {
+      "kind": "check",
+      "role": "check",
+      "fields": ["check", "ok", "value"],
+      "errorWhen": [
+        {
+          "ok": false
+        }
+      ]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "DS2408",
+      "summary": "PIO registers, channel samples, complemented writes and CRC16",
+      "events": {
+        "address": "Address",
+        "check": "Check",
+        "command": "Command",
+        "data": "Data",
+        "error": "Error",
+        "rom": "Rom"
+      },
+      "eventFields": {
+        "address": "Address",
+        "check": "Check",
+        "code": "Code",
+        "command": "Command",
+        "crcOk": "Crcok",
+        "field": "Field",
+        "id": "Id",
+        "ok": "Ok",
+        "reason": "Reason",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "DS2408",
+      "summary": "PIO寄存器、通道采样、互补写入和CRC16",
+      "events": {
+        "address": "目标地址",
+        "check": "完整性校验",
+        "command": "功能命令",
+        "data": "数据",
+        "error": "协议错误",
+        "rom": "ROM编码"
+      },
+      "eventFields": {
+        "address": "目标地址",
+        "check": "完整性校验",
+        "code": "命令码",
+        "command": "功能命令",
+        "crcOk": "CRC有效",
+        "field": "数据字段",
+        "id": "ROM编码",
+        "ok": "校验有效",
+        "reason": "错误原因",
+        "value": "数值"
+      }
+    }
+  }
+}

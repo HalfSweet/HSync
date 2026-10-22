@@ -327,9 +327,13 @@ fn manifest_of(module: &Module, program: &Program, defaults: &serde_json::Value)
                     other => (other.clone(), false),
                 };
                 let kind = match &ty {
+                    _ if field.json == Some(uiharu_ir::FieldJson::HexU64) => FieldKind::Text,
                     _ if field.channel => match &ty {
                         Type::Array { bound, .. } => FieldKind::Channels {
                             max: Some(bound_u8(*bound)),
+                        },
+                        Type::FixedArray { length, .. } => FieldKind::Channels {
+                            max: Some(bound_u8(*length)),
                         },
                         _ => FieldKind::Channel,
                     },
@@ -354,12 +358,33 @@ fn manifest_of(module: &Module, program: &Program, defaults: &serde_json::Value)
                         "text" => FieldKind::Text,
                         other => match enum_values(other) {
                             Some(values) => FieldKind::Enum { values },
-                            None => FieldKind::Text,
+                            None => types()
+                                .find(|def| def.name == other)
+                                .and_then(|def| {
+                                    if let TypeKind::NumericEnum { variants } = &def.kind {
+                                        Some(FieldKind::Integer {
+                                            min: variants
+                                                .iter()
+                                                .map(|variant| variant.value)
+                                                .min()
+                                                .and_then(|n| i64::try_from(n).ok()),
+                                            max: variants
+                                                .iter()
+                                                .map(|variant| variant.value)
+                                                .max()
+                                                .and_then(|n| i64::try_from(n).ok()),
+                                        })
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .unwrap_or(FieldKind::Text),
                         },
                     },
-                    Type::Array { .. } | Type::Batch { .. } | Type::Option { .. } => {
-                        FieldKind::Text
-                    }
+                    Type::Array { .. }
+                    | Type::FixedArray { .. }
+                    | Type::Batch { .. }
+                    | Type::Option { .. } => FieldKind::Text,
                 };
                 Field {
                     name: name.clone(),
@@ -370,9 +395,14 @@ fn manifest_of(module: &Module, program: &Program, defaults: &serde_json::Value)
             .collect()
     });
     let events = module
-        .contracts
+        .imports
         .iter()
-        .find(|contract| contract.schema.name == program.output_schema().name)
+        .map(|import| &import.contract)
+        .chain(module.contracts.iter())
+        .find(|contract| {
+            contract.schema.name == program.output_schema().name
+                && contract.schema.version == program.output_schema().version
+        })
         .and_then(|contract| {
             types()
                 .find(|def| def.name == contract.event)
@@ -483,10 +513,93 @@ mod tests {
     }
 
     #[test]
+    fn native_wire_config_fields_keep_numeric_and_hex_json_values() {
+        let mut declared = module("pwm");
+        declared.types.push(
+            serde_json::from_value(serde_json::json!({
+                "name": "Clause", "type": "numeric-enum", "variants": [
+                    { "name": "c22", "value": 22 }, { "name": "c45", "value": 45 }
+                ]
+            }))
+            .expect("a numeric enum declaration"),
+        );
+        let config_name = declared
+            .decoder
+            .as_ref()
+            .expect("a decoder")
+            .config
+            .ty
+            .clone();
+        let config = declared
+            .types
+            .iter_mut()
+            .find(|def| def.name == config_name)
+            .expect("configuration type");
+        let TypeKind::Record { fields } = &mut config.kind else {
+            panic!("configuration is a record")
+        };
+        for field in [
+            serde_json::json!({ "name": "clause", "type": "Clause" }),
+            serde_json::json!({ "name": "romId", "type": "u64", "json": "hex-u64" }),
+        ] {
+            fields.push(serde_json::from_value(field).expect("configuration field"));
+        }
+        let defaults = &mut declared
+            .decoder
+            .as_mut()
+            .expect("a decoder")
+            .config
+            .defaults;
+        defaults["clause"] = serde_json::json!(22);
+        defaults["romId"] = serde_json::json!("0xffffffffffffffff");
+        let mut catalog = Catalog::new();
+        let loaded = catalog.load(&declared).expect("exact defaults load");
+        assert_eq!(loaded.defaults()["clause"], serde_json::json!(22));
+        assert_eq!(
+            loaded.defaults()["rom_id"],
+            serde_json::json!("0xffffffffffffffff")
+        );
+        let field = |name: &str| {
+            &loaded
+                .manifest()
+                .config
+                .iter()
+                .find(|field| field.name == name)
+                .expect("field is described")
+                .kind
+        };
+        assert_eq!(
+            field("clause"),
+            &FieldKind::Integer {
+                min: Some(22),
+                max: Some(45)
+            }
+        );
+        assert_eq!(field("rom_id"), &FieldKind::Text);
+        assert!(loaded.build(&serde_json::json!({ "clause": 45 })).is_ok());
+        assert!(loaded.build(&serde_json::json!({ "clause": 23 })).is_err());
+        assert!(
+            loaded
+                .build(&serde_json::json!({ "clause": "45" }))
+                .is_err()
+        );
+    }
+
+    #[test]
     fn a_loaded_module_describes_itself_as_the_built_in_manifest_does() {
         let mut catalog = Catalog::new();
-        for name in ["pwm", "spi", "uart", "spi-nor"] {
-            let loaded = catalog.load(&module(name)).expect("loads");
+        for kind in KINDS {
+            let name = kind.name;
+            let path =
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dsl/ir/{name}.json"));
+            if !path.exists() {
+                continue;
+            }
+            let declared = module(name);
+            if declared.decoder.is_none() {
+                continue;
+            }
+            let loaded = catalog.load(&declared).expect("loads");
             let builtin = manifests()
                 .iter()
                 .find(|manifest| manifest.name == name)
@@ -497,6 +610,9 @@ mod tests {
             assert_eq!(manifest.inputs, builtin.inputs);
             assert_eq!(manifest.outputs, builtin.outputs);
             assert_eq!(manifest.events, builtin.events);
+            if !builtin.locales.is_empty() {
+                assert_eq!(manifest.locales, builtin.locales, "{name}: localized copy");
+            }
             let names = |fields: &[Field]| -> Vec<(String, bool)> {
                 fields
                     .iter()
@@ -515,11 +631,7 @@ mod tests {
                     field.name, field.kind, expected.kind
                 );
             }
-            let builtin_defaults = (KINDS
-                .iter()
-                .find(|kind| kind.name == name)
-                .expect("a built-in kind")
-                .defaults)();
+            let builtin_defaults = (kind.defaults)();
             assert_eq!(loaded.defaults(), &builtin_defaults, "{name}");
         }
     }
@@ -557,6 +669,45 @@ mod tests {
                 .iter()
                 .any(|field| field.name == "data_bits")
         );
+    }
+
+    #[test]
+    fn a_loaded_producer_describes_the_exact_imported_output_contract() {
+        let mut declared = module("pwm");
+        declared.name = "independent-pwm".into();
+        declared.decoder.as_mut().expect("a decoder").name = declared.name.clone();
+        let event = declared.types.remove(0);
+        let contract = declared.contracts.remove(0);
+        declared.imports.push(
+            serde_json::from_value(serde_json::json!({
+                "module": "pwm", "types": [event], "contract": contract
+            }))
+            .expect("the imported contract parses"),
+        );
+        // A local contract with the same name but another version must not supply the
+        // imported output's event metadata.
+        let mut another = declared.imports[0].contract.clone();
+        another.schema.version = 2;
+        another.event = "OtherEvent".into();
+        another.roles.clear();
+        declared.contracts.push(another);
+        declared.types.push(
+            serde_json::from_value(serde_json::json!({
+                "name": "OtherEvent", "type": "union", "variants": [{"name": "other"}]
+            }))
+            .expect("the other event parses"),
+        );
+        let mut catalog = Catalog::new();
+        let loaded = catalog.load(&declared).expect("the imported output loads");
+        let manifest = loaded.manifest();
+        let builtin = manifests()
+            .iter()
+            .find(|m| m.name == "pwm")
+            .expect("PWM manifest");
+        assert_eq!(manifest.outputs, builtin.outputs);
+        assert_eq!(manifest.events, builtin.events);
+        assert_eq!(manifest.events[0].kind, "cycle");
+        assert_eq!(manifest.events[0].fields, ["periodTicks", "activeTicks"]);
     }
 
     #[test]

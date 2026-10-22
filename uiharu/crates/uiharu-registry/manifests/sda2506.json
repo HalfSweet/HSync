@@ -1,0 +1,95 @@
+{
+  "name": "sda2506",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "sda2506.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "ce",
+      "kind": "channel"
+    }
+  ],
+  "events": [
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "operation", "address", "value", "reused"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "address", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "aborted", "bits"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "SDA2506",
+      "summary": "SDA2506 shared-data read and erase/write request sequences",
+      "fields": {
+        "ce": "Enable channel",
+        "clk": "Clock channel",
+        "data": "Data"
+      },
+      "events": {
+        "command": "Command",
+        "data": "Data",
+        "end": "End"
+      },
+      "eventFields": {
+        "aborted": "Aborted",
+        "address": "Address",
+        "bits": "Bits",
+        "operation": "Operation",
+        "reused": "Reused",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "SDA2506",
+      "summary": "解析SDA2506共享数据线读取及擦写请求序列",
+      "fields": {
+        "ce": "使能通道",
+        "clk": "时钟通道",
+        "data": "数据通道"
+      },
+      "events": {
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束"
+      },
+      "eventFields": {
+        "aborted": "中断",
+        "address": "地址",
+        "bits": "位数",
+        "operation": "操作",
+        "reused": "复用指令",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "name": "midi-semantics",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "midi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "midi-semantics.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "percussion_channel",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "note",
+      "role": "data",
+      "fields": [
+        "message",
+        "channel",
+        "note",
+        "pitchClass",
+        "octave",
+        "belowZero",
+        "action",
+        "value",
+        "drum"
+      ]
+    },
+    {
+      "kind": "controller",
+      "role": "control",
+      "fields": ["message", "channel", "number", "controller", "lsb", "value"]
+    },
+    {
+      "kind": "pitch-bend",
+      "role": "data",
+      "fields": ["message", "channel", "value", "magnitude", "negative"]
+    },
+    {
+      "kind": "song-position",
+      "role": "control",
+      "fields": ["message", "midiBeats", "midiClocks"]
+    },
+    {
+      "kind": "quarter-frame",
+      "role": "control",
+      "fields": ["message", "piece", "value"]
+    },
+    {
+      "kind": "manufacturer",
+      "role": "address",
+      "fields": ["message", "identifier", "extended", "manufacturer"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "MIDI semantic fields",
+      "summary": "Note, drum and controller names, pitch bend, song position, quarter-frame and SysEx IDs",
+      "fields": {
+        "percussion_channel": "Percussion channel (zero based)"
+      },
+      "events": {
+        "controller": "Controller",
+        "manufacturer": "Manufacturer ID",
+        "note": "Note",
+        "pitch-bend": "Pitch bend",
+        "quarter-frame": "Time code quarter frame",
+        "song-position": "Song position"
+      },
+      "eventFields": {
+        "action": "Action",
+        "belowZero": "Negative octave",
+        "channel": "Channel",
+        "controller": "Controller name",
+        "drum": "GM percussion",
+        "extended": "Extended identifier",
+        "identifier": "Identifier",
+        "lsb": "LSB controller",
+        "magnitude": "Magnitude",
+        "manufacturer": "Manufacturer",
+        "message": "Message",
+        "midiBeats": "MIDI beats",
+        "midiClocks": "MIDI clocks",
+        "negative": "Negative",
+        "note": "Note number",
+        "number": "Controller number",
+        "octave": "Octave magnitude",
+        "piece": "Quarter-frame piece",
+        "pitchClass": "Pitch class",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "MIDI语义字段",
+      "summary": "音符、鼓组和控制器名称、弯音、乐曲位置、四分之一帧和SysEx标识",
+      "fields": {
+        "percussion_channel": "打击乐通道（从0开始）"
+      },
+      "events": {
+        "controller": "控制器",
+        "manufacturer": "制造商标识",
+        "note": "音符",
+        "pitch-bend": "弯音",
+        "quarter-frame": "时间码四分之一帧",
+        "song-position": "乐曲位置"
+      },
+      "eventFields": {
+        "action": "动作",
+        "belowZero": "负八度",
+        "channel": "通道",
+        "controller": "控制器名称",
+        "drum": "GM打击乐",
+        "extended": "扩展标识",
+        "identifier": "标识",
+        "lsb": "低位控制器",
+        "magnitude": "绝对值",
+        "manufacturer": "制造商",
+        "message": "消息",
+        "midiBeats": "MIDI拍",
+        "midiClocks": "MIDI时钟",
+        "negative": "负方向",
+        "note": "音符编号",
+        "number": "控制器编号",
+        "octave": "八度绝对值",
+        "piece": "四分之一帧片段",
+        "pitchClass": "音级",
+        "value": "值"
+      }
+    }
+  }
+}

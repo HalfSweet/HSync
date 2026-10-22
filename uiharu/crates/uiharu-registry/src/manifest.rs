@@ -4,9 +4,8 @@
 //! configuration and the kinds of events it emits. Manifests are the JSON files in
 //! `manifests/`, one per node type, embedded into the registry; the user-visible names of
 //! everything they mention are the interface's business (i18n keys such as
-//! `decoder.<type>.title` and `decoder.<type>.field.<name>`), never text here. A module
-//! loaded at run time may carry its own copy (`locales`, the DSL's declaration), for an
-//! interface that has none for it.
+//! `decoder.<type>.title` and `decoder.<type>.field.<name>`). DSL declarations also supply
+//! their own localized copy (`locales`), for both built-in and loaded modules.
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -36,7 +35,7 @@ pub struct Manifest {
     pub events: Vec<EventKind>,
     /// What an interface shows for the node type, by language tag, as a loaded module
     /// declares it: its configuration fields and the enumerated values are keyed by the
-    /// names of `config`. Empty for the engine's own node types.
+    /// names of `config`. Older built-in types use the embedding application's copy.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub locales: BTreeMap<String, Locale>,
 }
@@ -567,14 +566,16 @@ mod tests {
     }
 
     #[test]
-    fn only_optional_fields_may_be_left_unset() {
+    fn required_fields_cannot_be_left_unset() {
         for (kind, manifest) in KINDS.iter().zip(manifests()) {
-            for field in &manifest.config {
+            // Optional fields may have constraints involving other options. For
+            // example, omitting a hardware boundary can require explicit alignment.
+            // Their nullability does not make every defaults-plus-null setup valid.
+            for field in manifest.config.iter().filter(|field| !field.optional) {
                 let mut config = (kind.defaults)();
                 config[field.name.as_str()] = serde_json::Value::Null;
-                assert_eq!(
-                    (kind.build)(&config).is_ok(),
-                    field.optional,
+                assert!(
+                    (kind.build)(&config).is_err(),
                     "{}: {} set to null",
                     kind.name,
                     field.name

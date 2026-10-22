@@ -1,0 +1,140 @@
+{
+  "name": "arm-memap",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "jtag-dp.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "arm-memap.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "ap",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "tar_wrap_bits",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "request",
+      "role": "command",
+      "fields": ["scan", "ap", "apIndex", "register", "address", "read", "value"]
+    },
+    {
+      "kind": "response",
+      "role": "data",
+      "fields": ["scan", "responseScan", "value", "register", "okOrFault"]
+    },
+    {
+      "kind": "memory-request",
+      "role": "address",
+      "fields": ["scan", "apIndex", "plannedAddress", "sizeBits", "packed", "read", "rawData"]
+    },
+    {
+      "kind": "memory-response",
+      "role": "data",
+      "fields": ["scan", "responseScan", "plannedAddress", "rawData", "okOrFault"]
+    },
+    {
+      "kind": "status",
+      "role": "control",
+      "fields": ["scan", "value", "stickyFault"],
+      "errorWhen": [
+        {
+          "stickyFault": true
+        }
+      ]
+    },
+    {
+      "kind": "wait",
+      "role": "handshake",
+      "fields": ["scan"]
+    },
+    {
+      "kind": "context-lost",
+      "role": "line",
+      "fields": []
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "Arm MEM-AP",
+      "summary": "DP/AP requests and planned memory addresses; OK/FAULT remains ambiguous",
+      "fields": {
+        "ap": "Access port index",
+        "tar_wrap_bits": "TAR auto-increment wrap bits"
+      },
+      "events": {
+        "context-lost": "Context lost",
+        "memory-request": "Planned memory access",
+        "memory-response": "Captured memory response",
+        "request": "Register request",
+        "response": "Captured response",
+        "status": "Debug status",
+        "wait": "WAIT"
+      },
+      "eventFields": {
+        "address": "Register address",
+        "ap": "Access port",
+        "apIndex": "AP index",
+        "okOrFault": "OK or FAULT",
+        "packed": "Packed",
+        "plannedAddress": "Planned address",
+        "rawData": "Raw data",
+        "read": "Read",
+        "register": "Register",
+        "responseScan": "Response scan",
+        "scan": "Request scan",
+        "sizeBits": "Access size (bits)",
+        "stickyFault": "Sticky fault",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "Arm MEM-AP",
+      "summary": "DP/AP 请求及计划访问地址；OK/FAULT 仍无法区分",
+      "fields": {
+        "ap": "访问端口编号",
+        "tar_wrap_bits": "TAR 自动递增回绕位数"
+      },
+      "events": {
+        "context-lost": "上下文丢失",
+        "memory-request": "计划内存访问",
+        "memory-response": "捕获的内存响应",
+        "request": "寄存器请求",
+        "response": "捕获的响应",
+        "status": "调试状态",
+        "wait": "WAIT"
+      },
+      "eventFields": {
+        "address": "寄存器地址",
+        "ap": "访问端口",
+        "apIndex": "AP 编号",
+        "okOrFault": "OK 或 FAULT",
+        "packed": "打包传输",
+        "plannedAddress": "计划地址",
+        "rawData": "原始数据",
+        "read": "读取",
+        "register": "寄存器",
+        "responseScan": "响应扫描",
+        "scan": "请求扫描",
+        "sizeBits": "访问宽度（位）",
+        "stickyFault": "粘滞故障",
+        "value": "值"
+      }
+    }
+  }
+}

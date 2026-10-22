@@ -1,0 +1,143 @@
+{
+  "name": "jtag-chain",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "jtag.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "jtag.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "ir_before",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "ir_bits",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "ir_after",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "dr_before",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "dr_bits",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "dr_after",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    }
+  ],
+  "events": [
+    {
+      "kind": "state",
+      "role": "framing",
+      "fields": ["state"]
+    },
+    {
+      "kind": "reset",
+      "role": "line",
+      "fields": ["by"]
+    },
+    {
+      "kind": "scan-begin",
+      "role": "framing",
+      "fields": ["scan", "register"]
+    },
+    {
+      "kind": "shift",
+      "role": "data",
+      "fields": ["scan", "offset", "tdi", "tdo", "bits"]
+    },
+    {
+      "kind": "scan-end",
+      "role": "framing",
+      "fields": ["scan", "bits", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "JTAG chain selection",
+      "summary": "Select an explicitly sized TAP scan window; reject mismatched chains",
+      "fields": {
+        "dr_after": "DR bits after TAP",
+        "dr_before": "DR bits before TAP",
+        "dr_bits": "Selected DR width",
+        "ir_after": "IR bits after TAP",
+        "ir_before": "IR bits before TAP",
+        "ir_bits": "Selected IR width"
+      },
+      "events": {
+        "reset": "Reset",
+        "scan-begin": "Scan begin",
+        "scan-end": "Scan end",
+        "shift": "Selected bit",
+        "state": "TAP state"
+      },
+      "eventFields": {
+        "bits": "Bits",
+        "by": "Reset source",
+        "offset": "Bit offset",
+        "reason": "End reason",
+        "register": "Register",
+        "scan": "Scan",
+        "state": "State",
+        "tdi": "TDI bits",
+        "tdo": "TDO bits"
+      }
+    },
+    "zh-CN": {
+      "name": "JTAG 链选择",
+      "summary": "选择指定宽度的 TAP 扫描窗口并拒绝长度不匹配",
+      "fields": {
+        "dr_after": "TAP 后 DR 位数",
+        "dr_before": "TAP 前 DR 位数",
+        "dr_bits": "选中 DR 宽度",
+        "ir_after": "TAP 后 IR 位数",
+        "ir_before": "TAP 前 IR 位数",
+        "ir_bits": "选中 IR 宽度"
+      },
+      "events": {
+        "reset": "复位",
+        "scan-begin": "扫描开始",
+        "scan-end": "扫描结束",
+        "shift": "选中位",
+        "state": "TAP 状态"
+      },
+      "eventFields": {
+        "bits": "位数",
+        "by": "复位源",
+        "offset": "位偏移",
+        "reason": "结束原因",
+        "register": "寄存器",
+        "scan": "扫描",
+        "state": "状态",
+        "tdi": "TDI 位",
+        "tdo": "TDO 位"
+      }
+    }
+  }
+}

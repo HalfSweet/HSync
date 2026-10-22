@@ -1,0 +1,197 @@
+{
+  "name": "edid",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "i2c.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "edid.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "address",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "segment_address",
+      "kind": "integer",
+      "min": 0,
+      "max": 65535
+    },
+    {
+      "name": "initial_segment",
+      "kind": "integer",
+      "min": 0,
+      "max": 255,
+      "optional": true
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "address",
+      "fields": ["op", "tx", "read", "ack", "segment"],
+      "errorWhen": [
+        {
+          "ack": false
+        }
+      ]
+    },
+    {
+      "kind": "pointer",
+      "role": "address",
+      "fields": ["op", "register", "ack"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["op", "register", "absolute", "value", "read", "ack"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["op", "register", "field", "value", "negative", "valid", "block"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "timing",
+      "role": "data",
+      "fields": ["op", "register", "width", "height", "refresh", "interlaced"]
+    },
+    {
+      "kind": "segment",
+      "role": "address",
+      "fields": ["tx", "value", "ack", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "cta-block",
+      "role": "control",
+      "fields": ["op", "register", "tag", "length", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "cta-video",
+      "role": "data",
+      "fields": ["op", "register", "code", "native"]
+    },
+    {
+      "kind": "cta-audio",
+      "role": "data",
+      "fields": ["op", "register", "format", "channels", "rates", "detail", "valid"],
+      "errorWhen": [
+        {
+          "valid": false
+        }
+      ]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["op", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "EDID 1.x",
+      "summary": "EDID identity, base display fields, detailed timing and block checksums",
+      "fields": {
+        "address": "I²C address",
+        "initial_segment": "Assumed initial segment (optional)",
+        "segment_address": "E-DDC segment address"
+      },
+      "events": {
+        "begin": "Address",
+        "byte": "Register byte",
+        "cta-audio": "CTA short audio descriptor",
+        "cta-block": "CTA data block",
+        "cta-video": "CTA short video descriptor",
+        "end": "End",
+        "field": "Decoded field",
+        "pointer": "Register pointer",
+        "segment": "E-DDC segment",
+        "timing": "Established timing"
+      },
+      "eventFields": {
+        "absolute": "Absolute byte address",
+        "ack": "Acknowledged",
+        "block": "EDID block",
+        "channels": "Audio channels",
+        "code": "Video code",
+        "detail": "Audio detail",
+        "field": "Field",
+        "format": "Audio format",
+        "height": "Vertical lines",
+        "interlaced": "Interlaced",
+        "length": "Payload length",
+        "native": "Native mode",
+        "negative": "Negative",
+        "op": "Operation",
+        "rates": "Sample rate mask",
+        "read": "Read",
+        "reason": "Reason",
+        "refresh": "Refresh Hz",
+        "register": "Register",
+        "segment": "Segment",
+        "tag": "Block tag",
+        "tx": "I²C transaction",
+        "valid": "Valid",
+        "value": "Value",
+        "width": "Horizontal pixels"
+      }
+    },
+    "zh-CN": {
+      "name": "EDID 1.x",
+      "summary": "EDID 标识、基本显示字段、详细时序和块校验和",
+      "fields": {
+        "address": "I²C地址",
+        "initial_segment": "假定起始段（可选）",
+        "segment_address": "E-DDC段地址"
+      },
+      "events": {
+        "begin": "地址",
+        "byte": "寄存器字节",
+        "cta-audio": "CTA短音频描述符",
+        "cta-block": "CTA数据块",
+        "cta-video": "CTA短视频描述符",
+        "end": "结束",
+        "field": "解码字段",
+        "pointer": "寄存器指针",
+        "segment": "E-DDC段",
+        "timing": "已定义时序"
+      },
+      "eventFields": {
+        "ack": "应答",
+        "field": "字段",
+        "negative": "负数",
+        "op": "操作号",
+        "read": "读取",
+        "reason": "原因",
+        "register": "寄存器",
+        "tx": "I²C 事务",
+        "valid": "有效",
+        "value": "值"
+      }
+    }
+  }
+}

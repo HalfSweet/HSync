@@ -1,0 +1,144 @@
+{
+  "name": "ds243x",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "onewire.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ds243x.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "model",
+      "kind": "enum",
+      "values": ["ds2432", "ds2433"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "rom",
+      "role": "address",
+      "fields": ["id", "crcOk", "model"],
+      "errorWhen": [
+        {
+          "crcOk": false
+        }
+      ]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["code", "command"]
+    },
+    {
+      "kind": "address",
+      "role": "address",
+      "fields": ["address"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["field", "index", "value"]
+    },
+    {
+      "kind": "crc16",
+      "role": "check",
+      "fields": ["value", "ok"],
+      "errorWhen": [
+        {
+          "ok": false
+        }
+      ]
+    },
+    {
+      "kind": "status",
+      "role": "control",
+      "fields": ["value", "success"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "DS243X",
+      "summary": "DS2432/DS2433 scratchpad, memory, CRC16 and authentication transport",
+      "fields": {
+        "model": "Model"
+      },
+      "values": {
+        "model": {
+          "ds2432": "DS2432",
+          "ds2433": "DS2433"
+        }
+      },
+      "events": {
+        "address": "Address",
+        "command": "Command",
+        "crc16": "Crc16",
+        "data": "Data",
+        "error": "Error",
+        "rom": "Rom",
+        "status": "Status"
+      },
+      "eventFields": {
+        "address": "Address",
+        "code": "Code",
+        "command": "Command",
+        "crcOk": "Crcok",
+        "field": "Field",
+        "id": "Id",
+        "index": "Index",
+        "model": "Model",
+        "ok": "Ok",
+        "reason": "Reason",
+        "success": "Success",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "DS243x",
+      "summary": "DS2432/DS2433暂存器、存储器、CRC16和认证传输",
+      "fields": {
+        "model": "设备型号"
+      },
+      "values": {
+        "model": {
+          "ds2432": "DS2432",
+          "ds2433": "DS2433"
+        }
+      },
+      "events": {
+        "address": "目标地址",
+        "command": "功能命令",
+        "crc16": "CRC16校验",
+        "data": "数据",
+        "error": "协议错误",
+        "rom": "ROM编码",
+        "status": "完成状态"
+      },
+      "eventFields": {
+        "address": "目标地址",
+        "code": "命令码",
+        "command": "功能命令",
+        "crcOk": "CRC有效",
+        "field": "数据字段",
+        "id": "ROM编码",
+        "index": "字节索引",
+        "model": "设备型号",
+        "ok": "校验有效",
+        "reason": "错误原因",
+        "success": "执行成功",
+        "value": "数值"
+      }
+    }
+  }
+}

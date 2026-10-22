@@ -1,0 +1,129 @@
+{
+  "name": "aud",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "aud.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clock",
+      "kind": "channel"
+    },
+    {
+      "name": "sync",
+      "kind": "channel"
+    },
+    {
+      "name": "data0",
+      "kind": "channel"
+    },
+    {
+      "name": "data1",
+      "kind": "channel"
+    },
+    {
+      "name": "data2",
+      "kind": "channel"
+    },
+    {
+      "name": "data3",
+      "kind": "channel"
+    },
+    {
+      "name": "initial_address",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295,
+      "optional": true
+    }
+  ],
+  "events": [
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["code", "supported"]
+    },
+    {
+      "kind": "nibble",
+      "role": "data",
+      "fields": ["trace", "index", "value"]
+    },
+    {
+      "kind": "address",
+      "role": "address",
+      "fields": ["trace", "value", "bits"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["trace", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "AUD branch trace",
+      "summary": "Bounded branch destination nibbles; unknown high address context stays unknown",
+      "fields": {
+        "clock": "AUDCK",
+        "data0": "AUDATA0",
+        "data1": "AUDATA1",
+        "data2": "AUDATA2",
+        "data3": "AUDATA3",
+        "initial_address": "Initial address (optional)",
+        "sync": "nAUDSYNC"
+      },
+      "events": {
+        "address": "Destination",
+        "command": "Command",
+        "end": "End",
+        "nibble": "Address nibble"
+      },
+      "eventFields": {
+        "bits": "Changed bits",
+        "code": "Command code",
+        "index": "Nibble index",
+        "reason": "End reason",
+        "supported": "Supported",
+        "trace": "Trace",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "AUD分支跟踪",
+      "summary": "解析有界分支目标地址；未知的高地址位保持未知",
+      "fields": {
+        "clock": "AUDCK",
+        "data0": "AUDATA0",
+        "data1": "AUDATA1",
+        "data2": "AUDATA2",
+        "data3": "AUDATA3",
+        "initial_address": "初始地址（可选）",
+        "sync": "nAUDSYNC"
+      },
+      "events": {
+        "address": "目标地址",
+        "command": "命令",
+        "end": "结束",
+        "nibble": "地址半字节"
+      },
+      "eventFields": {
+        "bits": "变化位数",
+        "code": "命令编码",
+        "index": "半字节索引",
+        "reason": "结束原因",
+        "supported": "已支持",
+        "trace": "跟踪编号",
+        "value": "数值"
+      }
+    }
+  }
+}

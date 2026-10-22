@@ -1,0 +1,149 @@
+{
+  "name": "jtag-stm32",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "jtag.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "jtag-stm32.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "reset",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "instruction",
+      "role": "command",
+      "fields": ["scan", "mcu", "bsc", "captureOk"]
+    },
+    {
+      "kind": "idcode",
+      "role": "address",
+      "fields": [
+        "scan",
+        "boundaryScan",
+        "value",
+        "version",
+        "part",
+        "manufacturer",
+        "lsbOk",
+        "density"
+      ]
+    },
+    {
+      "kind": "access",
+      "role": "data",
+      "fields": [
+        "scan",
+        "ap",
+        "read",
+        "addr",
+        "dataIn",
+        "ackBits",
+        "responseData",
+        "previousScan",
+        "accepted"
+      ]
+    },
+    {
+      "kind": "abort",
+      "role": "command",
+      "fields": ["scan", "value", "lowBits"]
+    },
+    {
+      "kind": "bypass",
+      "role": "data",
+      "fields": ["scan", "mcu", "bsc"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["scan", "bits", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "STM32F1 JTAG",
+      "summary": "Observed MCU/BSC chain IDs and ADIv5 access fields",
+      "events": {
+        "abort": "Abort request",
+        "access": "DP/AP access",
+        "bypass": "Bypass",
+        "error": "Error",
+        "idcode": "Device ID",
+        "instruction": "Instruction",
+        "reset": "Reset"
+      },
+      "eventFields": {
+        "accepted": "Request accepted",
+        "ackBits": "ACK bits",
+        "addr": "Register address",
+        "ap": "AP access",
+        "bits": "Bits",
+        "boundaryScan": "Boundary scan ID",
+        "bsc": "Boundary scan TAP",
+        "captureOk": "IR capture valid",
+        "dataIn": "Request data",
+        "density": "Device density",
+        "lowBits": "Low bits",
+        "lsbOk": "ID bit zero valid",
+        "manufacturer": "Manufacturer",
+        "mcu": "MCU TAP",
+        "part": "Part",
+        "previousScan": "Previous accepted scan",
+        "read": "Read",
+        "reason": "Reason",
+        "responseData": "Previous response data",
+        "scan": "Scan",
+        "value": "Value",
+        "version": "Version"
+      }
+    },
+    "zh-CN": {
+      "name": "STM32F1 JTAG",
+      "summary": "观察到的 MCU/BSC 链标识与 ADIv5 访问字段",
+      "events": {
+        "abort": "中止请求",
+        "access": "DP/AP 访问",
+        "bypass": "旁路",
+        "error": "错误",
+        "idcode": "器件标识",
+        "instruction": "指令",
+        "reset": "复位"
+      },
+      "eventFields": {
+        "accepted": "请求已接受",
+        "ackBits": "ACK 位",
+        "addr": "寄存器地址",
+        "ap": "AP 访问",
+        "bits": "位数",
+        "boundaryScan": "边界扫描标识",
+        "bsc": "边界扫描 TAP",
+        "captureOk": "IR 捕获有效",
+        "dataIn": "请求数据",
+        "density": "器件容量",
+        "lowBits": "低位",
+        "lsbOk": "标识最低位有效",
+        "manufacturer": "制造商",
+        "mcu": "MCU TAP",
+        "part": "型号",
+        "previousScan": "前次已接受扫描",
+        "read": "读取",
+        "reason": "原因",
+        "responseData": "前次响应数据",
+        "scan": "扫描",
+        "value": "值",
+        "version": "版本"
+      }
+    }
+  }
+}

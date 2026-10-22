@@ -1,0 +1,152 @@
+{
+  "name": "dmx512-analysis",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "uart.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "dmx512-analysis.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "min_break_us",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "min_mab_us",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "max_mark_us",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "min_break_interval_us",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "max_reset_interval_us",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "show_zero",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["packet", "breakTicks"]
+    },
+    {
+      "kind": "start-code",
+      "role": "command",
+      "fields": ["packet", "code", "profile"]
+    },
+    {
+      "kind": "slot",
+      "role": "data",
+      "fields": ["packet", "slot", "code", "value", "channel"]
+    },
+    {
+      "kind": "timing",
+      "role": "control",
+      "fields": ["packet", "interval", "ticks"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["packet", "reason", "slot", "ticks"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["packet", "slots", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "DMX512 timing and slots",
+      "summary": "Receiver timing checks, zero-channel filtering and alternate start-code identification",
+      "fields": {
+        "max_mark_us": "Maximum MARK (µs)",
+        "max_reset_interval_us": "Maximum RESET interval (µs)",
+        "min_break_interval_us": "Minimum BREAK interval (µs)",
+        "min_break_us": "Minimum BREAK (µs)",
+        "min_mab_us": "Minimum MAB (µs)",
+        "show_zero": "Show zero dimmer values"
+      },
+      "events": {
+        "begin": "Begin",
+        "end": "End",
+        "error": "Protocol error",
+        "slot": "Slot",
+        "start-code": "Start code",
+        "timing": "Timing"
+      },
+      "eventFields": {
+        "breakTicks": "BREAK ticks",
+        "channel": "Dimmer channel",
+        "code": "Start code",
+        "interval": "Interval",
+        "packet": "Packet",
+        "profile": "Start-code profile",
+        "reason": "Reason",
+        "slot": "Slot",
+        "slots": "Data slots",
+        "ticks": "Ticks",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "DMX512时序和槽位",
+      "summary": "接收端时序检查、零值通道过滤和备用起始码识别",
+      "fields": {
+        "max_mark_us": "最长MARK（µs）",
+        "max_reset_interval_us": "最长RESET间隔（µs）",
+        "min_break_interval_us": "最短BREAK间隔（µs）",
+        "min_break_us": "最短BREAK（µs）",
+        "min_mab_us": "最短MAB（µs）",
+        "show_zero": "显示零值调光通道"
+      },
+      "events": {
+        "begin": "开始",
+        "end": "结束",
+        "error": "协议错误",
+        "slot": "槽位",
+        "start-code": "起始码",
+        "timing": "时序"
+      },
+      "eventFields": {
+        "breakTicks": "BREAK采样数",
+        "channel": "调光通道",
+        "code": "起始码",
+        "interval": "间隔",
+        "packet": "包",
+        "profile": "起始码格式",
+        "reason": "原因",
+        "slot": "槽位",
+        "slots": "数据槽位",
+        "ticks": "采样数",
+        "value": "值"
+      }
+    }
+  }
+}

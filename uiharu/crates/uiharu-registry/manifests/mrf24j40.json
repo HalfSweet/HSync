@@ -1,0 +1,126 @@
+{
+  "name": "mrf24j40",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "mrf24j40.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "address", "read", "status"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "address", "value", "read"]
+    },
+    {
+      "kind": "operation",
+      "role": "command",
+      "fields": ["tx", "operation"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "address", "field", "value"]
+    },
+    {
+      "kind": "frame-begin",
+      "role": "framing",
+      "fields": ["frame", "receive", "length"]
+    },
+    {
+      "kind": "frame-byte",
+      "role": "data",
+      "fields": ["frame", "receive", "offset", "value"]
+    },
+    {
+      "kind": "frame-end",
+      "role": "framing",
+      "fields": ["frame", "receive", "reason"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "MRF24J40",
+      "summary": "MRF24J40 register/FIFO frames, transmit retries and failure flags",
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "field": "Field",
+        "frame-begin": "Frame begin",
+        "frame-byte": "Frame byte",
+        "frame-end": "Frame end",
+        "operation": "Operation"
+      },
+      "eventFields": {
+        "address": "Address",
+        "field": "Field",
+        "frame": "Frame",
+        "length": "Length",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "operation": "Operation",
+        "read": "Read",
+        "reason": "Reason",
+        "receive": "Receive",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "MRF24J40",
+      "summary": "解析MRF24J40寄存器、FIFO帧、发送重试及失败标志",
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束",
+        "field": "字段",
+        "frame-begin": "帧开始",
+        "frame-byte": "帧字节",
+        "frame-end": "帧结束",
+        "operation": "操作"
+      },
+      "eventFields": {
+        "address": "地址",
+        "field": "字段",
+        "frame": "帧编号",
+        "length": "长度",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "operation": "操作",
+        "read": "读取",
+        "reason": "结束原因",
+        "receive": "接收",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

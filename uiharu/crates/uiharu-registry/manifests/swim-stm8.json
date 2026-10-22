@@ -1,0 +1,151 @@
+{
+  "name": "swim-stm8",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "swim.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "clock_hz",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "speed",
+      "kind": "enum",
+      "values": ["low", "high"]
+    },
+    {
+      "name": "start_active",
+      "kind": "bool"
+    },
+    {
+      "name": "calibrate_sync",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["value", "parityOk", "ack"]
+    },
+    {
+      "kind": "byte",
+      "role": "data",
+      "fields": ["direction", "field", "value", "parityOk", "ack", "address"]
+    },
+    {
+      "kind": "reset",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "entry",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "calibration",
+      "role": "control",
+      "fields": ["clockHz", "lowTicks", "after"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason", "partial"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "STM8 SWIM (sync and recovery)",
+      "summary": "SWIM packets, command context, observed speed writes and optional synchronization calibration",
+      "fields": {
+        "calibrate_sync": "Trust the next low pulse as synchronization after entry/reset",
+        "clock_hz": "Initial SWIM clock (Hz)",
+        "data": "SWIM",
+        "speed": "Initial communication speed",
+        "start_active": "Start at an active command boundary"
+      },
+      "values": {
+        "speed": {
+          "high": "High speed",
+          "low": "Low speed"
+        }
+      },
+      "events": {
+        "byte": "Byte",
+        "calibration": "Synchronization clock estimate",
+        "command": "Command",
+        "entry": "Entry sequence",
+        "error": "Error",
+        "reset": "Reset or synchronization"
+      },
+      "eventFields": {
+        "ack": "ACK",
+        "address": "Observed address",
+        "after": "Following sequence",
+        "clockHz": "Estimated clock (Hz)",
+        "direction": "Direction",
+        "field": "Command position",
+        "lowTicks": "Synchronization low ticks",
+        "parityOk": "Parity valid",
+        "partial": "Partial initial low pulse",
+        "reason": "Reason",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "STM8 SWIM（同步与恢复）",
+      "summary": "SWIM 数据包、命令上下文、观察到的速度写入与可选同步校准",
+      "fields": {
+        "calibrate_sync": "将进入或复位后的下个低脉冲视为同步",
+        "clock_hz": "初始 SWIM 时钟（Hz）",
+        "data": "SWIM",
+        "speed": "初始通信速度",
+        "start_active": "从活动命令边界开始"
+      },
+      "values": {
+        "speed": {
+          "high": "高速",
+          "low": "低速"
+        }
+      },
+      "events": {
+        "byte": "字节",
+        "calibration": "同步时钟估计",
+        "command": "命令",
+        "entry": "进入序列",
+        "error": "错误",
+        "reset": "复位或同步"
+      },
+      "eventFields": {
+        "ack": "ACK",
+        "address": "观察到的地址",
+        "after": "前置序列",
+        "clockHz": "估计时钟（Hz）",
+        "direction": "方向",
+        "field": "命令位置",
+        "lowTicks": "同步低电平采样数",
+        "parityOk": "奇偶校验有效",
+        "partial": "起始低脉冲不完整",
+        "reason": "原因",
+        "value": "值"
+      }
+    }
+  }
+}

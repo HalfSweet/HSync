@@ -1,0 +1,125 @@
+{
+  "name": "ltc242x",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ltc242x.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "model",
+      "kind": "enum",
+      "values": ["ltc2420", "ltc2421", "ltc2422"]
+    },
+    {
+      "name": "reference_microvolts",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "sample",
+      "role": "data",
+      "fields": [
+        "tx",
+        "code",
+        "eoc",
+        "dummy",
+        "positive",
+        "extended",
+        "channel",
+        "microvolts",
+        "negative",
+        "valid"
+      ]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "LTC242X",
+      "summary": "LTC2420/21/22 conversion status, channel and signed voltage",
+      "fields": {
+        "model": "Model",
+        "reference_microvolts": "Reference voltage (µV)"
+      },
+      "values": {
+        "model": {
+          "ltc2420": "LTC2420",
+          "ltc2421": "LTC2421",
+          "ltc2422": "LTC2422"
+        }
+      },
+      "events": {
+        "begin": "Begin",
+        "end": "End",
+        "sample": "Sample"
+      },
+      "eventFields": {
+        "channel": "Channel",
+        "code": "Code",
+        "dummy": "Dummy",
+        "eoc": "End of conversion",
+        "extended": "Extended",
+        "microvolts": "Voltage (µV)",
+        "negative": "Negative",
+        "positive": "Positive",
+        "reason": "Reason",
+        "tx": "Transaction",
+        "valid": "Valid"
+      }
+    },
+    "zh-CN": {
+      "name": "LTC242X",
+      "summary": "解析LTC2420/21/22转换状态、通道及有符号电压",
+      "fields": {
+        "model": "型号",
+        "reference_microvolts": "参考电压（微伏）"
+      },
+      "values": {
+        "model": {
+          "ltc2420": "LTC2420",
+          "ltc2421": "LTC2421",
+          "ltc2422": "LTC2422"
+        }
+      },
+      "events": {
+        "begin": "开始",
+        "end": "结束",
+        "sample": "采样"
+      },
+      "eventFields": {
+        "channel": "通道",
+        "code": "编码",
+        "dummy": "空位",
+        "eoc": "转换结束",
+        "extended": "扩展范围",
+        "microvolts": "电压（微伏）",
+        "negative": "负数",
+        "positive": "正号",
+        "reason": "结束原因",
+        "tx": "事务号",
+        "valid": "有效"
+      }
+    }
+  }
+}

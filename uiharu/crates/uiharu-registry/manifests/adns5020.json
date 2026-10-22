@@ -1,0 +1,110 @@
+{
+  "name": "adns5020",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "adns5020.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "shared_data",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "address", "read", "status"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "address", "value", "read"]
+    },
+    {
+      "kind": "operation",
+      "role": "command",
+      "fields": ["tx", "operation"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "address", "field", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "ADNS5020",
+      "summary": "ADNS5020 SDIO registers, motion flags and raw movement bytes",
+      "fields": {
+        "shared_data": "Shared SDIO data line"
+      },
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "field": "Field",
+        "operation": "Operation"
+      },
+      "eventFields": {
+        "address": "Address",
+        "field": "Field",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "operation": "Operation",
+        "read": "Read",
+        "reason": "Reason",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "ADNS5020",
+      "summary": "解析ADNS5020共享数据线寄存器、运动标志及原始位移字节",
+      "fields": {
+        "shared_data": "共享SDIO数据线"
+      },
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束",
+        "field": "字段",
+        "operation": "操作"
+      },
+      "eventFields": {
+        "address": "地址",
+        "field": "字段",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "operation": "操作",
+        "read": "读取",
+        "reason": "结束原因",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

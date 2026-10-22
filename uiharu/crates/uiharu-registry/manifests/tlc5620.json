@@ -1,0 +1,158 @@
+{
+  "name": "tlc5620",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "tlc5620.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clk",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "load",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "ldac",
+      "kind": "channel",
+      "optional": true
+    },
+    {
+      "name": "ldac_low_when_absent",
+      "kind": "bool"
+    },
+    {
+      "name": "word_aligned",
+      "kind": "bool"
+    },
+    {
+      "name": "vref_a_microvolts",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "vref_b_microvolts",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "vref_c_microvolts",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    },
+    {
+      "name": "vref_d_microvolts",
+      "kind": "integer",
+      "min": 0,
+      "max": 4294967295
+    }
+  ],
+  "events": [
+    {
+      "kind": "dac",
+      "role": "data",
+      "fields": ["tx", "channel", "doubleRange", "code", "microvolts", "latched"]
+    },
+    {
+      "kind": "voltage-update",
+      "role": "data",
+      "fields": ["channel", "microvolts"]
+    },
+    {
+      "kind": "update-all",
+      "role": "control",
+      "fields": ["knownMask"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason", "bits"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "TLC5620",
+      "summary": "TLC5620 LOAD/LDAC latches, per-DAC reference voltages and simultaneous updates",
+      "fields": {
+        "clk": "Clock channel",
+        "data": "Data",
+        "ldac": "LDAC",
+        "ldac_low_when_absent": "LDAC absent: low",
+        "load": "LOAD",
+        "vref_a_microvolts": "DAC A reference (µV)",
+        "vref_b_microvolts": "DAC B reference (µV)",
+        "vref_c_microvolts": "DAC C reference (µV)",
+        "vref_d_microvolts": "DAC D reference (µV)",
+        "word_aligned": "Aligned start without LOAD"
+      },
+      "events": {
+        "dac": "Dac",
+        "end": "End",
+        "update-all": "Update all",
+        "voltage-update": "Voltage update"
+      },
+      "eventFields": {
+        "bits": "Bits",
+        "channel": "Channel",
+        "code": "Code",
+        "doubleRange": "Double Range",
+        "knownMask": "Known Mask",
+        "latched": "Latched",
+        "microvolts": "Voltage (µV)",
+        "reason": "Reason",
+        "tx": "Transaction"
+      }
+    },
+    "zh-CN": {
+      "name": "TLC5620",
+      "summary": "解析TLC5620载入与更新控制、各DAC参考电压及同步电压更新",
+      "fields": {
+        "clk": "时钟通道",
+        "data": "数据通道",
+        "ldac": "LDAC",
+        "ldac_low_when_absent": "未接LDAC时按低电平",
+        "load": "LOAD",
+        "vref_a_microvolts": "DAC A参考电压(µV)",
+        "vref_b_microvolts": "DAC B参考电压(µV)",
+        "vref_c_microvolts": "DAC C参考电压(µV)",
+        "vref_d_microvolts": "DAC D参考电压(µV)",
+        "word_aligned": "未接LOAD时已对齐字"
+      },
+      "events": {
+        "dac": "DAC输出",
+        "end": "结束",
+        "update-all": "全部DAC更新",
+        "voltage-update": "电压更新"
+      },
+      "eventFields": {
+        "bits": "位数",
+        "channel": "通道",
+        "code": "编码",
+        "doubleRange": "双倍量程",
+        "knownMask": "已知DAC掩码",
+        "latched": "已锁存",
+        "microvolts": "电压（微伏）",
+        "reason": "结束原因",
+        "tx": "事务号"
+      }
+    }
+  }
+}

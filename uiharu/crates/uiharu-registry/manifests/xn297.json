@@ -1,0 +1,111 @@
+{
+  "name": "xn297",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "xn297.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "model",
+      "kind": "enum",
+      "values": ["original", "xn297l"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "command", "register", "address", "pipe", "status"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "value", "read"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "field", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "XN297",
+      "summary": "Panchip XN297 commands, 64-byte payloads and calibration registers",
+      "fields": {
+        "model": "Model"
+      },
+      "values": {
+        "model": {
+          "original": "XN297 (original 2012)",
+          "xn297l": "XN297L (V4.6)"
+        }
+      },
+      "events": {
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "field": "Field"
+      },
+      "eventFields": {
+        "address": "Address",
+        "command": "Command",
+        "field": "Field",
+        "offset": "Offset",
+        "pipe": "Pipe",
+        "read": "Read",
+        "reason": "Reason",
+        "register": "Register",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "XN297",
+      "summary": "解析磐启XN297命令、64字节载荷及校准寄存器",
+      "fields": {
+        "model": "芯片型号"
+      },
+      "values": {
+        "model": {
+          "original": "XN297（原始2012版）",
+          "xn297l": "XN297L（V4.6）"
+        }
+      },
+      "events": {
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束",
+        "field": "字段"
+      },
+      "eventFields": {
+        "address": "地址",
+        "command": "命令",
+        "field": "字段",
+        "offset": "偏移",
+        "pipe": "接收管道",
+        "read": "读取",
+        "reason": "结束原因",
+        "register": "寄存器",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

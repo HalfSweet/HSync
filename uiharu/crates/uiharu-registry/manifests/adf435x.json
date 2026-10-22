@@ -1,0 +1,133 @@
+{
+  "name": "adf435x",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "adf435x.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["tx", "address", "value"]
+    },
+    {
+      "kind": "divider",
+      "role": "data",
+      "fields": ["tx", "integer", "fraction"]
+    },
+    {
+      "kind": "modulus",
+      "role": "data",
+      "fields": ["tx", "modulus", "phase", "prescaler89"]
+    },
+    {
+      "kind": "reference",
+      "role": "data",
+      "fields": ["tx", "counter", "doubler", "divide2", "chargePump", "powerDown"]
+    },
+    {
+      "kind": "output",
+      "role": "data",
+      "fields": ["tx", "divider", "feedbackFundamental", "enabled", "power", "bandSelectClock"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "address", "field", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "ADF435X",
+      "summary": "ADF4351 integer, fractional, reference and RF output register fields",
+      "events": {
+        "begin": "Begin",
+        "divider": "Divider",
+        "end": "End",
+        "field": "Field",
+        "modulus": "Modulus",
+        "output": "Output",
+        "reference": "Reference",
+        "register": "Register"
+      },
+      "eventFields": {
+        "address": "Address",
+        "bandSelectClock": "Band Select Clock",
+        "chargePump": "Charge Pump",
+        "counter": "Counter",
+        "divide2": "Divide2",
+        "divider": "Divider",
+        "doubler": "Doubler",
+        "enabled": "Enabled",
+        "feedbackFundamental": "Feedback Fundamental",
+        "field": "Field",
+        "fraction": "Fraction",
+        "integer": "Integer",
+        "modulus": "Modulus",
+        "phase": "Phase",
+        "power": "Power",
+        "powerDown": "Power Down",
+        "prescaler89": "Prescaler89",
+        "reason": "Reason",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "ADF435X",
+      "summary": "解析ADF4351整数、分数、参考及射频输出寄存器字段",
+      "events": {
+        "begin": "开始",
+        "divider": "分频器",
+        "end": "结束",
+        "field": "字段",
+        "modulus": "模数",
+        "output": "输出",
+        "reference": "参考配置",
+        "register": "寄存器"
+      },
+      "eventFields": {
+        "address": "地址",
+        "bandSelectClock": "频段选择时钟",
+        "chargePump": "电荷泵",
+        "counter": "参考计数器",
+        "divide2": "二分频",
+        "divider": "分频器",
+        "doubler": "倍频",
+        "enabled": "启用",
+        "feedbackFundamental": "基波反馈",
+        "field": "字段",
+        "fraction": "分数分频",
+        "integer": "整数分频",
+        "modulus": "模数",
+        "phase": "相位",
+        "power": "输出功率",
+        "powerDown": "掉电",
+        "prescaler89": "8/9预分频",
+        "reason": "结束原因",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

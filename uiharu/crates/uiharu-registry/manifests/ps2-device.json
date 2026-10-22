@@ -1,0 +1,173 @@
+{
+  "name": "ps2-device",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "ps2.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "ps2-device.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "mode",
+      "kind": "enum",
+      "values": [
+        "keyboard-set1",
+        "keyboard-set2",
+        "keyboard-set3",
+        "mouse",
+        "mouse-wheel",
+        "mouse-explorer"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "kind": "key",
+      "role": "data",
+      "fields": ["code", "extended", "released"]
+    },
+    {
+      "kind": "pause",
+      "role": "data",
+      "fields": []
+    },
+    {
+      "kind": "print-screen",
+      "role": "data",
+      "fields": ["released"]
+    },
+    {
+      "kind": "mouse",
+      "role": "data",
+      "fields": ["buttons", "x", "xNegative", "y", "yNegative", "xOverflow", "yOverflow"]
+    },
+    {
+      "kind": "wheel",
+      "role": "data",
+      "fields": ["buttons", "magnitude", "negative"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["value", "parameter"]
+    },
+    {
+      "kind": "reply",
+      "role": "control",
+      "fields": ["command", "index", "value"]
+    },
+    {
+      "kind": "status",
+      "role": "line",
+      "fields": ["value"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "PS/2 keyboard / mouse",
+      "summary": "Set 2 make/break, Pause/Print Screen, standard mouse packets and host replies",
+      "fields": {
+        "mode": "Device profile"
+      },
+      "values": {
+        "mode": {
+          "keyboard-set1": "Keyboard scan set 1",
+          "keyboard-set2": "Keyboard scan set 2",
+          "keyboard-set3": "Keyboard scan set 3",
+          "mouse": "Standard mouse",
+          "mouse-explorer": "Five-button wheel mouse",
+          "mouse-wheel": "Three-button wheel mouse"
+        }
+      },
+      "events": {
+        "command": "Host command",
+        "error": "Protocol error",
+        "key": "Key scan code",
+        "mouse": "Mouse movement",
+        "pause": "Pause",
+        "print-screen": "Print Screen",
+        "reply": "Device reply",
+        "status": "Device status",
+        "wheel": "Wheel and buttons"
+      },
+      "eventFields": {
+        "buttons": "Button mask",
+        "code": "Scan code",
+        "command": "Related host command",
+        "extended": "Extended",
+        "index": "Reply index",
+        "magnitude": "Wheel magnitude",
+        "negative": "Negative wheel",
+        "parameter": "Command parameter",
+        "reason": "Error reason",
+        "released": "Released",
+        "value": "Value",
+        "x": "X magnitude",
+        "xNegative": "Negative X",
+        "xOverflow": "X overflow",
+        "y": "Y magnitude",
+        "yNegative": "Negative Y",
+        "yOverflow": "Y overflow"
+      }
+    },
+    "zh-CN": {
+      "name": "PS/2键盘/鼠标",
+      "summary": "扫描码集2通断码、Pause/Print Screen、标准鼠标包和主机应答",
+      "fields": {
+        "mode": "设备格式"
+      },
+      "values": {
+        "mode": {
+          "keyboard-set1": "键盘扫描码集1",
+          "keyboard-set2": "键盘扫描码集2",
+          "keyboard-set3": "键盘扫描码集3",
+          "mouse": "标准鼠标",
+          "mouse-explorer": "五键滚轮鼠标",
+          "mouse-wheel": "三键滚轮鼠标"
+        }
+      },
+      "events": {
+        "command": "主机命令",
+        "error": "协议错误",
+        "key": "按键扫描码",
+        "mouse": "鼠标移动",
+        "pause": "Pause",
+        "print-screen": "Print Screen",
+        "reply": "设备应答",
+        "status": "设备状态",
+        "wheel": "滚轮和按键"
+      },
+      "eventFields": {
+        "buttons": "按键掩码",
+        "code": "扫描码",
+        "command": "关联主机命令",
+        "extended": "扩展码",
+        "index": "应答索引",
+        "magnitude": "滚轮绝对值",
+        "negative": "滚轮负方向",
+        "parameter": "命令参数",
+        "reason": "错误原因",
+        "released": "释放",
+        "value": "数值",
+        "x": "X绝对值",
+        "xNegative": "X负方向",
+        "xOverflow": "X溢出",
+        "y": "Y绝对值",
+        "yNegative": "Y负方向",
+        "yOverflow": "Y溢出"
+      }
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "name": "cc1101",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "cc1101.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "framing",
+      "fields": ["tx"]
+    },
+    {
+      "kind": "command",
+      "role": "command",
+      "fields": ["tx", "opcode", "address", "read", "status"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["tx", "address", "register", "value", "read"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "address", "value", "read"]
+    },
+    {
+      "kind": "operation",
+      "role": "command",
+      "fields": ["tx", "operation"]
+    },
+    {
+      "kind": "field",
+      "role": "data",
+      "fields": ["tx", "address", "field", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "CC1101",
+      "summary": "CC1101 strobes, FIFO traffic and packet/modem/status fields",
+      "events": {
+        "begin": "Begin",
+        "command": "Command",
+        "data": "Data",
+        "end": "End",
+        "field": "Field",
+        "operation": "Operation",
+        "register": "Register"
+      },
+      "eventFields": {
+        "address": "Address",
+        "field": "Field",
+        "offset": "Offset",
+        "opcode": "Opcode",
+        "operation": "Operation",
+        "read": "Read",
+        "reason": "Reason",
+        "register": "Register name",
+        "status": "Status",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "CC1101",
+      "summary": "解析CC1101选通命令、FIFO数据及数据包、调制和状态字段",
+      "events": {
+        "begin": "开始",
+        "command": "命令",
+        "data": "数据通道",
+        "end": "结束",
+        "field": "字段",
+        "operation": "操作",
+        "register": "寄存器"
+      },
+      "eventFields": {
+        "address": "地址",
+        "field": "字段",
+        "offset": "偏移",
+        "opcode": "操作码",
+        "operation": "操作",
+        "read": "读取",
+        "reason": "结束原因",
+        "register": "寄存器名称",
+        "status": "状态",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

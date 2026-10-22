@@ -23,6 +23,10 @@
       "kind": "channel"
     },
     {
+      "name": "strict_start",
+      "kind": "bool"
+    },
+    {
       "name": "turnaround",
       "kind": "integer",
       "min": 1,

@@ -1,0 +1,146 @@
+{
+  "name": "modbus-pdu",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "modbus.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "modbus-pdu.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "direction",
+      "kind": "enum",
+      "values": ["request", "response"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "begin",
+      "role": "command",
+      "fields": ["frame", "address", "function", "direction", "partial"]
+    },
+    {
+      "kind": "field",
+      "role": "control",
+      "fields": ["frame", "field", "value"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["frame", "index", "value"]
+    },
+    {
+      "kind": "bits",
+      "role": "data",
+      "fields": ["frame", "offset", "value"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["frame", "offset", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["frame", "reason", "lengthOk", "supported", "valid"],
+      "errorWhen": [
+        {
+          "lengthOk": false
+        },
+        {
+          "reason": "bad-crc"
+        },
+        {
+          "reason": "short"
+        },
+        {
+          "reason": "broken"
+        },
+        {
+          "reason": "aborted"
+        }
+      ]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "Modbus application protocol",
+      "summary": "Function fields above RTU; configure request or response direction",
+      "fields": {
+        "direction": "Direction"
+      },
+      "values": {
+        "direction": {
+          "request": "Client request",
+          "response": "Server response"
+        }
+      },
+      "events": {
+        "begin": "Begin",
+        "bits": "Coil / input bits",
+        "data": "Data",
+        "end": "End",
+        "field": "Function field",
+        "register": "Register"
+      },
+      "eventFields": {
+        "address": "Server address",
+        "direction": "Direction",
+        "field": "Field",
+        "frame": "Frame",
+        "function": "Function code",
+        "index": "Register index",
+        "lengthOk": "PDU length OK",
+        "offset": "Offset",
+        "partial": "Partial",
+        "reason": "Transport end",
+        "supported": "Function supported",
+        "valid": "Validated PDU",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "Modbus 应用协议",
+      "summary": "RTU 之上的功能字段；需指定请求或响应方向",
+      "fields": {
+        "direction": "方向"
+      },
+      "values": {
+        "direction": {
+          "request": "客户端请求",
+          "response": "服务端响应"
+        }
+      },
+      "events": {
+        "begin": "开始",
+        "bits": "线圈 / 输入位",
+        "data": "数据",
+        "end": "结束",
+        "field": "功能字段",
+        "register": "寄存器"
+      },
+      "eventFields": {
+        "address": "服务端地址",
+        "direction": "方向",
+        "field": "字段",
+        "frame": "帧",
+        "function": "功能码",
+        "index": "寄存器索引",
+        "lengthOk": "PDU 长度正确",
+        "offset": "偏移",
+        "partial": "不完整",
+        "reason": "传输结束原因",
+        "supported": "支持的功能",
+        "valid": "PDU 已验证",
+        "value": "值"
+      }
+    }
+  }
+}

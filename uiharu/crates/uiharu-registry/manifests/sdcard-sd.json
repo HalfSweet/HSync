@@ -1,0 +1,43 @@
+{
+  "name": "sdcard-sd",
+  "category": "bus",
+  "inputs": [{ "port": "logic", "schema": "logic.samples" }],
+  "outputs": [{ "port": "events", "schema": "sdcard-sd.events" }],
+  "config": [
+    { "name": "clk", "kind": "channel" },
+    { "name": "cmd", "kind": "channel" },
+    { "name": "data", "kind": "channels", "max": 4 },
+    { "name": "block_bytes", "kind": "integer", "min": 1, "max": 4096 }
+  ],
+  "events": [
+    { "kind": "begin", "role": "framing", "fields": ["token", "partial"] },
+    { "kind": "header", "role": "command", "fields": ["token", "host", "index", "bits"] },
+    { "kind": "payload", "role": "data", "fields": ["token", "offset", "value", "bits"] },
+    {
+      "kind": "crc",
+      "role": "check",
+      "fields": ["token", "value", "expected", "ok"],
+      "errorWhen": [{ "ok": false }]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["token", "reason"],
+      "errorWhen": [{ "reason": "invalid-end" }, { "reason": "aborted" }]
+    },
+    { "kind": "data-begin", "role": "framing", "fields": ["block", "partial"] },
+    { "kind": "data", "role": "data", "fields": ["block", "offset", "value"] },
+    {
+      "kind": "data-crc",
+      "role": "check",
+      "fields": ["block", "lane", "value", "expected", "ok"],
+      "errorWhen": [{ "ok": false }]
+    },
+    {
+      "kind": "data-end",
+      "role": "framing",
+      "fields": ["block", "reason"],
+      "errorWhen": [{ "reason": "invalid-end" }, { "reason": "aborted" }]
+    }
+  ]
+}

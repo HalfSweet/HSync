@@ -1,0 +1,90 @@
+{
+  "name": "cfp",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "mdio.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "cfp.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "phy",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "address",
+      "role": "address",
+      "fields": ["address"]
+    },
+    {
+      "kind": "register",
+      "role": "data",
+      "fields": ["address", "read", "value", "region"]
+    },
+    {
+      "kind": "identifier",
+      "role": "control",
+      "fields": ["value", "module"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "CFP management",
+      "summary": "Clause 45 DEVAD 1 register regions and module identifier",
+      "fields": {
+        "phy": "MDIO port"
+      },
+      "events": {
+        "address": "Register address",
+        "error": "Protocol error",
+        "identifier": "Module identifier",
+        "register": "Register access"
+      },
+      "eventFields": {
+        "address": "Address",
+        "module": "Module type",
+        "read": "Read",
+        "reason": "Error reason",
+        "region": "Register region",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "CFP管理",
+      "summary": "Clause 45设备地址1寄存器区域和模块标识",
+      "fields": {
+        "phy": "MDIO端口"
+      },
+      "events": {
+        "address": "寄存器地址",
+        "error": "协议错误",
+        "identifier": "模块标识",
+        "register": "寄存器访问"
+      },
+      "eventFields": {
+        "address": "地址",
+        "module": "模块类型",
+        "read": "读取",
+        "reason": "错误原因",
+        "region": "寄存器区域",
+        "value": "数值"
+      }
+    }
+  }
+}

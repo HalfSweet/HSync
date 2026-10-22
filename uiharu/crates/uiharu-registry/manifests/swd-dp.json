@@ -1,0 +1,146 @@
+{
+  "name": "swd-dp",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "swd.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "swd-dp.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "ap",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "tar_wrap_bits",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "access",
+      "role": "command",
+      "fields": ["tx", "ap", "apIndex", "address", "register", "read", "value", "ack", "reason"]
+    },
+    {
+      "kind": "posted-result",
+      "role": "data",
+      "fields": ["tx", "responseTx", "register", "value"]
+    },
+    {
+      "kind": "resend-result",
+      "role": "data",
+      "fields": ["tx", "originalTx", "value", "matchesPrevious"]
+    },
+    {
+      "kind": "memory-request",
+      "role": "address",
+      "fields": ["tx", "apIndex", "plannedAddress", "sizeBits", "packed", "read", "rawData"]
+    },
+    {
+      "kind": "memory-result",
+      "role": "data",
+      "fields": ["tx", "responseTx", "plannedAddress", "rawData"]
+    },
+    {
+      "kind": "status",
+      "role": "control",
+      "fields": ["tx", "value", "stickyFault"],
+      "errorWhen": [
+        {
+          "stickyFault": true
+        }
+      ]
+    },
+    {
+      "kind": "context-lost",
+      "role": "line",
+      "fields": []
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "Arm SWD DP/AP",
+      "summary": "SW-DP registers, posted AP read results and planned MEM-AP addresses",
+      "fields": {
+        "ap": "MEM-AP index",
+        "tar_wrap_bits": "TAR increment wrap bits"
+      },
+      "events": {
+        "access": "DP/AP access",
+        "context-lost": "Context lost",
+        "memory-request": "Planned memory access",
+        "memory-result": "Observed memory read result",
+        "posted-result": "Posted read result",
+        "resend-result": "Repeated read result",
+        "status": "DP status"
+      },
+      "eventFields": {
+        "ack": "Acknowledge",
+        "address": "Register address",
+        "ap": "Access port",
+        "apIndex": "AP index",
+        "matchesPrevious": "Matches previous result",
+        "originalTx": "Original read transfer",
+        "packed": "Packed increment",
+        "plannedAddress": "Planned address",
+        "rawData": "Raw data",
+        "read": "Read",
+        "reason": "End reason",
+        "register": "Register",
+        "responseTx": "Response transfer",
+        "sizeBits": "Transfer bits",
+        "stickyFault": "Sticky fault",
+        "tx": "Transfer",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "Arm SWD DP/AP",
+      "summary": "SW-DP寄存器、AP延迟读取结果与MEM-AP候选地址",
+      "fields": {
+        "ap": "MEM-AP索引",
+        "tar_wrap_bits": "TAR自增回绕位数"
+      },
+      "events": {
+        "access": "DP/AP访问",
+        "context-lost": "上下文丢失",
+        "memory-request": "候选内存访问",
+        "memory-result": "观测内存读取结果",
+        "posted-result": "延迟读取结果",
+        "resend-result": "重发读取结果",
+        "status": "DP状态"
+      },
+      "eventFields": {
+        "ack": "应答",
+        "address": "寄存器地址",
+        "ap": "访问端口",
+        "apIndex": "AP索引",
+        "matchesPrevious": "与上次结果一致",
+        "originalTx": "原始读取传输",
+        "packed": "打包自增",
+        "plannedAddress": "候选地址",
+        "rawData": "原始数据",
+        "read": "读取",
+        "reason": "结束原因",
+        "register": "寄存器",
+        "responseTx": "响应传输",
+        "sizeBits": "传输位数",
+        "stickyFault": "粘滞错误",
+        "tx": "传输",
+        "value": "数值"
+      }
+    }
+  }
+}

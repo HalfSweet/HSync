@@ -1,0 +1,253 @@
+{
+  "name": "arm-etmv3",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "trace-byte.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "arm-etmv3.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "start_aligned",
+      "kind": "bool"
+    },
+    {
+      "name": "context_bytes",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "cycle_accurate",
+      "kind": "bool"
+    },
+    {
+      "name": "minor_version",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    },
+    {
+      "name": "branch_encoding",
+      "kind": "enum",
+      "values": ["original", "alternative"]
+    },
+    {
+      "name": "data_addresses",
+      "kind": "bool"
+    },
+    {
+      "name": "timestamp_bits",
+      "kind": "integer",
+      "min": 0,
+      "max": 255
+    }
+  ],
+  "events": [
+    {
+      "kind": "sync",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "atom",
+      "role": "control",
+      "fields": ["atom", "index", "header"]
+    },
+    {
+      "kind": "marker",
+      "role": "control",
+      "fields": ["marker"]
+    },
+    {
+      "kind": "cycle-count",
+      "role": "control",
+      "fields": ["value", "overflow"]
+    },
+    {
+      "kind": "isync",
+      "role": "address",
+      "fields": [
+        "address",
+        "context",
+        "reason",
+        "isa",
+        "altIsa",
+        "nonsecure",
+        "hyp",
+        "loadStoreInProgress"
+      ]
+    },
+    {
+      "kind": "branch",
+      "role": "address",
+      "fields": [
+        "address",
+        "fragment",
+        "significantBits",
+        "isa",
+        "exception",
+        "legacyException",
+        "cancel",
+        "resume",
+        "nonsecure",
+        "hyp",
+        "altIsa"
+      ]
+    },
+    {
+      "kind": "context",
+      "role": "control",
+      "fields": ["value"]
+    },
+    {
+      "kind": "vmid",
+      "role": "control",
+      "fields": ["value"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tag", "placeholder", "valueTraced", "value", "bytes", "address", "bigEndian"]
+    },
+    {
+      "kind": "timestamp",
+      "role": "control",
+      "fields": ["fragment", "significantBits", "clockChange"]
+    },
+    {
+      "kind": "error",
+      "role": "error",
+      "fields": ["header", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "Arm ETMv3",
+      "summary": "ETMv3 packet fields, atoms, observed branch addresses and data",
+      "fields": {
+        "branch_encoding": "Branch address encoding",
+        "context_bytes": "Context ID bytes",
+        "cycle_accurate": "Cycle-accurate atom encoding",
+        "data_addresses": "Data address tracing enabled",
+        "minor_version": "ETMv3 minor version",
+        "start_aligned": "Assume packet alignment",
+        "timestamp_bits": "Timestamp width"
+      },
+      "values": {
+        "branch_encoding": {
+          "alternative": "Alternative encoding",
+          "original": "Original encoding"
+        }
+      },
+      "events": {
+        "atom": "Instruction atom",
+        "branch": "Branch",
+        "context": "Context ID",
+        "cycle-count": "Cycle count",
+        "data": "Data",
+        "error": "Error",
+        "isync": "Instruction synchronization",
+        "marker": "Trace marker",
+        "sync": "Alignment synchronization",
+        "timestamp": "Timestamp fragment",
+        "vmid": "VMID"
+      },
+      "eventFields": {
+        "address": "Observed address",
+        "altIsa": "Alternative ISA",
+        "atom": "Atom",
+        "bigEndian": "BE-8 transfer",
+        "bytes": "Value bytes",
+        "cancel": "Previous instruction canceled",
+        "clockChange": "Clock changed",
+        "context": "Context",
+        "exception": "Exception",
+        "fragment": "Transmitted fragment",
+        "header": "Header",
+        "hyp": "Hypervisor",
+        "index": "Atom index",
+        "isa": "Instruction set",
+        "legacyException": "Legacy exception encoding",
+        "loadStoreInProgress": "Load/store in progress",
+        "marker": "Marker",
+        "nonsecure": "Non-secure",
+        "overflow": "Counter overflow",
+        "placeholder": "Outstanding data placeholder",
+        "reason": "Reason",
+        "resume": "Resume",
+        "significantBits": "Significant bits",
+        "tag": "Data tag",
+        "value": "Value",
+        "valueTraced": "Value traced"
+      }
+    },
+    "zh-CN": {
+      "name": "Arm ETMv3",
+      "summary": "ETMv3 数据包字段、执行原子、观察到的分支地址和数据",
+      "fields": {
+        "branch_encoding": "分支地址编码",
+        "context_bytes": "上下文标识字节数",
+        "cycle_accurate": "周期精确原子编码",
+        "data_addresses": "已启用数据地址跟踪",
+        "minor_version": "ETMv3 次版本",
+        "start_aligned": "假定数据包对齐",
+        "timestamp_bits": "时间戳宽度"
+      },
+      "values": {
+        "branch_encoding": {
+          "alternative": "替代编码",
+          "original": "原始编码"
+        }
+      },
+      "events": {
+        "atom": "指令原子",
+        "branch": "分支",
+        "context": "上下文标识",
+        "cycle-count": "周期数",
+        "data": "数据",
+        "error": "错误",
+        "isync": "指令同步",
+        "marker": "跟踪标记",
+        "sync": "对齐同步",
+        "timestamp": "时间戳片段",
+        "vmid": "VMID"
+      },
+      "eventFields": {
+        "address": "观察到的地址",
+        "altIsa": "替代指令集",
+        "atom": "原子",
+        "bigEndian": "BE-8 传输",
+        "bytes": "值字节数",
+        "cancel": "前一指令已取消",
+        "clockChange": "时钟已变化",
+        "context": "上下文",
+        "exception": "异常",
+        "fragment": "传输片段",
+        "header": "头部",
+        "hyp": "管理程序",
+        "index": "原子序号",
+        "isa": "指令集",
+        "legacyException": "旧式异常编码",
+        "loadStoreInProgress": "加载存储进行中",
+        "marker": "标记",
+        "nonsecure": "非安全状态",
+        "overflow": "计数器溢出",
+        "placeholder": "待返回数据占位",
+        "reason": "原因",
+        "resume": "恢复",
+        "significantBits": "有效位数",
+        "tag": "数据标签",
+        "value": "值",
+        "valueTraced": "已跟踪值"
+      }
+    }
+  }
+}

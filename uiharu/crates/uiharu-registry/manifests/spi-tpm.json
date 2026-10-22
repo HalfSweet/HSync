@@ -1,0 +1,116 @@
+{
+  "name": "spi-tpm",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "spi.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "spi-tpm.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "tpm_version",
+      "kind": "enum",
+      "values": ["tpm12", "tpm20"]
+    }
+  ],
+  "events": [
+    {
+      "kind": "register",
+      "role": "command",
+      "fields": ["tx", "address", "locality", "name"]
+    },
+    {
+      "kind": "begin",
+      "role": "command",
+      "fields": ["tx", "read", "address", "length"]
+    },
+    {
+      "kind": "wait",
+      "role": "handshake",
+      "fields": ["tx", "bytes"]
+    },
+    {
+      "kind": "data",
+      "role": "data",
+      "fields": ["tx", "offset", "value"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["tx", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "SPI-TPM",
+      "summary": "TPM 1.2/2.0 SPI register headers and wait-state flow control",
+      "fields": {
+        "tpm_version": "TPM version"
+      },
+      "values": {
+        "tpm_version": {
+          "tpm12": "TPM 1.2",
+          "tpm20": "TPM 2.0"
+        }
+      },
+      "events": {
+        "begin": "Begin",
+        "data": "Data",
+        "end": "End",
+        "register": "Interface register",
+        "wait": "Wait"
+      },
+      "eventFields": {
+        "address": "Address",
+        "bytes": "Bytes",
+        "length": "Length",
+        "locality": "Locality",
+        "name": "Register name",
+        "offset": "Offset",
+        "read": "Read",
+        "reason": "Reason",
+        "tx": "Transaction",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "SPI-TPM",
+      "summary": "解析TPM 1.2/2.0 SPI寄存器头及等待状态流控",
+      "fields": {
+        "tpm_version": "TPM版本"
+      },
+      "values": {
+        "tpm_version": {
+          "tpm12": "TPM 1.2",
+          "tpm20": "TPM 2.0"
+        }
+      },
+      "events": {
+        "begin": "开始",
+        "data": "数据通道",
+        "end": "结束",
+        "register": "接口寄存器",
+        "wait": "等待"
+      },
+      "eventFields": {
+        "address": "地址",
+        "bytes": "字节数",
+        "length": "长度",
+        "locality": "本地区域",
+        "name": "寄存器名称",
+        "offset": "偏移",
+        "read": "读取",
+        "reason": "结束原因",
+        "tx": "事务号",
+        "value": "数值"
+      }
+    }
+  }
+}

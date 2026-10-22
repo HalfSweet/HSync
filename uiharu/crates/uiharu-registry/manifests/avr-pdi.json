@@ -1,0 +1,138 @@
+{
+  "name": "avr-pdi",
+  "category": "bus",
+  "inputs": [
+    {
+      "port": "logic",
+      "schema": "logic.samples"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "avr-pdi.events"
+    }
+  ],
+  "config": [
+    {
+      "name": "clock",
+      "kind": "channel"
+    },
+    {
+      "name": "data",
+      "kind": "channel"
+    },
+    {
+      "name": "start_aligned",
+      "kind": "bool"
+    }
+  ],
+  "events": [
+    {
+      "kind": "character",
+      "role": "data",
+      "fields": ["value", "parityOk", "stopOk"],
+      "errorWhen": [
+        {
+          "parityOk": false
+        },
+        {
+          "stopOk": false
+        }
+      ]
+    },
+    {
+      "kind": "break",
+      "role": "control",
+      "fields": []
+    },
+    {
+      "kind": "instruction",
+      "role": "command",
+      "fields": ["op", "command", "opcode", "repeat", "pointerMode", "controlRegister"]
+    },
+    {
+      "kind": "operand-byte",
+      "role": "data",
+      "fields": ["op", "iteration", "index", "role", "value"]
+    },
+    {
+      "kind": "value",
+      "role": "data",
+      "fields": ["op", "iteration", "role", "value", "address"]
+    },
+    {
+      "kind": "end",
+      "role": "framing",
+      "fields": ["op", "reason"]
+    }
+  ],
+  "locales": {
+    "en-US": {
+      "name": "AVR XMEGA PDI",
+      "summary": "Synchronous PDI characters, all instructions and streamed repeats",
+      "fields": {
+        "clock": "PDI_CLK",
+        "data": "PDI_DATA",
+        "start_aligned": "Start at a known instruction boundary"
+      },
+      "events": {
+        "break": "BREAK",
+        "character": "Character",
+        "end": "End",
+        "instruction": "Instruction",
+        "operand-byte": "Operand byte",
+        "value": "Assembled value"
+      },
+      "eventFields": {
+        "address": "Known address",
+        "command": "Instruction",
+        "controlRegister": "Control register",
+        "index": "Byte index",
+        "iteration": "Iteration",
+        "op": "Operation",
+        "opcode": "Opcode",
+        "parityOk": "Even parity OK",
+        "pointerMode": "Pointer mode",
+        "reason": "End reason",
+        "repeat": "Execution count",
+        "role": "Operand role",
+        "stopOk": "Stop bit OK",
+        "value": "Value"
+      }
+    },
+    "zh-CN": {
+      "name": "AVR XMEGA PDI",
+      "summary": "同步PDI字符、完整指令集及流式重复操作",
+      "fields": {
+        "clock": "PDI_CLK",
+        "data": "PDI_DATA",
+        "start_aligned": "从已知指令边界开始"
+      },
+      "events": {
+        "break": "BREAK",
+        "character": "字符",
+        "end": "结束",
+        "instruction": "指令",
+        "operand-byte": "操作数字节",
+        "value": "组合数值"
+      },
+      "eventFields": {
+        "address": "已知地址",
+        "command": "指令",
+        "controlRegister": "控制寄存器",
+        "index": "字节索引",
+        "iteration": "重复编号",
+        "op": "操作号",
+        "opcode": "操作码",
+        "parityOk": "偶校验正确",
+        "pointerMode": "指针模式",
+        "reason": "结束原因",
+        "repeat": "执行次数",
+        "role": "操作数用途",
+        "stopOk": "停止位正确",
+        "value": "数值"
+      }
+    }
+  }
+}

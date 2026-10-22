@@ -1,0 +1,65 @@
+{
+  "name": "jtag-dp",
+  "category": "device",
+  "inputs": [
+    {
+      "port": "bus",
+      "schema": "jtag.events"
+    }
+  ],
+  "outputs": [
+    {
+      "port": "events",
+      "schema": "jtag-dp.events"
+    }
+  ],
+  "config": [],
+  "events": [
+    {
+      "kind": "reset",
+      "role": "framing",
+      "fields": []
+    },
+    {
+      "kind": "instruction",
+      "role": "command",
+      "fields": ["scan", "value"]
+    },
+    {
+      "kind": "idcode",
+      "role": "data",
+      "fields": ["scan", "value"]
+    },
+    {
+      "kind": "bypass",
+      "role": "data",
+      "fields": ["scan", "tdi", "tdo"]
+    },
+    {
+      "kind": "abort",
+      "role": "command",
+      "fields": ["scan", "value", "lowBits"]
+    },
+    {
+      "kind": "access",
+      "role": "data",
+      "fields": [
+        "scan",
+        "instruction",
+        "read",
+        "addr",
+        "dataIn",
+        "ackBits",
+        "ack",
+        "responseData",
+        "previousScan",
+        "accepted"
+      ]
+    },
+    {
+      "kind": "scan",
+      "role": "framing",
+      "fields": ["scan", "ir", "bits", "status"]
+    }
+  ]
+}
