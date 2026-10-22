@@ -2,9 +2,11 @@
 
 How a protocol is added to `crates/uiharu-protocols`: its contract, its decoder, its synthesizer, its tests and its page. A decoder is written either in the DSL — a TypeScript module under `dsl/decoders/`, compiled to Rust by the tool chain of [dsl.md](dsl.md); PWM, SPI, SPI NOR and UART are; while it is under work, `uiharu decode --ir dsl/ir/<name>.json` runs its IR interpreted, on the engine's other decoders, without generating its Rust (dsl.md §8) — or by hand in Rust, in the same shape, which is what this page describes. The I²C module (`src/i2c/`, whose contract is `dsl/contracts/i2c.ts`) and the 24xx EEPROM decoder (`src/eeprom24xx/`) are the reference for every rule here; [design.md](design.md) explains the runtime they run on. A hand-written decoder built on a generated contract (the SD card decoder on `spi.events`) reads it through `uiharu_core::dsl::FramedBus`, as `src/sdcard_spi/` does.
 
-## Clean room
+## Sources and implementation boundary
 
-uiharu is Apache-2.0 and written from scratch. A decoder is implemented from the protocol's **public specification** — the standard, the vendor datasheet, the application note — which the module documentation cites. Never open, read or translate `src-tauri/resources/decoders/` (DSView's GPL decoders), `crates/hsync-decode`, `crates/hsync-srd`, or any sigrok or DSView source; the feature checklist of a protocol (channels, options, what to report) comes from the task description, written in its author's own words, not from that code.
+uiharu is Apache-2.0. Cite the protocol's public specification, vendor datasheet or application note for wire behavior and expected values. sigrok and DSView implementations may be consulted for behavior, edge cases and feature comparison; record those reference sources and distinguish consultation from copied or adapted code. GPL code must not be copied into Apache-2.0 files or introduced as a dependency. If actual source adaptation requires a licensing decision, record that blocker and continue other work.
+
+For the decoder expansion through P4, write new decoders in TypeScript using the existing DSL and contracts wherever possible. If a protocol needs an IR, code-generation, interpreter or runtime extension, record its required behavior, a minimal desired TS example, the exact missing capability, expected events/recovery and other affected protocols, then skip it. Do not extend the backend during this expansion or add a handwritten Rust replacement to bypass the limitation. New contract declarations and ordinary generated IR/Rust output are allowed when supported by the current toolchain. USB request/control-transfer/descriptor layers are deferred.
 
 ## Where things go
 
@@ -21,6 +23,16 @@ docs/protocols/<name>.md                        the contract and the decoding ru
 ```
 
 A decoder built on another contract (SPI NOR on `spi.events`, an EEPROM on `i2c.events`) is a single file or module named after the protocol, with its own events and tests. Add the module to `src/lib.rs`; touch nothing else outside your module (not `uiharu-cli`, not `design.md`, no new dependencies — `serde`, `thiserror`, `proptest` and `uiharu_core::testing` are what there is).
+
+For a built-in DSL decoder, re-export its generated module from `uiharu-protocols`
+and register the generated node, configuration and event type in `uiharu-registry`.
+Declare both application locales in the TS module. Export its catalog metadata
+with `cargo run -p uiharu-registry --example export_decoder_manifests -- <name>`
+after compiling the DSL and generating Rust; format and include the resulting
+`manifests/<name>.json`. Registry tests compare every registered DSL decoder with
+its loaded IR, including ports, events, configuration, defaults and localized copy.
+The generated and interpreted paths must also pass the same independent protocol
+vectors and streaming-invariance tests.
 
 ## The contract
 

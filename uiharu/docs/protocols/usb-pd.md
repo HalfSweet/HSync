@@ -208,3 +208,40 @@ The decoder was written from the specification's public structure; these points 
 - Object Position is read from bits 31–28, the width revision 3.1 gives it for EPR; earlier revisions reserve bit 31, which is then 0.
 - How Number of Data Objects and padding work in unchunked extended messages: the decoder relies on neither and reads such messages to their EOP.
 - The meanings of the fixed supply flags differ by revision; they are reported as they are.
+
+## TypeScript semantic consumer boundary (2026-10-22)
+
+RDO scaling against remembered source capabilities, PPS/AVS requests, structured
+VDM and BIST fields, and extended-message chunk tracking remain deferred. The
+physical decoder already observes the raw objects and bounded extended bytes;
+the semantic algorithms themselves do not need new signal operations. Their
+shared input contract cannot currently be migrated exactly to the DSL.
+
+`usbpd.events@1` flattens `MessageHeader`, `ExtendedMessageHeader`, and
+`RequestObject` records into their enclosing event. Its `pdo` event also flattens
+a second tagged union, `PowerObject`, whose discriminator is `supply` rather
+than `kind`. Preserving that union matters: a fixed supply has current/voltage,
+a battery has power/voltage ranges, and an augmented supply has optional PPS
+fields. Treating all fields as optional would change the existing schema and
+would stop the type system checking those alternatives.
+
+A minimal desired declaration is:
+
+```ts
+export type PowerObject =
+  | { supply: 'fixed'; millivolts: u16; milliamps: u16; flags: u16 }
+  | { supply: 'battery'; maxMillivolts: u16; minMillivolts: u16; milliwatts: u32 }
+// The contract also needs a supported flatten annotation for `object`.
+export type UsbPdEvent = { kind: 'pdo'; pkt: u64; index: u8; object: PowerObject }
+export const events = eventSchema<UsbPdEvent>('usbpd.events', 1)
+```
+
+A virtual module lowered with the current compiler reports
+`every member of a union has a kind` at the first `supply` variant. Replacing
+`supply` with `kind` and nesting the record changes the serialized contract;
+flattening needs separate compiler/IR/codegen/interpreter design work. No new
+native semantic decoder or conversion node is introduced to bypass that limit.
+After exact contract declaration support exists, expected recovery is bounded:
+remember only CRC-valid, complete source capabilities per SOP/role, clear them
+on reset/gap, keep unknown selected PDOs unknown, and track at most 260 extended
+bytes with explicit missing/duplicate/out-of-order chunk diagnostics. USB request/control-transfer/descriptor decoding is separately out of scope.

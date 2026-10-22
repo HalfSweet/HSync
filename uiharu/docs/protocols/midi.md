@@ -126,3 +126,16 @@ Data bytes are reported as sent. Two make a 14-bit value, low seven bits first: 
 - Messages are not interpreted: neither note on with velocity 0, nor channel mode messages, MIDI time code, manufacturers' identifiers or universal system exclusive messages.
 - The active sensing timeout is not checked.
 - A system reset is a real-time message like the others: it does not clear the running status.
+
+## Semantic consumer
+
+The exact `midi.events@1` JSON contract is declared in `dsl/contracts/midi.ts`;
+the native producer emits those generated types. Message IDs are scalar `u64`
+values. Native status conversion/query helpers and the event's message lookup
+are exported as `ChannelStatusExt`, `CommonStatusExt`, `RealtimeStatusExt` and
+`MidiEventExt` traits.
+
+Stack [midi-semantics](midi-semantics.md) above this transport for note/GM drum
+and controller names, velocity-zero note-off, pitch bend, song position,
+quarter-frame fields and bounded SysEx manufacturer identifiers. The lower
+transport's raw message events remain available independently.

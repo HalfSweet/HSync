@@ -88,3 +88,9 @@ Decoders built on SWD read the stream through `SwdBus`. `next()` waits for the n
 - The JTAG-to-dormant sequence is defined by the TAP controller's zero-bit scans (B5.3.2) and is not recognised on SWDIO; the Selection Alert that follows it is.
 - A Selection Alert the decoder had already taken for idle cycles and packets — because it believed the port in SWD — is still reported as a switch, but the events decoded from its bits before it completed stand.
 - No register is named in the events (see above).
+
+The optional TypeScript [`swd-dp`](swd-dp.md) layer interprets observed DP/AP
+registers, SW-DP posted AP reads/RDBUFF/RESEND and candidate MEM-AP addresses.
+The physical decoder's `strict_start` defaults true (wait for an observed line
+reset); false searches for request headers immediately and after input loss or
+protocol errors. This does not infer an unseen SELECT, AP bank or memory state.

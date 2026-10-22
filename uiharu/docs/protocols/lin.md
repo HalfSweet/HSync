@@ -124,3 +124,9 @@ The checksum is the inverted eight-bit sum with carry — the bytes added, 255 s
 - Signals, diagnostic requests and the transport layer are not interpreted.
 - The frame-time maximum of §2.3.2, `TFrame_Maximum`, 1.4 times the nominal time of the header and of the response, is not checked, though the specification asks tools to check it; collisions of event triggered frames are not told apart from other errors.
 - A wake-up signal long enough to be a break begins a frame, which reports nothing unless a byte follows it.
+
+The separate [LIN version and idle profile](lin-profile.md) reads the same
+UART contract directly, enforces the selected classic/enhanced checksum, and
+can complete the final response at a configured idle deadline without a
+following BREAK. Its explicitly configured idle threshold does not infer an
+LDF response length or change this native transport's limits.

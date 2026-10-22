@@ -110,3 +110,11 @@ The events of the stream settle in order, and they are the same however the samp
 - One command per chip select period, as the flash requires; the decoder does not judge whether the flash accepted a command (whether writes were enabled, whether chip select rose on the byte boundary it requires).
 - `auto` assumes the flash powers up in three-byte mode; a flash configured to power up in four-byte mode is read with `four`.
 - Vendor-specific commands outside the table — configuration registers beyond the three status registers, extended address registers, OTP areas reached by other opcodes — are unknown commands.
+
+The single-line command table also reports Winbond C8h/C5h as
+`read-extended-address`/`write-extended-address` raw data, and3Dh as
+`read-block-lock` with the configured address width and raw lock byte, following
+the W25Q256JV manufacturer instruction table. These are observed register
+transactions; the decoder does not combine an unverified extended-address
+write with later memory addresses or infer protection policy. QPI/QE changes
+belong to the logic-level `qspi-flash` decoder, which can observe all four lanes.

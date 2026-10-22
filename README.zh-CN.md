@@ -26,7 +26,7 @@
   <img src="assets/screenshots/zh-CN/hero-light.webp" alt="HSync 显示一段包含 I²C、UART、SPI 与 CAN-FD 总线的采集：解码结果位于对应波形上方，下方是 I²C 的数据流">
 </picture>
 
-HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic 与 PXLogic 的 PX-Logic 系列，并实验性支持矽速（Sipeed）的 SLogic16U3（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，采集还没结束就能看到，另有 30 种协议解码器搜索即用。HSync 以自己的 `.hsync` 格式保存采集，能打开、导出 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件与解码器。
+HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic 与 PXLogic 的 PX-Logic 系列，并实验性支持矽速（Sipeed）的 SLogic16U3（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，采集还没结束就能看到，数十种协议解码器搜索即用。HSync 以自己的 `.hsync` 格式保存采集，能打开、导出 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件与解码器。
 
 手边没有硬件？HSync 会打开内置的「演示设备」，回放一段包含四种总线的采集数据，所有功能都可以马上试用。
 
@@ -51,7 +51,8 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 ### 解码
 
 - **I²C、UART、SPI 与 CAN 解码器**，解码块与波形对齐，逐事件显示总线上实际传输的内容，不猜测其含义。
-- **另有 30 种协议**来自 HSync 自己的解码引擎 [uiharu](uiharu/)：从 1-Wire、JTAG、USB 到 USB PD、WS281x 灯珠；读取其他协议输出的解码器（24xx EEPROM、SPI NOR 闪存、Modbus RTU、LIN）叠加在下层协议上。
+- **数十种协议**来自 HSync 自己的解码引擎 [uiharu](uiharu/)，涵盖总线、调试与跟踪链路、闪存与 SD 卡、RTC、传感器、转换器、显示器和无线接口。兼容的解码层可以连成链，例如 UART → Modbus RTU → Modbus PDU，或 JTAG → JTAG-DP → MEM-AP。[覆盖记录](docs/decoder-coverage.md)列出了支持的器件配置，以及与 DSView、sigrok 尚存的差异。
+- **更深层的协议解析**涵盖 cJTAG OScan0/1、SWD 调试与内存访问观测、1-Wire 存储器和 PIO 器件、CFP 管理、MIDI 名称、DMX 时序以及按版本选择的 LIN 校验。
 - **解码跟着采集走**：设备还在填充采集时结果就陆续出现，期间也能添加或修改解码器。
 - **自己编写解码器**：用 HSync 的 TypeScript 解码器语言编写，可自带多语言名称，在设置中加载即可使用，无需重新构建应用，用到它的采集文件会随文件携带；与内置解码器同名的模块会替代它。
 - **数值可用十六进制、十进制、八进制、二进制或 ASCII 显示**，每个解码器各自选择。
@@ -71,7 +72,7 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 
 ### 文件
 
-- **以 `.hsync` 文件保存采集**，解码器、通道名、颜色与视图一并保存；**打开各版本的 DSView `.dsl` 采集文件**，双方都支持的解码器会一并接手；导出的 `.dsl` 文件 DSView 也能打开，通道名一并保存。
+- **以 `.hsync` 文件保存采集**，解码器、通道名、颜色与视图一并保存；**打开各版本的 DSView `.dsl` 采集文件**，支持的解码设置会被转换，暂不支持的设置仍会保留并显示导入说明；导出的 `.dsl` 文件 DSView 也能打开，通道名一并保存。
 - **导入 VCD、FST、GHW 波形**：仿真器与 FPGA 片上逻辑分析仪（Vivado ILA、Signal Tap 等）导出的波形，勾选信号后每一位成为一个通道，采样率就是文件当初的采样时钟。
 - **导出 DSView `.dsl`、CSV、VCD、FST、sigrok `.sr` 与原始二进制**：可以导出全程或选段、全部通道或部分通道。
 - **会话**保存设备设置、通道、触发与解码器；也能加载 DSView 的 `.dsc` 会话。

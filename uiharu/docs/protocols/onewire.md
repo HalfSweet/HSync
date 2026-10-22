@@ -91,3 +91,15 @@ Decoders built on the network layer read it through `OneWireBus`: `next()` waits
 - One speed per decoder; the switch to and from overdrive is not followed.
 - Slot lengths and recovery times are not checked beyond the sampling point: a slot that follows the previous one too soon is classified by its low pulse alone.
 - ROM commands other than the seven above (Resume, for instance) are not known: what follows them is reported as bytes.
+
+## Canonical DSL contract and Rust migration
+
+The network event types now come from `dsl/contracts/onewire.ts`. Compiled native
+producers and TypeScript consumers use exactly the same Rust event type, schema,
+and JSON. `Rom.id` and `Search.id` remain public `u64` fields serialized with the
+native hexadecimal-u64 codec. `TxId` is now a transparent `u64` alias: replace
+`TxId(n)` with `n`, and `tx.0` with `tx`. Import `OneWireEventExt` to keep using
+`event.tx()`. The physical link/network algorithms are unchanged.
+
+The `ds2408`, `ds243x`, and `ds28ea00` TypeScript consumers use this contract;
+the existing DS18B20 consumer continues to use it natively.

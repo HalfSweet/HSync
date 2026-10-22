@@ -83,6 +83,58 @@ A decoder is a TypeScript module that imports from `uiharu` (`dsl/src/index.ts`)
 
 Integer helpers: `min`, `max`, `saturatingSub`, `countOnes`, `fromBool`, `mulDiv` (`⌊a × b / c⌋` without overflowing in between) and `mulDivCeil`.
 
+Native event contracts can also declare these exact wire types:
+
+```ts
+import type { HexU64, NumericEnum, u8 } from 'uiharu'
+
+type ReadingBytes = readonly [u8, u8, u8, u8, u8]
+type Clause = NumericEnum<{ c22: 22; c45: 45 }>
+type Ack = 'ok' | 'wait' | 'fault' | { other: u8 }
+type Reading = {
+  kind: 'reading'
+  bytes: ReadingBytes
+  romId: HexU64
+  clause: Clause
+  ack: Ack
+}
+```
+
+- A homogeneous tuple, named or inline and optionally `readonly`, is an exact
+  fixed array. Its Rust type is `[T; N]`, and JSON input must contain exactly `N`
+  items. Optional, rest and heterogeneous tuple elements are rejected. The
+  supported length is 1–32, matching the native array serialization implemented
+  by the current serde derives. A fixed array and `Bounded<T, N>` are distinct;
+  there is no implicit conversion between them. Both support indexing and
+  `for … of`; constructing a fixed array requires an exact-length array literal
+  in its typed context.
+- `HexU64` is a field annotation, not a different arithmetic type: a direct
+  record or event field remains a Rust `u64`. JSON writes lowercase hexadecimal
+  with a `0x` prefix and no padding; input accepts an unsigned integer or a
+  hexadecimal string with an optional `0x`/`0X` prefix. It uses the existing
+  `uiharu_core::hex_u64` representation, so ROM identities above 2^53 stay exact.
+  Plain `u64` fields still require numbers. Optional/nested annotations and uses
+  outside field declarations are rejected; calculations use `u64`. Source
+  numeric literals must be safe integers; construct larger values with integer
+  operations or supply them through an annotated field.
+- `NumericEnum` preserves both symbolic variant names and numeric wire values:
+  `Clause::C22`/`Clause::C45` serialize as `22`/`45`. A bare numeric literal union
+  also works and receives generated names such as `Value22`. Assignments,
+  equality and `switch` use the declared numeric literals; undeclared wire values
+  are rejected. Arithmetic, ordering, increments and casts of a numeric enum are
+  rejected rather than silently erasing its validation.
+- A union of unit strings and single-property payload objects is an externally
+  tagged enum. `Ack` generates `Ok`, `Wait`, `Fault` and `Other(u8)`; its JSON is
+  exactly `"ok"`, `"wait"`, `"fault"` or `{"other": 7}`. Construct values with the
+  same source literals and objects. Test unit variants with equality or a
+  `switch`, and payloads with a TypeScript-compatible guard such as
+  `typeof ack === 'object' && 'other' in ack` before reading `ack.other`.
+
+Rust identifiers derived from enum wire strings are valid and collision-free;
+punctuation or spellings that normalize to the same identifier never change the
+wire strings. Early `break` inside a `switch` leaves that switch, including when
+nested inside a loop; `continue` still targets the enclosing source loop.
+
 ### 2.2 Code
 
 The subset is TypeScript without its dynamic parts: `let`/`const`, assignment and compound assignment, `if`/`else`, `switch` over an enum, a union's `kind` or integers (with `default`), `for (;;)`, `while`, `for (let i = a; i < b; i++)`, `for (const x of array)`, labelled `break`/`continue`, `return`, ternaries, `&&`/`||`/`!`, the arithmetic, bitwise and comparison operators, object literals of records and union variants, calls to the module's own functions and to the runtime's helpers, and `await` on the runtime's operations and the decoder's own `async` methods. Template strings make the messages of configuration checks.
@@ -116,6 +168,12 @@ export const spiEvents = eventSchema<SpiEvent>('spi.events', 1)
 `eventSchema` ties the event type to the schema name and version. `roles` says what each kind of event is to someone reading the bus, whatever the protocol, so that an interface can show events of the same role alike: `framing` (where a transaction, frame or scan begins or ends), `address` (whom the traffic is for), `command` (what is asked), `control` (what a frame says of itself, such as a CAN control field), `data` (what it carries), `check` (a CRC or checksum), `handshake` (the other side's answer), `line` (a condition of the line itself: a line reset, a break) or `error` (something the decoder reports as wrong). A role names what an event is, never how it looks. Every contract declares one for every kind of event, and the checker holds it to that. A kind's role can carry `errorWhen`, field values that make one of its events an error: `frame: { role: 'data', errorWhen: [{ parity: 'error' }, { framingOk: false }] }` makes a character with a wrong parity bit or a bad stop bit an error, and an event is one when it has every value of any one condition. The conditions name only what the contract defines as wrong: an I²C address no device acknowledged is an error, a data byte the master did not acknowledge is not, because that is how a read ends. `framed` declares how the stream frames its traffic: the event kind that begins a frame, the kinds that carry its items, the kind that ends it, the field that names the frame on all of them, the `begin` field saying the frame was under way, the `end` field saying why it ended and its values for a normal end, and the id of the one frame of a bus that has no framing line. A decoder reading the contract gets a cursor over its frames whose items are the item events without the frame's id: with one kind of item, its fields alone (`ItemOf<typeof spiEvents>` is `{ mosi: u8 | undefined; miso: u8 | undefined }`); with several — I²C's addresses, data bytes and repeated STARTs — their union tagged by `kind`, read with `switch (item.kind)`. The cursor is generated from the declaration (§5); it offers the contract's primitives — the next item, the normal end, draining — and nothing more.
 
 A contract can be declared without a decoder: a module under `dsl/contracts/` with the event type, its enums and the `eventSchema` call, for a decoder that stays hand-written. Its Rust types are generated like any other's, the hand-written decoder emits them, and a decoder written in the DSL can stack on it. `contracts/i2c.ts` is one: the hand-written I²C decoder of `crates/uiharu-protocols` emits its types, and the 24xx EEPROM decoder reads them through `FramedBus`.
+
+Independent producers may import that same contract as their output. The
+generator reuses the owning module's Rust payload and `EventSchema` implementation;
+the interpreter and catalog resolve the imported schema by both name and version.
+Conflicting definitions of the same schema identity are rejected. Identical JSON
+shapes declared as unrelated Rust types are not an implicit adapter.
 
 Events carry bus data only, as the contract pages describe them; numbers take the narrowest width that fits, a line that is not connected or a value that could not be seen is `undefined`.
 
@@ -247,7 +305,18 @@ The compiler lowers a DSL module to one JSON document per decoder, read by `uiha
 }
 ```
 
-**Types** are strings — the primitives `bool`, `u8`, `u16`, `u32`, `u64`, `text`, `mask`, `levels`, `range`, `provenance`, `cursor` (the frame cursor of a bus decoder) or a declared name — or objects: `{ "option": T }`, `{ "array": T, "bound": N }`, `{ "batch": T, "bound": N }`. Declared types are records (fields), enums (variant names as events spell them) and unions (variants with fields, tagged by `kind`). A contract names its schema, its event union, the role of each kind of event (§2.3: `"roles": { "frame": { "role": "data", "errorWhen": [{ "parity": "error" }] } }`, a lone condition written as a list of one; a module compiled before roles were declared has none, and its events show as data) and, when framed, its framing (§2.3: `items`, the kinds that carry a frame's items, and `normal`, the reasons of a normal end, are lists); an import carries another module's contract with its types. A module without a `decoder` declares contracts only.
+**Types** are strings — the primitives `bool`, `u8`, `u16`, `u32`, `u64`, `text`, `mask`, `levels`, `range`, `provenance`, `cursor` (the frame cursor of a bus decoder) or a declared name — or objects: `{ "option": T }`, `{ "array": T, "bound": N }`, `{ "fixedArray": T, "length": N }`, `{ "batch": T, "bound": N }`. Declared types are records (fields), enums (variant names as events spell them) and unions (variants with fields, tagged by `kind`). A contract names its schema, its event union, the role of each kind of event (§2.3: `"roles": { "frame": { "role": "data", "errorWhen": [{ "parity": "error" }] } }`, a lone condition written as a list of one; a module compiled before roles were declared has none, and its events show as data) and, when framed, its framing (§2.3: `items`, the kinds that carry a frame's items, and `normal`, the reasons of a normal end, are lists); an import carries another module's contract with its types. A module without a `decoder` declares contracts only.
+
+The additive native-contract forms are `"type": "numeric-enum"` with
+`"variants": [{ "name": "c22", "value": 22 }, …]`, and
+`"type": "external-enum"` with `"variants": [{ "name": "ok" },
+{ "name": "other", "payload": "u8" }]`. A field may carry
+`"json": "hex-u64"` only when its type is `u64`. The field metadata survives
+imports and generated framed-item types. Numeric enums use `enum` expressions
+with logical variant names; external enums use `variant` expressions with no
+fields for unit variants or one synthetic `value` field for a payload. This
+reuses variant matching and bindings while keeping the native wire shape.
+Existing IR version 1 modules remain valid without these optional forms.
 
 **The decoder** has its ports: `input` is `{ "kind": "logic" }`, `{ "kind": "stream", "schema": … }` or `{ "kind": "bus", "schema": … }`; `requires` and `props` are evaluated with `config` in scope; `locales` is the copy of §2.4 by language tag, every part optional; `partial` and `recovery` (with the reason enum's name) belong to bus decoders. `state` lists the fields with their initializers; `methods` the functions with `self`, the hooks among them by name.
 
@@ -258,7 +327,7 @@ The compiler lowers a DSL module to one JSON document per decoder, read by `uiha
 `validate` checks what the compiler enforces and the backend relies on:
 
 - every type, function, method, field, local, variant and intrinsic resolves, and nothing is declared twice or named after a primitive;
-- every array and batch has a bound of at least one item;
+- every array and batch has a bound of at least one item; a fixed array has an exact length from 1 through 32;
 - a free function is synchronous and has no `self`; only an `async` method awaits; an async method is called with `await`, a synchronous one without;
 - nothing recurses: the call graph of functions and methods has no cycle, so that the decoder's state — the future — has a fixed size;
 - every `loop` and `while` waits, breaks or returns on every iteration;
@@ -280,7 +349,7 @@ The backend emits one Rust module per IR module over `uiharu-core`, in the shape
 | ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | a record, an enum, a union                        | a `struct`, a unit `enum` with `#[serde(rename_all = "kebab-case")]`, an `enum` with `#[serde(tag = "kind", rename_all = "kebab-case", rename_all_fields = "camelCase")]`                                                                       |
 | `u8` … `u64`, `bool`, `option<T>`                 | the same; `u64` ticks become `Tick` at the runtime's API                                                                                                                                                                                        |
-| `array<T, N>`, `batch<T, N>`                      | `[T; N]` with a length, and the runtime's `Batch<T, N>`                                                                                                                                                                                         |
+| `array<T, N>`, `fixedArray<T, N>`, `batch<T, N>`  | `Vec<T>` bounded by N, `[T; N]` with exactly N items, and the runtime's `Batch<T, N>`                                                                                                                                                           |
 | a contract                                        | the event enum with `impl EventSchema`, and for a framed one the item type (a struct for one kind of item, an enum for several) and `impl Framed` (which variants begin, carry and end a frame) for the runtime's generic cursor `FramedBus<E>` |
 | `config`, `requires`, `props`, `validate`         | the `Config` struct with `Default`, `validate()`, `props()`, and `Requires` in `NodeSpec`                                                                                                                                                       |
 | `state`, `methods`                                | a `struct` of the fields and an `impl` with the methods; the hooks are methods the generated main loop calls                                                                                                                                    |
@@ -314,7 +383,6 @@ What the DSL does not express yet, and what the remaining decoders would need:
 - **A node with several inputs** (`ready_all`, the time-ordered merge of design.md §4): no decoder uses one today; a `defineMergeDecoder` can come with the first that does.
 - **A cursor that is not a frame cursor**: the 1-Wire link layer's `LinkBus` reads "a reset, then bits until something ends them" and names a bad slot among its errors; USB's `UsbBus` names a damaged packet. They are framed contracts with extra end reasons: the framing declaration will take a list of abnormal reasons with the cut each maps to.
 - **Properties of the input**: Modbus RTU and LIN take the baud rate from the UART stream's props (`io.input_props`). A stream decoder's definition will declare which props it reads, typed, as `this.input.props`.
-- **64-bit values in JSON** (`hex_u64`): a field attribute on the contract's type.
 - **Several outputs**: no decoder has them; the IR's `output` can become a list when one does.
 
 The rest of the decoders fit the three shapes and the vocabulary: the edge-driven logic decoders are SPI with other framing rules, the timed ones are UART with other timings and deadlines, the stream decoders are Modbus with other silences, the bus decoders are SPI NOR with other command sets.
