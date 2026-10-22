@@ -17,5 +17,3 @@ Cargo.lock linguist-generated=true -diff
 src/ipc/bindings/** linguist-generated=true
 src/ipc/mock/fixtures/decoder-catalog.json linguist-generated=true
 src/ipc/mock/fixtures/protocol-uiharu.json linguist-generated=true
-uiharu/crates/uiharu-dsl-protocols/src/** linguist-generated=true
-uiharu/crates/uiharu-interp/tests/fixtures/backend/generated/** linguist-generated=true

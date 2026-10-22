@@ -5,7 +5,8 @@
  * fixtures to disposable, ignored IR. All sources must compile before outputs are written.
  *
  *   pnpm dsl:compile    write the IR files, removing obsolete JSON
- *   pnpm dsl:check      compile IR and check the tracked Rust generated from it
+ *   pnpm dsl:generate   compile IR and generate local Rust sources
+ *   pnpm dsl:check      generate sources and type-check the generated Rust
  */
 
 import path from 'node:path'
