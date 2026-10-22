@@ -1,0 +1,4051 @@
+{
+  "ir": 1,
+  "name": "arm-memap",
+  "types": [
+    {
+      "name": "ArmMemapConfig",
+      "type": "record",
+      "fields": [
+        {
+          "name": "ap",
+          "type": "u8"
+        },
+        {
+          "name": "tarWrapBits",
+          "type": "u8"
+        }
+      ]
+    },
+    {
+      "name": "RegisterName",
+      "type": "enum",
+      "variants": [
+        "select",
+        "ctrl-stat",
+        "rdbuff",
+        "dp-register",
+        "csw",
+        "tar",
+        "drw",
+        "ap-register"
+      ]
+    },
+    {
+      "name": "ArmMemapEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "request",
+          "fields": [
+            {
+              "name": "scan",
+              "type": "u64"
+            },
+            {
+              "name": "ap",
+              "type": "bool"
+            },
+            {
+              "name": "apIndex",
+              "type": {
+                "option": "u8"
+              }
+            },
+            {
+              "name": "register",
+              "type": "RegisterName"
+            },
+            {
+              "name": "address",
+              "type": {
+                "option": "u8"
+              }
+            },
+            {
+              "name": "read",
+              "type": "bool"
+            },
+            {
+              "name": "value",
+              "type": "u32"
+            }
+          ]
+        },
+        {
+          "name": "response",
+          "fields": [
+            {
+              "name": "scan",
+              "type": "u64"
+            },
+            {
+              "name": "responseScan",
+              "type": "u64"
+            },
+            {
+              "name": "value",
+              "type": "u32"
+            },
+            {
+              "name": "register",
+              "type": "RegisterName"
+            },
+            {
+              "name": "okOrFault",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "memory-request",
+          "fields": [
+            {
+              "name": "scan",
+              "type": "u64"
+            },
+            {
+              "name": "apIndex",
+              "type": "u8"
+            },
+            {
+              "name": "plannedAddress",
+              "type": {
+                "option": "u32"
+              }
+            },
+            {
+              "name": "sizeBits",
+              "type": {
+                "option": "u8"
+              }
+            },
+            {
+              "name": "packed",
+              "type": "bool"
+            },
+            {
+              "name": "read",
+              "type": "bool"
+            },
+            {
+              "name": "rawData",
+              "type": "u32"
+            }
+          ]
+        },
+        {
+          "name": "memory-response",
+          "fields": [
+            {
+              "name": "scan",
+              "type": "u64"
+            },
+            {
+              "name": "responseScan",
+              "type": "u64"
+            },
+            {
+              "name": "plannedAddress",
+              "type": {
+                "option": "u32"
+              }
+            },
+            {
+              "name": "rawData",
+              "type": "u32"
+            },
+            {
+              "name": "okOrFault",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "status",
+          "fields": [
+            {
+              "name": "scan",
+              "type": "u64"
+            },
+            {
+              "name": "value",
+              "type": "u32"
+            },
+            {
+              "name": "stickyFault",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "wait",
+          "fields": [
+            {
+              "name": "scan",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "context-lost"
+        }
+      ]
+    },
+    {
+      "name": "Pending",
+      "type": "record",
+      "fields": [
+        {
+          "name": "scan",
+          "type": "u64"
+        },
+        {
+          "name": "ap",
+          "type": "bool"
+        },
+        {
+          "name": "read",
+          "type": "bool"
+        },
+        {
+          "name": "addr",
+          "type": "u8"
+        },
+        {
+          "name": "value",
+          "type": "u32"
+        },
+        {
+          "name": "register",
+          "type": "RegisterName"
+        },
+        {
+          "name": "selected",
+          "type": "bool"
+        },
+        {
+          "name": "planned",
+          "type": {
+            "option": "u32"
+          }
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "arm-memap.events",
+        "version": 1
+      },
+      "event": "ArmMemapEvent",
+      "roles": {
+        "request": {
+          "role": "command"
+        },
+        "response": {
+          "role": "data"
+        },
+        "memory-request": {
+          "role": "address"
+        },
+        "memory-response": {
+          "role": "data"
+        },
+        "status": {
+          "role": "control",
+          "errorWhen": [
+            {
+              "stickyFault": true
+            }
+          ]
+        },
+        "wait": {
+          "role": "handshake"
+        },
+        "context-lost": {
+          "role": "line"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "jtag-dp",
+      "contract": {
+        "schema": {
+          "name": "jtag-dp.events",
+          "version": 1
+        },
+        "event": "JtagDpEvent",
+        "roles": {
+          "reset": {
+            "role": "framing"
+          },
+          "instruction": {
+            "role": "command"
+          },
+          "idcode": {
+            "role": "data"
+          },
+          "bypass": {
+            "role": "data"
+          },
+          "abort": {
+            "role": "command"
+          },
+          "access": {
+            "role": "data"
+          },
+          "scan": {
+            "role": "framing"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "Ack",
+          "type": "enum",
+          "variants": ["wait", "ok-fault", "invalid"]
+        },
+        {
+          "name": "ScanStatus",
+          "type": "enum",
+          "variants": ["wait", "aborted", "invalid-length", "unknown-instruction", "missing-line"]
+        },
+        {
+          "name": "JtagDpEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "reset"
+            },
+            {
+              "name": "instruction",
+              "fields": [
+                {
+                  "name": "scan",
+                  "type": "u64"
+                },
+                {
+                  "name": "value",
+                  "type": "u8"
+                }
+              ]
+            },
+            {
+              "name": "idcode",
+              "fields": [
+                {
+                  "name": "scan",
+                  "type": "u64"
+                },
+                {
+                  "name": "value",
+                  "type": "u32"
+                }
+              ]
+            },
+            {
+              "name": "bypass",
+              "fields": [
+                {
+                  "name": "scan",
+                  "type": "u64"
+                },
+                {
+                  "name": "tdi",
+                  "type": "bool"
+                },
+                {
+                  "name": "tdo",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "abort",
+              "fields": [
+                {
+                  "name": "scan",
+                  "type": "u64"
+                },
+                {
+                  "name": "value",
+                  "type": "u32"
+                },
+                {
+                  "name": "lowBits",
+                  "type": "u8"
+                }
+              ]
+            },
+            {
+              "name": "access",
+              "fields": [
+                {
+                  "name": "scan",
+                  "type": "u64"
+                },
+                {
+                  "name": "instruction",
+                  "type": "u8"
+                },
+                {
+                  "name": "read",
+                  "type": "bool"
+                },
+                {
+                  "name": "addr",
+                  "type": "u8"
+                },
+                {
+                  "name": "dataIn",
+                  "type": "u32"
+                },
+                {
+                  "name": "ackBits",
+                  "type": "u8"
+                },
+                {
+                  "name": "ack",
+                  "type": "Ack"
+                },
+                {
+                  "name": "responseData",
+                  "type": "u32"
+                },
+                {
+                  "name": "previousScan",
+                  "type": {
+                    "option": "u64"
+                  }
+                },
+                {
+                  "name": "accepted",
+                  "type": {
+                    "option": "bool"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "scan",
+              "fields": [
+                {
+                  "name": "scan",
+                  "type": "u64"
+                },
+                {
+                  "name": "ir",
+                  "type": "bool"
+                },
+                {
+                  "name": "bits",
+                  "type": "u32"
+                },
+                {
+                  "name": "status",
+                  "type": "ScanStatus"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "validate",
+      "body": [
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "or",
+            "left": {
+              "expr": "binary",
+              "op": "lt",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "config"
+                },
+                "name": "tarWrapBits"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 10
+              }
+            },
+            "right": {
+              "expr": "binary",
+              "op": "gt",
+              "left": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "config"
+                },
+                "name": "tarWrapBits"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 31
+              }
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "text",
+                "value": "decode.config.tarWrapBits"
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "none"
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "config",
+          "type": "ArmMemapConfig"
+        }
+      ],
+      "ret": {
+        "option": "text"
+      }
+    }
+  ],
+  "decoder": {
+    "name": "arm-memap",
+    "category": "device",
+    "config": {
+      "type": "ArmMemapConfig",
+      "defaults": {
+        "ap": 0,
+        "tarWrapBits": 10
+      },
+      "validate": "validate"
+    },
+    "input": {
+      "kind": "stream",
+      "schema": {
+        "name": "jtag-dp.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "arm-memap.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "clear",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "select"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "csw"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "tar"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "pending"
+            },
+            "value": {
+              "expr": "none"
+            }
+          }
+        ]
+      },
+      {
+        "name": "onGap",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "method",
+              "name": "clear",
+              "args": []
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "_range",
+            "type": "range"
+          }
+        ]
+      },
+      {
+        "name": "onEnd",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "method",
+              "name": "clear",
+              "args": []
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "_tick",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "name",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "local",
+              "name": "ap"
+            },
+            "then": [
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "if-some",
+                  "value": {
+                    "expr": "local",
+                    "name": "bank"
+                  },
+                  "bind": "bank_2",
+                  "some": {
+                    "expr": "binary",
+                    "op": "eq",
+                    "left": {
+                      "expr": "local",
+                      "name": "bank_2"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 0
+                    }
+                  },
+                  "none": {
+                    "expr": "lit",
+                    "value": false
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "addr"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 0
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "return",
+                        "value": {
+                          "expr": "enum",
+                          "type": "RegisterName",
+                          "value": "csw"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "addr"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 4
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "return",
+                        "value": {
+                          "expr": "enum",
+                          "type": "RegisterName",
+                          "value": "tar"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "addr"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 12
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "return",
+                        "value": {
+                          "expr": "enum",
+                          "type": "RegisterName",
+                          "value": "drw"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "RegisterName",
+                  "value": "ap-register"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "addr"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 8
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "RegisterName",
+                  "value": "select"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "and",
+              "left": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "addr"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 4
+                }
+              },
+              "right": {
+                "expr": "if-some",
+                "value": {
+                  "expr": "local",
+                  "name": "bank"
+                },
+                "bind": "bank_2",
+                "some": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "local",
+                    "name": "bank_2"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                },
+                "none": {
+                  "expr": "lit",
+                  "value": false
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "RegisterName",
+                  "value": "ctrl-stat"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "addr"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 12
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "RegisterName",
+                  "value": "rdbuff"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "enum",
+              "type": "RegisterName",
+              "value": "dp-register"
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "ap",
+            "type": "bool"
+          },
+          {
+            "name": "addr",
+            "type": "u8"
+          },
+          {
+            "name": "bank",
+            "type": {
+              "option": "u8"
+            }
+          }
+        ],
+        "ret": "RegisterName"
+      },
+      {
+        "name": "nextTar",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "tar",
+            "value": {
+              "expr": "self",
+              "field": "tar"
+            },
+            "type": {
+              "option": "u32"
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "csw",
+            "value": {
+              "expr": "self",
+              "field": "csw"
+            },
+            "type": {
+              "option": "u32"
+            }
+          },
+          {
+            "stmt": "let-some",
+            "bind": "tar_2",
+            "value": {
+              "expr": "local",
+              "name": "tar"
+            },
+            "else": [
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let-some",
+            "bind": "csw_2",
+            "value": {
+              "expr": "local",
+              "name": "csw"
+            },
+            "else": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "tar"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "size",
+            "value": {
+              "expr": "cast",
+              "value": {
+                "expr": "binary",
+                "op": "bit-and",
+                "left": {
+                  "expr": "local",
+                  "name": "csw_2"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 7
+                }
+              },
+              "to": "u8"
+            },
+            "type": "u8"
+          },
+          {
+            "stmt": "let",
+            "name": "inc",
+            "value": {
+              "expr": "cast",
+              "value": {
+                "expr": "binary",
+                "op": "bit-and",
+                "left": {
+                  "expr": "binary",
+                  "op": "shr",
+                  "left": {
+                    "expr": "local",
+                    "name": "csw_2"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 4
+                  }
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 3
+                }
+              },
+              "to": "u8"
+            },
+            "type": "u8"
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "or",
+              "left": {
+                "expr": "binary",
+                "op": "gt",
+                "left": {
+                  "expr": "local",
+                  "name": "size"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 2
+                }
+              },
+              "right": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "inc"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 3
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "tar"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "inc"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 0
+              }
+            },
+            "then": [
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "stride",
+            "value": {
+              "expr": "ternary",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "inc"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 2
+                }
+              },
+              "then": {
+                "expr": "lit",
+                "value": 4
+              },
+              "else": {
+                "expr": "binary",
+                "op": "shl",
+                "left": {
+                  "expr": "lit",
+                  "value": 1
+                },
+                "right": {
+                  "expr": "local",
+                  "name": "size"
+                }
+              }
+            },
+            "type": "u32"
+          },
+          {
+            "stmt": "let",
+            "name": "mask",
+            "value": {
+              "expr": "binary",
+              "op": "sub",
+              "left": {
+                "expr": "binary",
+                "op": "shl",
+                "left": {
+                  "expr": "lit",
+                  "value": 1
+                },
+                "right": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "self",
+                    "field": "config"
+                  },
+                  "name": "tarWrapBits"
+                }
+              },
+              "right": {
+                "expr": "lit",
+                "value": 1
+              }
+            },
+            "type": "u32"
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "tar"
+            },
+            "value": {
+              "expr": "binary",
+              "op": "bit-or",
+              "left": {
+                "expr": "binary",
+                "op": "bit-and",
+                "left": {
+                  "expr": "local",
+                  "name": "tar_2"
+                },
+                "right": {
+                  "expr": "unary",
+                  "op": "bit-not",
+                  "value": {
+                    "expr": "local",
+                    "name": "mask"
+                  }
+                }
+              },
+              "right": {
+                "expr": "binary",
+                "op": "bit-and",
+                "left": {
+                  "expr": "binary",
+                  "op": "add",
+                  "left": {
+                    "expr": "local",
+                    "name": "tar_2"
+                  },
+                  "right": {
+                    "expr": "local",
+                    "name": "stride"
+                  }
+                },
+                "right": {
+                  "expr": "local",
+                  "name": "mask"
+                }
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "completed",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "ArmMemapEvent",
+                  "kind": "response",
+                  "fields": {
+                    "scan": {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "pending"
+                      },
+                      "name": "scan"
+                    },
+                    "responseScan": {
+                      "expr": "local",
+                      "name": "responseScan"
+                    },
+                    "value": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "register": {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "pending"
+                      },
+                      "name": "register"
+                    },
+                    "okOrFault": {
+                      "expr": "lit",
+                      "value": true
+                    }
+                  }
+                },
+                "at": {
+                  "expr": "local",
+                  "name": "at"
+                }
+              }
+            }
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "and",
+              "left": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "pending"
+                  },
+                  "name": "register"
+                },
+                "right": {
+                  "expr": "enum",
+                  "type": "RegisterName",
+                  "value": "ctrl-stat"
+                }
+              },
+              "right": {
+                "expr": "field",
+                "of": {
+                  "expr": "local",
+                  "name": "pending"
+                },
+                "name": "read"
+              }
+            },
+            "then": [
+              {
+                "stmt": "let",
+                "name": "stickyFault",
+                "value": {
+                  "expr": "binary",
+                  "op": "ne",
+                  "left": {
+                    "expr": "binary",
+                    "op": "bit-and",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 162
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                },
+                "type": "bool"
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "ArmMemapEvent",
+                      "kind": "status",
+                      "fields": {
+                        "scan": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "pending"
+                          },
+                          "name": "scan"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        },
+                        "stickyFault": {
+                          "expr": "local",
+                          "name": "stickyFault"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "local",
+                  "name": "stickyFault"
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "csw"
+                    },
+                    "value": {
+                      "expr": "none"
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "tar"
+                    },
+                    "value": {
+                      "expr": "none"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "and",
+              "left": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "pending"
+                  },
+                  "name": "register"
+                },
+                "right": {
+                  "expr": "enum",
+                  "type": "RegisterName",
+                  "value": "select"
+                }
+              },
+              "right": {
+                "expr": "unary",
+                "op": "not",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "pending"
+                  },
+                  "name": "read"
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "select"
+                },
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "pending"
+                  },
+                  "name": "value"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "field",
+              "of": {
+                "expr": "local",
+                "name": "pending"
+              },
+              "name": "selected"
+            },
+            "then": [
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "pending"
+                    },
+                    "name": "register"
+                  },
+                  "right": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "csw"
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "csw"
+                    },
+                    "value": {
+                      "expr": "ternary",
+                      "cond": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "pending"
+                        },
+                        "name": "read"
+                      },
+                      "then": {
+                        "expr": "local",
+                        "name": "value"
+                      },
+                      "else": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "pending"
+                        },
+                        "name": "value"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "pending"
+                    },
+                    "name": "register"
+                  },
+                  "right": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "tar"
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "tar"
+                    },
+                    "value": {
+                      "expr": "ternary",
+                      "cond": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "pending"
+                        },
+                        "name": "read"
+                      },
+                      "then": {
+                        "expr": "local",
+                        "name": "value"
+                      },
+                      "else": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "pending"
+                        },
+                        "name": "value"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "eq",
+                  "left": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "pending"
+                    },
+                    "name": "register"
+                  },
+                  "right": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "drw"
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "ArmMemapEvent",
+                          "kind": "memory-response",
+                          "fields": {
+                            "scan": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "pending"
+                              },
+                              "name": "scan"
+                            },
+                            "responseScan": {
+                              "expr": "local",
+                              "name": "responseScan"
+                            },
+                            "plannedAddress": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "pending"
+                              },
+                              "name": "planned"
+                            },
+                            "rawData": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "okOrFault": {
+                              "expr": "lit",
+                              "value": true
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "at"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "method",
+                      "name": "nextTar",
+                      "args": []
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "pending",
+            "type": "Pending"
+          },
+          {
+            "name": "responseScan",
+            "type": "u64"
+          },
+          {
+            "name": "value",
+            "type": "u32"
+          },
+          {
+            "name": "at",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "body": [
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "received",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "next"
+                  }
+                }
+              },
+              {
+                "stmt": "let",
+                "name": "event",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "received"
+                  },
+                  "name": "event"
+                },
+                "type": "JtagDpEvent"
+              },
+              {
+                "stmt": "let",
+                "name": "at",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "received"
+                  },
+                  "name": "at"
+                },
+                "type": "provenance"
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "or",
+                  "left": {
+                    "expr": "if-variant",
+                    "value": {
+                      "expr": "local",
+                      "name": "event"
+                    },
+                    "variant": "reset",
+                    "then": {
+                      "expr": "lit",
+                      "value": true
+                    },
+                    "else": {
+                      "expr": "lit",
+                      "value": false
+                    }
+                  },
+                  "right": {
+                    "expr": "if-variant",
+                    "value": {
+                      "expr": "local",
+                      "name": "event"
+                    },
+                    "variant": "abort",
+                    "then": {
+                      "expr": "lit",
+                      "value": true
+                    },
+                    "else": {
+                      "expr": "lit",
+                      "value": false
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "method",
+                      "name": "clear",
+                      "args": []
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "ArmMemapEvent",
+                          "kind": "context-lost"
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "at"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "stmt": "match",
+                    "value": {
+                      "expr": "local",
+                      "name": "event"
+                    },
+                    "arms": [
+                      {
+                        "pattern": {
+                          "pattern": "variant",
+                          "name": "instruction",
+                          "binds": {
+                            "value": "value"
+                          }
+                        },
+                        "body": [
+                          {
+                            "stmt": "if",
+                            "cond": {
+                              "expr": "binary",
+                              "op": "and",
+                              "left": {
+                                "expr": "binary",
+                                "op": "and",
+                                "left": {
+                                  "expr": "binary",
+                                  "op": "ne",
+                                  "left": {
+                                    "expr": "local",
+                                    "name": "value"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 10
+                                  }
+                                },
+                                "right": {
+                                  "expr": "binary",
+                                  "op": "ne",
+                                  "left": {
+                                    "expr": "local",
+                                    "name": "value"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 11
+                                  }
+                                }
+                              },
+                              "right": {
+                                "expr": "binary",
+                                "op": "ne",
+                                "left": {
+                                  "expr": "local",
+                                  "name": "value"
+                                },
+                                "right": {
+                                  "expr": "lit",
+                                  "value": 15
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "stmt": "expr",
+                                "expr": {
+                                  "expr": "method",
+                                  "name": "clear",
+                                  "args": []
+                                }
+                              },
+                              {
+                                "stmt": "expr",
+                                "expr": {
+                                  "expr": "await",
+                                  "op": {
+                                    "op": "emit",
+                                    "event": {
+                                      "expr": "variant",
+                                      "type": "ArmMemapEvent",
+                                      "kind": "context-lost"
+                                    },
+                                    "at": {
+                                      "expr": "local",
+                                      "name": "at"
+                                    }
+                                  }
+                                }
+                              }
+                            ],
+                            "else": [
+                              {
+                                "stmt": "match",
+                                "value": {
+                                  "expr": "local",
+                                  "name": "event"
+                                },
+                                "arms": [
+                                  {
+                                    "pattern": {
+                                      "pattern": "variant",
+                                      "name": "scan",
+                                      "binds": {
+                                        "status": "status",
+                                        "scan": "scan"
+                                      }
+                                    },
+                                    "body": [
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "binary",
+                                          "op": "eq",
+                                          "left": {
+                                            "expr": "local",
+                                            "name": "status"
+                                          },
+                                          "right": {
+                                            "expr": "enum",
+                                            "type": "ScanStatus",
+                                            "value": "wait"
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "expr",
+                                            "expr": {
+                                              "expr": "await",
+                                              "op": {
+                                                "op": "emit",
+                                                "event": {
+                                                  "expr": "variant",
+                                                  "type": "ArmMemapEvent",
+                                                  "kind": "wait",
+                                                  "fields": {
+                                                    "scan": {
+                                                      "expr": "local",
+                                                      "name": "scan"
+                                                    }
+                                                  }
+                                                },
+                                                "at": {
+                                                  "expr": "local",
+                                                  "name": "at"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ],
+                                        "else": [
+                                          {
+                                            "stmt": "expr",
+                                            "expr": {
+                                              "expr": "method",
+                                              "name": "clear",
+                                              "args": []
+                                            }
+                                          },
+                                          {
+                                            "stmt": "expr",
+                                            "expr": {
+                                              "expr": "await",
+                                              "op": {
+                                                "op": "emit",
+                                                "event": {
+                                                  "expr": "variant",
+                                                  "type": "ArmMemapEvent",
+                                                  "kind": "context-lost"
+                                                },
+                                                "at": {
+                                                  "expr": "local",
+                                                  "name": "at"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "pattern": {
+                                      "pattern": "default"
+                                    },
+                                    "body": [
+                                      {
+                                        "stmt": "match",
+                                        "value": {
+                                          "expr": "local",
+                                          "name": "event"
+                                        },
+                                        "arms": [
+                                          {
+                                            "pattern": {
+                                              "pattern": "variant",
+                                              "name": "access",
+                                              "binds": {
+                                                "ack": "ack",
+                                                "scan": "scan",
+                                                "accepted": "accepted",
+                                                "previousScan": "previousScan",
+                                                "responseData": "responseData",
+                                                "instruction": "instruction",
+                                                "addr": "addr",
+                                                "read": "read",
+                                                "dataIn": "dataIn"
+                                              }
+                                            },
+                                            "body": [
+                                              {
+                                                "stmt": "if",
+                                                "cond": {
+                                                  "expr": "binary",
+                                                  "op": "eq",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "ack"
+                                                  },
+                                                  "right": {
+                                                    "expr": "enum",
+                                                    "type": "Ack",
+                                                    "value": "wait"
+                                                  }
+                                                },
+                                                "then": [
+                                                  {
+                                                    "stmt": "expr",
+                                                    "expr": {
+                                                      "expr": "await",
+                                                      "op": {
+                                                        "op": "emit",
+                                                        "event": {
+                                                          "expr": "variant",
+                                                          "type": "ArmMemapEvent",
+                                                          "kind": "wait",
+                                                          "fields": {
+                                                            "scan": {
+                                                              "expr": "local",
+                                                              "name": "scan"
+                                                            }
+                                                          }
+                                                        },
+                                                        "at": {
+                                                          "expr": "local",
+                                                          "name": "at"
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "continue"
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "stmt": "if",
+                                                "cond": {
+                                                  "expr": "binary",
+                                                  "op": "or",
+                                                  "left": {
+                                                    "expr": "binary",
+                                                    "op": "ne",
+                                                    "left": {
+                                                      "expr": "local",
+                                                      "name": "ack"
+                                                    },
+                                                    "right": {
+                                                      "expr": "enum",
+                                                      "type": "Ack",
+                                                      "value": "ok-fault"
+                                                    }
+                                                  },
+                                                  "right": {
+                                                    "expr": "if-some",
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "accepted"
+                                                    },
+                                                    "bind": "accepted_2",
+                                                    "some": {
+                                                      "expr": "binary",
+                                                      "op": "ne",
+                                                      "left": {
+                                                        "expr": "local",
+                                                        "name": "accepted_2"
+                                                      },
+                                                      "right": {
+                                                        "expr": "lit",
+                                                        "value": true
+                                                      }
+                                                    },
+                                                    "none": {
+                                                      "expr": "lit",
+                                                      "value": true
+                                                    }
+                                                  }
+                                                },
+                                                "then": [
+                                                  {
+                                                    "stmt": "expr",
+                                                    "expr": {
+                                                      "expr": "method",
+                                                      "name": "clear",
+                                                      "args": []
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "expr",
+                                                    "expr": {
+                                                      "expr": "await",
+                                                      "op": {
+                                                        "op": "emit",
+                                                        "event": {
+                                                          "expr": "variant",
+                                                          "type": "ArmMemapEvent",
+                                                          "kind": "context-lost"
+                                                        },
+                                                        "at": {
+                                                          "expr": "local",
+                                                          "name": "at"
+                                                        }
+                                                      }
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "continue"
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "previous",
+                                                "value": {
+                                                  "expr": "self",
+                                                  "field": "pending"
+                                                },
+                                                "type": {
+                                                  "option": "Pending"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "if-some",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "previous"
+                                                },
+                                                "bind": "previous_2",
+                                                "then": [
+                                                  {
+                                                    "stmt": "if",
+                                                    "cond": {
+                                                      "expr": "if-some",
+                                                      "value": {
+                                                        "expr": "local",
+                                                        "name": "previousScan"
+                                                      },
+                                                      "bind": "previousScan_2",
+                                                      "some": {
+                                                        "expr": "binary",
+                                                        "op": "eq",
+                                                        "left": {
+                                                          "expr": "local",
+                                                          "name": "previousScan_2"
+                                                        },
+                                                        "right": {
+                                                          "expr": "field",
+                                                          "of": {
+                                                            "expr": "local",
+                                                            "name": "previous_2"
+                                                          },
+                                                          "name": "scan"
+                                                        }
+                                                      },
+                                                      "none": {
+                                                        "expr": "lit",
+                                                        "value": false
+                                                      }
+                                                    },
+                                                    "then": [
+                                                      {
+                                                        "stmt": "expr",
+                                                        "expr": {
+                                                          "expr": "await",
+                                                          "op": {
+                                                            "op": "method",
+                                                            "name": "completed",
+                                                            "args": [
+                                                              {
+                                                                "expr": "local",
+                                                                "name": "previous_2"
+                                                              },
+                                                              {
+                                                                "expr": "local",
+                                                                "name": "scan"
+                                                              },
+                                                              {
+                                                                "expr": "local",
+                                                                "name": "responseData"
+                                                              },
+                                                              {
+                                                                "expr": "local",
+                                                                "name": "at"
+                                                              }
+                                                            ]
+                                                          }
+                                                        }
+                                                      }
+                                                    ],
+                                                    "else": [
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "self",
+                                                          "field": "select"
+                                                        },
+                                                        "value": {
+                                                          "expr": "none"
+                                                        }
+                                                      },
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "self",
+                                                          "field": "csw"
+                                                        },
+                                                        "value": {
+                                                          "expr": "none"
+                                                        }
+                                                      },
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "self",
+                                                          "field": "tar"
+                                                        },
+                                                        "value": {
+                                                          "expr": "none"
+                                                        }
+                                                      }
+                                                    ]
+                                                  }
+                                                ],
+                                                "else": [
+                                                  {
+                                                    "stmt": "if-some",
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "previousScan"
+                                                    },
+                                                    "bind": "previousScan",
+                                                    "then": [
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "self",
+                                                          "field": "select"
+                                                        },
+                                                        "value": {
+                                                          "expr": "none"
+                                                        }
+                                                      },
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "self",
+                                                          "field": "csw"
+                                                        },
+                                                        "value": {
+                                                          "expr": "none"
+                                                        }
+                                                      },
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "self",
+                                                          "field": "tar"
+                                                        },
+                                                        "value": {
+                                                          "expr": "none"
+                                                        }
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "stmt": "assign",
+                                                "target": {
+                                                  "expr": "self",
+                                                  "field": "pending"
+                                                },
+                                                "value": {
+                                                  "expr": "none"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "ap",
+                                                "value": {
+                                                  "expr": "binary",
+                                                  "op": "eq",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "instruction"
+                                                  },
+                                                  "right": {
+                                                    "expr": "lit",
+                                                    "value": 11
+                                                  }
+                                                },
+                                                "type": "bool"
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "select",
+                                                "value": {
+                                                  "expr": "self",
+                                                  "field": "select"
+                                                },
+                                                "type": {
+                                                  "option": "u32"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "apIndex",
+                                                "value": {
+                                                  "expr": "none"
+                                                },
+                                                "mutable": true,
+                                                "type": {
+                                                  "option": "u8"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "bank",
+                                                "value": {
+                                                  "expr": "none"
+                                                },
+                                                "mutable": true,
+                                                "type": {
+                                                  "option": "u8"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "if-some",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "select"
+                                                },
+                                                "bind": "select_2",
+                                                "then": [
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "apIndex"
+                                                    },
+                                                    "value": {
+                                                      "expr": "cast",
+                                                      "value": {
+                                                        "expr": "binary",
+                                                        "op": "bit-and",
+                                                        "left": {
+                                                          "expr": "binary",
+                                                          "op": "shr",
+                                                          "left": {
+                                                            "expr": "local",
+                                                            "name": "select_2"
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 24
+                                                          }
+                                                        },
+                                                        "right": {
+                                                          "expr": "lit",
+                                                          "value": 255
+                                                        }
+                                                      },
+                                                      "to": "u8"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "bank"
+                                                    },
+                                                    "value": {
+                                                      "expr": "cast",
+                                                      "value": {
+                                                        "expr": "ternary",
+                                                        "cond": {
+                                                          "expr": "local",
+                                                          "name": "ap"
+                                                        },
+                                                        "then": {
+                                                          "expr": "binary",
+                                                          "op": "bit-and",
+                                                          "left": {
+                                                            "expr": "binary",
+                                                            "op": "shr",
+                                                            "left": {
+                                                              "expr": "local",
+                                                              "name": "select_2"
+                                                            },
+                                                            "right": {
+                                                              "expr": "lit",
+                                                              "value": 4
+                                                            }
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 15
+                                                          }
+                                                        },
+                                                        "else": {
+                                                          "expr": "binary",
+                                                          "op": "bit-and",
+                                                          "left": {
+                                                            "expr": "local",
+                                                            "name": "select_2"
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 15
+                                                          }
+                                                        }
+                                                      },
+                                                      "to": "u8"
+                                                    }
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "name",
+                                                "value": {
+                                                  "expr": "method",
+                                                  "name": "name",
+                                                  "args": [
+                                                    {
+                                                      "expr": "local",
+                                                      "name": "ap"
+                                                    },
+                                                    {
+                                                      "expr": "local",
+                                                      "name": "addr"
+                                                    },
+                                                    {
+                                                      "expr": "local",
+                                                      "name": "bank"
+                                                    }
+                                                  ]
+                                                },
+                                                "type": "RegisterName"
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "address",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "addr"
+                                                },
+                                                "mutable": true,
+                                                "type": {
+                                                  "option": "u8"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "if",
+                                                "cond": {
+                                                  "expr": "local",
+                                                  "name": "ap"
+                                                },
+                                                "then": [
+                                                  {
+                                                    "stmt": "if-some",
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "bank"
+                                                    },
+                                                    "bind": "bank_2",
+                                                    "then": [
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "local",
+                                                          "name": "address"
+                                                        },
+                                                        "value": {
+                                                          "expr": "cast",
+                                                          "value": {
+                                                            "expr": "binary",
+                                                            "op": "bit-or",
+                                                            "left": {
+                                                              "expr": "binary",
+                                                              "op": "shl",
+                                                              "left": {
+                                                                "expr": "local",
+                                                                "name": "bank_2"
+                                                              },
+                                                              "right": {
+                                                                "expr": "lit",
+                                                                "value": 4
+                                                              }
+                                                            },
+                                                            "right": {
+                                                              "expr": "local",
+                                                              "name": "addr"
+                                                            }
+                                                          },
+                                                          "to": "u8"
+                                                        }
+                                                      }
+                                                    ],
+                                                    "else": [
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "local",
+                                                          "name": "address"
+                                                        },
+                                                        "value": {
+                                                          "expr": "none"
+                                                        }
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "selected",
+                                                "value": {
+                                                  "expr": "binary",
+                                                  "op": "and",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "ap"
+                                                  },
+                                                  "right": {
+                                                    "expr": "if-some",
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "apIndex"
+                                                    },
+                                                    "bind": "apIndex_2",
+                                                    "some": {
+                                                      "expr": "binary",
+                                                      "op": "eq",
+                                                      "left": {
+                                                        "expr": "local",
+                                                        "name": "apIndex_2"
+                                                      },
+                                                      "right": {
+                                                        "expr": "field",
+                                                        "of": {
+                                                          "expr": "self",
+                                                          "field": "config"
+                                                        },
+                                                        "name": "ap"
+                                                      }
+                                                    },
+                                                    "none": {
+                                                      "expr": "lit",
+                                                      "value": false
+                                                    }
+                                                  }
+                                                },
+                                                "type": "bool"
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "planned",
+                                                "value": {
+                                                  "expr": "ternary",
+                                                  "cond": {
+                                                    "expr": "binary",
+                                                    "op": "and",
+                                                    "left": {
+                                                      "expr": "local",
+                                                      "name": "selected"
+                                                    },
+                                                    "right": {
+                                                      "expr": "binary",
+                                                      "op": "eq",
+                                                      "left": {
+                                                        "expr": "local",
+                                                        "name": "name"
+                                                      },
+                                                      "right": {
+                                                        "expr": "enum",
+                                                        "type": "RegisterName",
+                                                        "value": "drw"
+                                                      }
+                                                    }
+                                                  },
+                                                  "then": {
+                                                    "expr": "self",
+                                                    "field": "tar"
+                                                  },
+                                                  "else": {
+                                                    "expr": "none"
+                                                  }
+                                                },
+                                                "type": {
+                                                  "option": "u32"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "expr",
+                                                "expr": {
+                                                  "expr": "await",
+                                                  "op": {
+                                                    "op": "emit",
+                                                    "event": {
+                                                      "expr": "variant",
+                                                      "type": "ArmMemapEvent",
+                                                      "kind": "request",
+                                                      "fields": {
+                                                        "scan": {
+                                                          "expr": "local",
+                                                          "name": "scan"
+                                                        },
+                                                        "ap": {
+                                                          "expr": "local",
+                                                          "name": "ap"
+                                                        },
+                                                        "apIndex": {
+                                                          "expr": "local",
+                                                          "name": "apIndex"
+                                                        },
+                                                        "register": {
+                                                          "expr": "local",
+                                                          "name": "name"
+                                                        },
+                                                        "address": {
+                                                          "expr": "local",
+                                                          "name": "address"
+                                                        },
+                                                        "read": {
+                                                          "expr": "local",
+                                                          "name": "read"
+                                                        },
+                                                        "value": {
+                                                          "expr": "local",
+                                                          "name": "dataIn"
+                                                        }
+                                                      }
+                                                    },
+                                                    "at": {
+                                                      "expr": "local",
+                                                      "name": "at"
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "stmt": "if",
+                                                "cond": {
+                                                  "expr": "binary",
+                                                  "op": "and",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "selected"
+                                                  },
+                                                  "right": {
+                                                    "expr": "binary",
+                                                    "op": "eq",
+                                                    "left": {
+                                                      "expr": "local",
+                                                      "name": "name"
+                                                    },
+                                                    "right": {
+                                                      "expr": "enum",
+                                                      "type": "RegisterName",
+                                                      "value": "drw"
+                                                    }
+                                                  }
+                                                },
+                                                "then": [
+                                                  {
+                                                    "stmt": "let",
+                                                    "name": "csw",
+                                                    "value": {
+                                                      "expr": "self",
+                                                      "field": "csw"
+                                                    },
+                                                    "type": {
+                                                      "option": "u32"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "let",
+                                                    "name": "sizeBits",
+                                                    "value": {
+                                                      "expr": "none"
+                                                    },
+                                                    "mutable": true,
+                                                    "type": {
+                                                      "option": "u8"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "let",
+                                                    "name": "packed",
+                                                    "value": {
+                                                      "expr": "lit",
+                                                      "value": false
+                                                    },
+                                                    "mutable": true,
+                                                    "type": "bool"
+                                                  },
+                                                  {
+                                                    "stmt": "if-some",
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "csw"
+                                                    },
+                                                    "bind": "csw_2",
+                                                    "then": [
+                                                      {
+                                                        "stmt": "let",
+                                                        "name": "size",
+                                                        "value": {
+                                                          "expr": "cast",
+                                                          "value": {
+                                                            "expr": "binary",
+                                                            "op": "bit-and",
+                                                            "left": {
+                                                              "expr": "local",
+                                                              "name": "csw_2"
+                                                            },
+                                                            "right": {
+                                                              "expr": "lit",
+                                                              "value": 7
+                                                            }
+                                                          },
+                                                          "to": "u8"
+                                                        },
+                                                        "type": "u8"
+                                                      },
+                                                      {
+                                                        "stmt": "let",
+                                                        "name": "baseSize",
+                                                        "value": {
+                                                          "expr": "lit",
+                                                          "value": 8
+                                                        },
+                                                        "type": "u8"
+                                                      },
+                                                      {
+                                                        "stmt": "if",
+                                                        "cond": {
+                                                          "expr": "binary",
+                                                          "op": "le",
+                                                          "left": {
+                                                            "expr": "local",
+                                                            "name": "size"
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 2
+                                                          }
+                                                        },
+                                                        "then": [
+                                                          {
+                                                            "stmt": "assign",
+                                                            "target": {
+                                                              "expr": "local",
+                                                              "name": "sizeBits"
+                                                            },
+                                                            "value": {
+                                                              "expr": "binary",
+                                                              "op": "shl",
+                                                              "left": {
+                                                                "expr": "local",
+                                                                "name": "baseSize"
+                                                              },
+                                                              "right": {
+                                                                "expr": "local",
+                                                                "name": "size"
+                                                              }
+                                                            }
+                                                          }
+                                                        ]
+                                                      },
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "local",
+                                                          "name": "packed"
+                                                        },
+                                                        "value": {
+                                                          "expr": "binary",
+                                                          "op": "eq",
+                                                          "left": {
+                                                            "expr": "binary",
+                                                            "op": "bit-and",
+                                                            "left": {
+                                                              "expr": "binary",
+                                                              "op": "shr",
+                                                              "left": {
+                                                                "expr": "local",
+                                                                "name": "csw_2"
+                                                              },
+                                                              "right": {
+                                                                "expr": "lit",
+                                                                "value": 4
+                                                              }
+                                                            },
+                                                            "right": {
+                                                              "expr": "lit",
+                                                              "value": 3
+                                                            }
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 2
+                                                          }
+                                                        }
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "stmt": "expr",
+                                                    "expr": {
+                                                      "expr": "await",
+                                                      "op": {
+                                                        "op": "emit",
+                                                        "event": {
+                                                          "expr": "variant",
+                                                          "type": "ArmMemapEvent",
+                                                          "kind": "memory-request",
+                                                          "fields": {
+                                                            "scan": {
+                                                              "expr": "local",
+                                                              "name": "scan"
+                                                            },
+                                                            "apIndex": {
+                                                              "expr": "field",
+                                                              "of": {
+                                                                "expr": "self",
+                                                                "field": "config"
+                                                              },
+                                                              "name": "ap"
+                                                            },
+                                                            "plannedAddress": {
+                                                              "expr": "local",
+                                                              "name": "planned"
+                                                            },
+                                                            "sizeBits": {
+                                                              "expr": "local",
+                                                              "name": "sizeBits"
+                                                            },
+                                                            "packed": {
+                                                              "expr": "local",
+                                                              "name": "packed"
+                                                            },
+                                                            "read": {
+                                                              "expr": "local",
+                                                              "name": "read"
+                                                            },
+                                                            "rawData": {
+                                                              "expr": "local",
+                                                              "name": "dataIn"
+                                                            }
+                                                          }
+                                                        },
+                                                        "at": {
+                                                          "expr": "local",
+                                                          "name": "at"
+                                                        }
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "stmt": "assign",
+                                                "target": {
+                                                  "expr": "self",
+                                                  "field": "pending"
+                                                },
+                                                "value": {
+                                                  "expr": "record",
+                                                  "type": "Pending",
+                                                  "fields": {
+                                                    "scan": {
+                                                      "expr": "local",
+                                                      "name": "scan"
+                                                    },
+                                                    "ap": {
+                                                      "expr": "local",
+                                                      "name": "ap"
+                                                    },
+                                                    "read": {
+                                                      "expr": "local",
+                                                      "name": "read"
+                                                    },
+                                                    "addr": {
+                                                      "expr": "local",
+                                                      "name": "addr"
+                                                    },
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "dataIn"
+                                                    },
+                                                    "register": {
+                                                      "expr": "local",
+                                                      "name": "name"
+                                                    },
+                                                    "selected": {
+                                                      "expr": "local",
+                                                      "name": "selected"
+                                                    },
+                                                    "planned": {
+                                                      "expr": "local",
+                                                      "name": "planned"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "pattern": {
+                                              "pattern": "default"
+                                            },
+                                            "body": []
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "pattern": {
+                          "pattern": "default"
+                        },
+                        "body": [
+                          {
+                            "stmt": "match",
+                            "value": {
+                              "expr": "local",
+                              "name": "event"
+                            },
+                            "arms": [
+                              {
+                                "pattern": {
+                                  "pattern": "variant",
+                                  "name": "scan",
+                                  "binds": {
+                                    "status": "status",
+                                    "scan": "scan"
+                                  }
+                                },
+                                "body": [
+                                  {
+                                    "stmt": "if",
+                                    "cond": {
+                                      "expr": "binary",
+                                      "op": "eq",
+                                      "left": {
+                                        "expr": "local",
+                                        "name": "status"
+                                      },
+                                      "right": {
+                                        "expr": "enum",
+                                        "type": "ScanStatus",
+                                        "value": "wait"
+                                      }
+                                    },
+                                    "then": [
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "await",
+                                          "op": {
+                                            "op": "emit",
+                                            "event": {
+                                              "expr": "variant",
+                                              "type": "ArmMemapEvent",
+                                              "kind": "wait",
+                                              "fields": {
+                                                "scan": {
+                                                  "expr": "local",
+                                                  "name": "scan"
+                                                }
+                                              }
+                                            },
+                                            "at": {
+                                              "expr": "local",
+                                              "name": "at"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "else": [
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "method",
+                                          "name": "clear",
+                                          "args": []
+                                        }
+                                      },
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "await",
+                                          "op": {
+                                            "op": "emit",
+                                            "event": {
+                                              "expr": "variant",
+                                              "type": "ArmMemapEvent",
+                                              "kind": "context-lost"
+                                            },
+                                            "at": {
+                                              "expr": "local",
+                                              "name": "at"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              },
+                              {
+                                "pattern": {
+                                  "pattern": "default"
+                                },
+                                "body": [
+                                  {
+                                    "stmt": "match",
+                                    "value": {
+                                      "expr": "local",
+                                      "name": "event"
+                                    },
+                                    "arms": [
+                                      {
+                                        "pattern": {
+                                          "pattern": "variant",
+                                          "name": "access",
+                                          "binds": {
+                                            "ack": "ack",
+                                            "scan": "scan",
+                                            "accepted": "accepted",
+                                            "previousScan": "previousScan",
+                                            "responseData": "responseData",
+                                            "instruction": "instruction",
+                                            "addr": "addr",
+                                            "read": "read",
+                                            "dataIn": "dataIn"
+                                          }
+                                        },
+                                        "body": [
+                                          {
+                                            "stmt": "if",
+                                            "cond": {
+                                              "expr": "binary",
+                                              "op": "eq",
+                                              "left": {
+                                                "expr": "local",
+                                                "name": "ack"
+                                              },
+                                              "right": {
+                                                "expr": "enum",
+                                                "type": "Ack",
+                                                "value": "wait"
+                                              }
+                                            },
+                                            "then": [
+                                              {
+                                                "stmt": "expr",
+                                                "expr": {
+                                                  "expr": "await",
+                                                  "op": {
+                                                    "op": "emit",
+                                                    "event": {
+                                                      "expr": "variant",
+                                                      "type": "ArmMemapEvent",
+                                                      "kind": "wait",
+                                                      "fields": {
+                                                        "scan": {
+                                                          "expr": "local",
+                                                          "name": "scan"
+                                                        }
+                                                      }
+                                                    },
+                                                    "at": {
+                                                      "expr": "local",
+                                                      "name": "at"
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "stmt": "continue"
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "stmt": "if",
+                                            "cond": {
+                                              "expr": "binary",
+                                              "op": "or",
+                                              "left": {
+                                                "expr": "binary",
+                                                "op": "ne",
+                                                "left": {
+                                                  "expr": "local",
+                                                  "name": "ack"
+                                                },
+                                                "right": {
+                                                  "expr": "enum",
+                                                  "type": "Ack",
+                                                  "value": "ok-fault"
+                                                }
+                                              },
+                                              "right": {
+                                                "expr": "if-some",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "accepted"
+                                                },
+                                                "bind": "accepted_2",
+                                                "some": {
+                                                  "expr": "binary",
+                                                  "op": "ne",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "accepted_2"
+                                                  },
+                                                  "right": {
+                                                    "expr": "lit",
+                                                    "value": true
+                                                  }
+                                                },
+                                                "none": {
+                                                  "expr": "lit",
+                                                  "value": true
+                                                }
+                                              }
+                                            },
+                                            "then": [
+                                              {
+                                                "stmt": "expr",
+                                                "expr": {
+                                                  "expr": "method",
+                                                  "name": "clear",
+                                                  "args": []
+                                                }
+                                              },
+                                              {
+                                                "stmt": "expr",
+                                                "expr": {
+                                                  "expr": "await",
+                                                  "op": {
+                                                    "op": "emit",
+                                                    "event": {
+                                                      "expr": "variant",
+                                                      "type": "ArmMemapEvent",
+                                                      "kind": "context-lost"
+                                                    },
+                                                    "at": {
+                                                      "expr": "local",
+                                                      "name": "at"
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "stmt": "continue"
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "previous",
+                                            "value": {
+                                              "expr": "self",
+                                              "field": "pending"
+                                            },
+                                            "type": {
+                                              "option": "Pending"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "if-some",
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "previous"
+                                            },
+                                            "bind": "previous_2",
+                                            "then": [
+                                              {
+                                                "stmt": "if",
+                                                "cond": {
+                                                  "expr": "if-some",
+                                                  "value": {
+                                                    "expr": "local",
+                                                    "name": "previousScan"
+                                                  },
+                                                  "bind": "previousScan_2",
+                                                  "some": {
+                                                    "expr": "binary",
+                                                    "op": "eq",
+                                                    "left": {
+                                                      "expr": "local",
+                                                      "name": "previousScan_2"
+                                                    },
+                                                    "right": {
+                                                      "expr": "field",
+                                                      "of": {
+                                                        "expr": "local",
+                                                        "name": "previous_2"
+                                                      },
+                                                      "name": "scan"
+                                                    }
+                                                  },
+                                                  "none": {
+                                                    "expr": "lit",
+                                                    "value": false
+                                                  }
+                                                },
+                                                "then": [
+                                                  {
+                                                    "stmt": "expr",
+                                                    "expr": {
+                                                      "expr": "await",
+                                                      "op": {
+                                                        "op": "method",
+                                                        "name": "completed",
+                                                        "args": [
+                                                          {
+                                                            "expr": "local",
+                                                            "name": "previous_2"
+                                                          },
+                                                          {
+                                                            "expr": "local",
+                                                            "name": "scan"
+                                                          },
+                                                          {
+                                                            "expr": "local",
+                                                            "name": "responseData"
+                                                          },
+                                                          {
+                                                            "expr": "local",
+                                                            "name": "at"
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  }
+                                                ],
+                                                "else": [
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "self",
+                                                      "field": "select"
+                                                    },
+                                                    "value": {
+                                                      "expr": "none"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "self",
+                                                      "field": "csw"
+                                                    },
+                                                    "value": {
+                                                      "expr": "none"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "self",
+                                                      "field": "tar"
+                                                    },
+                                                    "value": {
+                                                      "expr": "none"
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            ],
+                                            "else": [
+                                              {
+                                                "stmt": "if-some",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "previousScan"
+                                                },
+                                                "bind": "previousScan",
+                                                "then": [
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "self",
+                                                      "field": "select"
+                                                    },
+                                                    "value": {
+                                                      "expr": "none"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "self",
+                                                      "field": "csw"
+                                                    },
+                                                    "value": {
+                                                      "expr": "none"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "self",
+                                                      "field": "tar"
+                                                    },
+                                                    "value": {
+                                                      "expr": "none"
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "pending"
+                                            },
+                                            "value": {
+                                              "expr": "none"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "ap",
+                                            "value": {
+                                              "expr": "binary",
+                                              "op": "eq",
+                                              "left": {
+                                                "expr": "local",
+                                                "name": "instruction"
+                                              },
+                                              "right": {
+                                                "expr": "lit",
+                                                "value": 11
+                                              }
+                                            },
+                                            "type": "bool"
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "select",
+                                            "value": {
+                                              "expr": "self",
+                                              "field": "select"
+                                            },
+                                            "type": {
+                                              "option": "u32"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "apIndex",
+                                            "value": {
+                                              "expr": "none"
+                                            },
+                                            "mutable": true,
+                                            "type": {
+                                              "option": "u8"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "bank",
+                                            "value": {
+                                              "expr": "none"
+                                            },
+                                            "mutable": true,
+                                            "type": {
+                                              "option": "u8"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "if-some",
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "select"
+                                            },
+                                            "bind": "select_2",
+                                            "then": [
+                                              {
+                                                "stmt": "assign",
+                                                "target": {
+                                                  "expr": "local",
+                                                  "name": "apIndex"
+                                                },
+                                                "value": {
+                                                  "expr": "cast",
+                                                  "value": {
+                                                    "expr": "binary",
+                                                    "op": "bit-and",
+                                                    "left": {
+                                                      "expr": "binary",
+                                                      "op": "shr",
+                                                      "left": {
+                                                        "expr": "local",
+                                                        "name": "select_2"
+                                                      },
+                                                      "right": {
+                                                        "expr": "lit",
+                                                        "value": 24
+                                                      }
+                                                    },
+                                                    "right": {
+                                                      "expr": "lit",
+                                                      "value": 255
+                                                    }
+                                                  },
+                                                  "to": "u8"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "assign",
+                                                "target": {
+                                                  "expr": "local",
+                                                  "name": "bank"
+                                                },
+                                                "value": {
+                                                  "expr": "cast",
+                                                  "value": {
+                                                    "expr": "ternary",
+                                                    "cond": {
+                                                      "expr": "local",
+                                                      "name": "ap"
+                                                    },
+                                                    "then": {
+                                                      "expr": "binary",
+                                                      "op": "bit-and",
+                                                      "left": {
+                                                        "expr": "binary",
+                                                        "op": "shr",
+                                                        "left": {
+                                                          "expr": "local",
+                                                          "name": "select_2"
+                                                        },
+                                                        "right": {
+                                                          "expr": "lit",
+                                                          "value": 4
+                                                        }
+                                                      },
+                                                      "right": {
+                                                        "expr": "lit",
+                                                        "value": 15
+                                                      }
+                                                    },
+                                                    "else": {
+                                                      "expr": "binary",
+                                                      "op": "bit-and",
+                                                      "left": {
+                                                        "expr": "local",
+                                                        "name": "select_2"
+                                                      },
+                                                      "right": {
+                                                        "expr": "lit",
+                                                        "value": 15
+                                                      }
+                                                    }
+                                                  },
+                                                  "to": "u8"
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "name",
+                                            "value": {
+                                              "expr": "method",
+                                              "name": "name",
+                                              "args": [
+                                                {
+                                                  "expr": "local",
+                                                  "name": "ap"
+                                                },
+                                                {
+                                                  "expr": "local",
+                                                  "name": "addr"
+                                                },
+                                                {
+                                                  "expr": "local",
+                                                  "name": "bank"
+                                                }
+                                              ]
+                                            },
+                                            "type": "RegisterName"
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "address",
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "addr"
+                                            },
+                                            "mutable": true,
+                                            "type": {
+                                              "option": "u8"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "if",
+                                            "cond": {
+                                              "expr": "local",
+                                              "name": "ap"
+                                            },
+                                            "then": [
+                                              {
+                                                "stmt": "if-some",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "bank"
+                                                },
+                                                "bind": "bank_2",
+                                                "then": [
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "address"
+                                                    },
+                                                    "value": {
+                                                      "expr": "cast",
+                                                      "value": {
+                                                        "expr": "binary",
+                                                        "op": "bit-or",
+                                                        "left": {
+                                                          "expr": "binary",
+                                                          "op": "shl",
+                                                          "left": {
+                                                            "expr": "local",
+                                                            "name": "bank_2"
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 4
+                                                          }
+                                                        },
+                                                        "right": {
+                                                          "expr": "local",
+                                                          "name": "addr"
+                                                        }
+                                                      },
+                                                      "to": "u8"
+                                                    }
+                                                  }
+                                                ],
+                                                "else": [
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "address"
+                                                    },
+                                                    "value": {
+                                                      "expr": "none"
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "selected",
+                                            "value": {
+                                              "expr": "binary",
+                                              "op": "and",
+                                              "left": {
+                                                "expr": "local",
+                                                "name": "ap"
+                                              },
+                                              "right": {
+                                                "expr": "if-some",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "apIndex"
+                                                },
+                                                "bind": "apIndex_2",
+                                                "some": {
+                                                  "expr": "binary",
+                                                  "op": "eq",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "apIndex_2"
+                                                  },
+                                                  "right": {
+                                                    "expr": "field",
+                                                    "of": {
+                                                      "expr": "self",
+                                                      "field": "config"
+                                                    },
+                                                    "name": "ap"
+                                                  }
+                                                },
+                                                "none": {
+                                                  "expr": "lit",
+                                                  "value": false
+                                                }
+                                              }
+                                            },
+                                            "type": "bool"
+                                          },
+                                          {
+                                            "stmt": "let",
+                                            "name": "planned",
+                                            "value": {
+                                              "expr": "ternary",
+                                              "cond": {
+                                                "expr": "binary",
+                                                "op": "and",
+                                                "left": {
+                                                  "expr": "local",
+                                                  "name": "selected"
+                                                },
+                                                "right": {
+                                                  "expr": "binary",
+                                                  "op": "eq",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "name"
+                                                  },
+                                                  "right": {
+                                                    "expr": "enum",
+                                                    "type": "RegisterName",
+                                                    "value": "drw"
+                                                  }
+                                                }
+                                              },
+                                              "then": {
+                                                "expr": "self",
+                                                "field": "tar"
+                                              },
+                                              "else": {
+                                                "expr": "none"
+                                              }
+                                            },
+                                            "type": {
+                                              "option": "u32"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "expr",
+                                            "expr": {
+                                              "expr": "await",
+                                              "op": {
+                                                "op": "emit",
+                                                "event": {
+                                                  "expr": "variant",
+                                                  "type": "ArmMemapEvent",
+                                                  "kind": "request",
+                                                  "fields": {
+                                                    "scan": {
+                                                      "expr": "local",
+                                                      "name": "scan"
+                                                    },
+                                                    "ap": {
+                                                      "expr": "local",
+                                                      "name": "ap"
+                                                    },
+                                                    "apIndex": {
+                                                      "expr": "local",
+                                                      "name": "apIndex"
+                                                    },
+                                                    "register": {
+                                                      "expr": "local",
+                                                      "name": "name"
+                                                    },
+                                                    "address": {
+                                                      "expr": "local",
+                                                      "name": "address"
+                                                    },
+                                                    "read": {
+                                                      "expr": "local",
+                                                      "name": "read"
+                                                    },
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "dataIn"
+                                                    }
+                                                  }
+                                                },
+                                                "at": {
+                                                  "expr": "local",
+                                                  "name": "at"
+                                                }
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "stmt": "if",
+                                            "cond": {
+                                              "expr": "binary",
+                                              "op": "and",
+                                              "left": {
+                                                "expr": "local",
+                                                "name": "selected"
+                                              },
+                                              "right": {
+                                                "expr": "binary",
+                                                "op": "eq",
+                                                "left": {
+                                                  "expr": "local",
+                                                  "name": "name"
+                                                },
+                                                "right": {
+                                                  "expr": "enum",
+                                                  "type": "RegisterName",
+                                                  "value": "drw"
+                                                }
+                                              }
+                                            },
+                                            "then": [
+                                              {
+                                                "stmt": "let",
+                                                "name": "csw",
+                                                "value": {
+                                                  "expr": "self",
+                                                  "field": "csw"
+                                                },
+                                                "type": {
+                                                  "option": "u32"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "sizeBits",
+                                                "value": {
+                                                  "expr": "none"
+                                                },
+                                                "mutable": true,
+                                                "type": {
+                                                  "option": "u8"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "let",
+                                                "name": "packed",
+                                                "value": {
+                                                  "expr": "lit",
+                                                  "value": false
+                                                },
+                                                "mutable": true,
+                                                "type": "bool"
+                                              },
+                                              {
+                                                "stmt": "if-some",
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "csw"
+                                                },
+                                                "bind": "csw_2",
+                                                "then": [
+                                                  {
+                                                    "stmt": "let",
+                                                    "name": "size",
+                                                    "value": {
+                                                      "expr": "cast",
+                                                      "value": {
+                                                        "expr": "binary",
+                                                        "op": "bit-and",
+                                                        "left": {
+                                                          "expr": "local",
+                                                          "name": "csw_2"
+                                                        },
+                                                        "right": {
+                                                          "expr": "lit",
+                                                          "value": 7
+                                                        }
+                                                      },
+                                                      "to": "u8"
+                                                    },
+                                                    "type": "u8"
+                                                  },
+                                                  {
+                                                    "stmt": "let",
+                                                    "name": "baseSize",
+                                                    "value": {
+                                                      "expr": "lit",
+                                                      "value": 8
+                                                    },
+                                                    "type": "u8"
+                                                  },
+                                                  {
+                                                    "stmt": "if",
+                                                    "cond": {
+                                                      "expr": "binary",
+                                                      "op": "le",
+                                                      "left": {
+                                                        "expr": "local",
+                                                        "name": "size"
+                                                      },
+                                                      "right": {
+                                                        "expr": "lit",
+                                                        "value": 2
+                                                      }
+                                                    },
+                                                    "then": [
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "local",
+                                                          "name": "sizeBits"
+                                                        },
+                                                        "value": {
+                                                          "expr": "binary",
+                                                          "op": "shl",
+                                                          "left": {
+                                                            "expr": "local",
+                                                            "name": "baseSize"
+                                                          },
+                                                          "right": {
+                                                            "expr": "local",
+                                                            "name": "size"
+                                                          }
+                                                        }
+                                                      }
+                                                    ]
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "packed"
+                                                    },
+                                                    "value": {
+                                                      "expr": "binary",
+                                                      "op": "eq",
+                                                      "left": {
+                                                        "expr": "binary",
+                                                        "op": "bit-and",
+                                                        "left": {
+                                                          "expr": "binary",
+                                                          "op": "shr",
+                                                          "left": {
+                                                            "expr": "local",
+                                                            "name": "csw_2"
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 4
+                                                          }
+                                                        },
+                                                        "right": {
+                                                          "expr": "lit",
+                                                          "value": 3
+                                                        }
+                                                      },
+                                                      "right": {
+                                                        "expr": "lit",
+                                                        "value": 2
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              },
+                                              {
+                                                "stmt": "expr",
+                                                "expr": {
+                                                  "expr": "await",
+                                                  "op": {
+                                                    "op": "emit",
+                                                    "event": {
+                                                      "expr": "variant",
+                                                      "type": "ArmMemapEvent",
+                                                      "kind": "memory-request",
+                                                      "fields": {
+                                                        "scan": {
+                                                          "expr": "local",
+                                                          "name": "scan"
+                                                        },
+                                                        "apIndex": {
+                                                          "expr": "field",
+                                                          "of": {
+                                                            "expr": "self",
+                                                            "field": "config"
+                                                          },
+                                                          "name": "ap"
+                                                        },
+                                                        "plannedAddress": {
+                                                          "expr": "local",
+                                                          "name": "planned"
+                                                        },
+                                                        "sizeBits": {
+                                                          "expr": "local",
+                                                          "name": "sizeBits"
+                                                        },
+                                                        "packed": {
+                                                          "expr": "local",
+                                                          "name": "packed"
+                                                        },
+                                                        "read": {
+                                                          "expr": "local",
+                                                          "name": "read"
+                                                        },
+                                                        "rawData": {
+                                                          "expr": "local",
+                                                          "name": "dataIn"
+                                                        }
+                                                      }
+                                                    },
+                                                    "at": {
+                                                      "expr": "local",
+                                                      "name": "at"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "pending"
+                                            },
+                                            "value": {
+                                              "expr": "record",
+                                              "type": "Pending",
+                                              "fields": {
+                                                "scan": {
+                                                  "expr": "local",
+                                                  "name": "scan"
+                                                },
+                                                "ap": {
+                                                  "expr": "local",
+                                                  "name": "ap"
+                                                },
+                                                "read": {
+                                                  "expr": "local",
+                                                  "name": "read"
+                                                },
+                                                "addr": {
+                                                  "expr": "local",
+                                                  "name": "addr"
+                                                },
+                                                "value": {
+                                                  "expr": "local",
+                                                  "name": "dataIn"
+                                                },
+                                                "register": {
+                                                  "expr": "local",
+                                                  "name": "name"
+                                                },
+                                                "selected": {
+                                                  "expr": "local",
+                                                  "name": "selected"
+                                                },
+                                                "planned": {
+                                                  "expr": "local",
+                                                  "name": "planned"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "pattern": {
+                                          "pattern": "default"
+                                        },
+                                        "body": []
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "Arm MEM-AP",
+        "summary": "DP/AP requests and planned memory addresses; OK/FAULT remains ambiguous",
+        "fields": {
+          "ap": "Access port index",
+          "tarWrapBits": "TAR auto-increment wrap bits"
+        },
+        "events": {
+          "request": "Register request",
+          "response": "Captured response",
+          "memory-request": "Planned memory access",
+          "memory-response": "Captured memory response",
+          "status": "Debug status",
+          "wait": "WAIT",
+          "context-lost": "Context lost"
+        },
+        "eventFields": {
+          "scan": "Request scan",
+          "responseScan": "Response scan",
+          "ap": "Access port",
+          "apIndex": "AP index",
+          "register": "Register",
+          "address": "Register address",
+          "read": "Read",
+          "value": "Value",
+          "okOrFault": "OK or FAULT",
+          "plannedAddress": "Planned address",
+          "sizeBits": "Access size (bits)",
+          "packed": "Packed",
+          "rawData": "Raw data",
+          "stickyFault": "Sticky fault"
+        }
+      },
+      "zh-CN": {
+        "name": "Arm MEM-AP",
+        "summary": "DP/AP 请求及计划访问地址；OK/FAULT 仍无法区分",
+        "fields": {
+          "ap": "访问端口编号",
+          "tarWrapBits": "TAR 自动递增回绕位数"
+        },
+        "events": {
+          "request": "寄存器请求",
+          "response": "捕获的响应",
+          "memory-request": "计划内存访问",
+          "memory-response": "捕获的内存响应",
+          "status": "调试状态",
+          "wait": "WAIT",
+          "context-lost": "上下文丢失"
+        },
+        "eventFields": {
+          "scan": "请求扫描",
+          "responseScan": "响应扫描",
+          "ap": "访问端口",
+          "apIndex": "AP 编号",
+          "register": "寄存器",
+          "address": "寄存器地址",
+          "read": "读取",
+          "value": "值",
+          "okOrFault": "OK 或 FAULT",
+          "plannedAddress": "计划地址",
+          "sizeBits": "访问宽度（位）",
+          "packed": "打包传输",
+          "rawData": "原始数据",
+          "stickyFault": "粘滞故障"
+        }
+      }
+    },
+    "state": [
+      {
+        "name": "select",
+        "type": {
+          "option": "u32"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "csw",
+        "type": {
+          "option": "u32"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "tar",
+        "type": {
+          "option": "u32"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "pending",
+        "type": {
+          "option": "Pending"
+        },
+        "init": {
+          "expr": "none"
+        }
+      }
+    ]
+  }
+}
