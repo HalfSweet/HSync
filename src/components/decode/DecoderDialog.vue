@@ -10,6 +10,9 @@ import {
   baseTypes,
   buildEntry,
   channelFields,
+  compatiblePorts,
+  uniqueNodeId,
+  type EntryLayer,
   entryChannels,
   entryLabel,
   nodeConfig,
@@ -18,6 +21,7 @@ import {
   type FieldValue,
   type NodeEntry,
 } from '@/decode/catalog'
+import { linearLayers, patchEntry, replaceLinearLayers } from '@/decode/editor'
 import { entryFormat, NUMBER_FORMATS, type NumberFormat } from '@/decode/numberFormat'
 import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
 import type { CatalogField } from '@/ipc/bindings/CatalogField'
@@ -46,8 +50,9 @@ const editing = computed(() => decode.editor?.index ?? null)
 const existing = computed(() =>
   editing.value === null ? undefined : decode.entries[editing.value],
 )
-/** The stored nodes when editing: the protocol first, then the decoder stacked on it. */
-const storedNodes = computed<NodeEntry[]>(() => Object.values(existing.value?.nodes ?? {}))
+const storedNodes = computed(() => Object.entries(existing.value?.nodes ?? {}))
+const chain = existing.value ? linearLayers(existing.value, decode.catalog) : null
+const structural = !existing.value || chain !== null
 
 const copy = useDecoderCopy()
 const { typeName, categoryName } = copy
@@ -78,16 +83,11 @@ const bases = computed(() =>
   ),
 )
 
-/** The protocol, by type name: the stored entry's first node when editing, which stays. */
-const picked = shallowRef(storedNodes.value[0]?.type ?? bases.value[0]?.name ?? '')
-const base = computed(() => typeOf(picked.value, decode.catalog))
-/** The device decoders that read what the protocol puts out. */
-const stackable = computed(() =>
-  base.value ? stackableOn(base.value, decode.catalog).sort(byName) : [],
+/** The first protocol stays fixed when editing. */
+const picked = shallowRef(
+  chain?.[0]?.type.name ?? storedNodes.value[0]?.[1].type ?? bases.value[0]?.name ?? '',
 )
-/** The decoder stacked on the protocol, by type name; empty for none. */
-const stacked = shallowRef(storedNodes.value[1]?.type ?? '')
-const stackType = computed(() => stackable.value.find((type) => type.name === stacked.value))
+const base = computed(() => typeOf(picked.value, decode.catalog))
 
 const label = shallowRef(existing.value?.label ?? '')
 const numberFormat = shallowRef<NumberFormat>(entryFormat(existing.value))
@@ -119,8 +119,15 @@ function channelName(index: number): string {
 type FormValue = number | string | boolean | null
 type Form = Record<string, FormValue>
 
-const baseForm = reactive<Form>({})
-const stackForm = reactive<Form>({})
+interface EditorLayer {
+  id: string
+  type: CatalogEntry | undefined
+  form: Form
+  initial: Form
+  fromPort?: string
+  toPort?: string
+}
+const editorLayers = reactive<EditorLayer[]>([])
 
 /** The channels of a list as typed, `0, 1, 2`, also as `D0` or with Chinese commas. */
 function parseChannels(list: string): number[] | null {
@@ -183,33 +190,102 @@ function fill(form: Form, type: CatalogEntry | undefined, stored: NodeEntry | un
     form[field.name] = formValue(field, config ? config[field.name] : field.default, free)
 }
 
+function makeLayer(
+  id: string,
+  type: CatalogEntry | undefined,
+  stored?: NodeEntry,
+  ports?: { from?: string; to?: string },
+): EditorLayer {
+  const form: Form = {}
+  fill(form, type, stored)
+  return { id, type, form, initial: { ...form }, fromPort: ports?.from, toPort: ports?.to }
+}
+
+if (existing.value) {
+  if (chain) {
+    for (const layer of chain)
+      editorLayers.push(
+        makeLayer(layer.id!, layer.type, existing.value.nodes[layer.id!], {
+          from: layer.fromPort,
+          to: layer.toPort,
+        }),
+      )
+  } else {
+    for (const [id, node] of storedNodes.value)
+      editorLayers.push(makeLayer(id, typeOf(node.type, decode.catalog), node))
+  }
+}
 watch(
   picked,
   () => {
-    fill(baseForm, base.value, storedNodes.value[0])
-    if (!stackable.value.some((type) => type.name === stacked.value)) stacked.value = ''
+    if (existing.value) return
+    editorLayers.splice(0, editorLayers.length)
+    if (base.value)
+      editorLayers.push(
+        makeLayer(base.value.name, base.value, undefined, {
+          to: base.value.inputs.find((port) => port.schema === 'logic.samples')?.port,
+        }),
+      )
     error.value = null
   },
   { immediate: true },
 )
-watch(stacked, () => fill(stackForm, stackType.value, storedNodes.value[1]), {
-  immediate: true,
+
+function choicesFor(layer: EditorLayer) {
+  if (!layer.type) return []
+  return stackableOn(layer.type, decode.catalog)
+    .sort(byName)
+    .flatMap((type) =>
+      compatiblePorts(layer.type!, type).map((ports) => ({
+        key: JSON.stringify([type.name, ports.from, ports.to]),
+        type,
+        ...ports,
+      })),
+    )
+}
+const appendChoices = computed(() => {
+  const last = editorLayers.at(-1)
+  return structural && last ? choicesFor(last) : []
 })
+function appendLayer(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const choice = appendChoices.value.find((choice) => choice.key === select.value)
+  if (choice)
+    editorLayers.push(
+      makeLayer(
+        uniqueNodeId(choice.type.name, [
+          ...Object.keys(existing.value?.nodes ?? {}),
+          ...editorLayers.map((layer) => layer.id),
+        ]),
+        choice.type,
+        undefined,
+        { from: choice.from, to: choice.to },
+      ),
+    )
+  select.value = ''
+}
+function removeLayer(index: number) {
+  editorLayers.splice(index)
+  error.value = null
+}
 
-/** The protocol's fields naming channels. */
-const channelSlots = computed(() => (base.value ? channelFields(base.value) : []))
-
-const optionFields = (type: CatalogEntry) =>
-  type.config.filter((field) => field.kind.kind !== 'channel' && field.kind.kind !== 'channels')
-
-/** The layers with options: the protocol, then the decoder stacked on it. */
-const layers = computed(() => {
-  const all: { type: CatalogEntry; form: Form; fields: CatalogField[] }[] = []
-  if (base.value) all.push({ type: base.value, form: baseForm, fields: optionFields(base.value) })
-  if (stackType.value)
-    all.push({ type: stackType.value, form: stackForm, fields: optionFields(stackType.value) })
-  return all.filter((layer) => layer.fields.length > 0)
-})
+/** All known layers retain their own form and stable instance identity. */
+const layers = computed(() =>
+  editorLayers.flatMap((layer) =>
+    layer.type
+      ? [
+          {
+            ...layer,
+            type: layer.type,
+            fields: layer.type.config.filter(
+              (field) => field.kind.kind !== 'channel' && field.kind.kind !== 'channels',
+            ),
+            channels: channelFields(layer.type),
+          },
+        ]
+      : [],
+  ),
+)
 
 const title = computed(() =>
   existing.value === undefined
@@ -235,31 +311,46 @@ const found = computed(() => {
 })
 
 function validate(): string | null {
-  const type = base.value
-  if (!type) return null
-  const used: number[] = []
-  for (const field of channelSlots.value) {
-    const role = fieldLabel(type, field)
-    const value = baseForm[field.name]
-    if (field.kind.kind === 'channel') {
-      if (typeof value === 'number') used.push(value)
-      else if (!field.optional) return t('decoderDialog.needChannel', { role })
-    } else if (field.kind.kind === 'channels') {
-      const list = parseChannels(String(value ?? ''))
-      const max = field.kind.max
-      if (!list || !list.every(hasChannel) || (max !== null && list.length > max))
-        return t('decoderDialog.badChannelList', { field: role })
-      if (list.length === 0 && !field.optional) return t('decoderDialog.needChannel', { role })
-      used.push(...list)
+  for (const layer of layers.value) {
+    if (
+      existing.value?.nodes[layer.id] &&
+      layer.channels.every((field) => layer.form[field.name] === layer.initial[field.name])
+    )
+      continue
+    const used: number[] = []
+    for (const field of layer.channels) {
+      const role = fieldLabel(layer.type, field)
+      const value = layer.form[field.name]
+      if (field.kind.kind === 'channel') {
+        if (typeof value === 'number') {
+          if (!hasChannel(value)) return t('decoderDialog.needChannel', { role })
+          used.push(value)
+        } else if (!field.optional) return t('decoderDialog.needChannel', { role })
+      } else if (field.kind.kind === 'channels') {
+        const list = parseChannels(String(value ?? ''))
+        const max = field.kind.max
+        if (!list || !list.every(hasChannel) || (max !== null && list.length > max))
+          return t('decoderDialog.badChannelList', { field: role })
+        if (list.length === 0 && !field.optional) return t('decoderDialog.needChannel', { role })
+        used.push(...list)
+      }
     }
+    const twice = used.find((channel, at) => used.indexOf(channel) !== at)
+    if (twice !== undefined) return t('decoderDialog.duplicateChannel', { channel: twice })
   }
-  const twice = used.find((channel, at) => used.indexOf(channel) !== at)
-  if (twice !== undefined) return t('decoderDialog.duplicateChannel', { channel: twice })
   for (const layer of layers.value) {
     for (const field of layer.fields) {
       if (field.kind.kind !== 'integer') continue
+      if (existing.value?.nodes[layer.id] && layer.form[field.name] === layer.initial[field.name])
+        continue
       const number = parseInteger(layer.form[field.name])
-      if (number === null || (number === undefined && !field.optional))
+      if (
+        number === null ||
+        (number === undefined && !field.optional) ||
+        (typeof number === 'number' &&
+          ((field.kind.min !== null && number < field.kind.min) ||
+            (field.kind.max !== null && number > field.kind.max)))
+      )
         return t('decoderDialog.badNumber', { field: fieldLabel(layer.type, field) })
     }
   }
@@ -310,18 +401,42 @@ async function commit(next: unknown[]): Promise<void> {
 
 async function save(): Promise<void> {
   const type = base.value
-  if (!type) return
+  if (!type && !existing.value) return
   error.value = validate()
   if (error.value) return
-  const entry = buildEntry(
-    type,
-    configOf(type, baseForm),
-    stackType.value
-      ? [{ type: stackType.value, config: configOf(stackType.value, stackForm) }]
-      : [],
-    label.value,
-    numberFormat.value === 'hex' ? undefined : { numbers: numberFormat.value },
-  )
+  const configured: EntryLayer[] = layers.value.map((layer) => ({
+    id: layer.id,
+    type: layer.type,
+    config: configOf(layer.type, layer.form),
+    fromPort: layer.fromPort,
+    toPort: layer.toPort,
+  }))
+  let entry
+  if (existing.value) {
+    const patches: Record<string, Record<string, unknown>> = {}
+    for (const layer of layers.value) {
+      const config = configOf(layer.type, layer.form)
+      patches[layer.id] = Object.fromEntries(
+        Object.entries(config).filter(([name]) => layer.form[name] !== layer.initial[name]),
+      )
+    }
+    const structureChanged =
+      structural &&
+      (configured.length !== chain?.length ||
+        configured.some((layer, index) => layer.id !== chain?.[index]?.id))
+    const original = structureChanged
+      ? replaceLinearLayers(existing.value, configured)
+      : existing.value
+    entry = patchEntry(original, patches, label.value, numberFormat.value)
+  } else {
+    entry = buildEntry(
+      type!,
+      configured[0]?.config ?? {},
+      configured.slice(1),
+      label.value,
+      numberFormat.value === 'hex' ? undefined : { numbers: numberFormat.value },
+    )
+  }
   const next: unknown[] = [...decode.entries]
   if (editing.value === null) next.push(entry)
   else next[editing.value] = entry
@@ -417,20 +532,38 @@ async function remove(): Promise<void> {
           </div>
         </div>
 
-        <div v-if="base && stackable.length > 0" class="flex flex-col gap-1.5">
-          <label class="flex flex-col gap-1.5">
-            <span class="text-caption text-ink-3">{{ t('decoderDialog.stack') }}</span>
-            <select v-model="stacked" class="h-8 w-full rounded-6 bg-control px-2 text-ink">
-              <option value="">{{ t('decoderDialog.stackNone') }}</option>
-              <option v-for="one in stackable" :key="one.name" :value="one.name">
-                {{ typeName(one.name) }}
-              </option>
-            </select>
-          </label>
-          <span class="text-ink-3">
-            {{ t('decoderDialog.stackHint', { name: typeName(base.name) }) }}
-          </span>
+        <p v-if="existing && !structural" class="rounded-6 bg-control px-2 py-1.5 text-ink-3">
+          {{ t('decoderDialog.graphPreserved') }}
+        </p>
+        <div
+          v-for="(layer, index) in editorLayers.slice(1)"
+          :key="layer.id"
+          class="flex items-center gap-2 rounded-6 bg-control px-2 py-1.5"
+        >
+          <span class="min-w-0 flex-1">{{
+            t('decoderDialog.layer', {
+              index: index + 2,
+              name: typeName(layer.type?.name ?? existing?.nodes[layer.id]?.type ?? ''),
+            })
+          }}</span>
+          <button
+            v-if="structural"
+            class="btn-icon"
+            :aria-label="t('decoderDialog.removeLayer')"
+            @click="removeLayer(index + 1)"
+          >
+            <AppIcon name="close" />
+          </button>
         </div>
+        <label v-if="appendChoices.length" class="flex flex-col gap-1.5">
+          <span class="text-caption text-ink-3">{{ t('decoderDialog.stack') }}</span>
+          <select class="h-8 w-full rounded-6 bg-control px-2 text-ink" @change="appendLayer">
+            <option value="">{{ t('decoderDialog.stackNone') }}</option>
+            <option v-for="choice in appendChoices" :key="choice.key" :value="choice.key">
+              {{ typeName(choice.type.name) }} · {{ choice.from }} → {{ choice.to }}
+            </option>
+          </select>
+        </label>
 
         <label class="flex flex-col gap-1.5">
           <span class="text-caption text-ink-3">{{ t('decoderDialog.label') }}</span>
@@ -442,15 +575,19 @@ async function remove(): Promise<void> {
           />
         </label>
 
-        <fieldset v-if="base && channelSlots.length > 0" class="flex flex-col gap-2">
+        <fieldset
+          v-for="layer in layers.filter((layer) => layer.channels.length)"
+          :key="`channels-${layer.id}`"
+          class="flex flex-col gap-2"
+        >
           <legend class="mb-1 text-caption text-ink-3">{{ t('decoderDialog.channels') }}</legend>
-          <label v-for="field in channelSlots" :key="field.name" class="flex items-center gap-3">
-            <span class="w-40 flex-none truncate text-ink-2" :title="fieldLabel(base, field)">
-              {{ fieldLabel(base, field) }}
+          <label v-for="field in layer.channels" :key="field.name" class="flex items-center gap-3">
+            <span class="w-40 flex-none truncate text-ink-2" :title="fieldLabel(layer.type, field)">
+              {{ fieldLabel(layer.type, field) }}
             </span>
             <select
               v-if="field.kind.kind === 'channel'"
-              v-model="baseForm[field.name]"
+              v-model="layer.form[field.name]"
               class="h-8 min-w-0 flex-1 rounded-6 bg-control px-2 text-ink"
             >
               <option v-if="field.optional" :value="null">{{ t('decoderDialog.unused') }}</option>
@@ -464,7 +601,7 @@ async function remove(): Promise<void> {
             </select>
             <input
               v-else
-              v-model="baseForm[field.name]"
+              v-model="layer.form[field.name]"
               type="text"
               class="h-8 min-w-0 flex-1 rounded-6 bg-control px-2 text-ink tabular-nums"
               :placeholder="t('decoderDialog.channelList')"
@@ -473,10 +610,14 @@ async function remove(): Promise<void> {
           </label>
         </fieldset>
 
-        <fieldset v-for="layer in layers" :key="layer.type.name" class="flex flex-col gap-2">
+        <fieldset
+          v-for="layer in layers.filter((layer) => layer.fields.length)"
+          :key="layer.id"
+          class="flex flex-col gap-2"
+        >
           <legend class="mb-1 text-caption text-ink-3">
             {{
-              stackType
+              editorLayers.length > 1
                 ? t('decoderDialog.optionsOf', { name: typeName(layer.type.name) })
                 : t('decoderDialog.options')
             }}
@@ -556,7 +697,7 @@ async function remove(): Promise<void> {
         </button>
         <button
           class="inline-flex h-7 items-center rounded-6 bg-ink px-3 font-medium text-canvas hover:opacity-86 disabled:opacity-55"
-          :disabled="saving || !base"
+          :disabled="saving || editorLayers.length === 0"
           @click="save"
         >
           {{ editing === null ? t('decoderDialog.add') : t('decoderDialog.save') }}

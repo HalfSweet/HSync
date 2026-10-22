@@ -347,7 +347,44 @@
     "failed": "解码中断",
     "missingChannels": "缺少通道",
     "invalid": "无法解码",
-    "intervalTip": "{label} · {start}–{end}，持续 {duration}"
+    "intervalTip": "{label} · {start}–{end}，持续 {duration}",
+    "import": {
+      "summary": "导入解码配置提示（{count}）",
+      "previous": "上一个解码器",
+      "next": "下一个解码器",
+      "remove": "移除保留的解码器",
+      "retained": "原始解码配置会随采集文件保留。尚不支持的配置不会运行。",
+      "previousDetail": "上一条提示",
+      "nextDetail": "下一条提示",
+      "unsupportedDecoder": "解码器 {decoder} 已保留，但目前无法运行。",
+      "unsupportedOptions": "解码器 {decoder}：未映射的选项 {options} 已保留。",
+      "deviceProfile": "解码器 {decoder} 已按 HSync 支持的器件范围导入，请核对目标地址和设置；原始配置已保留。",
+      "unsupportedStack": "解码器 {decoder}：叠加层 {stack} 已保留，但目前无法运行。",
+      "unsupportedChannels": "{decoder}：通道映射 {channels} 已保留，但当前解码配置不使用这些通道。",
+      "xn297Profile": "解码器 {decoder}：XN297 选项按 XN297L 寄存器表导入。原厂规格中的 BB_CAL 为 1 字节，参考解码器按 5 字节处理；原始配置已保留。"
+    },
+    "config": {
+      "address": "解码器 {node}：I²C 地址必须为 0–127 的 7 位地址。",
+      "resolution": "解码器 {node}：温度分辨率必须为 9–12 位。",
+      "reference": "解码器 {node}：参考电压必须为 1–5,500,000 微伏。",
+      "length": "解码器 {node}：字节数上限必须为 16–1,048,576。",
+      "tarWrapBits": "解码器 {node}：TAR 回绕宽度必须为 10–31 位。",
+      "traceId": "解码器 {node}：跟踪源 ID 必须为 1–111。",
+      "chainWidths": "解码器 {node}：IR 宽度必须为 1–256 位，DR 宽度为 1–4096 位，目标前后每段链的宽度为 0–4096 位。",
+      "ejtagIrBits": "解码器 {node}：EJTAG 指令宽度必须为 5–8 位。",
+      "etmContextBytes": "解码器 {node}：ETMv3 上下文宽度必须为 0、1、2 或 4 字节。",
+      "etmVersion": "解码器 {node}：ETMv3 次版本必须为 0–5。",
+      "etmTimestampBits": "解码器 {node}：ETMv3 时间戳宽度必须为 48 或 64 位。",
+      "channel": "解码器 {node}：请选择 0–63 范围内的通道。",
+      "clockHz": "解码器 {node}：初始 SWIM 时钟必须为 1–100,000,000 Hz。",
+      "channels": "解码器 {node}：请选择 0–63 范围内互不相同的通道。",
+      "cjtagTiming": "解码器 {node}：就绪位数必须为 1–4，固定延迟为 0–2 个时钟，停顿上限至少为 4 个时钟。",
+      "phy": "解码器 {node}：MDIO PHY 地址必须为 0–31。",
+      "midiChannel": "解码器 {node}：MIDI 打击乐通道必须为 0–15。",
+      "baud": "解码器 {node}：波特率必须大于零。",
+      "linBreak": "解码器 {node}：LIN 最短 BREAK 必须为 9–13 位。",
+      "linIdle": "解码器 {node}：LIN 响应空闲阈值必须至少为 10 位。"
+    }
   },
   "decoder": {
     "category": {
@@ -846,9 +883,15 @@
       "summary": "读取以太网 PHY 管理接口上的帧（Clause 22 与 45）",
       "field": {
         "mdc": "MDC 线",
-        "mdio": "MDIO 线"
+        "mdio": "MDIO 线",
+        "readEdge": "采样边沿"
       },
-      "value": {},
+      "value": {
+        "readEdge": {
+          "rising": "上升沿",
+          "falling": "下降沿"
+        }
+      },
       "event": {
         "frame": "帧",
         "error": "错误"
@@ -1196,7 +1239,8 @@
         "swclk": "SWCLK 线",
         "swdio": "SWDIO 线",
         "turnaround": "转向周期（时钟数）",
-        "overrun_detect": "溢出检测"
+        "overrun_detect": "溢出检测",
+        "strict_start": "等待线路复位后解码"
       },
       "value": {
         "overrun_detect": {
@@ -1479,6 +1523,139 @@
         "reason": "原因",
         "bits": "位数"
       }
+    },
+    "qspi": {
+      "name": "双线 / 四线 SPI",
+      "summary": "两路或四路 SPI 数据线上的固定宽度 SDR 字；不推断闪存传输阶段",
+      "field": {
+        "cs": "片选（CS）",
+        "clk": "时钟线",
+        "data": "数据线（IO0 在前）",
+        "mode": "SPI 模式",
+        "word_bits": "每字位数",
+        "cs_active_low": "CS 低电平有效",
+        "lsb_first": "低位组在前"
+      },
+      "value": {},
+      "event": {
+        "begin": "开始",
+        "word": "数据字",
+        "end": "结束"
+      },
+      "eventField": {
+        "tx": "事务",
+        "partial": "不完整",
+        "value": "值",
+        "reason": "原因",
+        "droppedBits": "丢弃位数"
+      }
+    },
+    "sdcard-sd": {
+      "name": "SD 卡（原生 SDR）",
+      "summary": "原生 SD 命令、响应及可选的单线或四线读取数据",
+      "field": {
+        "clk": "时钟线",
+        "cmd": "命令线",
+        "data": "数据线（DAT0 在前；留空则不解码）",
+        "block_bytes": "块长度（字节）"
+      },
+      "value": {},
+      "event": {
+        "begin": "令牌开始",
+        "header": "头部",
+        "payload": "载荷",
+        "crc": "CRC",
+        "end": "令牌结束",
+        "data-begin": "数据块开始",
+        "data": "数据",
+        "data-crc": "数据 CRC",
+        "data-end": "数据块结束"
+      },
+      "eventField": {
+        "token": "令牌",
+        "partial": "不完整",
+        "host": "来自主机",
+        "index": "命令编号",
+        "bits": "位数",
+        "offset": "偏移",
+        "value": "值",
+        "expected": "预期 CRC",
+        "ok": "CRC 正确",
+        "reason": "原因",
+        "block": "数据块",
+        "lane": "数据线"
+      }
+    },
+    "swim": {
+      "name": "STM8 SWIM",
+      "summary": "SWIM 数据包、奇偶校验、应答及观察到的进入序列和复位条件",
+      "field": {
+        "data": "数据线",
+        "clock_hz": "SWIM 时钟（Hz）",
+        "speed": "初始速度",
+        "start_active": "从命令边界开始"
+      },
+      "value": {
+        "speed": {
+          "low": "低速",
+          "high": "高速"
+        }
+      },
+      "event": {
+        "command": "命令",
+        "byte": "字节",
+        "reset": "复位 / 同步脉冲",
+        "entry": "进入序列",
+        "error": "错误",
+        "calibration": "同步时钟估计"
+      },
+      "eventField": {
+        "value": "值",
+        "parityOk": "奇偶校验正确",
+        "ack": "应答",
+        "direction": "方向",
+        "field": "命令字段",
+        "address": "地址",
+        "reason": "原因",
+        "partial": "不完整",
+        "clockHz": "估计时钟（Hz）",
+        "lowTicks": "同步低电平采样数",
+        "after": "前置序列"
+      }
+    },
+    "jtag-dp": {
+      "name": "Arm JTAG-DP",
+      "summary": "单个四位 JTAG TAP 上的 ADIv5 调试传输：请求及前次响应",
+      "field": {},
+      "value": {},
+      "event": {
+        "reset": "复位",
+        "instruction": "指令",
+        "idcode": "IDCODE",
+        "bypass": "BYPASS",
+        "abort": "ABORT",
+        "access": "调试访问",
+        "scan": "未解释的扫描"
+      },
+      "eventField": {
+        "scan": "扫描",
+        "value": "值",
+        "tdi": "TDI",
+        "tdo": "TDO",
+        "lowBits": "低位",
+        "instruction": "指令",
+        "read": "读取",
+        "addr": "地址位",
+        "dataIn": "请求数据",
+        "ackBits": "原始应答位",
+        "ack": "应答",
+        "responseData": "捕获的响应数据",
+        "previousScan": "前次请求扫描",
+        "accepted": "请求已接受",
+        "ir": "指令寄存器",
+        "bits": "位数",
+        "status": "状态"
+      }
     }
   },
   "decoderDialog": {
@@ -1516,7 +1693,10 @@
     "remove": "移除",
     "cancel": "取消",
     "edit": "修改解码设置",
-    "loadedFrom": "从 {file} 加载"
+    "loadedFrom": "从 {file} 加载",
+    "graphPreserved": "此解码图包含分支或不可用的解码器。连接会完整保留，可修改已支持的选项和显示设置。",
+    "removeLayer": "移除此层及其上方各层",
+    "layer": "第 {index} 层：{name}"
   },
   "stream": {
     "title": "数据流",
@@ -1789,5 +1969,93 @@
   },
   "shortcuts": {
     "space": "空格"
+  },
+  "c2": {
+    "config": {
+      "wait": "解码器 {node}：等待周期上限必须大于零。",
+      "channels": "解码器 {node}：请选择两个不同的通道，编号为 0–63。"
+    }
+  },
+  "sd-native": {
+    "config": {
+      "blockBytes": "解码器 {node}：块大小必须为 1–4096 字节。",
+      "dataWidth": "解码器 {node}：1 位数据请选择 DAT0；4 位数据请配置全部四条 DAT 线。",
+      "channel": "解码器 {node}：通道编号必须为 0–63。",
+      "duplicateChannel": "解码器 {node}：每条信号必须使用不同的通道。"
+    }
+  },
+  "qspi-flash": {
+    "config": {
+      "addressBytes": "解码器 {node}：地址宽度必须为 3 或 4 字节。",
+      "dtrQuadDummyClocks": "解码器 {node}：DTR 四线空周期数必须为 0–32。",
+      "qpiDummyClocks": "解码器 {node}：QPI 空周期数必须为 2、4、6 或 8。",
+      "mode": "解码器 {node}：SPI 模式必须为 0 或 3，四线空周期数必须为 0–64。",
+      "channel": "解码器 {node}：通道编号必须为 0–63。",
+      "duplicateChannel": "解码器 {node}：每条信号必须使用不同的通道。"
+    }
+  },
+  "eeprom24xx-memory": {
+    "config": {
+      "address": "解码器 {node}：EEPROM 地址必须为 0x50–0x57。",
+      "geometry": "解码器 {node}：容量和页大小必须为正的 2 次幂；容量不超过 524,288 字节，且为页大小的整数倍。",
+      "addressing": "解码器 {node}：请使用 1–2 个地址字节及 0–3 个块地址位，确保能覆盖容量，且 I²C 基地址按块地址位对齐。",
+      "counter": "解码器 {node}：初始地址计数器必须小于存储容量。",
+      "bank": "解码器 {node}：初始存储区必须为 0 或 1。"
+    }
+  },
+  "aud": {
+    "config": {
+      "channel": "解码器 {node}：通道编号必须为 0–63。",
+      "duplicateChannel": "解码器 {node}：每条信号必须使用不同的通道。"
+    }
+  },
+  "st7735": {
+    "config": {
+      "channel": "解码器 {node}：通道编号必须为 0–63。",
+      "duplicateChannel": "解码器 {node}：每条信号必须使用不同的通道。"
+    }
+  },
+  "st7789": {
+    "config": {
+      "channel": "解码器 {node}：通道编号必须为 0–63。",
+      "duplicateChannel": "解码器 {node}：每条信号必须使用不同的通道。"
+    }
+  },
+  "sda2506": {
+    "config": {
+      "channel": "解码器 {node}：通道编号必须为 0–63。",
+      "duplicateChannel": "解码器 {node}：每条信号必须使用不同的通道。"
+    }
+  },
+  "avr-pdi": {
+    "config": {
+      "channels": "解码器 {node}：请选择两个不同的通道，编号为 0–63。"
+    }
+  },
+  "fsi": {
+    "config": {
+      "channels": "解码器 {node}：请在 0–63 中选择两个不同的通道。",
+      "timing": "解码器 {node}：换向时间必须为 1–32 个时钟，响应超时必须大于零。"
+    }
+  },
+  "tlc5620": {
+    "config": {
+      "channel": "解码器 {node}：通道编号必须为 0–63。",
+      "duplicateChannel": "解码器 {node}：每个信号必须使用不同的通道。",
+      "reference": "解码器 {node}：每路参考电压必须为 0–10,000,000 微伏。",
+      "alignment": "解码器 {node}：请连接 LOAD，或明确启用未接 LOAD 时的字对齐。"
+    }
+  },
+  "smbus": {
+    "config": {
+      "address": "解码器 {node}：SMBus 地址必须为 0–127；留空可接受所有地址。",
+      "bytes": "解码器 {node}：事务长度上限必须为 2–1024 字节。",
+      "block": "解码器 {node}：块长度上限必须为 1–255 字节。"
+    }
+  },
+  "edid": {
+    "config": {
+      "segment": "解码器 {node}：EDID 初始段号必须为 0–127；未知时请留空。"
+    }
   }
 }

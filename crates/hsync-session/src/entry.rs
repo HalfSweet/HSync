@@ -31,6 +31,9 @@ pub struct DecoderEntry {
     /// Display settings the interface keeps; decoding does not read them.
     #[serde(default, skip_serializing_if = "Value::is_null")]
     pub show: Value,
+    /// Original imported configuration and diagnostics, kept independently of runnable nodes.
+    #[serde(default, skip_serializing_if = "Value::is_null")]
+    pub import: Value,
 }
 
 impl DecoderEntry {
@@ -106,14 +109,14 @@ pub struct CatalogEntry {
     pub events: Vec<CatalogEvent>,
     /// The file of the decoder module the type comes from; `None` for one built in.
     pub module: Option<String>,
-    /// What a loaded module says of itself, by language tag; none for a type built in, whose
-    /// copy the interface has.
+    /// Localized copy supplied by a built-in or loaded DSL module. Older built-in types
+    /// use the interface's own translations when this is absent.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub locales: Option<BTreeMap<String, CatalogLocale>>,
 }
 
-/// What a loaded module shows for itself in one language: its name, a one-line summary and
+/// What a DSL module shows for itself in one language: its name, a one-line summary and
 /// the labels of its configuration fields, their enumerated values, its event kinds and their
 /// fields, under the names the catalog entry uses; what is left out shows as the interface's
 /// own copy or as the identifier.
@@ -353,7 +356,16 @@ mod tests {
     #[test]
     fn the_catalog_lists_every_node_type_with_its_defaults() {
         let catalog = catalog();
-        assert_eq!(catalog.len(), 37);
+        assert_eq!(
+            catalog
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            uiharu_registry::KINDS
+                .iter()
+                .map(|kind| kind.name)
+                .collect::<Vec<_>>()
+        );
         let uart = catalog
             .iter()
             .find(|entry| entry.name == "uart")

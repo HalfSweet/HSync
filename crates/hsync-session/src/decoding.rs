@@ -179,6 +179,17 @@ fn failure(error: DecodeError) -> (DecodeState, UiError) {
                     .join(", "),
             ),
         ),
+        DecodeError::Build(uiharu_registry::BuildError::Configuration { node, message })
+            if message.contains(".config.")
+                && message
+                    .bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-' | b'_')) =>
+        {
+            (
+                DecodeState::Invalid,
+                UiError::new(&message).with("node", node),
+            )
+        }
         DecodeError::Build(error) => (
             DecodeState::Invalid,
             UiError::new("error.decode.invalid").with("detail", error.to_string()),
@@ -226,6 +237,26 @@ impl DecodeSet {
     }
 
     fn start_entry(&self, index: u32, value: &Value) -> Entry {
+        // Preserved imports without a translation are metadata, never executable graphs.
+        if value.pointer("/import/runnable").and_then(Value::as_bool) == Some(false) {
+            let decoder = value
+                .pointer("/import/raw/id")
+                .and_then(Value::as_str)
+                .unwrap_or_default();
+            return Entry {
+                label: value
+                    .get("label")
+                    .and_then(Value::as_str)
+                    .unwrap_or(decoder)
+                    .to_owned(),
+                kinds: Vec::new(),
+                decoder: None,
+                failure: Some((
+                    DecodeState::Invalid,
+                    UiError::new("decode.import.unsupportedDecoder").with("decoder", decoder),
+                )),
+            };
+        }
         let entry = match DecoderEntry::parse(value) {
             Ok(entry) => entry,
             Err(error) => {
@@ -496,5 +527,36 @@ impl DecodeSet {
             }
             Some(joined)
         })
+    }
+}
+
+#[cfg(test)]
+mod diagnostic_tests {
+    use super::*;
+
+    #[test]
+    fn decoder_configuration_keys_reach_the_ui_with_the_node_identity() {
+        let description = serde_json::from_value(serde_json::json!({
+            "source": {"channels":2},
+            "nodes": {"sensor": {"type":"lm75", "config":{"address":128}}}
+        }))
+        .expect("description");
+        let error = uiharu_registry::build(&description).expect_err("invalid address");
+        let (state, error) = failure(DecodeError::Build(error));
+        assert_eq!(state, DecodeState::Invalid);
+        assert_eq!(error.code, "decode.config.address");
+        assert_eq!(error.params["node"], "sensor");
+    }
+
+    #[test]
+    fn non_key_configuration_errors_remain_complete() {
+        let (_, error) = failure(DecodeError::Build(
+            uiharu_registry::BuildError::Configuration {
+                node: "custom".into(),
+                message: "expected an integer".into(),
+            },
+        ));
+        assert_eq!(error.code, "error.decode.invalid");
+        assert_eq!(error.params["detail"], "node custom: expected an integer");
     }
 }

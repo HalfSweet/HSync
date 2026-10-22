@@ -9,6 +9,7 @@ import type { DecoderStatus } from '@/ipc/bindings/DecoderStatus'
 import type { ModuleInfo } from '@/ipc/bindings/ModuleInfo'
 import type { StreamView } from '@/ipc/bindings/StreamView'
 import { toUiError, type UiError } from '@/ipc/errors'
+import { decoderImportWarnings } from '@/session/decoderImports'
 import { viewportEnd } from '@/timeline/viewport'
 import { covers, overscan, type SampleWindow } from '@/timeline/window'
 
@@ -295,6 +296,9 @@ export const useDecodeStore = defineStore('decode', () => {
     return Array.isArray(decoders) ? decoders.filter(isEntry) : []
   })
 
+  /** Import warnings remain visible until the associated entry is explicitly removed. */
+  const importWarnings = computed(() => decoderImportWarnings(capture.summary?.decoders))
+
   /** Replaces the decoder list; the capture decodes again. */
   async function setEntries(next: unknown[]): Promise<void> {
     const id = capture.summary?.id
@@ -308,6 +312,7 @@ export const useDecodeStore = defineStore('decode', () => {
     lanes,
     editor,
     entries,
+    importWarnings,
     catalog,
     modules,
     carried,
