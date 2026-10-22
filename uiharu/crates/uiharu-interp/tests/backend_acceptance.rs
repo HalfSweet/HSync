@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! TypeScript → freshly compiled IR → tracked generated Rust and interpreted bytecode,
+//! TypeScript → freshly compiled IR → generated Rust and interpreted bytecode,
 //! with independent wire-value assertions and mixed execution under backpressure.
-//! Prepare the ignored fixture IR with `pnpm dsl:compile` before Cargo tests.
+//! Prepare the ignored fixture IR and Rust with `pnpm dsl:generate` before Cargo tests.
 
 #[path = "fixtures/backend/generated/lib.rs"]
 mod generated;
@@ -29,7 +29,7 @@ fn program(name: &str) -> Arc<Program> {
         .join(format!("tests/fixtures/backend/ir/{name}.json"));
     let contents = std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
-            "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+            "{} reads: {error}; run `pnpm dsl:generate` before Cargo tests",
             path.display()
         )
     });

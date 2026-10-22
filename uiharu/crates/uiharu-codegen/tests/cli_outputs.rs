@@ -94,7 +94,7 @@ fn check_rejects_orphans_without_mutation_and_generation_prunes_renames_and_remo
     std::fs::write(directory.output().join("notes.txt"), b"keep me").expect("non-Rust file");
     assert!(directory.run(true).status.success());
 
-    // The current lib.rs can be correct while an old tracked Rust module remains.
+    // The current lib.rs can be correct while an obsolete generated Rust module remains.
     std::fs::write(directory.output().join("orphan.rs"), b"// obsolete\n").expect("orphan");
     let before = snapshot(&directory.output());
     let check = directory.run(true);

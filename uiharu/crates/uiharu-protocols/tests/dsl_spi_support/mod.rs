@@ -11,7 +11,7 @@ pub fn program(name: &str) -> Arc<Program> {
         .join(format!("../../dsl/ir/{name}.json"));
     let contents = std::fs::read_to_string(&path).unwrap_or_else(|error| {
         panic!(
-            "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+            "{} reads: {error}; run `pnpm dsl:generate` before Cargo tests",
             path.display()
         )
     });

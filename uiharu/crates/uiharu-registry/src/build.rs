@@ -286,7 +286,7 @@ mod tests {
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dsl/ir/{name}.json"));
         let json = std::fs::read_to_string(&path).unwrap_or_else(|error| {
             panic!(
-                "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+                "{} reads: {error}; run `pnpm dsl:generate` before Cargo tests",
                 path.display()
             )
         });
