@@ -183,3 +183,5 @@ You need:
 - [Node.js](https://nodejs.org/) 22.12 or later and [pnpm](https://pnpm.io/) 12
 - [Rust](https://rustup.rs/) (stable)
 - [Tauri's system dependencies](https://tauri.app/start/prerequisites/) for your platform
+
+Decoder TypeScript sources and generated Rust are tracked; generated IR is disposable local output. Run `pnpm dsl:compile` before direct Cargo tests; `pnpm test` prepares IR automatically. See the [DSL workflow](uiharu/docs/dsl.md) for generation and freshness checks.

@@ -21,6 +21,10 @@ How HSync is checked, released and packaged: continuous integration, the release
 | Frontend        | `pnpm format:check`, `lint`, `typecheck`, `test`, `build`                                                                                                                      |
 | Rust            | `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -D warnings`, `cargo test --workspace --locked`, and that the tests left `src/ipc/bindings` as committed |
 
+Generated decoder IR is disposable local output: `uiharu/dsl/ir/` and `uiharu/crates/uiharu-interp/tests/fixtures/backend/ir/` are ignored. `pnpm dsl:compile` regenerates both directories and prunes stale JSON. The frontend job's `pnpm test` prepares IR automatically; the Rust job installs the Node/pnpm dependencies and explicitly compiles IR before all-target clippy and tests. Run the same command before direct Cargo tests locally, and before interpreted CLI decoding or decoder metadata export. `pnpm test:watch` and `pnpm bindings` also prepare IR automatically.
+
+Commit TypeScript sources and regenerated Rust, including backend-fixture Rust when affected. `pnpm dsl:check` freshly compiles both sets of IR and checks both tracked Rust output directories without rewriting Rust. The hand-authored `uiharu/crates/uiharu-ir/tests/fixtures/pwm.json` stays tracked. Ordinary Rust builds use the committed Rust without Node or IR; installer builds package committed Rust and manifests and do not require or ship local IR.
+
 When the bindings check fails, run `pnpm bindings` and commit the result.
 
 With a warm cache the Rust job takes about 4 minutes; after `Cargo.lock` changes, or on a cold cache, it can take 15–30. Jobs stop after 10–60 minutes.

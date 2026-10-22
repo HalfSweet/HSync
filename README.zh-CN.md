@@ -183,3 +183,5 @@ SLogic16U3 驱动使用 Rust 与 nusb，参照[矽速官方的 libsigrok 驱动]
 - [Node.js](https://nodejs.org/) 22.12 或更高版本，以及 [pnpm](https://pnpm.io/) 12
 - [Rust](https://rustup.rs/)（stable）
 - 所在平台的 [Tauri 系统依赖](https://tauri.app/start/prerequisites/)
+
+解码器 TypeScript 源码和生成的 Rust 代码由 Git 跟踪，生成的 IR 是可随时重新生成的本地输出。直接运行 Cargo 测试之前，请先运行 `pnpm dsl:compile`；`pnpm test` 会自动准备 IR。生成及一致性检查详见 [DSL 工作流程（英文）](uiharu/docs/dsl.md)。

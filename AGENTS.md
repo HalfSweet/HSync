@@ -59,8 +59,9 @@ pnpm lint:fix             # ESLint, applying fixes
 pnpm format               # Prettier, writing
 pnpm format:check         # Prettier, checking
 pnpm typecheck            # vue-tsc
-pnpm test                 # Vitest (single run)
+pnpm test                 # prepare local decoder IR and run Vitest once
 
+pnpm dsl:compile          # prepare local production and backend-fixture IR before direct Cargo tests
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
@@ -71,10 +72,13 @@ cargo run -p uiharu-cli -- decode flash.bin --stats           # NDJSON events on
 cargo run -p uiharu-cli -- decode flash.bin --ir uiharu/dsl/ir/spi-nor.json   # a decoder interpreted from its IR
 cargo run -p uiharu-cli -- bench                              # throughput, latency, memory
 
-pnpm dsl:compile          # lower the DSL decoders of uiharu/dsl/decoders to uiharu/dsl/ir
-pnpm dsl:check            # fail when that IR is out of date
-cargo run -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src   # Rust from the IR (--check to compare)
+pnpm dsl:compile          # regenerate both IR directories and prune stale JSON
+pnpm dsl:check            # freshly compile IR and check both tracked Rust output directories
+cargo run -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src   # regenerate production Rust
+cargo run -p uiharu-codegen -- uiharu/crates/uiharu-interp/tests/fixtures/backend/ir uiharu/crates/uiharu-interp/tests/fixtures/backend/generated   # regenerate backend-fixture Rust
 ```
+
+Generated IR in `uiharu/dsl/ir/` and `uiharu/crates/uiharu-interp/tests/fixtures/backend/ir/` is ignored, disposable local output. Run `pnpm dsl:compile` before direct Cargo tests, interpreted CLI decoding or decoder metadata export. `pnpm test`, `pnpm test:watch` and `pnpm bindings` prepare it automatically. Ordinary Rust builds and installer bundles use committed generated Rust and manifests; they do not load IR or need Node for decoder generation. Keep the hand-authored `uiharu/crates/uiharu-ir/tests/fixtures/pwm.json` tracked. `pnpm dsl:check` never rewrites generated Rust.
 
 When you wrap up a change, run at least the ones that concern it: `pnpm lint`, `pnpm typecheck`, `pnpm test`, `cargo clippy`, `cargo test`.
 
@@ -112,7 +116,7 @@ When you wrap up a change, run at least the ones that concern it: `pnpm lint`, `
 - Nodes declare their ports with `InputSpec`/`OutputSpec`: the properties an output promises (`Props`) and what an input requires of it (`Requires`), so that the graph can refuse a connection with a diagnostic that names the port, the property and both values.
 - Contracts stay generic: the cursor over a contract (such as `spi::Transaction`) offers only the contract's primitives — the next word, the normal end, draining. Which line a protocol reads, byte order, field widths and integer assembly are the consuming decoder's own code; never add a protocol-specific operation to a shared contract.
 - Behaviour must not depend on how samples are cut into blocks, on the reader's pauses or on queue sizes and budgets; a change to a decoder or to the runtime comes with a case in the acceptance suite (`uiharu/crates/uiharu-protocols/tests/acceptance.rs`) when it could affect this. Rust decoders of a contract are written the way the DSL will express them (see `uiharu/docs/design.md` §7).
-- New decoders follow `uiharu/docs/writing-decoders.md`: a module per protocol with its contract, decoder, synthesizer and tests, tested through `uiharu_core::testing` (feature `testing`), implemented from the protocol's public specification and documented in `uiharu/docs/protocols/<name>.md`. A decoder may be written in the DSL instead (`uiharu/dsl/decoders/`, see `uiharu/docs/dsl.md`); PWM, SPI, SPI NOR and UART are. Its IR also runs interpreted (`uiharu-interp`, `uiharu decode --ir`); the interpreter must do what the generated Rust does, which `uiharu/crates/uiharu-interp/tests/equivalence.rs` checks, so a change to the backend's semantics changes the interpreter in the same pull request. A hand-written decoder's contract may be declared in the DSL as well (`uiharu/dsl/contracts/`; I²C's is, so that DSL decoders can read it), its types generated for the decoder to emit; the other hand-written contracts stay in Rust until a DSL decoder needs one. To change one of those, edit the TypeScript, run `pnpm dsl:compile` and `cargo run -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src`, and commit the regenerated IR and Rust with it; the generated files are never edited by hand.
+- New decoders follow `uiharu/docs/writing-decoders.md`: a module per protocol with its contract, decoder, synthesizer and tests, tested through `uiharu_core::testing` (feature `testing`), implemented from the protocol's public specification and documented in `uiharu/docs/protocols/<name>.md`. A decoder may be written in the DSL instead (`uiharu/dsl/decoders/`, see `uiharu/docs/dsl.md`); PWM, SPI, SPI NOR and UART are. Its IR also runs interpreted (`uiharu-interp`, `uiharu decode --ir`); the interpreter must do what the generated Rust does, which `uiharu/crates/uiharu-interp/tests/equivalence.rs` checks, so a change to the backend's semantics changes the interpreter in the same pull request. A hand-written decoder's contract may be declared in the DSL as well (`uiharu/dsl/contracts/`; I²C's is, so that DSL decoders can read it), its types generated for the decoder to emit; the other hand-written contracts stay in Rust until a DSL decoder needs one. To change one of those, edit the TypeScript, run `pnpm dsl:compile` and `cargo run -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src`, and commit the TypeScript and regenerated Rust with it. Regenerate backend-fixture Rust with the command above when its sources change. Generated IR is local disposable output and is not committed; generated files are never edited by hand.
 - The runtime's rules live in `uiharu/docs/design.md`; a change to them changes the document in the same pull request. `uiharu/README.md` describes the CLI and the embedding API for users of the engine.
 
 ### Implementing the design
