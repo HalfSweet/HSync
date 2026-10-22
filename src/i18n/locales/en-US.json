@@ -347,7 +347,44 @@
     "failed": "Decoding stopped",
     "missingChannels": "Channels missing",
     "invalid": "Cannot decode",
-    "intervalTip": "{label} · {start}–{end}, duration {duration}"
+    "intervalTip": "{label} · {start}–{end}, duration {duration}",
+    "import": {
+      "summary": "Imported decoder notes ({count})",
+      "previous": "Previous decoder",
+      "next": "Next decoder",
+      "remove": "Remove retained decoder",
+      "retained": "Original decoder settings remain saved with this capture. Unsupported settings do not run.",
+      "previousDetail": "Previous note",
+      "nextDetail": "Next note",
+      "unsupportedDecoder": "Decoder {decoder} is retained but cannot run.",
+      "unsupportedOptions": "Decoder {decoder}: unmapped options {options} are retained.",
+      "deviceProfile": "Decoder {decoder} uses HSync’s supported device profile. Review its target address and settings; the original is retained.",
+      "unsupportedStack": "Decoder {decoder}: stacked decoder {stack} is retained but cannot run.",
+      "unsupportedChannels": "{decoder}: channel mappings {channels} are preserved but are not used by this profile.",
+      "xn297Profile": "Decoder {decoder}: the XN297 option uses the XN297L register map. BB_CAL is one byte in the manufacturer specification, unlike the reference decoder’s five bytes. Original settings are retained."
+    },
+    "config": {
+      "address": "Decoder {node}: Use a 7-bit I²C address from 0 to 127.",
+      "resolution": "Decoder {node}: Temperature resolution must be 9–12 bits.",
+      "reference": "Decoder {node}: Reference voltage must be 1–5,500,000 µV.",
+      "length": "Decoder {node}: The byte limit must be 16–1,048,576.",
+      "tarWrapBits": "Decoder {node}: TAR wrap width must be 10–31 bits.",
+      "traceId": "Decoder {node}: Trace source ID must be 1–111.",
+      "chainWidths": "Decoder {node}: IR width must be 1–256 bits, DR width 1–4096 bits, and each surrounding chain width 0–4096 bits.",
+      "ejtagIrBits": "Decoder {node}: EJTAG instruction width must be 5–8 bits.",
+      "etmContextBytes": "Decoder {node}: ETMv3 context width must be 0, 1, 2 or 4 bytes.",
+      "etmVersion": "Decoder {node}: ETMv3 minor version must be 0–5.",
+      "etmTimestampBits": "Decoder {node}: ETMv3 timestamp width must be 48 or 64 bits.",
+      "channel": "Decoder {node}: Choose a channel from 0 to 63.",
+      "clockHz": "Decoder {node}: Initial SWIM clock must be 1–100,000,000 Hz.",
+      "channels": "Decoder {node}: Choose different channels from 0 to 63.",
+      "cjtagTiming": "Decoder {node}: Ready bits must be 1–4, fixed delay 0–2 clocks, and the stall limit at least 4 clocks.",
+      "phy": "Decoder {node}: MDIO PHY address must be 0–31.",
+      "midiChannel": "Decoder {node}: The MIDI percussion channel must be 0–15.",
+      "baud": "Decoder {node}: Baud rate must be greater than zero.",
+      "linBreak": "Decoder {node}: LIN minimum BREAK must be 9–13 bits.",
+      "linIdle": "Decoder {node}: LIN response idle threshold must be at least 10 bits."
+    }
   },
   "decoder": {
     "category": {
@@ -846,9 +883,15 @@
       "summary": "Management frames of Ethernet PHYs, clause 22 and clause 45",
       "field": {
         "mdc": "MDC line",
-        "mdio": "MDIO line"
+        "mdio": "MDIO line",
+        "readEdge": "Sample edge"
       },
-      "value": {},
+      "value": {
+        "readEdge": {
+          "rising": "Rising edge",
+          "falling": "Falling edge"
+        }
+      },
       "event": {
         "frame": "Frame",
         "error": "Error"
@@ -1196,7 +1239,8 @@
         "swclk": "SWCLK line",
         "swdio": "SWDIO line",
         "turnaround": "Turnaround (clocks)",
-        "overrun_detect": "Overrun detection"
+        "overrun_detect": "Overrun detection",
+        "strict_start": "Wait for line reset before decoding"
       },
       "value": {
         "overrun_detect": {
@@ -1479,6 +1523,139 @@
         "reason": "Reason",
         "bits": "Bits"
       }
+    },
+    "qspi": {
+      "name": "Dual / quad SPI",
+      "summary": "Fixed-width SDR words on two or four SPI data lanes; no flash phase inference",
+      "field": {
+        "cs": "Chip select (CS)",
+        "clk": "Clock line",
+        "data": "Data lanes (IO0 first)",
+        "mode": "SPI mode",
+        "word_bits": "Bits per word",
+        "cs_active_low": "CS active low",
+        "lsb_first": "Least significant group first"
+      },
+      "value": {},
+      "event": {
+        "begin": "Begin",
+        "word": "Word",
+        "end": "End"
+      },
+      "eventField": {
+        "tx": "Transaction",
+        "partial": "Partial",
+        "value": "Value",
+        "reason": "Reason",
+        "droppedBits": "Dropped bits"
+      }
+    },
+    "sdcard-sd": {
+      "name": "SD card (native SDR)",
+      "summary": "Native SD commands, responses and optional one- or four-lane read data",
+      "field": {
+        "clk": "Clock line",
+        "cmd": "Command line",
+        "data": "Data lanes (DAT0 first; empty for none)",
+        "block_bytes": "Block length (bytes)"
+      },
+      "value": {},
+      "event": {
+        "begin": "Token begin",
+        "header": "Header",
+        "payload": "Payload",
+        "crc": "CRC",
+        "end": "Token end",
+        "data-begin": "Data block begin",
+        "data": "Data",
+        "data-crc": "Data CRC",
+        "data-end": "Data block end"
+      },
+      "eventField": {
+        "token": "Token",
+        "partial": "Partial",
+        "host": "From host",
+        "index": "Command index",
+        "bits": "Bits",
+        "offset": "Offset",
+        "value": "Value",
+        "expected": "Expected CRC",
+        "ok": "CRC OK",
+        "reason": "Reason",
+        "block": "Block",
+        "lane": "Data lane"
+      }
+    },
+    "swim": {
+      "name": "STM8 SWIM",
+      "summary": "SWIM packets, parity and ACK, with observed entry and reset conditions",
+      "field": {
+        "data": "Data line",
+        "clock_hz": "SWIM clock (Hz)",
+        "speed": "Initial speed",
+        "start_active": "Start at a command boundary"
+      },
+      "value": {
+        "speed": {
+          "low": "Low speed",
+          "high": "High speed"
+        }
+      },
+      "event": {
+        "command": "Command",
+        "byte": "Byte",
+        "reset": "Reset / sync pulse",
+        "entry": "Entry sequence",
+        "error": "Error",
+        "calibration": "Synchronization clock estimate"
+      },
+      "eventField": {
+        "value": "Value",
+        "parityOk": "Parity OK",
+        "ack": "ACK",
+        "direction": "Direction",
+        "field": "Command field",
+        "address": "Address",
+        "reason": "Reason",
+        "partial": "Partial",
+        "clockHz": "Estimated clock (Hz)",
+        "lowTicks": "Synchronization low ticks",
+        "after": "Following sequence"
+      }
+    },
+    "jtag-dp": {
+      "name": "Arm JTAG-DP",
+      "summary": "ADIv5 debug transport on one four-bit JTAG TAP; requests and prior responses",
+      "field": {},
+      "value": {},
+      "event": {
+        "reset": "Reset",
+        "instruction": "Instruction",
+        "idcode": "IDCODE",
+        "bypass": "BYPASS",
+        "abort": "ABORT",
+        "access": "Debug access",
+        "scan": "Uninterpreted scan"
+      },
+      "eventField": {
+        "scan": "Scan",
+        "value": "Value",
+        "tdi": "TDI",
+        "tdo": "TDO",
+        "lowBits": "Low bits",
+        "instruction": "Instruction",
+        "read": "Read",
+        "addr": "Address bits",
+        "dataIn": "Request data",
+        "ackBits": "Raw ACK bits",
+        "ack": "ACK",
+        "responseData": "Captured response data",
+        "previousScan": "Previous request scan",
+        "accepted": "Request admitted",
+        "ir": "Instruction register",
+        "bits": "Bits",
+        "status": "Status"
+      }
     }
   },
   "decoderDialog": {
@@ -1516,7 +1693,10 @@
     "remove": "Remove",
     "cancel": "Cancel",
     "edit": "Decoder settings",
-    "loadedFrom": "Loaded from {file}"
+    "loadedFrom": "Loaded from {file}",
+    "graphPreserved": "This graph has branches or unavailable decoders. Its connections are preserved; you can edit available options and display settings.",
+    "removeLayer": "Remove this layer and the layers above it",
+    "layer": "Layer {index}: {name}"
   },
   "stream": {
     "title": "Data stream",
@@ -1789,5 +1969,93 @@
   },
   "shortcuts": {
     "space": "Space"
+  },
+  "c2": {
+    "config": {
+      "wait": "Decoder {node}: The wait-cycle limit must be greater than zero.",
+      "channels": "Decoder {node}: Choose two different channels from 0–63."
+    }
+  },
+  "sd-native": {
+    "config": {
+      "blockBytes": "Decoder {node}: Block size must be 1–4096 bytes.",
+      "dataWidth": "Decoder {node}: Select DAT0 for one-bit data, or all four DAT lines for four-bit data.",
+      "channel": "Decoder {node}: Channel indices must be 0–63.",
+      "duplicateChannel": "Decoder {node}: Each signal must use a different channel."
+    }
+  },
+  "qspi-flash": {
+    "config": {
+      "addressBytes": "Decoder {node}: Address width must be 3 or 4 bytes.",
+      "dtrQuadDummyClocks": "Decoder {node}: DTR quad dummy clocks must be 0–32.",
+      "qpiDummyClocks": "Decoder {node}: QPI dummy clocks must be 2, 4, 6 or 8.",
+      "mode": "Decoder {node}: SPI mode must be 0 or 3 and quad dummy clocks 0–64.",
+      "channel": "Decoder {node}: Channel indices must be 0–63.",
+      "duplicateChannel": "Decoder {node}: Each signal must use a different channel."
+    }
+  },
+  "eeprom24xx-memory": {
+    "config": {
+      "address": "Decoder {node}: EEPROM address must be 0x50–0x57.",
+      "geometry": "Decoder {node}: Capacity and page size must be positive powers of two; capacity is at most 524,288 bytes and a multiple of page size.",
+      "addressing": "Decoder {node}: Use 1–2 address bytes and 0–3 block bits, enough to address the capacity, with an aligned I²C base address.",
+      "counter": "Decoder {node}: The initial address counter must be below the memory capacity.",
+      "bank": "Decoder {node}: Initial bank must be 0 or 1."
+    }
+  },
+  "aud": {
+    "config": {
+      "channel": "Decoder {node}: Channel indices must be 0–63.",
+      "duplicateChannel": "Decoder {node}: Each signal must use a different channel."
+    }
+  },
+  "st7735": {
+    "config": {
+      "channel": "Decoder {node}: Channel indices must be 0–63.",
+      "duplicateChannel": "Decoder {node}: Each signal must use a different channel."
+    }
+  },
+  "st7789": {
+    "config": {
+      "channel": "Decoder {node}: Channel indices must be 0–63.",
+      "duplicateChannel": "Decoder {node}: Each signal must use a different channel."
+    }
+  },
+  "sda2506": {
+    "config": {
+      "channel": "Decoder {node}: Channel indices must be 0–63.",
+      "duplicateChannel": "Decoder {node}: Each signal must use a different channel."
+    }
+  },
+  "avr-pdi": {
+    "config": {
+      "channels": "Decoder {node}: Choose two different channels from 0–63."
+    }
+  },
+  "fsi": {
+    "config": {
+      "channels": "Decoder {node}: Choose two different channels from 0–63.",
+      "timing": "Decoder {node}: Turnaround must be 1–32 clocks and the response timeout must be greater than zero."
+    }
+  },
+  "tlc5620": {
+    "config": {
+      "channel": "Decoder {node}: Channel indices must be 0–63.",
+      "duplicateChannel": "Decoder {node}: Each signal must use a different channel.",
+      "reference": "Decoder {node}: Each reference voltage must be 0–10,000,000 µV.",
+      "alignment": "Decoder {node}: connect LOAD or explicitly enable aligned words when LOAD is absent."
+    }
+  },
+  "smbus": {
+    "config": {
+      "address": "Decoder {node}: SMBus address must be 0–127, or unset to accept all addresses.",
+      "bytes": "Decoder {node}: The transaction limit must be 2–1024 bytes.",
+      "block": "Decoder {node}: The block-length limit must be 1–255 bytes."
+    }
+  },
+  "edid": {
+    "config": {
+      "segment": "Decoder {node}: the initial EDID segment must be 0–127, or unset when unknown."
+    }
   }
 }

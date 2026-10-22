@@ -15,6 +15,11 @@ export function useDecoderCopy() {
   const named = (key: string, fallback: string): string =>
     i18n.te(key) ? i18n.t(key as never) : fallback
   const copy = (type: string) => moduleLocale(typeOf(type, activeCatalog.value), i18n.locale.value)
+  // Compact transports and selected TAPs retain the canonical JTAG state vocabulary.
+  const eventFallback = (type: string): string =>
+    typeOf(type, activeCatalog.value)?.outputs.some((port) => port.schema === 'jtag.events')
+      ? 'jtag'
+      : type
 
   return {
     /** What a node type is called. */
@@ -27,7 +32,11 @@ export function useDecoderCopy() {
       copy(type)?.fields[field] ?? named(`decoder.${type}.field.${field}`, field),
     /** The name of an enumerated value of a configuration field. */
     valueLabel: (type: string, field: string, value: string): string =>
-      copy(type)?.values[field]?.[value] ?? named(`decoder.${type}.value.${field}.${value}`, value),
+      copy(type)?.values[field]?.[value] ??
+      named(
+        `decoder.${type}.value.${field}.${value}`,
+        named(`decoder.${eventFallback(type)}.value.${field}.${value}`, value),
+      ),
     /** The name of a kind of event. */
     eventLabel: (type: string, kind: string): string =>
       copy(type)?.events[kind] ?? named(`decoder.${type}.event.${kind}`, kind),

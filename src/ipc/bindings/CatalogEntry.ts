@@ -21,7 +21,7 @@ category: string, inputs: Array<CatalogPort>, outputs: Array<CatalogPort>, confi
  */
 module: string | null, 
 /**
- * What a loaded module says of itself, by language tag; none for a type built in, whose
- * copy the interface has.
+ * Localized copy supplied by a built-in or loaded DSL module. Older built-in types
+ * use the interface's own translations when this is absent.
  */
 locales?: { [key in string]: CatalogLocale }, };

@@ -106,7 +106,7 @@ const layout = computed(() => {
     (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
     (group) => Math.max(1, decode.statusOf(group.decoder)?.streams.length ?? 0),
     (channel) => channels.heights[channel.index],
-    streamKindOf,
+    streamSchemaOf,
   )
   // The channel rows grow and shrink with the timeline's height, below the ruler (§6.1).
   if (!preferences.fitRows || client.value.height <= 0) return { ...rows, scale: 1 }
@@ -153,6 +153,15 @@ function streamKindOf(group: ChannelGroup, stream: number): string {
   return (
     decode.statusOf(group.decoder)?.streams[stream]?.kind ??
     (stream === 0 ? (group.type ?? '') : '')
+  )
+}
+
+/** Shared contracts determine annotation lanes, including cJTAG and selected TAP streams. */
+function streamSchemaOf(group: ChannelGroup, stream: number): string | null {
+  return (
+    decode.statusOf(group.decoder)?.streams[stream]?.schema ??
+    decode.typeNamed(streamKindOf(group, stream))?.outputs[0]?.schema ??
+    null
   )
 }
 

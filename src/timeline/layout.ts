@@ -3,6 +3,7 @@
  * waveform canvas both use this layout, so neither has to measure the other.
  */
 import type { ChannelGroup, ChannelRef } from './groups'
+import { typeOf } from '@/decode/catalog'
 
 export type RowKind = 'gap' | 'header' | 'lane' | 'trace' | 'trace-narrow'
 
@@ -55,7 +56,7 @@ export function collapsedByDefault(group: ChannelGroup): boolean {
 /**
  * Lays out the rows: for each group its title row, which carries the decoder's first stream,
  * a lane row for each further stream (`streamsOf` says how many a decoder has), with a state
- * annotation row after each JTAG stream (`streamKindOf` names it), then its channels, each as
+ * annotation row after each JTAG-schema stream, then its channels, each as
  * high as `heightOf` says (the user dragged its edge) or else its kind's height.
  */
 export function layoutRows(
@@ -64,8 +65,8 @@ export function layoutRows(
   isCollapsed: (group: ChannelGroup) => boolean,
   streamsOf: (group: ChannelGroup) => number = () => 1,
   heightOf: (channel: ChannelRef) => number | undefined = () => undefined,
-  streamKindOf: (group: ChannelGroup, stream: number) => string | null = (group, stream) =>
-    stream === 0 ? group.type : null,
+  streamSchemaOf: (group: ChannelGroup, stream: number) => string | null = (group, stream) =>
+    stream === 0 ? (typeOf(group.type ?? '')?.outputs[0]?.schema ?? null) : null,
 ): { rows: Row[]; height: number } {
   const rows: Row[] = []
   let top = 0
@@ -98,7 +99,7 @@ export function layoutRows(
             stream,
           })
         }
-        if (streamKindOf(group, stream) === 'jtag') {
+        if (streamSchemaOf(group, stream) === 'jtag.events') {
           push({
             key: `${group.key}:stream:${stream}:annotation:states`,
             kind: 'lane',

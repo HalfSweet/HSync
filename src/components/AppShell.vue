@@ -5,6 +5,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useStreamStore } from '@/stores/stream'
 
 import DecoderDialog from './decode/DecoderDialog.vue'
+import DecoderImportWarnings from './decode/DecoderImportWarnings.vue'
 
 import AppHeader from './header/AppHeader.vue'
 import ImportDialog from './import/ImportDialog.vue'
@@ -25,6 +26,7 @@ const settings = useSettingsStore()
     <AppHeader />
     <div class="flex min-h-0 flex-1">
       <main class="relative flex min-w-0 flex-1 flex-col overflow-clip">
+        <DecoderImportWarnings />
         <OverviewStrip />
         <TimelineView />
         <Transition name="drawer">

@@ -751,19 +751,18 @@ impl Workspace {
 }
 
 /// HSync's decoder entries out of a list that may hold DSView's (from a `.dsl` file, a `.dsc`
-/// session or an older HSync session), those uiharu cannot decode left out; `None` when
-/// nothing is left.
+/// session or an older HSync session), retaining original imported metadata even when no runnable translation exists.
 fn normalize_decoders(decoders: Option<serde_json::Value>) -> Option<serde_json::Value> {
     let entries: Vec<serde_json::Value> = decoders
         .as_ref()
         .and_then(serde_json::Value::as_array)
         .into_iter()
         .flatten()
-        .filter_map(|entry| {
+        .map(|entry| {
             if DecoderEntry::is_entry(entry) {
-                Some(entry.clone())
+                entry.clone()
             } else {
-                dsview::convert(entry)
+                dsview::preserve(entry)
             }
         })
         .collect();
@@ -773,14 +772,21 @@ fn normalize_decoders(decoders: Option<serde_json::Value>) -> Option<serde_json:
 /// What of a decoder list decides the results: each entry without the keys that only say how
 /// they are shown.
 fn decoding_part(decoders: Option<&serde_json::Value>) -> Vec<serde_json::Value> {
-    const DISPLAY: [&str; 2] = ["show", "label"];
+    const DISPLAY: [&str; 3] = ["show", "label", "import"];
     decoders
         .and_then(serde_json::Value::as_array)
         .into_iter()
         .flatten()
         .map(|entry| {
+            let disabled = entry
+                .pointer("/import/runnable")
+                .and_then(serde_json::Value::as_bool)
+                == Some(false);
             let mut entry = entry.clone();
             if let Some(fields) = entry.as_object_mut() {
+                if disabled {
+                    fields.insert("_importDisabled".into(), true.into());
+                }
                 for key in DISPLAY {
                     fields.remove(key);
                 }

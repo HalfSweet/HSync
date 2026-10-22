@@ -15,17 +15,20 @@ import type { NumberFormat } from './numberFormat'
 export const LOGIC_SCHEMA = 'logic.samples'
 
 export interface NodeEntry {
+  [metadata: string]: unknown
   type: string
   config?: Record<string, unknown>
 }
 
 /** How a decoder's results show; decoding does not read it. */
 export interface DisplaySettings {
+  [metadata: string]: unknown
   numbers?: NumberFormat
 }
 
 /** A decoder entry, as the backend reads it (`hsync_session::DecoderEntry`). */
 export interface DecoderEntry {
+  [metadata: string]: unknown
   /** The nodes by name, the bus first. */
   nodes: Record<string, NodeEntry>
   /** Connections between `source` or `node.port` and `node.port`. */
@@ -77,15 +80,43 @@ export function typeOf(
 
 /** Node types reading samples: those a decoder starts with. */
 export function baseTypes(catalog: readonly CatalogEntry[]): CatalogEntry[] {
-  return catalog.filter((type) => type.inputs[0]?.schema === LOGIC_SCHEMA)
+  return catalog.filter((type) => type.inputs.some((port) => port.schema === LOGIC_SCHEMA))
 }
 
-/** Node types that read what `base` puts out, to stack on it. */
+/** Every explicitly declared port pair on which the upper layer can read the lower. */
+export function compatiblePorts(below: CatalogEntry, above: CatalogEntry) {
+  return below.outputs.flatMap((output) =>
+    above.inputs
+      .filter((input) => input.schema === output.schema)
+      .map((input) => ({
+        from: output.port,
+        to: input.port,
+        schema: output.schema,
+      })),
+  )
+}
+
+/** Types that can read an output of this layer, including repeated type instances. */
 export function stackableOn(base: CatalogEntry, catalog: readonly CatalogEntry[]): CatalogEntry[] {
-  const schema = base.outputs[0]?.schema
-  return schema === undefined
-    ? []
-    : catalog.filter((type) => type.inputs[0]?.schema === schema && type.name !== base.name)
+  return catalog.filter((type) => compatiblePorts(base, type).length > 0)
+}
+
+/** Stable instance names: preserve existing names and suffix repeated types. */
+export function uniqueNodeId(type: string, used: Iterable<string>): string {
+  const names = new Set(used)
+  if (!names.has(type)) return type
+  let suffix = 2
+  while (names.has(`${type}-${suffix}`)) suffix++
+  return `${type}-${suffix}`
+}
+
+export interface EntryLayer {
+  id?: string
+  type: CatalogEntry
+  config: Record<string, FieldValue>
+  /** Explicit compatible port names for this layer's incoming connection. */
+  fromPort?: string
+  toPort?: string
 }
 
 /** The configuration fields of `type` naming channels. */
@@ -156,26 +187,35 @@ function cleanConfig(config: Record<string, FieldValue>): Record<string, unknown
 export function buildEntry(
   base: CatalogEntry,
   config: Record<string, FieldValue>,
-  stacked: readonly { type: CatalogEntry; config: Record<string, FieldValue> }[] = [],
+  stacked: readonly EntryLayer[] = [],
   label?: string,
   show?: DisplaySettings,
 ): DecoderEntry {
-  const nodes: Record<string, NodeEntry> = {
-    [base.name]: { type: base.name, config: cleanConfig(config) },
-  }
-  const connections = [{ from: 'source', to: `${base.name}.${base.inputs[0]?.port ?? 'logic'}` }]
-  const expose: Record<string, string> = {
-    [base.name]: `${base.name}.${base.outputs[0]?.port ?? 'events'}`,
-  }
-  let below = base
-  for (const layer of stacked) {
-    nodes[layer.type.name] = { type: layer.type.name, config: cleanConfig(layer.config) }
-    connections.push({
-      from: `${below.name}.${below.outputs[0]?.port ?? 'events'}`,
-      to: `${layer.type.name}.${layer.type.inputs[0]?.port ?? 'bus'}`,
-    })
-    expose[layer.type.name] = `${layer.type.name}.${layer.type.outputs[0]?.port ?? 'events'}`
-    below = layer.type
+  const layers: EntryLayer[] = [{ type: base, config }, ...stacked]
+  const nodes: Record<string, NodeEntry> = {}
+  const connections: { from: string; to: string }[] = []
+  const expose: Record<string, string> = {}
+  let previous: { id: string; type: CatalogEntry } | undefined
+  for (const layer of layers) {
+    const id = layer.id ?? uniqueNodeId(layer.type.name, Object.keys(nodes))
+    if (id in nodes) throw new Error('duplicate decoder instance')
+    nodes[id] = { type: layer.type.name, config: cleanConfig(layer.config) }
+    if (previous) {
+      const pair = compatiblePorts(previous.type, layer.type).find(
+        (ports) =>
+          (layer.fromPort === undefined || ports.from === layer.fromPort) &&
+          (layer.toPort === undefined || ports.to === layer.toPort),
+      )
+      if (!pair) throw new Error('incompatible decoder ports')
+      connections.push({ from: `${previous.id}.${pair.from}`, to: `${id}.${pair.to}` })
+    } else {
+      const port = layer.type.inputs.find((port) => port.schema === LOGIC_SCHEMA)
+      if (!port) throw new Error('decoder needs a logic input')
+      connections.push({ from: 'source', to: `${id}.${port.port}` })
+    }
+    const output = layer.type.outputs[0]
+    if (output) expose[id] = `${id}.${output.port}`
+    previous = { id, type: layer.type }
   }
   const entry: DecoderEntry = { nodes, connections, expose }
   const trimmed = label?.trim()
