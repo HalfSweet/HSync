@@ -8,7 +8,7 @@ use proptest::prelude::*;
 use uiharu_core::testing::{Harness, assert_block_invariant, without_progress};
 use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::dmx512::synth::{PacketTiming, packet};
-use uiharu_protocols::dmx512::{Dmx512, Dmx512Event, EndReason, SLOT_BATCH};
+use uiharu_protocols::dmx512::{Dmx512, Dmx512Event, Dmx512EventExt, EndReason, SLOT_BATCH};
 use uiharu_protocols::uart::synth::{Faults, UartWaveform};
 use uiharu_protocols::uart::{Parity, StopBits, Uart, UartConfig};
 
@@ -63,22 +63,22 @@ fn describe(items: &[Item<Dmx512Event>]) -> Vec<String> {
                     Dmx512Event::PacketBegin {
                         packet,
                         break_ticks,
-                    } => format!("packet-begin p{} {break_ticks}", packet.0),
+                    } => format!("packet-begin p{} {break_ticks}", packet),
                     Dmx512Event::StartCode { packet, code } => {
-                        format!("start-code p{} {code:02x}", packet.0)
+                        format!("start-code p{} {code:02x}", packet)
                     }
                     Dmx512Event::Slots {
                         packet,
                         offset,
                         values,
-                    } => format!("slots p{} +{offset} {}", packet.0, hex(values)),
+                    } => format!("slots p{} +{offset} {}", packet, hex(values)),
                     Dmx512Event::PacketEnd {
                         packet,
                         slots,
                         reason,
-                    } => format!("packet-end p{} {slots} {reason:?}", packet.0),
+                    } => format!("packet-end p{} {slots} {reason:?}", packet),
                     Dmx512Event::Error { packet, slot } => {
-                        format!("error p{} slot {slot}", packet.0)
+                        format!("error p{} slot {slot}", packet)
                     }
                 };
                 format!(
@@ -680,7 +680,7 @@ proptest! {
         for event in reference.iter().filter_map(Item::event) {
             prop_assert!(event.settled >= settled, "{:?} settled before {:?}", event, settled);
             settled = event.settled;
-            let id = event.payload.packet().0;
+            let id = event.payload.packet();
             match &event.payload {
                 Dmx512Event::PacketBegin { .. } => {
                     prop_assert!(open.is_empty(), "two packets open");

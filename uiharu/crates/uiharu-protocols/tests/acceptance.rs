@@ -6,6 +6,14 @@
 //! never grow past their capacity; cut-off and lost samples never pass for a whole command.
 
 mod common;
+#[path = "acceptance/jtag_dp.rs"]
+mod jtag_dp;
+#[path = "acceptance/qspi.rs"]
+mod qspi;
+#[path = "acceptance/sdcard_sd.rs"]
+mod sdcard_sd;
+#[path = "acceptance/swim.rs"]
+mod swim;
 
 use std::sync::Arc;
 

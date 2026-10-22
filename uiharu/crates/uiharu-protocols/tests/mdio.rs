@@ -7,7 +7,7 @@ use serde::Serialize;
 use uiharu_core::testing::{Harness, assert_block_invariant};
 use uiharu_core::{GraphConfig, Item, LogicBlock, Tick, TickRange, TimeBase};
 use uiharu_protocols::mdio::synth::{Frame, MdioWaveform};
-use uiharu_protocols::mdio::{Mdio, MdioConfig, MdioEvent};
+use uiharu_protocols::mdio::{ClauseExt, Mdio, MdioConfig, MdioEvent};
 
 /// MDC and MDIO on channels 0 and 1.
 const CHANNELS: u8 = 2;
@@ -697,5 +697,55 @@ proptest! {
             })
             .collect();
         prop_assert_eq!(lines, expected);
+    }
+}
+
+#[test]
+fn configured_rising_and_falling_edges_read_the_same_independent_frame() {
+    use uiharu_protocols::mdio::{Clause, Op, ReadEdge};
+    for edge in [ReadEdge::Rising, ReadEdge::Falling] {
+        let config = MdioConfig {
+            read_edge: edge,
+            ..MdioConfig::default()
+        };
+        // The 64 bits below are independently assembled: 32 preamble ones, ST=00,
+        // OP=11, PRTAD=3, DEVAD=1, TA=10, data=0x96a5.
+        let bits = (0..32)
+            .map(|_| true)
+            .chain((0..32).rev().map(|bit| 0x3186_96a5_u32 >> bit & 1 != 0));
+        let mut builder = uiharu_core::LogicBlockBuilder::new(Tick::ZERO, 2);
+        let idle_clock = edge == ReadEdge::Falling;
+        builder.push_repeated(uiharu_core::Levels(u64::from(idle_clock) | 2), 5);
+        for bit in bits {
+            let data = u64::from(bit) << 1;
+            builder.push_repeated(uiharu_core::Levels(u64::from(idle_clock) | data), 2);
+            builder.push_repeated(uiharu_core::Levels(u64::from(!idle_clock) | data), 2);
+        }
+        let block = builder.finish().expect("samples");
+        let build = |limits| {
+            Harness::build(2, TimeBase::new(1_000_000), limits, |g, s| {
+                let node = g.add(Mdio::new(config.clone()).expect("MDIO"));
+                g.connect(s.samples, Mdio::input(node))?;
+                Ok(Mdio::events(node))
+            })
+            .expect("graph")
+        };
+        let mut harness = build(GraphConfig::default());
+        harness.run_all(&block);
+        assert_eq!(harness.events().len(), 1);
+        assert_eq!(
+            harness.events()[0].payload,
+            MdioEvent::Frame {
+                clause: Clause::C45,
+                op: Op::Read,
+                phy: 3,
+                reg: 1,
+                turnaround: 2,
+                data: 0x96a5,
+                preamble_bits: 32
+            }
+        );
+        assert_eq!(harness.events()[0].settled, Tick(259));
+        assert_block_invariant(build, &block, &[]);
     }
 }

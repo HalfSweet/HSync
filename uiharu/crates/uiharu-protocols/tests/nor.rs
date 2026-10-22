@@ -1068,3 +1068,32 @@ fn progress_moves_inside_a_long_read() {
     );
     assert_progress_promise(&items);
 }
+
+#[test]
+fn extended_address_register_and_block_lock_queries_preserve_raw_wire_values() {
+    // Winbond W25Q256JV Table1: C8/C5 carry one extended-address byte;
+    //3D carries the configured address width and returned lock byte.
+    let lines = decode(
+        SpiNorConfig::default(),
+        &[
+            vec![(0xc8, 0), (0, 1)],
+            vec![(0xc5, 0), (2, 0)],
+            synth::read(0x3d, 0x123456, 3, 0, &[1]),
+        ],
+    );
+    assert_eq!(
+        lines,
+        [
+            "begin op1 tx1 ReadExtendedAddress",
+            "data op1 out +0 01",
+            "end op1 Complete",
+            "begin op2 tx2 WriteExtendedAddress",
+            "data op2 in +0 02",
+            "end op2 Complete",
+            "begin op3 tx3 ReadBlockLock",
+            "address op3 123456",
+            "data op3 out +0 01",
+            "end op3 Complete"
+        ]
+    );
+}
