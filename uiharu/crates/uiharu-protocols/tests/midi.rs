@@ -14,7 +14,8 @@ use uiharu_protocols::midi::synth::{
     channel_message, channel_status, common_message, fourteen_bits, sysex,
 };
 use uiharu_protocols::midi::{
-    ChannelStatus, CommonStatus, EndReason, ErrorReason, MessageId, Midi, MidiEvent, SYSEX_BATCH,
+    ChannelStatus, ChannelStatusExt, CommonStatus, CommonStatusExt, EndReason, ErrorReason,
+    MessageId, Midi, MidiEvent, MidiEventExt, SYSEX_BATCH,
 };
 use uiharu_protocols::uart::synth::UartWaveform;
 use uiharu_protocols::uart::{BitOrder, Parity, StopBits, Uart, UartConfig};
@@ -80,7 +81,7 @@ fn describe(items: &[Item<MidiEvent>]) -> Vec<String> {
                         running,
                     } => format!(
                         "m{} {status:?} ch{channel} {data1:02x}{}{}",
-                        message.0,
+                        message,
                         optional(*data2),
                         if *running { " running" } else { "" }
                     ),
@@ -91,7 +92,7 @@ fn describe(items: &[Item<MidiEvent>]) -> Vec<String> {
                         data2,
                     } => format!(
                         "m{} {status:?}{}{}",
-                        message.0,
+                        message,
                         optional(*data1),
                         optional(*data2)
                     ),
@@ -102,12 +103,12 @@ fn describe(items: &[Item<MidiEvent>]) -> Vec<String> {
                         message,
                         offset,
                         bytes,
-                    } => format!("m{} sysex +{offset} {}", message.0, hex(bytes)),
+                    } => format!("m{} sysex +{offset} {}", message, hex(bytes)),
                     MidiEvent::SysexEnd {
                         message,
                         bytes,
                         reason,
-                    } => format!("m{} sysex-end {bytes} {reason:?}", message.0),
+                    } => format!("m{} sysex-end {bytes} {reason:?}", message),
                     MidiEvent::Error { reason, byte } => format!("error {reason:?} {byte:02x}"),
                 };
                 format!(
@@ -679,7 +680,7 @@ fn every_cut_and_pause_yields_the_same_messages() {
         ]
     );
     // Messages are numbered in order, from 1.
-    let numbers: Vec<u64> = messages.iter().map(|message| message.0).collect();
+    let numbers: Vec<u64> = messages.to_vec();
     let expected: Vec<u64> = (1..=numbers.len() as u64).collect();
     assert_eq!(numbers, expected);
     assert_block_invariant(
@@ -823,10 +824,10 @@ fn check_messages(items: &[Item<MidiEvent>]) -> Result<(), TestCaseError> {
         );
         settled = event.settled;
         if let Some(message) = event.payload.message()
-            && message.0 > last
+            && message > last
         {
-            prop_assert_eq!(message.0, last + 1, "{:?}", event);
-            last = message.0;
+            prop_assert_eq!(message, last + 1, "{:?}", event);
+            last = message;
         }
         match &event.payload {
             MidiEvent::ChannelMessage {

@@ -57,7 +57,7 @@ fn hex(bytes: &[u8]) -> String {
 
 fn describe(event: &Ds18b20Event) -> String {
     match event {
-        Ds18b20Event::Command { tx, code } => format!("command tx{} {code:02x}", tx.0),
+        Ds18b20Event::Command { tx, code } => format!("command tx{} {code:02x}", tx),
         Ds18b20Event::Scratchpad {
             tx,
             bytes,
@@ -70,22 +70,22 @@ fn describe(event: &Ds18b20Event) -> String {
         } => format!(
             "scratchpad tx{} {} crc {crc_ok} t {temperature_raw} th {th} tl {tl} config \
              {config:02x} res {resolution}",
-            tx.0,
+            tx,
             hex(bytes)
         ),
         Ds18b20Event::PartialScratchpad {
             tx,
             bytes,
             temperature_raw,
-        } => format!("partial tx{} {} t {temperature_raw:?}", tx.0, hex(bytes)),
+        } => format!("partial tx{} {} t {temperature_raw:?}", tx, hex(bytes)),
         Ds18b20Event::WriteScratchpad { tx, th, tl, config } => {
-            format!("write tx{} th {th} tl {tl} config {config:02x}", tx.0)
+            format!("write tx{} th {th} tl {tl} config {config:02x}", tx)
         }
         Ds18b20Event::PowerSupply { tx, parasite } => {
-            format!("power tx{} parasite {parasite}", tx.0)
+            format!("power tx{} parasite {parasite}", tx)
         }
-        Ds18b20Event::UnknownCommand { tx, code } => format!("unknown tx{} {code:02x}", tx.0),
-        Ds18b20Event::End { tx, reason } => format!("end tx{} {reason:?}", tx.0),
+        Ds18b20Event::UnknownCommand { tx, code } => format!("unknown tx{} {code:02x}", tx),
+        Ds18b20Event::End { tx, reason } => format!("end tx{} {reason:?}", tx),
     }
 }
 

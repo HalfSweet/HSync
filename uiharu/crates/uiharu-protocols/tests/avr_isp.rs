@@ -6,7 +6,7 @@ use proptest::prelude::*;
 use serde::Serialize;
 use uiharu_core::testing::{Harness, assert_block_invariant};
 use uiharu_core::{GraphConfig, GraphError, Item, LogicBlock, Tick, TickRange, TimeBase};
-use uiharu_protocols::avr_isp::{AvrIsp, Command, IspEvent, synth};
+use uiharu_protocols::avr_isp::{AvrIsp, Command, CommandExt, IspEvent, synth};
 use uiharu_protocols::spi::synth::SpiWaveform;
 use uiharu_protocols::spi::{BitOrder, Spi, SpiConfig};
 
@@ -115,7 +115,7 @@ fn describe(items: &[Item<IspEvent>], ticks: bool) -> Vec<String> {
                         bytes,
                     } => format!(
                         "instruction op{} tx{} {} addr={} in={} out={} sync={} {}",
-                        op.0,
+                        op,
                         tx,
                         name(command),
                         address.map_or("----".to_owned(), |address| format!("{address:04x}")),

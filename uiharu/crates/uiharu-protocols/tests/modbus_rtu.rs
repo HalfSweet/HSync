@@ -112,7 +112,7 @@ fn describe(items: &[Item<ModbusEvent>]) -> Vec<String> {
                         partial,
                     } => format!(
                         "begin f{} {address:02x} {}{}{}",
-                        frame.0,
+                        frame,
                         function.map_or("--".to_owned(), |code| format!("{code:02x}")),
                         if *exception { " exception" } else { "" },
                         if *partial { " partial" } else { "" },
@@ -121,13 +121,13 @@ fn describe(items: &[Item<ModbusEvent>]) -> Vec<String> {
                         frame,
                         offset,
                         bytes,
-                    } => format!("data f{} +{offset} {}", frame.0, hex(bytes)),
+                    } => format!("data f{} +{offset} {}", frame, hex(bytes)),
                     ModbusEvent::Crc { frame, value, ok } => format!(
                         "crc f{} {value:04x} {}",
-                        frame.0,
+                        frame,
                         if *ok { "ok" } else { "bad" }
                     ),
-                    ModbusEvent::End { frame, reason } => format!("end f{} {reason:?}", frame.0),
+                    ModbusEvent::End { frame, reason } => format!("end f{} {reason:?}", frame),
                 };
                 format!("{what} {}", at(event.span, event.settled))
             }

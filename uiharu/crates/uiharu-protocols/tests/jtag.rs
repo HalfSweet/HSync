@@ -12,7 +12,7 @@ use uiharu_core::{
 use uiharu_protocols::jtag::synth::JtagWaveform;
 use uiharu_protocols::jtag::{
     InitialState, Jtag, JtagBus, JtagConfig, JtagEvent, Next, Read, Register, ResetBy,
-    SHIFT_BATCH_BITS, TapState,
+    SHIFT_BATCH_BITS, TapState, TapStateExt,
 };
 
 /// TCK, TMS, TDI, TDO and TRST on channels 0 to 4.
@@ -100,7 +100,7 @@ fn describe(items: &[Item<JtagEvent>]) -> Vec<String> {
                     JtagEvent::State { state } => format!("state {}", name(state)),
                     JtagEvent::Reset { by } => format!("reset {}", name(by)),
                     JtagEvent::ScanBegin { scan, register } => {
-                        format!("scan-begin s{} {}", scan.0, name(register))
+                        format!("scan-begin s{} {}", scan, name(register))
                     }
                     JtagEvent::Shift {
                         scan,
@@ -108,14 +108,9 @@ fn describe(items: &[Item<JtagEvent>]) -> Vec<String> {
                         tdi,
                         tdo,
                         bits,
-                    } => format!(
-                        "shift s{} +{offset} {bits} {}/{}",
-                        scan.0,
-                        hex(tdi),
-                        hex(tdo)
-                    ),
+                    } => format!("shift s{} +{offset} {bits} {}/{}", scan, hex(tdi), hex(tdo)),
                     JtagEvent::ScanEnd { scan, bits, reason } => {
-                        format!("scan-end s{} {bits} {}", scan.0, name(reason))
+                        format!("scan-end s{} {bits} {}", scan, name(reason))
                     }
                 };
                 format!("{what} {}", at(event.span, event.settled))

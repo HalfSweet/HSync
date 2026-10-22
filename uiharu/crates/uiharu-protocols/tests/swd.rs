@@ -12,7 +12,7 @@ use uiharu_core::{
 use uiharu_protocols::swd::synth::{SwdPacket, SwdWaveform};
 use uiharu_protocols::swd::{
     ACTIVATE_JTAG_DP, ACTIVATE_SWD, Ack, Data, EndReason, Field, Interface, Next, OverrunDetect,
-    Read, Request, Swd, SwdBus, SwdConfig, SwdEvent, TxId,
+    Read, Request, Swd, SwdBus, SwdConfig, SwdEvent,
 };
 
 /// SWCLK and SWDIO on channels 0 and 1.
@@ -107,7 +107,7 @@ fn at(span: TickRange, settled: Tick) -> String {
 
 fn what(event: &SwdEvent) -> String {
     match *event {
-        SwdEvent::Begin { tx } => format!("begin p{}", tx.0),
+        SwdEvent::Begin { tx } => format!("begin p{}", tx),
         SwdEvent::Request {
             tx,
             apndp,
@@ -116,12 +116,12 @@ fn what(event: &SwdEvent) -> String {
             parity_ok,
         } => format!(
             "request p{} {} {} {addr:#x}{}",
-            tx.0,
+            tx,
             if apndp { "ap" } else { "dp" },
             if rnw { "read" } else { "write" },
             if parity_ok { "" } else { " bad-parity" }
         ),
-        SwdEvent::Ack { tx, value } => format!("ack p{} {}", tx.0, ack_name(value)),
+        SwdEvent::Ack { tx, value } => format!("ack p{} {}", tx, ack_name(value)),
         SwdEvent::Data {
             tx,
             value,
@@ -129,11 +129,11 @@ fn what(event: &SwdEvent) -> String {
             from_target,
         } => format!(
             "data p{} {value:08x} {}{}",
-            tx.0,
+            tx,
             if from_target { "target" } else { "host" },
             if parity_ok { "" } else { " bad-parity" }
         ),
-        SwdEvent::End { tx, reason } => format!("end p{} {}", tx.0, name(&reason)),
+        SwdEvent::End { tx, reason } => format!("end p{} {}", tx, name(&reason)),
         SwdEvent::LineReset => "line-reset".to_owned(),
         SwdEvent::Switch { to } => format!("switch {}", name(&to)),
     }
@@ -187,7 +187,7 @@ fn packet_lines_as(tx: u64, packet: &SwdPacket, position: u64, trn: u64) -> Vec<
     // The packet is known from the first low bit of its request.
     let decided = (1..8).find(|i| request >> i & 1 == 0).map_or(rise(8), rise);
     let event = SwdEvent::Request {
-        tx: TxId(tx),
+        tx,
         apndp: packet.apndp,
         rnw: packet.rnw,
         addr: packet.addr & 0xc,
@@ -228,7 +228,7 @@ fn packet_lines_as(tx: u64, packet: &SwdPacket, position: u64, trn: u64) -> Vec<
                 (ack_last + 1 + trn, ack_last + 33 + trn)
             };
             let event = SwdEvent::Data {
-                tx: TxId(tx),
+                tx,
                 value: packet.data,
                 parity_ok: !packet.bad_data_parity,
                 from_target: packet.rnw,
@@ -1361,7 +1361,7 @@ fn simulate(steps: &[Step]) -> (Vec<SwdEvent>, Vec<Step>) {
                     }
                 }
                 if mode == Mode::Swd {
-                    let tx = TxId(next);
+                    let tx = next;
                     next += 1;
                     events.push(SwdEvent::Begin { tx });
                     events.push(SwdEvent::Request {

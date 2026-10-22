@@ -16,7 +16,7 @@ use uiharu_protocols::onewire::rom::{
 };
 use uiharu_protocols::onewire::synth::{OneWireWaveform, Slot, search_rom};
 use uiharu_protocols::onewire::{
-    EndReason, LinkConfig, LinkEvent, OneWireEvent, OneWireLink, OneWireNetwork, Speed, TxId,
+    EndReason, LinkConfig, LinkEvent, OneWireEvent, OneWireLink, OneWireNetwork, Speed,
 };
 use uiharu_protocols::spi::{Spi, SpiConfig, SpiEvent};
 
@@ -101,15 +101,15 @@ fn link_lines(items: &[Item<LinkEvent>]) -> Vec<String> {
 fn describe(event: &OneWireEvent) -> String {
     match *event {
         OneWireEvent::Begin { tx, presence } => {
-            format!("begin tx{}{}", tx.0, if presence { "+" } else { "-" })
+            format!("begin tx{}{}", tx, if presence { "+" } else { "-" })
         }
-        OneWireEvent::RomCommand { tx, code } => format!("rom-command tx{} {code:02x}", tx.0),
+        OneWireEvent::RomCommand { tx, code } => format!("rom-command tx{} {code:02x}", tx),
         OneWireEvent::Rom {
             tx,
             id,
             family,
             crc_ok,
-        } => format!("rom tx{} {id:016x} family {family:02x} crc {crc_ok}", tx.0),
+        } => format!("rom tx{} {id:016x} family {family:02x} crc {crc_ok}", tx),
         OneWireEvent::Search {
             tx,
             id,
@@ -118,13 +118,13 @@ fn describe(event: &OneWireEvent) -> String {
             unanswered,
         } => format!(
             "search tx{} {id:016x} crc {crc_ok} conflicts {conflicts} unanswered {unanswered}",
-            tx.0
+            tx
         ),
-        OneWireEvent::Byte { tx, value } => format!("byte tx{} {value:02x}", tx.0),
+        OneWireEvent::Byte { tx, value } => format!("byte tx{} {value:02x}", tx),
         OneWireEvent::Bits { tx, value, count } => {
-            format!("bits tx{} {value:02x}/{count}", tx.0)
+            format!("bits tx{} {value:02x}/{count}", tx)
         }
-        OneWireEvent::End { tx, reason } => format!("end tx{} {reason:?}", tx.0),
+        OneWireEvent::End { tx, reason } => format!("end tx{} {reason:?}", tx),
     }
 }
 
@@ -1074,7 +1074,7 @@ fn synthesize(scenarios: &[Scenario], speed: Speed, rate: u64) -> (LogicBlock, V
     let mut waveform = waveform(speed, rate);
     let mut expected = Vec::new();
     for (n, scenario) in scenarios.iter().enumerate() {
-        let tx = TxId(n as u64 + 1);
+        let tx = n as u64 + 1;
         waveform.reset(scenario.presence);
         expected.push(describe(&OneWireEvent::Begin {
             tx,
@@ -1160,7 +1160,7 @@ fn synthesize(scenarios: &[Scenario], speed: Speed, rate: u64) -> (LogicBlock, V
             reason: EndReason::Reset,
         }));
     }
-    let last = TxId(scenarios.len() as u64 + 1);
+    let last = scenarios.len() as u64 + 1;
     waveform.reset(true);
     expected.push(describe(&OneWireEvent::Begin {
         tx: last,

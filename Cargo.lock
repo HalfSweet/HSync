@@ -5056,6 +5056,7 @@ dependencies = [
  "thiserror 2.0.21",
  "uiharu-core",
  "uiharu-dsl-protocols",
+ "uiharu-interp",
 ]
 
 [[package]]
