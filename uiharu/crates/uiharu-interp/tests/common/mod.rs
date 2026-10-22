@@ -13,11 +13,15 @@ use uiharu_core::{Event, Item};
 use uiharu_interp::{DynEvent, Program};
 use uiharu_ir::Module;
 
-/// The IR of `name` as the compiler wrote it, from `uiharu/dsl/ir`.
+/// The freshly compiled TS intermediate for `name`; prepare with `pnpm dsl:compile`.
 pub fn module(name: &str) -> Module {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dsl/ir/{name}.json"));
-    let json = std::fs::read_to_string(&path)
-        .unwrap_or_else(|error| panic!("{} reads: {error}", path.display()));
+    let json = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+        panic!(
+            "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+            path.display()
+        )
+    });
     serde_json::from_str(&json).expect("the module parses")
 }
 

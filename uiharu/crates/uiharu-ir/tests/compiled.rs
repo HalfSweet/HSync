@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The IR the compiler writes for the reference decoders (`uiharu/dsl/ir/*.json`) reads and
-//! passes the checks: the contract between the TypeScript side and the Rust side.
+//! Freshly compiled TypeScript intermediates (`uiharu/dsl/ir/*.json`) parse and pass the
+//! checks: the contract between the TypeScript front end and Rust backends. Prepare these
+//! ignored files with `pnpm dsl:compile` before running Cargo tests.
 
 use std::path::PathBuf;
 
@@ -15,14 +16,19 @@ fn compiled_dir() -> PathBuf {
 fn every_compiled_module_passes_the_checks() {
     let dir = compiled_dir();
     let mut files: Vec<PathBuf> = std::fs::read_dir(&dir)
-        .unwrap_or_else(|error| panic!("{} is readable: {error}", dir.display()))
+        .unwrap_or_else(|error| {
+            panic!(
+                "{} is readable: {error}; run `pnpm dsl:compile` before Cargo tests",
+                dir.display()
+            )
+        })
         .map(|entry| entry.expect("a directory entry").path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
         .collect();
     files.sort();
     assert!(
         !files.is_empty(),
-        "the compiler has written modules to {}",
+        "the compiler has written modules to {}; run `pnpm dsl:compile` before Cargo tests",
         dir.display()
     );
     for path in files {

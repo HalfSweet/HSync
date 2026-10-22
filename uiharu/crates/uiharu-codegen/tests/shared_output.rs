@@ -7,9 +7,11 @@ use serde_json::json;
 use uiharu_codegen::generate;
 use uiharu_ir::Module;
 
+// The hand-authored PWM fixture keeps these unit tests independent of generated files.
 fn producer() -> Module {
-    let mut module: Module = serde_json::from_str(include_str!("../../../dsl/ir/pwm.json"))
-        .expect("the PWM module parses");
+    let mut module: Module =
+        serde_json::from_str(include_str!("../../uiharu-ir/tests/fixtures/pwm.json"))
+            .expect("the PWM module parses");
     module.name = "independent-pwm".into();
     module.decoder.as_mut().expect("a decoder").name = module.name.clone();
     let event = module.types.remove(0);

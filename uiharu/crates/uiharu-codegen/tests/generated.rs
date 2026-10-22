@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The generated crate is what the backend writes for the IR checked in: generating every
-//! module of `uiharu/dsl/ir/` again gives the files under `uiharu-dsl-protocols/src/` as they
-//! are. When this fails, run `cargo run -p uiharu-codegen -- uiharu/dsl/ir
-//! uiharu/crates/uiharu-dsl-protocols/src` and commit the result.
+//! The tracked generated Rust is what the backend writes from freshly compiled TypeScript
+//! intermediates. Run `pnpm dsl:compile` before these tests to prepare production and backend
+//! fixture IR. When generated Rust differs, regenerate it with `uiharu-codegen` and commit
+//! the Rust output; the intermediate JSON is not tracked.
 
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -40,8 +41,12 @@ fn rustfmt(source: &str) -> String {
 }
 
 fn read(path: &Path) -> String {
-    std::fs::read_to_string(path)
-        .unwrap_or_else(|error| panic!("{} reads: {error}", path.display()))
+    std::fs::read_to_string(path).unwrap_or_else(|error| {
+        panic!(
+            "{} reads: {error}; prepare missing IR with `pnpm dsl:compile` before Cargo tests",
+            path.display()
+        )
+    })
 }
 
 #[test]
@@ -60,13 +65,23 @@ fn backend_acceptance_sources_are_up_to_date() {
 
 fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
     let mut files: Vec<PathBuf> = std::fs::read_dir(&ir_dir)
-        .expect("the IR directory")
+        .unwrap_or_else(|error| {
+            panic!(
+                "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+                ir_dir.display()
+            )
+        })
         .map(|entry| entry.expect("an entry").path())
         .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
         .collect();
     files.sort();
-    assert!(!files.is_empty(), "modules under {}", ir_dir.display());
+    assert!(
+        !files.is_empty(),
+        "no freshly compiled modules under {}; run `pnpm dsl:compile` before Cargo tests",
+        ir_dir.display()
+    );
     let mut names = Vec::new();
+    let mut expected = BTreeSet::from([std::ffi::OsString::from("lib.rs")]);
     for path in files {
         let module: Module = serde_json::from_str(&read(&path)).expect("the module parses");
         assert_eq!(
@@ -78,6 +93,12 @@ fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
         let source =
             generate(&module).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
         let target = out_dir.join(format!("{}.rs", module_name(&module)));
+        expected.insert(
+            target
+                .file_name()
+                .expect("a generated file name")
+                .to_owned(),
+        );
         assert_eq!(
             read(&target),
             rustfmt(&source),
@@ -86,6 +107,18 @@ fn assert_generated(ir_dir: PathBuf, out_dir: PathBuf) {
         );
         names.push(module_name(&module));
     }
+    let actual: BTreeSet<_> = std::fs::read_dir(&out_dir)
+        .expect("the generated Rust directory")
+        .map(|entry| entry.expect("a generated directory entry").path())
+        .filter(|path| path.is_file() && path.extension().is_some_and(|ext| ext == "rs"))
+        .map(|path| path.file_name().expect("a generated file name").to_owned())
+        .collect();
+    assert_eq!(
+        actual,
+        expected,
+        "{} has unexpected Rust files; regenerate with uiharu-codegen",
+        out_dir.display()
+    );
     assert_eq!(
         read(&out_dir.join("lib.rs")),
         rustfmt(&generate_lib(&names)),

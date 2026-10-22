@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! Source → checked IR → generated Rust and interpreted bytecode, with independent
-//! wire-value assertions and mixed compiled/interpreted pipelines under backpressure.
+//! TypeScript → freshly compiled IR → tracked generated Rust and interpreted bytecode,
+//! with independent wire-value assertions and mixed execution under backpressure.
+//! Prepare the ignored fixture IR with `pnpm dsl:compile` before Cargo tests.
 
 #[path = "fixtures/backend/generated/lib.rs"]
 mod generated;
@@ -26,9 +27,13 @@ use uiharu_ir::Module;
 fn program(name: &str) -> Arc<Program> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join(format!("tests/fixtures/backend/ir/{name}.json"));
-    let module: Module =
-        serde_json::from_str(&std::fs::read_to_string(path).expect("fixture reads"))
-            .expect("fixture parses");
+    let contents = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+        panic!(
+            "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+            path.display()
+        )
+    });
+    let module: Module = serde_json::from_str(&contents).expect("fixture parses");
     Arc::new(Program::load(&module).expect("source-generated fixture loads"))
 }
 
