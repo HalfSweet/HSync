@@ -1,0 +1,1408 @@
+{
+  "ir": 1,
+  "name": "max72xx",
+  "types": [
+    {
+      "name": "End",
+      "type": "enum",
+      "variants": ["complete", "incomplete", "aborted"]
+    },
+    {
+      "name": "Event",
+      "type": "union",
+      "variants": [
+        {
+          "name": "begin",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "register",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "address",
+              "type": "u8"
+            },
+            {
+              "name": "value",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "digit",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "digit",
+              "type": "u8"
+            },
+            {
+              "name": "segments",
+              "type": "u8"
+            },
+            {
+              "name": "decimalPoint",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "decode-mode",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "mask",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "intensity",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "level",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "scan-limit",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "lastDigit",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "shutdown",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "display-test",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "warning",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "address",
+              "type": "u8"
+            },
+            {
+              "name": "value",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "End"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "record",
+      "fields": []
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "max72xx.events",
+        "version": 1
+      },
+      "event": "Event",
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "register": {
+          "role": "data"
+        },
+        "digit": {
+          "role": "data"
+        },
+        "decode-mode": {
+          "role": "control"
+        },
+        "intensity": {
+          "role": "control"
+        },
+        "scan-limit": {
+          "role": "control"
+        },
+        "shutdown": {
+          "role": "control"
+        },
+        "display-test": {
+          "role": "control"
+        },
+        "warning": {
+          "role": "control"
+        },
+        "end": {
+          "role": "framing"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "spi",
+      "contract": {
+        "schema": {
+          "name": "spi.events",
+          "version": 1
+        },
+        "event": "SpiEvent",
+        "framing": {
+          "begin": "begin",
+          "items": ["word"],
+          "end": "end",
+          "id": "tx",
+          "reason": "reason",
+          "normal": ["cs-release"],
+          "partial": "partial",
+          "unframed": 0
+        },
+        "roles": {
+          "begin": {
+            "role": "framing"
+          },
+          "word": {
+            "role": "data"
+          },
+          "end": {
+            "role": "framing"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "EndReason",
+          "type": "enum",
+          "variants": ["cs-release", "aborted"]
+        },
+        {
+          "name": "SpiEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "begin",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "partial",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "word",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "mosi",
+                  "type": {
+                    "option": "u8"
+                  }
+                },
+                {
+                  "name": "miso",
+                  "type": {
+                    "option": "u8"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "end",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "reason",
+                  "type": "EndReason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "decoder": {
+    "name": "max72xx",
+    "category": "device",
+    "config": {
+      "type": "Config",
+      "defaults": {}
+    },
+    "input": {
+      "kind": "bus",
+      "schema": {
+        "name": "spi.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "max72xx.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "recover",
+        "body": [
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "self",
+              "field": "open"
+            },
+            "bind": "open",
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "open"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "end",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "open"
+                        },
+                        "reason": {
+                          "expr": "local",
+                          "name": "reason"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "reason",
+            "type": "End"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "transaction",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "intrinsic",
+              "name": "tx-id",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "tx"
+                }
+              ]
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "Event",
+                  "kind": "begin",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "slot",
+            "value": {
+              "expr": "lit",
+              "value": 0
+            },
+            "mutable": true,
+            "type": "u32"
+          },
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "high",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "item-or-end"
+                  }
+                }
+              },
+              {
+                "stmt": "let-some",
+                "bind": "high_2",
+                "value": {
+                  "expr": "local",
+                  "name": "high"
+                },
+                "else": [
+                  {
+                    "stmt": "break"
+                  }
+                ]
+              },
+              {
+                "stmt": "let",
+                "name": "address",
+                "value": {
+                  "expr": "binary",
+                  "op": "bit-and",
+                  "left": {
+                    "expr": "required",
+                    "value": {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "high_2"
+                      },
+                      "name": "mosi"
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 15
+                  }
+                },
+                "type": "u8"
+              },
+              {
+                "stmt": "let",
+                "name": "value",
+                "value": {
+                  "expr": "required",
+                  "value": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "await",
+                      "op": {
+                        "op": "item"
+                      }
+                    },
+                    "name": "mosi"
+                  }
+                },
+                "type": "u8"
+              },
+              {
+                "stmt": "let",
+                "name": "where",
+                "value": {
+                  "expr": "intrinsic",
+                  "name": "consumed",
+                  "args": []
+                },
+                "type": "provenance"
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "register",
+                      "fields": {
+                        "tx": {
+                          "expr": "intrinsic",
+                          "name": "tx-id",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "tx"
+                            }
+                          ]
+                        },
+                        "slot": {
+                          "expr": "local",
+                          "name": "slot"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "and",
+                  "left": {
+                    "expr": "binary",
+                    "op": "ge",
+                    "left": {
+                      "expr": "local",
+                      "name": "address"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "le",
+                    "left": {
+                      "expr": "local",
+                      "name": "address"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 8
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "digit",
+                          "fields": {
+                            "tx": {
+                              "expr": "intrinsic",
+                              "name": "tx-id",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              ]
+                            },
+                            "slot": {
+                              "expr": "local",
+                              "name": "slot"
+                            },
+                            "digit": {
+                              "expr": "binary",
+                              "op": "sub",
+                              "left": {
+                                "expr": "local",
+                                "name": "address"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 1
+                              }
+                            },
+                            "segments": {
+                              "expr": "binary",
+                              "op": "bit-and",
+                              "left": {
+                                "expr": "local",
+                                "name": "value"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 127
+                              }
+                            },
+                            "decimalPoint": {
+                              "expr": "binary",
+                              "op": "ne",
+                              "left": {
+                                "expr": "binary",
+                                "op": "bit-and",
+                                "left": {
+                                  "expr": "local",
+                                  "name": "value"
+                                },
+                                "right": {
+                                  "expr": "lit",
+                                  "value": 128
+                                }
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 0
+                              }
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "where"
+                        }
+                      }
+                    }
+                  }
+                ],
+                "else": [
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "address"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 9
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "decode-mode",
+                              "fields": {
+                                "tx": {
+                                  "expr": "intrinsic",
+                                  "name": "tx-id",
+                                  "args": [
+                                    {
+                                      "expr": "local",
+                                      "name": "tx"
+                                    }
+                                  ]
+                                },
+                                "slot": {
+                                  "expr": "local",
+                                  "name": "slot"
+                                },
+                                "mask": {
+                                  "expr": "local",
+                                  "name": "value"
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "local",
+                              "name": "where"
+                            }
+                          }
+                        }
+                      }
+                    ],
+                    "else": [
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "local",
+                            "name": "address"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 10
+                          }
+                        },
+                        "then": [
+                          {
+                            "stmt": "expr",
+                            "expr": {
+                              "expr": "await",
+                              "op": {
+                                "op": "emit",
+                                "event": {
+                                  "expr": "variant",
+                                  "type": "Event",
+                                  "kind": "intensity",
+                                  "fields": {
+                                    "tx": {
+                                      "expr": "intrinsic",
+                                      "name": "tx-id",
+                                      "args": [
+                                        {
+                                          "expr": "local",
+                                          "name": "tx"
+                                        }
+                                      ]
+                                    },
+                                    "slot": {
+                                      "expr": "local",
+                                      "name": "slot"
+                                    },
+                                    "level": {
+                                      "expr": "binary",
+                                      "op": "bit-and",
+                                      "left": {
+                                        "expr": "local",
+                                        "name": "value"
+                                      },
+                                      "right": {
+                                        "expr": "lit",
+                                        "value": 15
+                                      }
+                                    }
+                                  }
+                                },
+                                "at": {
+                                  "expr": "local",
+                                  "name": "where"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "stmt": "if",
+                            "cond": {
+                              "expr": "binary",
+                              "op": "gt",
+                              "left": {
+                                "expr": "local",
+                                "name": "value"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 15
+                              }
+                            },
+                            "then": [
+                              {
+                                "stmt": "expr",
+                                "expr": {
+                                  "expr": "await",
+                                  "op": {
+                                    "op": "emit",
+                                    "event": {
+                                      "expr": "variant",
+                                      "type": "Event",
+                                      "kind": "warning",
+                                      "fields": {
+                                        "tx": {
+                                          "expr": "intrinsic",
+                                          "name": "tx-id",
+                                          "args": [
+                                            {
+                                              "expr": "local",
+                                              "name": "tx"
+                                            }
+                                          ]
+                                        },
+                                        "slot": {
+                                          "expr": "local",
+                                          "name": "slot"
+                                        },
+                                        "address": {
+                                          "expr": "local",
+                                          "name": "address"
+                                        },
+                                        "value": {
+                                          "expr": "local",
+                                          "name": "value"
+                                        }
+                                      }
+                                    },
+                                    "at": {
+                                      "expr": "local",
+                                      "name": "where"
+                                    }
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ],
+                        "else": [
+                          {
+                            "stmt": "if",
+                            "cond": {
+                              "expr": "binary",
+                              "op": "eq",
+                              "left": {
+                                "expr": "local",
+                                "name": "address"
+                              },
+                              "right": {
+                                "expr": "lit",
+                                "value": 11
+                              }
+                            },
+                            "then": [
+                              {
+                                "stmt": "expr",
+                                "expr": {
+                                  "expr": "await",
+                                  "op": {
+                                    "op": "emit",
+                                    "event": {
+                                      "expr": "variant",
+                                      "type": "Event",
+                                      "kind": "scan-limit",
+                                      "fields": {
+                                        "tx": {
+                                          "expr": "intrinsic",
+                                          "name": "tx-id",
+                                          "args": [
+                                            {
+                                              "expr": "local",
+                                              "name": "tx"
+                                            }
+                                          ]
+                                        },
+                                        "slot": {
+                                          "expr": "local",
+                                          "name": "slot"
+                                        },
+                                        "lastDigit": {
+                                          "expr": "binary",
+                                          "op": "bit-and",
+                                          "left": {
+                                            "expr": "local",
+                                            "name": "value"
+                                          },
+                                          "right": {
+                                            "expr": "lit",
+                                            "value": 7
+                                          }
+                                        }
+                                      }
+                                    },
+                                    "at": {
+                                      "expr": "local",
+                                      "name": "where"
+                                    }
+                                  }
+                                }
+                              },
+                              {
+                                "stmt": "if",
+                                "cond": {
+                                  "expr": "binary",
+                                  "op": "gt",
+                                  "left": {
+                                    "expr": "local",
+                                    "name": "value"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 7
+                                  }
+                                },
+                                "then": [
+                                  {
+                                    "stmt": "expr",
+                                    "expr": {
+                                      "expr": "await",
+                                      "op": {
+                                        "op": "emit",
+                                        "event": {
+                                          "expr": "variant",
+                                          "type": "Event",
+                                          "kind": "warning",
+                                          "fields": {
+                                            "tx": {
+                                              "expr": "intrinsic",
+                                              "name": "tx-id",
+                                              "args": [
+                                                {
+                                                  "expr": "local",
+                                                  "name": "tx"
+                                                }
+                                              ]
+                                            },
+                                            "slot": {
+                                              "expr": "local",
+                                              "name": "slot"
+                                            },
+                                            "address": {
+                                              "expr": "local",
+                                              "name": "address"
+                                            },
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "value"
+                                            }
+                                          }
+                                        },
+                                        "at": {
+                                          "expr": "local",
+                                          "name": "where"
+                                        }
+                                      }
+                                    }
+                                  }
+                                ]
+                              }
+                            ],
+                            "else": [
+                              {
+                                "stmt": "if",
+                                "cond": {
+                                  "expr": "binary",
+                                  "op": "eq",
+                                  "left": {
+                                    "expr": "local",
+                                    "name": "address"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 12
+                                  }
+                                },
+                                "then": [
+                                  {
+                                    "stmt": "expr",
+                                    "expr": {
+                                      "expr": "await",
+                                      "op": {
+                                        "op": "emit",
+                                        "event": {
+                                          "expr": "variant",
+                                          "type": "Event",
+                                          "kind": "shutdown",
+                                          "fields": {
+                                            "tx": {
+                                              "expr": "intrinsic",
+                                              "name": "tx-id",
+                                              "args": [
+                                                {
+                                                  "expr": "local",
+                                                  "name": "tx"
+                                                }
+                                              ]
+                                            },
+                                            "slot": {
+                                              "expr": "local",
+                                              "name": "slot"
+                                            },
+                                            "enabled": {
+                                              "expr": "binary",
+                                              "op": "eq",
+                                              "left": {
+                                                "expr": "binary",
+                                                "op": "bit-and",
+                                                "left": {
+                                                  "expr": "local",
+                                                  "name": "value"
+                                                },
+                                                "right": {
+                                                  "expr": "lit",
+                                                  "value": 1
+                                                }
+                                              },
+                                              "right": {
+                                                "expr": "lit",
+                                                "value": 0
+                                              }
+                                            }
+                                          }
+                                        },
+                                        "at": {
+                                          "expr": "local",
+                                          "name": "where"
+                                        }
+                                      }
+                                    }
+                                  }
+                                ],
+                                "else": [
+                                  {
+                                    "stmt": "if",
+                                    "cond": {
+                                      "expr": "binary",
+                                      "op": "eq",
+                                      "left": {
+                                        "expr": "local",
+                                        "name": "address"
+                                      },
+                                      "right": {
+                                        "expr": "lit",
+                                        "value": 15
+                                      }
+                                    },
+                                    "then": [
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "await",
+                                          "op": {
+                                            "op": "emit",
+                                            "event": {
+                                              "expr": "variant",
+                                              "type": "Event",
+                                              "kind": "display-test",
+                                              "fields": {
+                                                "tx": {
+                                                  "expr": "intrinsic",
+                                                  "name": "tx-id",
+                                                  "args": [
+                                                    {
+                                                      "expr": "local",
+                                                      "name": "tx"
+                                                    }
+                                                  ]
+                                                },
+                                                "slot": {
+                                                  "expr": "local",
+                                                  "name": "slot"
+                                                },
+                                                "enabled": {
+                                                  "expr": "binary",
+                                                  "op": "ne",
+                                                  "left": {
+                                                    "expr": "binary",
+                                                    "op": "bit-and",
+                                                    "left": {
+                                                      "expr": "local",
+                                                      "name": "value"
+                                                    },
+                                                    "right": {
+                                                      "expr": "lit",
+                                                      "value": 1
+                                                    }
+                                                  },
+                                                  "right": {
+                                                    "expr": "lit",
+                                                    "value": 0
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            "at": {
+                                              "expr": "local",
+                                              "name": "where"
+                                            }
+                                          }
+                                        }
+                                      }
+                                    ],
+                                    "else": [
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "binary",
+                                          "op": "ne",
+                                          "left": {
+                                            "expr": "local",
+                                            "name": "address"
+                                          },
+                                          "right": {
+                                            "expr": "lit",
+                                            "value": 0
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "expr",
+                                            "expr": {
+                                              "expr": "await",
+                                              "op": {
+                                                "op": "emit",
+                                                "event": {
+                                                  "expr": "variant",
+                                                  "type": "Event",
+                                                  "kind": "warning",
+                                                  "fields": {
+                                                    "tx": {
+                                                      "expr": "intrinsic",
+                                                      "name": "tx-id",
+                                                      "args": [
+                                                        {
+                                                          "expr": "local",
+                                                          "name": "tx"
+                                                        }
+                                                      ]
+                                                    },
+                                                    "slot": {
+                                                      "expr": "local",
+                                                      "name": "slot"
+                                                    },
+                                                    "address": {
+                                                      "expr": "local",
+                                                      "name": "address"
+                                                    },
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "value"
+                                                    }
+                                                  }
+                                                },
+                                                "at": {
+                                                  "expr": "local",
+                                                  "name": "where"
+                                                }
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "slot"
+                },
+                "op": "add",
+                "value": {
+                  "expr": "lit",
+                  "value": 1
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "Event",
+                  "kind": "end",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    },
+                    "reason": {
+                      "expr": "enum",
+                      "type": "End",
+                      "value": "complete"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tx",
+            "type": "cursor"
+          }
+        ]
+      }
+    ],
+    "requires": [
+      {
+        "key": "wordBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "key": "bitOrder",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "msb-first"
+          }
+        ]
+      },
+      {
+        "key": "cs",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "mosi",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "MAX72XX",
+        "summary": "MAX7219/MAX7221 daisy-chain words and display register fields",
+        "fields": {},
+        "events": {
+          "begin": "Begin",
+          "register": "Register",
+          "digit": "Digit",
+          "decode-mode": "Decode mode",
+          "intensity": "Intensity",
+          "scan-limit": "Scan limit",
+          "shutdown": "Shutdown",
+          "display-test": "Display test",
+          "warning": "Warning",
+          "end": "End"
+        },
+        "eventFields": {
+          "tx": "Transaction",
+          "slot": "Slot",
+          "address": "Address",
+          "value": "Value",
+          "digit": "Digit",
+          "segments": "Segments",
+          "decimalPoint": "Decimal Point",
+          "mask": "Mask",
+          "level": "Level",
+          "lastDigit": "Last Digit",
+          "enabled": "Enabled",
+          "reason": "Reason"
+        },
+        "values": {}
+      },
+      "zh-CN": {
+        "name": "MAX72XX",
+        "summary": "解析MAX7219/MAX7221级联字及显示寄存器字段",
+        "fields": {},
+        "events": {
+          "begin": "开始",
+          "register": "寄存器",
+          "digit": "数位",
+          "decode-mode": "译码模式",
+          "intensity": "亮度",
+          "scan-limit": "扫描位数",
+          "shutdown": "关断",
+          "display-test": "显示测试",
+          "warning": "警告",
+          "end": "结束"
+        },
+        "eventFields": {
+          "tx": "事务号",
+          "slot": "链中序号",
+          "address": "地址",
+          "value": "数值",
+          "digit": "数位",
+          "segments": "段码",
+          "decimalPoint": "小数点",
+          "mask": "掩码",
+          "level": "等级",
+          "lastDigit": "末尾数位",
+          "enabled": "启用",
+          "reason": "结束原因"
+        },
+        "values": {}
+      }
+    },
+    "partial": "drain",
+    "recovery": {
+      "reason": "End",
+      "incomplete": "incomplete",
+      "truncated": "aborted",
+      "missing": "aborted",
+      "gap": "aborted",
+      "end": "aborted"
+    },
+    "state": [
+      {
+        "name": "open",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      }
+    ]
+  }
+}

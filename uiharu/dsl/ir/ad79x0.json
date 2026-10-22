@@ -1,0 +1,1124 @@
+{
+  "ir": 1,
+  "name": "ad79x0",
+  "types": [
+    {
+      "name": "End",
+      "type": "enum",
+      "variants": ["complete", "incomplete", "aborted", "invalid-length"]
+    },
+    {
+      "name": "Mode",
+      "type": "enum",
+      "variants": ["conversion", "power-down-request", "invalid-short-frame"]
+    },
+    {
+      "name": "DeviceEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "begin",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "mode",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "mode",
+              "type": "Mode"
+            },
+            {
+              "name": "clocks",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "sample",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "code",
+              "type": "u16"
+            },
+            {
+              "name": "bits",
+              "type": "u8"
+            },
+            {
+              "name": "leading",
+              "type": "u8"
+            },
+            {
+              "name": "trailing",
+              "type": "u8"
+            },
+            {
+              "name": "microvolts",
+              "type": "u32"
+            },
+            {
+              "name": "valid",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "End"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "record",
+      "fields": [
+        {
+          "name": "tenBit",
+          "type": "bool"
+        },
+        {
+          "name": "referenceMicrovolts",
+          "type": "u32"
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "ad79x0.events",
+        "version": 1
+      },
+      "event": "DeviceEvent",
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "mode": {
+          "role": "control"
+        },
+        "sample": {
+          "role": "data"
+        },
+        "end": {
+          "role": "framing"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "spi",
+      "contract": {
+        "schema": {
+          "name": "spi.events",
+          "version": 1
+        },
+        "event": "SpiEvent",
+        "framing": {
+          "begin": "begin",
+          "items": ["word"],
+          "end": "end",
+          "id": "tx",
+          "reason": "reason",
+          "normal": ["cs-release"],
+          "partial": "partial",
+          "unframed": 0
+        },
+        "roles": {
+          "begin": {
+            "role": "framing"
+          },
+          "word": {
+            "role": "data"
+          },
+          "end": {
+            "role": "framing"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "EndReason",
+          "type": "enum",
+          "variants": ["cs-release", "aborted"]
+        },
+        {
+          "name": "SpiEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "begin",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "partial",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "word",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "mosi",
+                  "type": {
+                    "option": "u8"
+                  }
+                },
+                {
+                  "name": "miso",
+                  "type": {
+                    "option": "u8"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "end",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "reason",
+                  "type": "EndReason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "decoder": {
+    "name": "ad79x0",
+    "category": "device",
+    "config": {
+      "type": "Config",
+      "defaults": {
+        "tenBit": false,
+        "referenceMicrovolts": 3300000
+      }
+    },
+    "input": {
+      "kind": "bus",
+      "schema": {
+        "name": "spi.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "ad79x0.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "recover",
+        "body": [
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "self",
+              "field": "open"
+            },
+            "bind": "open",
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "open"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "DeviceEvent",
+                      "kind": "end",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "open"
+                        },
+                        "reason": {
+                          "expr": "local",
+                          "name": "reason"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "reason",
+            "type": "End"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "transaction",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "intrinsic",
+              "name": "tx-id",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "tx"
+                }
+              ]
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "DeviceEvent",
+                  "kind": "begin",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "value",
+            "value": {
+              "expr": "lit",
+              "value": 0
+            },
+            "mutable": true,
+            "type": "u32"
+          },
+          {
+            "stmt": "for",
+            "var": "i",
+            "from": {
+              "expr": "cast",
+              "value": {
+                "expr": "lit",
+                "value": 0
+              },
+              "to": "u8"
+            },
+            "to": {
+              "expr": "lit",
+              "value": 16
+            },
+            "body": [
+              {
+                "stmt": "let",
+                "name": "word",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "item-or-end"
+                  }
+                }
+              },
+              {
+                "stmt": "let-some",
+                "bind": "word_2",
+                "value": {
+                  "expr": "local",
+                  "name": "word"
+                },
+                "else": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "DeviceEvent",
+                          "kind": "mode",
+                          "fields": {
+                            "tx": {
+                              "expr": "intrinsic",
+                              "name": "tx-id",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              ]
+                            },
+                            "mode": {
+                              "expr": "ternary",
+                              "cond": {
+                                "expr": "binary",
+                                "op": "and",
+                                "left": {
+                                  "expr": "binary",
+                                  "op": "ge",
+                                  "left": {
+                                    "expr": "local",
+                                    "name": "i"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 2
+                                  }
+                                },
+                                "right": {
+                                  "expr": "binary",
+                                  "op": "le",
+                                  "left": {
+                                    "expr": "local",
+                                    "name": "i"
+                                  },
+                                  "right": {
+                                    "expr": "lit",
+                                    "value": 10
+                                  }
+                                }
+                              },
+                              "then": {
+                                "expr": "enum",
+                                "type": "Mode",
+                                "value": "power-down-request"
+                              },
+                              "else": {
+                                "expr": "enum",
+                                "type": "Mode",
+                                "value": "invalid-short-frame"
+                              }
+                            },
+                            "clocks": {
+                              "expr": "cast",
+                              "value": {
+                                "expr": "local",
+                                "name": "i"
+                              },
+                              "to": "u8"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "open"
+                    },
+                    "value": {
+                      "expr": "none"
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "DeviceEvent",
+                          "kind": "end",
+                          "fields": {
+                            "tx": {
+                              "expr": "intrinsic",
+                              "name": "tx-id",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              ]
+                            },
+                            "reason": {
+                              "expr": "enum",
+                              "type": "End",
+                              "value": "invalid-length"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "value"
+                },
+                "value": {
+                  "expr": "binary",
+                  "op": "bit-or",
+                  "left": {
+                    "expr": "binary",
+                    "op": "shl",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "bit-and",
+                    "left": {
+                      "expr": "required",
+                      "value": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "word_2"
+                        },
+                        "name": "miso"
+                      }
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "ne",
+              "left": {
+                "expr": "await",
+                "op": {
+                  "op": "item-or-end"
+                }
+              },
+              "right": {
+                "expr": "none"
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "drain"
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "open"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "DeviceEvent",
+                      "kind": "end",
+                      "fields": {
+                        "tx": {
+                          "expr": "intrinsic",
+                          "name": "tx-id",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "tx"
+                            }
+                          ]
+                        },
+                        "reason": {
+                          "expr": "enum",
+                          "type": "End",
+                          "value": "invalid-length"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "where",
+            "value": {
+              "expr": "intrinsic",
+              "name": "consumed",
+              "args": []
+            },
+            "type": "provenance"
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "DeviceEvent",
+                  "kind": "mode",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    },
+                    "mode": {
+                      "expr": "enum",
+                      "type": "Mode",
+                      "value": "conversion"
+                    },
+                    "clocks": {
+                      "expr": "lit",
+                      "value": 16
+                    }
+                  }
+                },
+                "at": {
+                  "expr": "local",
+                  "name": "where"
+                }
+              }
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "bits",
+            "value": {
+              "expr": "ternary",
+              "cond": {
+                "expr": "field",
+                "of": {
+                  "expr": "self",
+                  "field": "config"
+                },
+                "name": "tenBit"
+              },
+              "then": {
+                "expr": "lit",
+                "value": 10
+              },
+              "else": {
+                "expr": "lit",
+                "value": 12
+              }
+            },
+            "type": "u8"
+          },
+          {
+            "stmt": "let",
+            "name": "code",
+            "value": {
+              "expr": "ternary",
+              "cond": {
+                "expr": "field",
+                "of": {
+                  "expr": "self",
+                  "field": "config"
+                },
+                "name": "tenBit"
+              },
+              "then": {
+                "expr": "cast",
+                "value": {
+                  "expr": "binary",
+                  "op": "bit-and",
+                  "left": {
+                    "expr": "binary",
+                    "op": "shr",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 2
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 1023
+                  }
+                },
+                "to": "u16"
+              },
+              "else": {
+                "expr": "cast",
+                "value": {
+                  "expr": "binary",
+                  "op": "bit-and",
+                  "left": {
+                    "expr": "local",
+                    "name": "value"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 4095
+                  }
+                },
+                "to": "u16"
+              }
+            },
+            "type": "u16"
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "DeviceEvent",
+                  "kind": "sample",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    },
+                    "code": {
+                      "expr": "local",
+                      "name": "code"
+                    },
+                    "bits": {
+                      "expr": "local",
+                      "name": "bits"
+                    },
+                    "leading": {
+                      "expr": "cast",
+                      "value": {
+                        "expr": "binary",
+                        "op": "bit-and",
+                        "left": {
+                          "expr": "binary",
+                          "op": "shr",
+                          "left": {
+                            "expr": "local",
+                            "name": "value"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 12
+                          }
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 15
+                        }
+                      },
+                      "to": "u8"
+                    },
+                    "trailing": {
+                      "expr": "ternary",
+                      "cond": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "self",
+                          "field": "config"
+                        },
+                        "name": "tenBit"
+                      },
+                      "then": {
+                        "expr": "cast",
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "local",
+                            "name": "value"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 3
+                          }
+                        },
+                        "to": "u8"
+                      },
+                      "else": {
+                        "expr": "lit",
+                        "value": 0
+                      }
+                    },
+                    "microvolts": {
+                      "expr": "cast",
+                      "value": {
+                        "expr": "intrinsic",
+                        "name": "mul-div",
+                        "args": [
+                          {
+                            "expr": "local",
+                            "name": "code"
+                          },
+                          {
+                            "expr": "field",
+                            "of": {
+                              "expr": "self",
+                              "field": "config"
+                            },
+                            "name": "referenceMicrovolts"
+                          },
+                          {
+                            "expr": "binary",
+                            "op": "shl",
+                            "left": {
+                              "expr": "lit",
+                              "value": 1
+                            },
+                            "right": {
+                              "expr": "local",
+                              "name": "bits"
+                            }
+                          }
+                        ]
+                      },
+                      "to": "u32"
+                    },
+                    "valid": {
+                      "expr": "binary",
+                      "op": "and",
+                      "left": {
+                        "expr": "binary",
+                        "op": "eq",
+                        "left": {
+                          "expr": "binary",
+                          "op": "shr",
+                          "left": {
+                            "expr": "local",
+                            "name": "value"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 12
+                          }
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 0
+                        }
+                      },
+                      "right": {
+                        "expr": "binary",
+                        "op": "or",
+                        "left": {
+                          "expr": "unary",
+                          "op": "not",
+                          "value": {
+                            "expr": "field",
+                            "of": {
+                              "expr": "self",
+                              "field": "config"
+                            },
+                            "name": "tenBit"
+                          }
+                        },
+                        "right": {
+                          "expr": "binary",
+                          "op": "eq",
+                          "left": {
+                            "expr": "binary",
+                            "op": "bit-and",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 3
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 0
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "at": {
+                  "expr": "local",
+                  "name": "where"
+                }
+              }
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "DeviceEvent",
+                  "kind": "end",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    },
+                    "reason": {
+                      "expr": "enum",
+                      "type": "End",
+                      "value": "complete"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tx",
+            "type": "cursor"
+          }
+        ]
+      }
+    ],
+    "requires": [
+      {
+        "key": "wordBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 1
+          }
+        ]
+      },
+      {
+        "key": "bitOrder",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "msb-first"
+          }
+        ]
+      },
+      {
+        "key": "cs",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "miso",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "AD79X0",
+        "summary": "AD7910/7920 conversion voltage, padding checks and power-down requests",
+        "fields": {
+          "tenBit": "AD7910 10-bit mode",
+          "referenceMicrovolts": "Reference voltage (µV)"
+        },
+        "events": {
+          "begin": "Begin",
+          "mode": "Mode",
+          "sample": "Sample",
+          "end": "End"
+        },
+        "eventFields": {
+          "tx": "Transaction",
+          "mode": "Mode",
+          "clocks": "Clocks",
+          "code": "Code",
+          "bits": "Bits",
+          "leading": "Leading",
+          "trailing": "Trailing",
+          "microvolts": "Voltage (µV)",
+          "valid": "Valid",
+          "reason": "Reason"
+        },
+        "values": {}
+      },
+      "zh-CN": {
+        "name": "AD79X0",
+        "summary": "解析AD7910/7920转换电压、填充位检查及掉电请求",
+        "fields": {
+          "tenBit": "AD7910十位模式",
+          "referenceMicrovolts": "参考电压（微伏）"
+        },
+        "events": {
+          "begin": "开始",
+          "mode": "模式",
+          "sample": "采样",
+          "end": "结束"
+        },
+        "eventFields": {
+          "tx": "事务号",
+          "mode": "模式",
+          "clocks": "时钟数",
+          "code": "编码",
+          "bits": "位数",
+          "leading": "前导位",
+          "trailing": "尾随位",
+          "microvolts": "电压（微伏）",
+          "valid": "有效",
+          "reason": "结束原因"
+        },
+        "values": {}
+      }
+    },
+    "partial": "drain",
+    "recovery": {
+      "reason": "End",
+      "incomplete": "incomplete",
+      "truncated": "aborted",
+      "missing": "aborted",
+      "gap": "aborted",
+      "end": "aborted"
+    },
+    "state": [
+      {
+        "name": "open",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      }
+    ]
+  }
+}

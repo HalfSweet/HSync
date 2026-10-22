@@ -1,0 +1,1716 @@
+{
+  "ir": 1,
+  "name": "rgb-led-spi",
+  "types": [
+    {
+      "name": "Order",
+      "type": "enum",
+      "variants": ["rgb", "rbg", "grb", "gbr", "brg", "bgr"]
+    },
+    {
+      "name": "End",
+      "type": "enum",
+      "variants": ["complete", "incomplete", "aborted"]
+    },
+    {
+      "name": "Event",
+      "type": "union",
+      "variants": [
+        {
+          "name": "pixel",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "index",
+              "type": "u32"
+            },
+            {
+              "name": "red",
+              "type": "u8"
+            },
+            {
+              "name": "green",
+              "type": "u8"
+            },
+            {
+              "name": "blue",
+              "type": "u8"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "pixels",
+              "type": "u32"
+            },
+            {
+              "name": "reason",
+              "type": "End"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "record",
+      "fields": [
+        {
+          "name": "order",
+          "type": "Order"
+        },
+        {
+          "name": "framed",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "rgb-led-spi.events",
+        "version": 1
+      },
+      "event": "Event",
+      "roles": {
+        "pixel": {
+          "role": "data"
+        },
+        "end": {
+          "role": "framing"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "spi",
+      "contract": {
+        "schema": {
+          "name": "spi.events",
+          "version": 1
+        },
+        "event": "SpiEvent",
+        "framing": {
+          "begin": "begin",
+          "items": ["word"],
+          "end": "end",
+          "id": "tx",
+          "reason": "reason",
+          "normal": ["cs-release"],
+          "partial": "partial",
+          "unframed": 0
+        },
+        "roles": {
+          "begin": {
+            "role": "framing"
+          },
+          "word": {
+            "role": "data"
+          },
+          "end": {
+            "role": "framing"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "EndReason",
+          "type": "enum",
+          "variants": ["cs-release", "aborted"]
+        },
+        {
+          "name": "SpiEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "begin",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "partial",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "word",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "mosi",
+                  "type": {
+                    "option": "u8"
+                  }
+                },
+                {
+                  "name": "miso",
+                  "type": {
+                    "option": "u8"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "end",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "reason",
+                  "type": "EndReason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "decoder": {
+    "name": "rgb-led-spi",
+    "category": "device",
+    "config": {
+      "type": "Config",
+      "defaults": {
+        "order": "rgb",
+        "framed": false
+      }
+    },
+    "input": {
+      "kind": "stream",
+      "schema": {
+        "name": "spi.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "rgb-led-spi.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "hold",
+        "body": [
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "if-some",
+              "value": {
+                "expr": "self",
+                "field": "first"
+              },
+              "bind": "first",
+              "some": {
+                "expr": "field",
+                "of": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "first"
+                  },
+                  "name": "span"
+                },
+                "name": "start"
+              },
+              "none": {
+                "expr": "none"
+              }
+            }
+          }
+        ],
+        "ret": {
+          "option": "u64"
+        }
+      },
+      {
+        "name": "finish",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "or",
+              "left": {
+                "expr": "binary",
+                "op": "gt",
+                "left": {
+                  "expr": "self",
+                  "field": "count"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              "right": {
+                "expr": "binary",
+                "op": "gt",
+                "left": {
+                  "expr": "self",
+                  "field": "pixels"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "end",
+                      "fields": {
+                        "tx": {
+                          "expr": "self",
+                          "field": "tx"
+                        },
+                        "pixels": {
+                          "expr": "self",
+                          "field": "pixels"
+                        },
+                        "reason": {
+                          "expr": "local",
+                          "name": "reason"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "count"
+            },
+            "value": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "pixels"
+            },
+            "value": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "first"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "tx"
+            },
+            "op": "add",
+            "value": {
+              "expr": "lit",
+              "value": 1
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "where",
+            "type": "provenance"
+          },
+          {
+            "name": "reason",
+            "type": "End"
+          }
+        ]
+      },
+      {
+        "name": "onGap",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "finish",
+                "args": [
+                  {
+                    "expr": "intrinsic",
+                    "name": "at",
+                    "args": [
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "range"
+                        },
+                        "name": "start"
+                      }
+                    ]
+                  },
+                  {
+                    "expr": "enum",
+                    "type": "End",
+                    "value": "aborted"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "aligned"
+            },
+            "value": {
+              "expr": "lit",
+              "value": false
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "range",
+            "type": "range"
+          }
+        ]
+      },
+      {
+        "name": "onEnd",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "finish",
+                "args": [
+                  {
+                    "expr": "intrinsic",
+                    "name": "at",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "tick"
+                      }
+                    ]
+                  },
+                  {
+                    "expr": "ternary",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "gt",
+                      "left": {
+                        "expr": "self",
+                        "field": "count"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 0
+                      }
+                    },
+                    "then": {
+                      "expr": "enum",
+                      "type": "End",
+                      "value": "incomplete"
+                    },
+                    "else": {
+                      "expr": "enum",
+                      "type": "End",
+                      "value": "complete"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tick",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "body": [
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "received",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "next"
+                  }
+                }
+              },
+              {
+                "stmt": "let",
+                "name": "event",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "received"
+                  },
+                  "name": "event"
+                },
+                "type": "SpiEvent"
+              },
+              {
+                "stmt": "let",
+                "name": "where",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "received"
+                  },
+                  "name": "at"
+                },
+                "type": "provenance"
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "event"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "begin",
+                      "binds": {
+                        "partial": "partial",
+                        "tx": "tx"
+                      }
+                    },
+                    "body": [
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "local",
+                          "name": "partial"
+                        },
+                        "then": [
+                          {
+                            "stmt": "expr",
+                            "expr": {
+                              "expr": "await",
+                              "op": {
+                                "op": "method",
+                                "name": "finish",
+                                "args": [
+                                  {
+                                    "expr": "local",
+                                    "name": "where"
+                                  },
+                                  {
+                                    "expr": "enum",
+                                    "type": "End",
+                                    "value": "aborted"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "stmt": "assign",
+                            "target": {
+                              "expr": "self",
+                              "field": "aligned"
+                            },
+                            "value": {
+                              "expr": "lit",
+                              "value": false
+                            }
+                          },
+                          {
+                            "stmt": "continue"
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "self",
+                            "field": "config"
+                          },
+                          "name": "framed"
+                        },
+                        "then": [
+                          {
+                            "stmt": "expr",
+                            "expr": {
+                              "expr": "await",
+                              "op": {
+                                "op": "method",
+                                "name": "finish",
+                                "args": [
+                                  {
+                                    "expr": "local",
+                                    "name": "where"
+                                  },
+                                  {
+                                    "expr": "enum",
+                                    "type": "End",
+                                    "value": "aborted"
+                                  }
+                                ]
+                              }
+                            }
+                          },
+                          {
+                            "stmt": "assign",
+                            "target": {
+                              "expr": "self",
+                              "field": "tx"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "tx"
+                            }
+                          },
+                          {
+                            "stmt": "assign",
+                            "target": {
+                              "expr": "self",
+                              "field": "aligned"
+                            },
+                            "value": {
+                              "expr": "unary",
+                              "op": "not",
+                              "value": {
+                                "expr": "local",
+                                "name": "partial"
+                              }
+                            }
+                          }
+                        ],
+                        "else": [
+                          {
+                            "stmt": "if",
+                            "cond": {
+                              "expr": "binary",
+                              "op": "and",
+                              "left": {
+                                "expr": "unary",
+                                "op": "not",
+                                "value": {
+                                  "expr": "self",
+                                  "field": "aligned"
+                                }
+                              },
+                              "right": {
+                                "expr": "unary",
+                                "op": "not",
+                                "value": {
+                                  "expr": "local",
+                                  "name": "partial"
+                                }
+                              }
+                            },
+                            "then": [
+                              {
+                                "stmt": "assign",
+                                "target": {
+                                  "expr": "self",
+                                  "field": "aligned"
+                                },
+                                "value": {
+                                  "expr": "lit",
+                                  "value": true
+                                }
+                              },
+                              {
+                                "stmt": "assign",
+                                "target": {
+                                  "expr": "self",
+                                  "field": "tx"
+                                },
+                                "value": {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": [
+                      {
+                        "stmt": "match",
+                        "value": {
+                          "expr": "local",
+                          "name": "event"
+                        },
+                        "arms": [
+                          {
+                            "pattern": {
+                              "pattern": "variant",
+                              "name": "end",
+                              "binds": {
+                                "reason": "reason"
+                              }
+                            },
+                            "body": [
+                              {
+                                "stmt": "if",
+                                "cond": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "self",
+                                    "field": "config"
+                                  },
+                                  "name": "framed"
+                                },
+                                "then": [
+                                  {
+                                    "stmt": "expr",
+                                    "expr": {
+                                      "expr": "await",
+                                      "op": {
+                                        "op": "method",
+                                        "name": "finish",
+                                        "args": [
+                                          {
+                                            "expr": "local",
+                                            "name": "where"
+                                          },
+                                          {
+                                            "expr": "ternary",
+                                            "cond": {
+                                              "expr": "binary",
+                                              "op": "eq",
+                                              "left": {
+                                                "expr": "local",
+                                                "name": "reason"
+                                              },
+                                              "right": {
+                                                "expr": "enum",
+                                                "type": "EndReason",
+                                                "value": "aborted"
+                                              }
+                                            },
+                                            "then": {
+                                              "expr": "enum",
+                                              "type": "End",
+                                              "value": "aborted"
+                                            },
+                                            "else": {
+                                              "expr": "ternary",
+                                              "cond": {
+                                                "expr": "binary",
+                                                "op": "gt",
+                                                "left": {
+                                                  "expr": "self",
+                                                  "field": "count"
+                                                },
+                                                "right": {
+                                                  "expr": "lit",
+                                                  "value": 0
+                                                }
+                                              },
+                                              "then": {
+                                                "expr": "enum",
+                                                "type": "End",
+                                                "value": "incomplete"
+                                              },
+                                              "else": {
+                                                "expr": "enum",
+                                                "type": "End",
+                                                "value": "complete"
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "stmt": "assign",
+                                    "target": {
+                                      "expr": "self",
+                                      "field": "aligned"
+                                    },
+                                    "value": {
+                                      "expr": "lit",
+                                      "value": false
+                                    }
+                                  }
+                                ],
+                                "else": [
+                                  {
+                                    "stmt": "if",
+                                    "cond": {
+                                      "expr": "binary",
+                                      "op": "eq",
+                                      "left": {
+                                        "expr": "local",
+                                        "name": "reason"
+                                      },
+                                      "right": {
+                                        "expr": "enum",
+                                        "type": "EndReason",
+                                        "value": "aborted"
+                                      }
+                                    },
+                                    "then": [
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "await",
+                                          "op": {
+                                            "op": "method",
+                                            "name": "finish",
+                                            "args": [
+                                              {
+                                                "expr": "local",
+                                                "name": "where"
+                                              },
+                                              {
+                                                "expr": "ternary",
+                                                "cond": {
+                                                  "expr": "binary",
+                                                  "op": "gt",
+                                                  "left": {
+                                                    "expr": "self",
+                                                    "field": "count"
+                                                  },
+                                                  "right": {
+                                                    "expr": "lit",
+                                                    "value": 0
+                                                  }
+                                                },
+                                                "then": {
+                                                  "expr": "enum",
+                                                  "type": "End",
+                                                  "value": "incomplete"
+                                                },
+                                                "else": {
+                                                  "expr": "enum",
+                                                  "type": "End",
+                                                  "value": "complete"
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "stmt": "assign",
+                                        "target": {
+                                          "expr": "self",
+                                          "field": "aligned"
+                                        },
+                                        "value": {
+                                          "expr": "lit",
+                                          "value": false
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "pattern": {
+                              "pattern": "default"
+                            },
+                            "body": [
+                              {
+                                "stmt": "match",
+                                "value": {
+                                  "expr": "local",
+                                  "name": "event"
+                                },
+                                "arms": [
+                                  {
+                                    "pattern": {
+                                      "pattern": "variant",
+                                      "name": "word",
+                                      "binds": {
+                                        "mosi": "mosi"
+                                      }
+                                    },
+                                    "body": [
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "unary",
+                                          "op": "not",
+                                          "value": {
+                                            "expr": "self",
+                                            "field": "aligned"
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "continue"
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "stmt": "let",
+                                        "name": "value",
+                                        "value": {
+                                          "expr": "local",
+                                          "name": "mosi"
+                                        },
+                                        "type": {
+                                          "option": "u8"
+                                        }
+                                      },
+                                      {
+                                        "stmt": "let-some",
+                                        "bind": "value_2",
+                                        "value": {
+                                          "expr": "local",
+                                          "name": "value"
+                                        },
+                                        "else": [
+                                          {
+                                            "stmt": "expr",
+                                            "expr": {
+                                              "expr": "await",
+                                              "op": {
+                                                "op": "method",
+                                                "name": "finish",
+                                                "args": [
+                                                  {
+                                                    "expr": "local",
+                                                    "name": "where"
+                                                  },
+                                                  {
+                                                    "expr": "enum",
+                                                    "type": "End",
+                                                    "value": "aborted"
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "aligned"
+                                            },
+                                            "value": {
+                                              "expr": "lit",
+                                              "value": false
+                                            }
+                                          },
+                                          {
+                                            "stmt": "continue"
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "binary",
+                                          "op": "eq",
+                                          "left": {
+                                            "expr": "self",
+                                            "field": "count"
+                                          },
+                                          "right": {
+                                            "expr": "lit",
+                                            "value": 0
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "a"
+                                            },
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "value_2"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "first"
+                                            },
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "where"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "count"
+                                            },
+                                            "value": {
+                                              "expr": "lit",
+                                              "value": 1
+                                            }
+                                          },
+                                          {
+                                            "stmt": "continue"
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "binary",
+                                          "op": "eq",
+                                          "left": {
+                                            "expr": "self",
+                                            "field": "count"
+                                          },
+                                          "right": {
+                                            "expr": "lit",
+                                            "value": 1
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "b"
+                                            },
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "value_2"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "count"
+                                            },
+                                            "value": {
+                                              "expr": "lit",
+                                              "value": 2
+                                            }
+                                          },
+                                          {
+                                            "stmt": "continue"
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "stmt": "let",
+                                        "name": "first",
+                                        "value": {
+                                          "expr": "self",
+                                          "field": "first"
+                                        },
+                                        "type": {
+                                          "option": "provenance"
+                                        }
+                                      },
+                                      {
+                                        "stmt": "let-some",
+                                        "bind": "first_2",
+                                        "value": {
+                                          "expr": "local",
+                                          "name": "first"
+                                        },
+                                        "else": [
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "count"
+                                            },
+                                            "value": {
+                                              "expr": "lit",
+                                              "value": 0
+                                            }
+                                          },
+                                          {
+                                            "stmt": "continue"
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "stmt": "let",
+                                        "name": "red",
+                                        "value": {
+                                          "expr": "self",
+                                          "field": "a"
+                                        },
+                                        "mutable": true,
+                                        "type": "u8"
+                                      },
+                                      {
+                                        "stmt": "let",
+                                        "name": "green",
+                                        "value": {
+                                          "expr": "self",
+                                          "field": "b"
+                                        },
+                                        "mutable": true,
+                                        "type": "u8"
+                                      },
+                                      {
+                                        "stmt": "let",
+                                        "name": "blue",
+                                        "value": {
+                                          "expr": "cast",
+                                          "value": {
+                                            "expr": "local",
+                                            "name": "value_2"
+                                          },
+                                          "to": "u8"
+                                        },
+                                        "mutable": true,
+                                        "type": "u8"
+                                      },
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "binary",
+                                          "op": "eq",
+                                          "left": {
+                                            "expr": "field",
+                                            "of": {
+                                              "expr": "self",
+                                              "field": "config"
+                                            },
+                                            "name": "order"
+                                          },
+                                          "right": {
+                                            "expr": "enum",
+                                            "type": "Order",
+                                            "value": "rbg"
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "local",
+                                              "name": "green"
+                                            },
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "value_2"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "local",
+                                              "name": "blue"
+                                            },
+                                            "value": {
+                                              "expr": "self",
+                                              "field": "b"
+                                            }
+                                          }
+                                        ],
+                                        "else": [
+                                          {
+                                            "stmt": "if",
+                                            "cond": {
+                                              "expr": "binary",
+                                              "op": "eq",
+                                              "left": {
+                                                "expr": "field",
+                                                "of": {
+                                                  "expr": "self",
+                                                  "field": "config"
+                                                },
+                                                "name": "order"
+                                              },
+                                              "right": {
+                                                "expr": "enum",
+                                                "type": "Order",
+                                                "value": "grb"
+                                              }
+                                            },
+                                            "then": [
+                                              {
+                                                "stmt": "assign",
+                                                "target": {
+                                                  "expr": "local",
+                                                  "name": "red"
+                                                },
+                                                "value": {
+                                                  "expr": "self",
+                                                  "field": "b"
+                                                }
+                                              },
+                                              {
+                                                "stmt": "assign",
+                                                "target": {
+                                                  "expr": "local",
+                                                  "name": "green"
+                                                },
+                                                "value": {
+                                                  "expr": "self",
+                                                  "field": "a"
+                                                }
+                                              }
+                                            ],
+                                            "else": [
+                                              {
+                                                "stmt": "if",
+                                                "cond": {
+                                                  "expr": "binary",
+                                                  "op": "eq",
+                                                  "left": {
+                                                    "expr": "field",
+                                                    "of": {
+                                                      "expr": "self",
+                                                      "field": "config"
+                                                    },
+                                                    "name": "order"
+                                                  },
+                                                  "right": {
+                                                    "expr": "enum",
+                                                    "type": "Order",
+                                                    "value": "gbr"
+                                                  }
+                                                },
+                                                "then": [
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "red"
+                                                    },
+                                                    "value": {
+                                                      "expr": "local",
+                                                      "name": "value_2"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "green"
+                                                    },
+                                                    "value": {
+                                                      "expr": "self",
+                                                      "field": "a"
+                                                    }
+                                                  },
+                                                  {
+                                                    "stmt": "assign",
+                                                    "target": {
+                                                      "expr": "local",
+                                                      "name": "blue"
+                                                    },
+                                                    "value": {
+                                                      "expr": "self",
+                                                      "field": "b"
+                                                    }
+                                                  }
+                                                ],
+                                                "else": [
+                                                  {
+                                                    "stmt": "if",
+                                                    "cond": {
+                                                      "expr": "binary",
+                                                      "op": "eq",
+                                                      "left": {
+                                                        "expr": "field",
+                                                        "of": {
+                                                          "expr": "self",
+                                                          "field": "config"
+                                                        },
+                                                        "name": "order"
+                                                      },
+                                                      "right": {
+                                                        "expr": "enum",
+                                                        "type": "Order",
+                                                        "value": "brg"
+                                                      }
+                                                    },
+                                                    "then": [
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "local",
+                                                          "name": "red"
+                                                        },
+                                                        "value": {
+                                                          "expr": "self",
+                                                          "field": "b"
+                                                        }
+                                                      },
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "local",
+                                                          "name": "green"
+                                                        },
+                                                        "value": {
+                                                          "expr": "local",
+                                                          "name": "value_2"
+                                                        }
+                                                      },
+                                                      {
+                                                        "stmt": "assign",
+                                                        "target": {
+                                                          "expr": "local",
+                                                          "name": "blue"
+                                                        },
+                                                        "value": {
+                                                          "expr": "self",
+                                                          "field": "a"
+                                                        }
+                                                      }
+                                                    ],
+                                                    "else": [
+                                                      {
+                                                        "stmt": "if",
+                                                        "cond": {
+                                                          "expr": "binary",
+                                                          "op": "eq",
+                                                          "left": {
+                                                            "expr": "field",
+                                                            "of": {
+                                                              "expr": "self",
+                                                              "field": "config"
+                                                            },
+                                                            "name": "order"
+                                                          },
+                                                          "right": {
+                                                            "expr": "enum",
+                                                            "type": "Order",
+                                                            "value": "bgr"
+                                                          }
+                                                        },
+                                                        "then": [
+                                                          {
+                                                            "stmt": "assign",
+                                                            "target": {
+                                                              "expr": "local",
+                                                              "name": "red"
+                                                            },
+                                                            "value": {
+                                                              "expr": "local",
+                                                              "name": "value_2"
+                                                            }
+                                                          },
+                                                          {
+                                                            "stmt": "assign",
+                                                            "target": {
+                                                              "expr": "local",
+                                                              "name": "green"
+                                                            },
+                                                            "value": {
+                                                              "expr": "self",
+                                                              "field": "b"
+                                                            }
+                                                          },
+                                                          {
+                                                            "stmt": "assign",
+                                                            "target": {
+                                                              "expr": "local",
+                                                              "name": "blue"
+                                                            },
+                                                            "value": {
+                                                              "expr": "self",
+                                                              "field": "a"
+                                                            }
+                                                          }
+                                                        ]
+                                                      }
+                                                    ]
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "stmt": "assign",
+                                        "target": {
+                                          "expr": "self",
+                                          "field": "first"
+                                        },
+                                        "value": {
+                                          "expr": "none"
+                                        }
+                                      },
+                                      {
+                                        "stmt": "assign",
+                                        "target": {
+                                          "expr": "self",
+                                          "field": "count"
+                                        },
+                                        "value": {
+                                          "expr": "lit",
+                                          "value": 0
+                                        }
+                                      },
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "await",
+                                          "op": {
+                                            "op": "emit",
+                                            "event": {
+                                              "expr": "variant",
+                                              "type": "Event",
+                                              "kind": "pixel",
+                                              "fields": {
+                                                "tx": {
+                                                  "expr": "self",
+                                                  "field": "tx"
+                                                },
+                                                "index": {
+                                                  "expr": "self",
+                                                  "field": "pixels"
+                                                },
+                                                "red": {
+                                                  "expr": "local",
+                                                  "name": "red"
+                                                },
+                                                "green": {
+                                                  "expr": "local",
+                                                  "name": "green"
+                                                },
+                                                "blue": {
+                                                  "expr": "local",
+                                                  "name": "blue"
+                                                }
+                                              }
+                                            },
+                                            "at": {
+                                              "expr": "intrinsic",
+                                              "name": "join",
+                                              "args": [
+                                                {
+                                                  "expr": "local",
+                                                  "name": "first_2"
+                                                },
+                                                {
+                                                  "expr": "local",
+                                                  "name": "where"
+                                                }
+                                              ]
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "stmt": "assign",
+                                        "target": {
+                                          "expr": "self",
+                                          "field": "pixels"
+                                        },
+                                        "op": "add",
+                                        "value": {
+                                          "expr": "lit",
+                                          "value": 1
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "pattern": {
+                                      "pattern": "default"
+                                    },
+                                    "body": []
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true
+      }
+    ],
+    "requires": [
+      {
+        "key": "wordBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "key": "bitOrder",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "msb-first"
+          }
+        ]
+      },
+      {
+        "key": "mosi",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "mode",
+        "requirement": "one-of",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 0
+          },
+          {
+            "expr": "lit",
+            "value": 3
+          }
+        ]
+      },
+      {
+        "key": "cs",
+        "requirement": "one-of",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          },
+          {
+            "expr": "field",
+            "of": {
+              "expr": "local",
+              "name": "config"
+            },
+            "name": "framed"
+          }
+        ]
+      }
+    ],
+    "props": [
+      {
+        "key": "order",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "order"
+        }
+      },
+      {
+        "key": "framed",
+        "value": {
+          "expr": "field",
+          "of": {
+            "expr": "local",
+            "name": "config"
+          },
+          "name": "framed"
+        }
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "RGB-LED-SPI",
+        "summary": "Clocked RGB byte triplets with explicit channel order",
+        "fields": {
+          "order": "Order",
+          "framed": "Restart triplets on chip select"
+        },
+        "events": {
+          "pixel": "Pixel",
+          "end": "End"
+        },
+        "eventFields": {
+          "tx": "Transaction",
+          "index": "Index",
+          "red": "Red",
+          "green": "Green",
+          "blue": "Blue",
+          "pixels": "Pixels",
+          "reason": "Reason"
+        },
+        "values": {
+          "order": {
+            "rgb": "RGB",
+            "rbg": "RBG",
+            "grb": "GRB",
+            "gbr": "GBR",
+            "brg": "BRG",
+            "bgr": "BGR"
+          }
+        }
+      },
+      "zh-CN": {
+        "name": "RGB-LED-SPI",
+        "summary": "按指定颜色顺序解析时钟驱动RGB字节组",
+        "fields": {
+          "order": "颜色顺序",
+          "framed": "片选重新对齐像素"
+        },
+        "events": {
+          "pixel": "像素",
+          "end": "结束"
+        },
+        "eventFields": {
+          "tx": "事务号",
+          "index": "序号",
+          "red": "红色",
+          "green": "绿色",
+          "blue": "蓝色",
+          "pixels": "像素数",
+          "reason": "结束原因"
+        },
+        "values": {
+          "order": {
+            "rgb": "RGB",
+            "rbg": "RBG",
+            "grb": "GRB",
+            "gbr": "GBR",
+            "brg": "BRG",
+            "bgr": "BGR"
+          }
+        }
+      }
+    },
+    "state": [
+      {
+        "name": "tx",
+        "type": "u64",
+        "init": {
+          "expr": "lit",
+          "value": 1
+        }
+      },
+      {
+        "name": "pixels",
+        "type": "u32",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "count",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "a",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "b",
+        "type": "u8",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "aligned",
+        "type": "bool",
+        "init": {
+          "expr": "lit",
+          "value": true
+        }
+      },
+      {
+        "name": "first",
+        "type": {
+          "option": "provenance"
+        },
+        "init": {
+          "expr": "none"
+        }
+      }
+    ]
+  }
+}
