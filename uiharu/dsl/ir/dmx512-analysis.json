@@ -1,0 +1,2243 @@
+{
+  "ir": 1,
+  "name": "dmx512-analysis",
+  "types": [
+    {
+      "name": "Config",
+      "type": "record",
+      "fields": [
+        {
+          "name": "minBreakUs",
+          "type": "u32"
+        },
+        {
+          "name": "minMabUs",
+          "type": "u32"
+        },
+        {
+          "name": "maxMarkUs",
+          "type": "u32"
+        },
+        {
+          "name": "minBreakIntervalUs",
+          "type": "u32"
+        },
+        {
+          "name": "maxResetIntervalUs",
+          "type": "u32"
+        },
+        {
+          "name": "showZero",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "StartCode",
+      "type": "enum",
+      "variants": ["dimmer", "text", "rdm", "system-information", "other"]
+    },
+    {
+      "name": "Reason",
+      "type": "enum",
+      "variants": [
+        "short-break",
+        "short-mab",
+        "long-mark",
+        "short-break-interval",
+        "long-reset-interval",
+        "too-many-slots",
+        "framing-error",
+        "missing-start-code"
+      ]
+    },
+    {
+      "name": "Interval",
+      "type": "enum",
+      "variants": ["mab", "inter-slot", "inter-packet", "break-to-break", "reset-to-reset"]
+    },
+    {
+      "name": "EndReason",
+      "type": "enum",
+      "variants": ["break", "aborted"]
+    },
+    {
+      "name": "Event",
+      "type": "union",
+      "variants": [
+        {
+          "name": "begin",
+          "fields": [
+            {
+              "name": "packet",
+              "type": "u64"
+            },
+            {
+              "name": "breakTicks",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "start-code",
+          "fields": [
+            {
+              "name": "packet",
+              "type": "u64"
+            },
+            {
+              "name": "code",
+              "type": "u8"
+            },
+            {
+              "name": "profile",
+              "type": "StartCode"
+            }
+          ]
+        },
+        {
+          "name": "slot",
+          "fields": [
+            {
+              "name": "packet",
+              "type": "u64"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "code",
+              "type": "u8"
+            },
+            {
+              "name": "value",
+              "type": "u8"
+            },
+            {
+              "name": "channel",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "timing",
+          "fields": [
+            {
+              "name": "packet",
+              "type": "u64"
+            },
+            {
+              "name": "interval",
+              "type": "Interval"
+            },
+            {
+              "name": "ticks",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "error",
+          "fields": [
+            {
+              "name": "packet",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "Reason"
+            },
+            {
+              "name": "slot",
+              "type": "u32"
+            },
+            {
+              "name": "ticks",
+              "type": {
+                "option": "u64"
+              }
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "packet",
+              "type": "u64"
+            },
+            {
+              "name": "slots",
+              "type": "u32"
+            },
+            {
+              "name": "reason",
+              "type": "EndReason"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "dmx512-analysis.events",
+        "version": 1
+      },
+      "event": "Event",
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "start-code": {
+          "role": "command"
+        },
+        "slot": {
+          "role": "data"
+        },
+        "timing": {
+          "role": "control"
+        },
+        "error": {
+          "role": "error"
+        },
+        "end": {
+          "role": "framing"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "uart",
+      "contract": {
+        "schema": {
+          "name": "uart.events",
+          "version": 1
+        },
+        "event": "UartEvent",
+        "roles": {
+          "frame": {
+            "role": "data",
+            "errorWhen": [
+              {
+                "parity": "error"
+              },
+              {
+                "framingOk": false
+              }
+            ]
+          },
+          "break": {
+            "role": "line"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "ParityCheck",
+          "type": "enum",
+          "variants": ["ok", "error"]
+        },
+        {
+          "name": "UartEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "frame",
+              "fields": [
+                {
+                  "name": "value",
+                  "type": "u16"
+                },
+                {
+                  "name": "parity",
+                  "type": {
+                    "option": "ParityCheck"
+                  }
+                },
+                {
+                  "name": "framingOk",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "break",
+              "fields": [
+                {
+                  "name": "ticks",
+                  "type": "u64"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "profile",
+      "body": [
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "local",
+              "name": "code"
+            },
+            "right": {
+              "expr": "lit",
+              "value": 0
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "enum",
+                "type": "StartCode",
+                "value": "dimmer"
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "local",
+              "name": "code"
+            },
+            "right": {
+              "expr": "lit",
+              "value": 23
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "enum",
+                "type": "StartCode",
+                "value": "text"
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "local",
+              "name": "code"
+            },
+            "right": {
+              "expr": "lit",
+              "value": 204
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "enum",
+                "type": "StartCode",
+                "value": "rdm"
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "local",
+              "name": "code"
+            },
+            "right": {
+              "expr": "lit",
+              "value": 207
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "enum",
+                "type": "StartCode",
+                "value": "system-information"
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "enum",
+            "type": "StartCode",
+            "value": "other"
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "code",
+          "type": "u8"
+        }
+      ],
+      "ret": "StartCode"
+    }
+  ],
+  "decoder": {
+    "name": "dmx512-analysis",
+    "category": "bus",
+    "config": {
+      "type": "Config",
+      "defaults": {
+        "minBreakUs": 88,
+        "minMabUs": 8,
+        "maxMarkUs": 1000000,
+        "minBreakIntervalUs": 1196,
+        "maxResetIntervalUs": 1250000,
+        "showZero": false
+      }
+    },
+    "input": {
+      "kind": "stream",
+      "schema": {
+        "name": "uart.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "dmx512-analysis.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "fail",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "Event",
+                  "kind": "error",
+                  "fields": {
+                    "packet": {
+                      "expr": "self",
+                      "field": "packet"
+                    },
+                    "reason": {
+                      "expr": "local",
+                      "name": "reason"
+                    },
+                    "slot": {
+                      "expr": "local",
+                      "name": "slot"
+                    },
+                    "ticks": {
+                      "expr": "local",
+                      "name": "ticks"
+                    }
+                  }
+                },
+                "at": {
+                  "expr": "local",
+                  "name": "at"
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "reason",
+            "type": "Reason"
+          },
+          {
+            "name": "slot",
+            "type": "u32"
+          },
+          {
+            "name": "ticks",
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "name": "at",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "close",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "self",
+              "field": "open"
+            },
+            "then": [
+              {
+                "stmt": "if-some",
+                "value": {
+                  "expr": "self",
+                  "field": "code"
+                },
+                "bind": "code",
+                "then": [],
+                "else": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "method",
+                        "name": "fail",
+                        "args": [
+                          {
+                            "expr": "enum",
+                            "type": "Reason",
+                            "value": "missing-start-code"
+                          },
+                          {
+                            "expr": "lit",
+                            "value": 0
+                          },
+                          {
+                            "expr": "none"
+                          },
+                          {
+                            "expr": "local",
+                            "name": "at"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "end",
+                      "fields": {
+                        "packet": {
+                          "expr": "self",
+                          "field": "packet"
+                        },
+                        "slots": {
+                          "expr": "self",
+                          "field": "slots"
+                        },
+                        "reason": {
+                          "expr": "local",
+                          "name": "reason"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "at"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "lit",
+              "value": false
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "reason",
+            "type": "EndReason"
+          },
+          {
+            "name": "at",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "onGap",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "close",
+                "args": [
+                  {
+                    "expr": "enum",
+                    "type": "EndReason",
+                    "value": "aborted"
+                  },
+                  {
+                    "expr": "intrinsic",
+                    "name": "over",
+                    "args": [
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "range"
+                        },
+                        "name": "start"
+                      },
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "range"
+                        },
+                        "name": "start"
+                      },
+                      {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "range"
+                        },
+                        "name": "start"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "previousBreak"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "previousReset"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "previousEnd"
+            },
+            "value": {
+              "expr": "none"
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "range",
+            "type": "range"
+          }
+        ]
+      },
+      {
+        "name": "onEnd",
+        "body": [
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "method",
+                "name": "close",
+                "args": [
+                  {
+                    "expr": "enum",
+                    "type": "EndReason",
+                    "value": "aborted"
+                  },
+                  {
+                    "expr": "intrinsic",
+                    "name": "over",
+                    "args": [
+                      {
+                        "expr": "local",
+                        "name": "tick"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "tick"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "tick"
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tick",
+            "type": "u64"
+          }
+        ]
+      },
+      {
+        "name": "mark",
+        "body": [
+          {
+            "stmt": "let",
+            "name": "start",
+            "value": {
+              "expr": "self",
+              "field": "previousEnd"
+            },
+            "type": {
+              "option": "u64"
+            }
+          },
+          {
+            "stmt": "let-some",
+            "bind": "start_2",
+            "value": {
+              "expr": "local",
+              "name": "start"
+            },
+            "else": [
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "let",
+            "name": "ticks",
+            "value": {
+              "expr": "intrinsic",
+              "name": "saturating-sub",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "end"
+                },
+                {
+                  "expr": "local",
+                  "name": "start_2"
+                }
+              ]
+            },
+            "type": "u64"
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "Event",
+                  "kind": "timing",
+                  "fields": {
+                    "packet": {
+                      "expr": "self",
+                      "field": "packet"
+                    },
+                    "interval": {
+                      "expr": "local",
+                      "name": "interval"
+                    },
+                    "ticks": {
+                      "expr": "local",
+                      "name": "ticks"
+                    }
+                  }
+                },
+                "at": {
+                  "expr": "local",
+                  "name": "at"
+                }
+              }
+            }
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "gt",
+              "left": {
+                "expr": "local",
+                "name": "ticks"
+              },
+              "right": {
+                "expr": "intrinsic",
+                "name": "mul-div-ceil",
+                "args": [
+                  {
+                    "expr": "self",
+                    "field": "rate"
+                  },
+                  {
+                    "expr": "field",
+                    "of": {
+                      "expr": "self",
+                      "field": "config"
+                    },
+                    "name": "maxMarkUs"
+                  },
+                  {
+                    "expr": "lit",
+                    "value": 1000000
+                  }
+                ]
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "fail",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "Reason",
+                        "value": "long-mark"
+                      },
+                      {
+                        "expr": "self",
+                        "field": "slots"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "ticks"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "at"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "and",
+              "left": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "interval"
+                },
+                "right": {
+                  "expr": "enum",
+                  "type": "Interval",
+                  "value": "mab"
+                }
+              },
+              "right": {
+                "expr": "binary",
+                "op": "lt",
+                "left": {
+                  "expr": "local",
+                  "name": "ticks"
+                },
+                "right": {
+                  "expr": "intrinsic",
+                  "name": "mul-div-ceil",
+                  "args": [
+                    {
+                      "expr": "self",
+                      "field": "rate"
+                    },
+                    {
+                      "expr": "field",
+                      "of": {
+                        "expr": "self",
+                        "field": "config"
+                      },
+                      "name": "minMabUs"
+                    },
+                    {
+                      "expr": "lit",
+                      "value": 1000000
+                    }
+                  ]
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "method",
+                    "name": "fail",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "Reason",
+                        "value": "short-mab"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "local",
+                        "name": "ticks"
+                      },
+                      {
+                        "expr": "local",
+                        "name": "at"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "end",
+            "type": "u64"
+          },
+          {
+            "name": "interval",
+            "type": "Interval"
+          },
+          {
+            "name": "at",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "body": [
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "received",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "next"
+                  }
+                }
+              },
+              {
+                "stmt": "let",
+                "name": "e",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "received"
+                  },
+                  "name": "event"
+                },
+                "type": "UartEvent"
+              },
+              {
+                "stmt": "let",
+                "name": "at",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "received"
+                  },
+                  "name": "at"
+                },
+                "type": "provenance"
+              },
+              {
+                "stmt": "match",
+                "value": {
+                  "expr": "local",
+                  "name": "e"
+                },
+                "arms": [
+                  {
+                    "pattern": {
+                      "pattern": "variant",
+                      "name": "break",
+                      "binds": {
+                        "ticks": "ticks"
+                      }
+                    },
+                    "body": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "mark",
+                            "args": [
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "at"
+                                  },
+                                  "name": "span"
+                                },
+                                "name": "start"
+                              },
+                              {
+                                "expr": "enum",
+                                "type": "Interval",
+                                "value": "inter-packet"
+                              },
+                              {
+                                "expr": "local",
+                                "name": "at"
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "close",
+                            "args": [
+                              {
+                                "expr": "enum",
+                                "type": "EndReason",
+                                "value": "break"
+                              },
+                              {
+                                "expr": "intrinsic",
+                                "name": "over",
+                                "args": [
+                                  {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "field",
+                                      "of": {
+                                        "expr": "local",
+                                        "name": "at"
+                                      },
+                                      "name": "span"
+                                    },
+                                    "name": "start"
+                                  },
+                                  {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "field",
+                                      "of": {
+                                        "expr": "local",
+                                        "name": "at"
+                                      },
+                                      "name": "span"
+                                    },
+                                    "name": "start"
+                                  },
+                                  {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "local",
+                                      "name": "at"
+                                    },
+                                    "name": "settled"
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "packet"
+                        },
+                        "op": "add",
+                        "value": {
+                          "expr": "lit",
+                          "value": 1
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "open"
+                        },
+                        "value": {
+                          "expr": "lit",
+                          "value": true
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "code"
+                        },
+                        "value": {
+                          "expr": "none"
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "slots"
+                        },
+                        "value": {
+                          "expr": "lit",
+                          "value": 0
+                        }
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "begin",
+                              "fields": {
+                                "packet": {
+                                  "expr": "self",
+                                  "field": "packet"
+                                },
+                                "breakTicks": {
+                                  "expr": "local",
+                                  "name": "ticks"
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "local",
+                              "name": "at"
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "binary",
+                          "op": "lt",
+                          "left": {
+                            "expr": "local",
+                            "name": "ticks"
+                          },
+                          "right": {
+                            "expr": "intrinsic",
+                            "name": "mul-div-ceil",
+                            "args": [
+                              {
+                                "expr": "self",
+                                "field": "rate"
+                              },
+                              {
+                                "expr": "field",
+                                "of": {
+                                  "expr": "self",
+                                  "field": "config"
+                                },
+                                "name": "minBreakUs"
+                              },
+                              {
+                                "expr": "lit",
+                                "value": 1000000
+                              }
+                            ]
+                          }
+                        },
+                        "then": [
+                          {
+                            "stmt": "expr",
+                            "expr": {
+                              "expr": "await",
+                              "op": {
+                                "op": "method",
+                                "name": "fail",
+                                "args": [
+                                  {
+                                    "expr": "enum",
+                                    "type": "Reason",
+                                    "value": "short-break"
+                                  },
+                                  {
+                                    "expr": "lit",
+                                    "value": 0
+                                  },
+                                  {
+                                    "expr": "local",
+                                    "name": "ticks"
+                                  },
+                                  {
+                                    "expr": "local",
+                                    "name": "at"
+                                  }
+                                ]
+                              }
+                            }
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "let",
+                        "name": "last",
+                        "value": {
+                          "expr": "self",
+                          "field": "previousBreak"
+                        },
+                        "type": {
+                          "option": "u64"
+                        }
+                      },
+                      {
+                        "stmt": "if-some",
+                        "value": {
+                          "expr": "local",
+                          "name": "last"
+                        },
+                        "bind": "last_2",
+                        "then": [
+                          {
+                            "stmt": "let",
+                            "name": "ticks",
+                            "value": {
+                              "expr": "intrinsic",
+                              "name": "saturating-sub",
+                              "args": [
+                                {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "local",
+                                      "name": "at"
+                                    },
+                                    "name": "span"
+                                  },
+                                  "name": "start"
+                                },
+                                {
+                                  "expr": "local",
+                                  "name": "last_2"
+                                }
+                              ]
+                            },
+                            "type": "u64"
+                          },
+                          {
+                            "stmt": "expr",
+                            "expr": {
+                              "expr": "await",
+                              "op": {
+                                "op": "emit",
+                                "event": {
+                                  "expr": "variant",
+                                  "type": "Event",
+                                  "kind": "timing",
+                                  "fields": {
+                                    "packet": {
+                                      "expr": "self",
+                                      "field": "packet"
+                                    },
+                                    "interval": {
+                                      "expr": "enum",
+                                      "type": "Interval",
+                                      "value": "break-to-break"
+                                    },
+                                    "ticks": {
+                                      "expr": "local",
+                                      "name": "ticks"
+                                    }
+                                  }
+                                },
+                                "at": {
+                                  "expr": "local",
+                                  "name": "at"
+                                }
+                              }
+                            }
+                          },
+                          {
+                            "stmt": "if",
+                            "cond": {
+                              "expr": "binary",
+                              "op": "lt",
+                              "left": {
+                                "expr": "local",
+                                "name": "ticks"
+                              },
+                              "right": {
+                                "expr": "intrinsic",
+                                "name": "mul-div-ceil",
+                                "args": [
+                                  {
+                                    "expr": "self",
+                                    "field": "rate"
+                                  },
+                                  {
+                                    "expr": "field",
+                                    "of": {
+                                      "expr": "self",
+                                      "field": "config"
+                                    },
+                                    "name": "minBreakIntervalUs"
+                                  },
+                                  {
+                                    "expr": "lit",
+                                    "value": 1000000
+                                  }
+                                ]
+                              }
+                            },
+                            "then": [
+                              {
+                                "stmt": "expr",
+                                "expr": {
+                                  "expr": "await",
+                                  "op": {
+                                    "op": "method",
+                                    "name": "fail",
+                                    "args": [
+                                      {
+                                        "expr": "enum",
+                                        "type": "Reason",
+                                        "value": "short-break-interval"
+                                      },
+                                      {
+                                        "expr": "lit",
+                                        "value": 0
+                                      },
+                                      {
+                                        "expr": "local",
+                                        "name": "ticks"
+                                      },
+                                      {
+                                        "expr": "local",
+                                        "name": "at"
+                                      }
+                                    ]
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "previousBreak"
+                        },
+                        "value": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "field",
+                            "of": {
+                              "expr": "local",
+                              "name": "at"
+                            },
+                            "name": "span"
+                          },
+                          "name": "start"
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "previousEnd"
+                        },
+                        "value": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "field",
+                            "of": {
+                              "expr": "local",
+                              "name": "at"
+                            },
+                            "name": "span"
+                          },
+                          "name": "end"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "pattern": {
+                      "pattern": "default"
+                    },
+                    "body": [
+                      {
+                        "stmt": "match",
+                        "value": {
+                          "expr": "local",
+                          "name": "e"
+                        },
+                        "arms": [
+                          {
+                            "pattern": {
+                              "pattern": "variant",
+                              "name": "frame",
+                              "binds": {
+                                "value": "value",
+                                "framingOk": "framingOk"
+                              }
+                            },
+                            "body": [
+                              {
+                                "stmt": "if",
+                                "cond": {
+                                  "expr": "self",
+                                  "field": "open"
+                                },
+                                "then": [
+                                  {
+                                    "stmt": "let",
+                                    "name": "first",
+                                    "value": {
+                                      "expr": "if-some",
+                                      "value": {
+                                        "expr": "self",
+                                        "field": "code"
+                                      },
+                                      "bind": "_present",
+                                      "some": {
+                                        "expr": "lit",
+                                        "value": false
+                                      },
+                                      "none": {
+                                        "expr": "lit",
+                                        "value": true
+                                      }
+                                    },
+                                    "type": "bool"
+                                  },
+                                  {
+                                    "stmt": "expr",
+                                    "expr": {
+                                      "expr": "await",
+                                      "op": {
+                                        "op": "method",
+                                        "name": "mark",
+                                        "args": [
+                                          {
+                                            "expr": "field",
+                                            "of": {
+                                              "expr": "field",
+                                              "of": {
+                                                "expr": "local",
+                                                "name": "at"
+                                              },
+                                              "name": "span"
+                                            },
+                                            "name": "start"
+                                          },
+                                          {
+                                            "expr": "ternary",
+                                            "cond": {
+                                              "expr": "local",
+                                              "name": "first"
+                                            },
+                                            "then": {
+                                              "expr": "enum",
+                                              "type": "Interval",
+                                              "value": "mab"
+                                            },
+                                            "else": {
+                                              "expr": "enum",
+                                              "type": "Interval",
+                                              "value": "inter-slot"
+                                            }
+                                          },
+                                          {
+                                            "expr": "local",
+                                            "name": "at"
+                                          }
+                                        ]
+                                      }
+                                    }
+                                  },
+                                  {
+                                    "stmt": "if",
+                                    "cond": {
+                                      "expr": "local",
+                                      "name": "first"
+                                    },
+                                    "then": [
+                                      {
+                                        "stmt": "let",
+                                        "name": "code",
+                                        "value": {
+                                          "expr": "cast",
+                                          "value": {
+                                            "expr": "local",
+                                            "name": "value"
+                                          },
+                                          "to": "u8"
+                                        },
+                                        "type": "u8"
+                                      },
+                                      {
+                                        "stmt": "assign",
+                                        "target": {
+                                          "expr": "self",
+                                          "field": "code"
+                                        },
+                                        "value": {
+                                          "expr": "local",
+                                          "name": "code"
+                                        }
+                                      },
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "await",
+                                          "op": {
+                                            "op": "emit",
+                                            "event": {
+                                              "expr": "variant",
+                                              "type": "Event",
+                                              "kind": "start-code",
+                                              "fields": {
+                                                "packet": {
+                                                  "expr": "self",
+                                                  "field": "packet"
+                                                },
+                                                "code": {
+                                                  "expr": "local",
+                                                  "name": "code"
+                                                },
+                                                "profile": {
+                                                  "expr": "call",
+                                                  "name": "profile",
+                                                  "args": [
+                                                    {
+                                                      "expr": "local",
+                                                      "name": "code"
+                                                    }
+                                                  ]
+                                                }
+                                              }
+                                            },
+                                            "at": {
+                                              "expr": "local",
+                                              "name": "at"
+                                            }
+                                          }
+                                        }
+                                      },
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "binary",
+                                          "op": "eq",
+                                          "left": {
+                                            "expr": "local",
+                                            "name": "code"
+                                          },
+                                          "right": {
+                                            "expr": "lit",
+                                            "value": 0
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "let",
+                                            "name": "last",
+                                            "value": {
+                                              "expr": "self",
+                                              "field": "previousReset"
+                                            },
+                                            "type": {
+                                              "option": "u64"
+                                            }
+                                          },
+                                          {
+                                            "stmt": "if-some",
+                                            "value": {
+                                              "expr": "local",
+                                              "name": "last"
+                                            },
+                                            "bind": "last_2",
+                                            "then": [
+                                              {
+                                                "stmt": "let",
+                                                "name": "ticks",
+                                                "value": {
+                                                  "expr": "intrinsic",
+                                                  "name": "saturating-sub",
+                                                  "args": [
+                                                    {
+                                                      "expr": "field",
+                                                      "of": {
+                                                        "expr": "field",
+                                                        "of": {
+                                                          "expr": "local",
+                                                          "name": "at"
+                                                        },
+                                                        "name": "span"
+                                                      },
+                                                      "name": "end"
+                                                    },
+                                                    {
+                                                      "expr": "local",
+                                                      "name": "last_2"
+                                                    }
+                                                  ]
+                                                },
+                                                "type": "u64"
+                                              },
+                                              {
+                                                "stmt": "expr",
+                                                "expr": {
+                                                  "expr": "await",
+                                                  "op": {
+                                                    "op": "emit",
+                                                    "event": {
+                                                      "expr": "variant",
+                                                      "type": "Event",
+                                                      "kind": "timing",
+                                                      "fields": {
+                                                        "packet": {
+                                                          "expr": "self",
+                                                          "field": "packet"
+                                                        },
+                                                        "interval": {
+                                                          "expr": "enum",
+                                                          "type": "Interval",
+                                                          "value": "reset-to-reset"
+                                                        },
+                                                        "ticks": {
+                                                          "expr": "local",
+                                                          "name": "ticks"
+                                                        }
+                                                      }
+                                                    },
+                                                    "at": {
+                                                      "expr": "local",
+                                                      "name": "at"
+                                                    }
+                                                  }
+                                                }
+                                              },
+                                              {
+                                                "stmt": "if",
+                                                "cond": {
+                                                  "expr": "binary",
+                                                  "op": "gt",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "ticks"
+                                                  },
+                                                  "right": {
+                                                    "expr": "intrinsic",
+                                                    "name": "mul-div-ceil",
+                                                    "args": [
+                                                      {
+                                                        "expr": "self",
+                                                        "field": "rate"
+                                                      },
+                                                      {
+                                                        "expr": "field",
+                                                        "of": {
+                                                          "expr": "self",
+                                                          "field": "config"
+                                                        },
+                                                        "name": "maxResetIntervalUs"
+                                                      },
+                                                      {
+                                                        "expr": "lit",
+                                                        "value": 1000000
+                                                      }
+                                                    ]
+                                                  }
+                                                },
+                                                "then": [
+                                                  {
+                                                    "stmt": "expr",
+                                                    "expr": {
+                                                      "expr": "await",
+                                                      "op": {
+                                                        "op": "method",
+                                                        "name": "fail",
+                                                        "args": [
+                                                          {
+                                                            "expr": "enum",
+                                                            "type": "Reason",
+                                                            "value": "long-reset-interval"
+                                                          },
+                                                          {
+                                                            "expr": "lit",
+                                                            "value": 0
+                                                          },
+                                                          {
+                                                            "expr": "local",
+                                                            "name": "ticks"
+                                                          },
+                                                          {
+                                                            "expr": "local",
+                                                            "name": "at"
+                                                          }
+                                                        ]
+                                                      }
+                                                    }
+                                                  }
+                                                ]
+                                              }
+                                            ]
+                                          },
+                                          {
+                                            "stmt": "assign",
+                                            "target": {
+                                              "expr": "self",
+                                              "field": "previousReset"
+                                            },
+                                            "value": {
+                                              "expr": "field",
+                                              "of": {
+                                                "expr": "field",
+                                                "of": {
+                                                  "expr": "local",
+                                                  "name": "at"
+                                                },
+                                                "name": "span"
+                                              },
+                                              "name": "end"
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ],
+                                    "else": [
+                                      {
+                                        "stmt": "assign",
+                                        "target": {
+                                          "expr": "self",
+                                          "field": "slots"
+                                        },
+                                        "op": "add",
+                                        "value": {
+                                          "expr": "lit",
+                                          "value": 1
+                                        }
+                                      },
+                                      {
+                                        "stmt": "let",
+                                        "name": "code",
+                                        "value": {
+                                          "expr": "self",
+                                          "field": "code"
+                                        },
+                                        "type": {
+                                          "option": "u8"
+                                        }
+                                      },
+                                      {
+                                        "stmt": "if-some",
+                                        "value": {
+                                          "expr": "local",
+                                          "name": "code"
+                                        },
+                                        "bind": "code_2",
+                                        "then": [
+                                          {
+                                            "stmt": "if",
+                                            "cond": {
+                                              "expr": "binary",
+                                              "op": "or",
+                                              "left": {
+                                                "expr": "binary",
+                                                "op": "ne",
+                                                "left": {
+                                                  "expr": "local",
+                                                  "name": "code_2"
+                                                },
+                                                "right": {
+                                                  "expr": "lit",
+                                                  "value": 0
+                                                }
+                                              },
+                                              "right": {
+                                                "expr": "binary",
+                                                "op": "or",
+                                                "left": {
+                                                  "expr": "field",
+                                                  "of": {
+                                                    "expr": "self",
+                                                    "field": "config"
+                                                  },
+                                                  "name": "showZero"
+                                                },
+                                                "right": {
+                                                  "expr": "binary",
+                                                  "op": "ne",
+                                                  "left": {
+                                                    "expr": "local",
+                                                    "name": "value"
+                                                  },
+                                                  "right": {
+                                                    "expr": "lit",
+                                                    "value": 0
+                                                  }
+                                                }
+                                              }
+                                            },
+                                            "then": [
+                                              {
+                                                "stmt": "expr",
+                                                "expr": {
+                                                  "expr": "await",
+                                                  "op": {
+                                                    "op": "emit",
+                                                    "event": {
+                                                      "expr": "variant",
+                                                      "type": "Event",
+                                                      "kind": "slot",
+                                                      "fields": {
+                                                        "packet": {
+                                                          "expr": "self",
+                                                          "field": "packet"
+                                                        },
+                                                        "slot": {
+                                                          "expr": "self",
+                                                          "field": "slots"
+                                                        },
+                                                        "code": {
+                                                          "expr": "local",
+                                                          "name": "code_2"
+                                                        },
+                                                        "value": {
+                                                          "expr": "cast",
+                                                          "value": {
+                                                            "expr": "local",
+                                                            "name": "value"
+                                                          },
+                                                          "to": "u8"
+                                                        },
+                                                        "channel": {
+                                                          "expr": "binary",
+                                                          "op": "eq",
+                                                          "left": {
+                                                            "expr": "local",
+                                                            "name": "code_2"
+                                                          },
+                                                          "right": {
+                                                            "expr": "lit",
+                                                            "value": 0
+                                                          }
+                                                        }
+                                                      }
+                                                    },
+                                                    "at": {
+                                                      "expr": "local",
+                                                      "name": "at"
+                                                    }
+                                                  }
+                                                }
+                                              }
+                                            ]
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "stmt": "if",
+                                        "cond": {
+                                          "expr": "binary",
+                                          "op": "eq",
+                                          "left": {
+                                            "expr": "self",
+                                            "field": "slots"
+                                          },
+                                          "right": {
+                                            "expr": "lit",
+                                            "value": 513
+                                          }
+                                        },
+                                        "then": [
+                                          {
+                                            "stmt": "expr",
+                                            "expr": {
+                                              "expr": "await",
+                                              "op": {
+                                                "op": "method",
+                                                "name": "fail",
+                                                "args": [
+                                                  {
+                                                    "expr": "enum",
+                                                    "type": "Reason",
+                                                    "value": "too-many-slots"
+                                                  },
+                                                  {
+                                                    "expr": "self",
+                                                    "field": "slots"
+                                                  },
+                                                  {
+                                                    "expr": "none"
+                                                  },
+                                                  {
+                                                    "expr": "local",
+                                                    "name": "at"
+                                                  }
+                                                ]
+                                              }
+                                            }
+                                          }
+                                        ]
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "stmt": "if",
+                                    "cond": {
+                                      "expr": "unary",
+                                      "op": "not",
+                                      "value": {
+                                        "expr": "local",
+                                        "name": "framingOk"
+                                      }
+                                    },
+                                    "then": [
+                                      {
+                                        "stmt": "expr",
+                                        "expr": {
+                                          "expr": "await",
+                                          "op": {
+                                            "op": "method",
+                                            "name": "fail",
+                                            "args": [
+                                              {
+                                                "expr": "enum",
+                                                "type": "Reason",
+                                                "value": "framing-error"
+                                              },
+                                              {
+                                                "expr": "ternary",
+                                                "cond": {
+                                                  "expr": "local",
+                                                  "name": "first"
+                                                },
+                                                "then": {
+                                                  "expr": "lit",
+                                                  "value": 0
+                                                },
+                                                "else": {
+                                                  "expr": "self",
+                                                  "field": "slots"
+                                                }
+                                              },
+                                              {
+                                                "expr": "none"
+                                              },
+                                              {
+                                                "expr": "local",
+                                                "name": "at"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "stmt": "assign",
+                                    "target": {
+                                      "expr": "self",
+                                      "field": "previousEnd"
+                                    },
+                                    "value": {
+                                      "expr": "field",
+                                      "of": {
+                                        "expr": "field",
+                                        "of": {
+                                          "expr": "local",
+                                          "name": "at"
+                                        },
+                                        "name": "span"
+                                      },
+                                      "name": "end"
+                                    }
+                                  }
+                                ]
+                              }
+                            ]
+                          },
+                          {
+                            "pattern": {
+                              "pattern": "default"
+                            },
+                            "body": []
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "async": true
+      }
+    ],
+    "requires": [
+      {
+        "key": "baud",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 250000
+          }
+        ]
+      },
+      {
+        "key": "dataBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "key": "parity",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "none"
+          }
+        ]
+      },
+      {
+        "key": "stopBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "two"
+          }
+        ]
+      },
+      {
+        "key": "bitOrder",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "lsb-first"
+          }
+        ]
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "DMX512 timing and slots",
+        "summary": "Receiver timing checks, zero-channel filtering and alternate start-code identification",
+        "fields": {
+          "minBreakUs": "Minimum BREAK (µs)",
+          "minMabUs": "Minimum MAB (µs)",
+          "maxMarkUs": "Maximum MARK (µs)",
+          "minBreakIntervalUs": "Minimum BREAK interval (µs)",
+          "maxResetIntervalUs": "Maximum RESET interval (µs)",
+          "showZero": "Show zero dimmer values"
+        },
+        "events": {
+          "begin": "Begin",
+          "start-code": "Start code",
+          "slot": "Slot",
+          "timing": "Timing",
+          "error": "Protocol error",
+          "end": "End"
+        },
+        "eventFields": {
+          "packet": "Packet",
+          "breakTicks": "BREAK ticks",
+          "code": "Start code",
+          "profile": "Start-code profile",
+          "slot": "Slot",
+          "value": "Value",
+          "channel": "Dimmer channel",
+          "interval": "Interval",
+          "ticks": "Ticks",
+          "reason": "Reason",
+          "slots": "Data slots"
+        }
+      },
+      "zh-CN": {
+        "name": "DMX512时序和槽位",
+        "summary": "接收端时序检查、零值通道过滤和备用起始码识别",
+        "fields": {
+          "minBreakUs": "最短BREAK（µs）",
+          "minMabUs": "最短MAB（µs）",
+          "maxMarkUs": "最长MARK（µs）",
+          "minBreakIntervalUs": "最短BREAK间隔（µs）",
+          "maxResetIntervalUs": "最长RESET间隔（µs）",
+          "showZero": "显示零值调光通道"
+        },
+        "events": {
+          "begin": "开始",
+          "start-code": "起始码",
+          "slot": "槽位",
+          "timing": "时序",
+          "error": "协议错误",
+          "end": "结束"
+        },
+        "eventFields": {
+          "packet": "包",
+          "breakTicks": "BREAK采样数",
+          "code": "起始码",
+          "profile": "起始码格式",
+          "slot": "槽位",
+          "value": "值",
+          "channel": "调光通道",
+          "interval": "间隔",
+          "ticks": "采样数",
+          "reason": "原因",
+          "slots": "数据槽位"
+        }
+      }
+    },
+    "state": [
+      {
+        "name": "packet",
+        "type": "u64",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "open",
+        "type": "bool",
+        "init": {
+          "expr": "lit",
+          "value": false
+        }
+      },
+      {
+        "name": "code",
+        "type": {
+          "option": "u8"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "slots",
+        "type": "u32",
+        "init": {
+          "expr": "lit",
+          "value": 0
+        }
+      },
+      {
+        "name": "previousBreak",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "previousReset",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "previousEnd",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      }
+    ]
+  }
+}
