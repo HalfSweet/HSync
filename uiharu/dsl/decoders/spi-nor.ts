@@ -74,6 +74,9 @@ export type Command =
   | 'block-unlock'
   | 'global-block-lock'
   | 'global-block-unlock'
+  | 'read-block-lock'
+  | 'read-extended-address'
+  | 'write-extended-address'
 
 /** Which way data moves: into the flash on MOSI (`in`) or out to the host on MISO (`out`). */
 export type Direction = 'in' | 'out'
@@ -247,6 +250,12 @@ function commandOf(opcode: u8): Command | undefined {
       return 'block-unlock'
     case 0x7e:
       return 'global-block-lock'
+    case 0x3d:
+      return 'read-block-lock'
+    case 0xc8:
+      return 'read-extended-address'
+    case 0xc5:
+      return 'write-extended-address'
     case 0x98:
       return 'global-block-unlock'
     default:
@@ -279,6 +288,12 @@ function layoutOf(command: Command): Layout {
     case 'global-block-lock':
     case 'global-block-unlock':
       return bare({ kind: 'none' })
+    case 'read-extended-address':
+      return bare({ kind: 'data-out' })
+    case 'write-extended-address':
+      return bare({ kind: 'data-in' })
+    case 'read-block-lock':
+      return addressed('mode', 0, { kind: 'data-out' })
     case 'read-status':
       return bare({ kind: 'read-status', register: 1 })
     case 'read-status-2':
