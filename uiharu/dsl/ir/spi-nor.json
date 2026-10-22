@@ -45,7 +45,10 @@
         "block-lock",
         "block-unlock",
         "global-block-lock",
-        "global-block-unlock"
+        "global-block-unlock",
+        "read-block-lock",
+        "read-extended-address",
+        "write-extended-address"
       ]
     },
     {
@@ -1098,6 +1101,54 @@
             {
               "pattern": {
                 "pattern": "values",
+                "values": [61]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-block-lock"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [200]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "read-extended-address"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": [197]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "Command",
+                    "value": "write-extended-address"
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
                 "values": [152]
               },
               "body": [
@@ -1252,6 +1303,81 @@
                         "expr": "variant",
                         "type": "Phase",
                         "kind": "none"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-extended-address"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-out"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["write-extended-address"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "bare",
+                    "args": [
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-in"
+                      }
+                    ]
+                  }
+                }
+              ]
+            },
+            {
+              "pattern": {
+                "pattern": "values",
+                "values": ["read-block-lock"]
+              },
+              "body": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "call",
+                    "name": "addressed",
+                    "args": [
+                      {
+                        "expr": "enum",
+                        "type": "AddressWidth",
+                        "value": "mode"
+                      },
+                      {
+                        "expr": "lit",
+                        "value": 0
+                      },
+                      {
+                        "expr": "variant",
+                        "type": "Phase",
+                        "kind": "data-out"
                       }
                     ]
                   }

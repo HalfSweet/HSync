@@ -113,6 +113,12 @@ pub enum Command {
     GlobalBlockLock,
     #[serde(rename = "global-block-unlock")]
     GlobalBlockUnlock,
+    #[serde(rename = "read-block-lock")]
+    ReadBlockLock,
+    #[serde(rename = "read-extended-address")]
+    ReadExtendedAddress,
+    #[serde(rename = "write-extended-address")]
+    WriteExtendedAddress,
 }
 
 impl Command {
@@ -159,6 +165,9 @@ impl Command {
             Command::BlockUnlock => "block-unlock",
             Command::GlobalBlockLock => "global-block-lock",
             Command::GlobalBlockUnlock => "global-block-unlock",
+            Command::ReadBlockLock => "read-block-lock",
+            Command::ReadExtendedAddress => "read-extended-address",
+            Command::WriteExtendedAddress => "write-extended-address",
         }
     }
 }
@@ -502,6 +511,15 @@ pub fn command_of(opcode: u8) -> Option<Command> {
         126 => {
             return Some(Command::GlobalBlockLock);
         }
+        61 => {
+            return Some(Command::ReadBlockLock);
+        }
+        200 => {
+            return Some(Command::ReadExtendedAddress);
+        }
+        197 => {
+            return Some(Command::WriteExtendedAddress);
+        }
         152 => {
             return Some(Command::GlobalBlockUnlock);
         }
@@ -514,7 +532,7 @@ pub fn command_of(opcode: u8) -> Option<Command> {
 pub fn bare(phase: Phase) -> Layout {
     return Layout {
         address: AddressWidth::None,
-        dummy: 0,
+        dummy: 0u8,
         phase,
     };
 }
@@ -544,41 +562,59 @@ pub fn layout_of(command: Command) -> Layout {
         | Command::GlobalBlockUnlock => {
             return bare(Phase::None);
         }
+        Command::ReadExtendedAddress => {
+            return bare(Phase::DataOut);
+        }
+        Command::WriteExtendedAddress => {
+            return bare(Phase::DataIn);
+        }
+        Command::ReadBlockLock => {
+            return addressed(AddressWidth::Mode, 0u8, Phase::DataOut);
+        }
         Command::ReadStatus => {
-            return bare(Phase::ReadStatus { register: 1 });
+            return bare(Phase::ReadStatus { register: 1u8 });
         }
         Command::ReadStatus2 => {
-            return bare(Phase::ReadStatus { register: 2 });
+            return bare(Phase::ReadStatus { register: 2u8 });
         }
         Command::ReadStatus3 => {
-            return bare(Phase::ReadStatus { register: 3 });
+            return bare(Phase::ReadStatus { register: 3u8 });
         }
         Command::WriteStatus => {
-            return bare(Phase::WriteStatus { first: 1, last: 2 });
+            return bare(Phase::WriteStatus {
+                first: 1u8,
+                last: 2u8,
+            });
         }
         Command::WriteStatus2 => {
-            return bare(Phase::WriteStatus { first: 2, last: 2 });
+            return bare(Phase::WriteStatus {
+                first: 2u8,
+                last: 2u8,
+            });
         }
         Command::WriteStatus3 => {
-            return bare(Phase::WriteStatus { first: 3, last: 3 });
+            return bare(Phase::WriteStatus {
+                first: 3u8,
+                last: 3u8,
+            });
         }
         Command::Read => {
-            return addressed(AddressWidth::Mode, 0, Phase::DataOut);
+            return addressed(AddressWidth::Mode, 0u8, Phase::DataOut);
         }
         Command::FastRead | Command::ReadSecurityRegister => {
-            return addressed(AddressWidth::Mode, 1, Phase::DataOut);
+            return addressed(AddressWidth::Mode, 1u8, Phase::DataOut);
         }
         Command::Read4b => {
-            return addressed(AddressWidth::Four, 0, Phase::DataOut);
+            return addressed(AddressWidth::Four, 0u8, Phase::DataOut);
         }
         Command::FastRead4b => {
-            return addressed(AddressWidth::Four, 1, Phase::DataOut);
+            return addressed(AddressWidth::Four, 1u8, Phase::DataOut);
         }
         Command::PageProgram | Command::ProgramSecurityRegister => {
-            return addressed(AddressWidth::Mode, 0, Phase::DataIn);
+            return addressed(AddressWidth::Mode, 0u8, Phase::DataIn);
         }
         Command::PageProgram4b => {
-            return addressed(AddressWidth::Four, 0, Phase::DataIn);
+            return addressed(AddressWidth::Four, 0u8, Phase::DataIn);
         }
         Command::SectorErase
         | Command::BlockErase32k
@@ -586,10 +622,10 @@ pub fn layout_of(command: Command) -> Layout {
         | Command::EraseSecurityRegister
         | Command::BlockLock
         | Command::BlockUnlock => {
-            return addressed(AddressWidth::Mode, 0, Phase::None);
+            return addressed(AddressWidth::Mode, 0u8, Phase::None);
         }
         Command::SectorErase4b | Command::BlockErase64k4b => {
-            return addressed(AddressWidth::Four, 0, Phase::None);
+            return addressed(AddressWidth::Four, 0u8, Phase::None);
         }
         Command::ReleasePowerDown => {
             return bare(Phase::Signature);
@@ -597,10 +633,10 @@ pub fn layout_of(command: Command) -> Layout {
         Command::ReadManufacturerDeviceId => {
             return addressed(
                 AddressWidth::Three,
-                0,
+                0u8,
                 Phase::Id {
                     scheme: IdScheme::ManufacturerDevice,
-                    len: Some(2),
+                    len: Some(2u8),
                 },
             );
         }
@@ -611,15 +647,15 @@ pub fn layout_of(command: Command) -> Layout {
             });
         }
         Command::ReadSfdp => {
-            return addressed(AddressWidth::Three, 1, Phase::DataOut);
+            return addressed(AddressWidth::Three, 1u8, Phase::DataOut);
         }
         Command::ReadUniqueId => {
             return addressed(
                 AddressWidth::None,
-                4,
+                4u8,
                 Phase::Id {
                     scheme: IdScheme::Unique,
-                    len: Some(8),
+                    len: Some(8u8),
                 },
             );
         }
@@ -629,13 +665,13 @@ pub fn layout_of(command: Command) -> Layout {
 pub fn address_width(width: AddressWidth, mode: u8) -> u8 {
     match width {
         AddressWidth::None => {
-            return 0;
+            return 0u8;
         }
         AddressWidth::Three => {
-            return 3;
+            return 3u8;
         }
         AddressWidth::Four => {
-            return 4;
+            return 4u8;
         }
         AddressWidth::Mode => {
             return mode;
@@ -732,14 +768,14 @@ impl State {
     fn new(config: SpiNorConfig, rate: u64) -> Self {
         let four_byte: bool = (config.address_bytes == AddressBytes::Four);
         let reset_enabled: bool = false;
-        let next_op: u64 = 1;
+        let next_op: u64 = 1u64;
         let open: Option<u64> = None;
         let batch: Batch<u8, 32> = Batch::new();
         let batch_of: BatchOf = BatchOf::Data {
             direction: Direction::Out,
         };
-        let batch_offset: u32 = 0;
-        let count: u32 = 0;
+        let batch_offset: u32 = 0u32;
+        let count: u32 = 0u32;
         Self {
             config,
             rate,
@@ -768,7 +804,7 @@ impl State {
     }
 
     fn address_bytes(&self) -> u8 {
-        return if self.four_byte { 4 } else { 3 };
+        return if self.four_byte { 4u8 } else { 3u8 };
     }
 
     fn completed(&mut self, command: Command, reset_enabled: bool) {
@@ -803,9 +839,9 @@ impl State {
         tx: u64,
     ) -> Result<u64, Cut> {
         let op: u64 = self.next_op;
-        self.next_op = Int::wadd(self.next_op, 1);
+        self.next_op = Int::wadd(self.next_op, 1u64);
         self.open = Some(op);
-        self.count = 0;
+        self.count = 0u32;
         io.out
             .emit(io.consumed(), NorEvent::Begin { op, tx, command })
             .await;
@@ -830,7 +866,7 @@ impl State {
         self.batch.push(byte, r#where);
         match of {
             BatchOf::Data { .. } => {
-                self.count = Int::wadd(self.count, 1);
+                self.count = Int::wadd(self.count, 1u32);
             }
             _ => {}
         }
@@ -852,7 +888,7 @@ impl State {
         let taken: Taken<u8> = self.batch.take();
         let mut r#where: Provenance = taken
             .at
-            .unwrap_or(Provenance::at(Tick(decided.unwrap_or(0))));
+            .unwrap_or(Provenance::at(Tick(decided.unwrap_or(0u64))));
         if let Some(decided_2) = decided {
             r#where = Provenance::over(
                 TickRange::new(Tick(r#where.span.start.0), Tick(r#where.span.end.0)),
@@ -949,9 +985,9 @@ impl State {
         let op: u64 = self.begin(io, command_2, tx.id()).await?;
         let layout: Layout = layout_of(command_2);
         let width: u8 = address_width(layout.address, self.address_bytes());
-        if (width > 0) {
-            let mut address: u32 = 0;
-            for i in (0 as u8)..(width as u8) {
+        if (width > 0u8) {
+            let mut address: u32 = 0u32;
+            for i in (0u8 as u8)..(width as u8) {
                 address = (Int::shl(address, 8)
                     | u32::from(required(
                         {
@@ -972,8 +1008,8 @@ impl State {
                 )
                 .await;
         }
-        if (layout.dummy > 0) {
-            for i in (0 as u8)..(layout.dummy as u8) {
+        if (layout.dummy > 0u8) {
+            for i in (0u8 as u8)..(layout.dummy as u8) {
                 {
                     io.sink.hold(self.hold().map(Tick));
                     tx.item().await?
@@ -1103,7 +1139,7 @@ impl State {
                         },
                     )
                     .await;
-                for register in (Int::wadd(first, 1) as u8)..(Int::wadd(last, 1) as u8) {
+                for register in (Int::wadd(first, 1u8) as u8)..(Int::wadd(last, 1u8) as u8) {
                     let word: Option<SpiEventItem> = {
                         io.sink.hold(self.hold().map(Tick));
                         match tx.item_or_end().await? {
@@ -1132,7 +1168,7 @@ impl State {
                 let mut left: Option<u8> = len;
                 loop {
                     if if let Some(left_2) = left {
-                        (left_2 == 0)
+                        (left_2 == 0u8)
                     } else {
                         false
                     } {
@@ -1158,7 +1194,7 @@ impl State {
                     )
                     .await?;
                     if let Some(left_2) = left {
-                        left = Some(Int::wsub(left_2, 1));
+                        left = Some(Int::wsub(left_2, 1u8));
                     }
                 }
             }
@@ -1173,14 +1209,14 @@ impl State {
                 {
                     return Ok(true);
                 }
-                for i in (1 as u8)..(3 as u8) {
+                for i in (1u64 as u64)..(3u64 as u64) {
                     {
                         io.sink.hold(self.hold().map(Tick));
                         tx.item().await?
                     };
                 }
                 io.out
-                    .emit(io.consumed(), NorEvent::Dummy { op, bytes: 3 })
+                    .emit(io.consumed(), NorEvent::Dummy { op, bytes: 3u8 })
                     .await;
                 let word: Option<SpiEventItem> = {
                     io.sink.hold(self.hold().map(Tick));
