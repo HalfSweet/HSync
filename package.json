@@ -15,7 +15,7 @@
     "bundle": "node scripts/bundle.mjs",
     "release": "node scripts/release.mjs",
     "preview": "vite preview",
-    "tauri": "tauri",
+    "tauri": "node scripts/tauri.mjs",
     "typecheck": "vue-tsc --build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -23,9 +23,10 @@
     "format:check": "prettier --check .",
     "test": "pnpm dsl:compile && vitest run",
     "test:watch": "pnpm dsl:compile && vitest",
-    "bindings": "pnpm dsl:compile && cargo test --workspace export_bindings",
+    "bindings": "pnpm dsl:generate && cargo test --workspace export_bindings",
     "dsl:compile": "node --experimental-strip-types uiharu/compiler/src/main.ts",
-    "dsl:check": "pnpm dsl:compile && cargo run -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src --check && cargo run -p uiharu-codegen -- uiharu/crates/uiharu-interp/tests/fixtures/backend/ir uiharu/crates/uiharu-interp/tests/fixtures/backend/generated --check"
+    "dsl:generate": "pnpm dsl:compile && cargo run --locked -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src/generated && cargo run --locked -p uiharu-codegen -- uiharu/crates/uiharu-interp/tests/fixtures/backend/ir uiharu/crates/uiharu-interp/tests/fixtures/backend/generated",
+    "dsl:check": "pnpm dsl:generate && cargo check --locked -p uiharu-dsl-protocols -p uiharu-interp --all-targets"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",

@@ -1,94 +1,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
-//! The protocol decoders generated from the decoder DSL (`uiharu/dsl/decoders/`) and the
-//! contracts of decoders written by hand (`uiharu/dsl/contracts/`), by `uiharu-codegen` from
-//! `uiharu/dsl/ir/`; do not edit. A module is one decoder — its contract's types, its
-//! configuration and its node — or one contract: its types alone.
+//! Decoder modules compiled from the TypeScript DSL. Generate the disposable implementation
+//! under `src/generated/` with `pnpm dsl:generate` before building.
+//! This handwritten crate root keeps a Cargo target available while codegen bootstraps.
 
 #![forbid(unsafe_code)]
 
-pub mod a7105;
-pub mod ad5626;
-pub mod ad79x0;
-pub mod ade77xx;
-pub mod adf435x;
-pub mod adns5020;
-pub mod adxl345;
-pub mod adxl345_spi;
-pub mod am230x;
-pub mod am230x_values;
-pub mod amulet_ascii;
-pub mod arm_etmv3;
-pub mod arm_itm;
-pub mod arm_memap;
-pub mod arm_trace_transport;
-pub mod atsha204a;
-pub mod aud;
-pub mod avr_isp;
-pub mod avr_isp_device;
-pub mod avr_pdi;
-pub mod c2;
-pub mod cc1101;
-pub mod cfp;
-pub mod cjtag;
-pub mod dmx512;
-pub mod dmx512_analysis;
-pub mod ds1307;
-pub mod ds2408;
-pub mod ds243x;
-pub mod ds28ea00;
-pub mod edid;
-pub mod eeprom24xx_memory;
-pub mod enc28j60;
-pub mod fsi;
-pub mod i2c;
-pub mod jtag_chain;
-pub mod jtag_dp;
-pub mod jtag_ejtag;
-pub mod jtag_stm32;
-pub mod lin_profile;
-pub mod lm75;
-pub mod ltc242x;
-pub mod ltc26x7;
-pub mod max7219;
-pub mod max72xx;
-pub mod mcp230xx;
-pub mod mdio;
-pub mod midi;
-pub mod midi_semantics;
-pub mod mlx90614;
-pub mod modbus;
-pub mod modbus_pdu;
-pub mod mrf24j40;
-pub mod mxc6225xu;
-pub mod nrf905;
-pub mod nunchuk;
-pub mod onewire;
-pub mod pan1321;
-pub mod pca9571;
-pub mod ps2;
-pub mod ps2_device;
-pub mod pwm;
-pub mod qspi_flash;
-pub mod rfm12;
-pub mod rgb_led_spi;
-pub mod rtc8564;
-pub mod sd_native;
-pub mod sd_registers;
-pub mod sda2506;
-pub mod smbus;
-pub mod spi;
-pub mod spi_nor;
-pub mod spi_tpm;
-pub mod st25r39xx_spi;
-pub mod st7735;
-pub mod st7789;
-pub mod swd;
-pub mod swd_dp;
-pub mod swim_stm8;
-pub mod tca6408a;
-pub mod tlc5620;
-pub mod uart;
-pub mod x2444m;
-pub mod xfp;
-pub mod xn297;
+#[path = "generated/lib.rs"]
+mod generated;
+
+// Generated modules use `crate::<module>` for shared contracts; keep those paths public.
+pub use generated::*;
