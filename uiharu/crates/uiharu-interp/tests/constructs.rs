@@ -155,6 +155,10 @@ fn lab() -> Json {
             "picked": call("pick", vec![field(this("config"), "mode"), local("t2")]),
             "wrapped": bin("add", local("small"), lit(250)),
             "wide": bin("mul", local("small"), lit(100)),
+            "nested_wide": bin("add", bin("mul", local("small"), lit(100)), local("big")),
+            "cast_wide": cast(bin("shl", lit(1), lit(40)), "u64"),
+            "cast_barrier": cast(cast(bin("mul", local("small"), lit(100)), "u8"), "u64"),
+            "count_width": bin("shl", lit(1), cast(lit(8), "u8")),
             "maxed": intrinsic("max", vec![local("small"), lit(3)]),
             "either": json!({ "expr": "if-variant", "value": local("t"), "variant": "quiet",
                 "binds": { "tick": "q" }, "then": bin("eq", local("q"), local("t2")), "else": flag(false) }),
@@ -296,6 +300,8 @@ fn lab() -> Json {
                     { "name": "cast", "type": "u8" }, { "name": "whiles", "type": "u64" },
                     { "name": "labelled", "type": "u64" }, { "name": "picked", "type": "u64" },
                     { "name": "wrapped", "type": "u8" }, { "name": "wide", "type": "u16" },
+                    { "name": "nested_wide", "type": "u16" }, { "name": "cast_wide", "type": "u64" },
+                    { "name": "cast_barrier", "type": "u64" }, { "name": "count_width", "type": "u16" },
                     { "name": "maxed", "type": "u8" }, { "name": "either", "type": "bool" }] },
                 { "name": "items", "fields": [
                     { "name": "bytes", "type": { "array": "u8", "bound": 4 } },
@@ -457,6 +463,10 @@ fn every_construct_runs() {
     assert_eq!(first["picked"], 20);
     assert_eq!(first["wrapped"], 9);
     assert_eq!(first["wide"], 1500);
+    assert_eq!(first["nested_wide"], 1800);
+    assert_eq!(first["cast_wide"], 1_u64 << 40);
+    assert_eq!(first["cast_barrier"], 220);
+    assert_eq!(first["count_width"], 256);
     assert_eq!(first["maxed"], 15);
     assert_eq!(first["either"], true);
     // The table's last item grows by one at every deadline.
