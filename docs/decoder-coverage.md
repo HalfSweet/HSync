@@ -433,8 +433,9 @@ collisions. Existing IR version 1 modules remain supported.
 The supported source forms and limits are in
 [the DSL specification](../uiharu/docs/dsl.md#21-types). Acceptance sources in
 `uiharu/compiler/fixtures/backend-*.ts` and their generated/interpreted pipeline
-exercise these capabilities outside the production catalog. Regenerate their
-IR with `node uiharu/compiler/src/backend-fixtures.ts` and their Rust with
+exercise these capabilities outside the production catalog. `pnpm dsl:compile`
+regenerates both production and backend-fixture IR as ignored, disposable local
+output and prunes stale JSON. Regenerate their tracked Rust with
 `cargo run -p uiharu-codegen -- uiharu/crates/uiharu-interp/tests/fixtures/backend/ir uiharu/crates/uiharu-interp/tests/fixtures/backend/generated`.
 
 The acceptance pipeline covers all four compiled/interpreted producer-consumer
@@ -449,6 +450,15 @@ tests pass. Workspace clippy with warnings denied, Rust/Prettier formatting,
 ESLint, TypeScript checking, the frontend build, DSL IR freshness and generated
 Rust freshness also pass. The fixture checks cover both source-to-IR and
 IR-to-Rust freshness; generated files are not edited by hand.
+
+The current workflow keeps TypeScript sources and generated Rust tracked, not
+generated IR. `pnpm dsl:check` freshly compiles both IR directories and checks
+both tracked Rust output directories without rewriting Rust. `pnpm test`,
+`pnpm test:watch` and `pnpm bindings` prepare local IR automatically; run
+`pnpm dsl:compile` first for direct Cargo tests,
+interpreted CLI decoding or metadata export. Ordinary Rust builds and installer
+bundles use committed Rust and manifests without local IR. The independent,
+hand-authored `uiharu/crates/uiharu-ir/tests/fixtures/pwm.json` remains tracked.
 
 These backend capabilities were delivered before the protocol continuation below;
 at that checkpoint the catalog still contained 100 nodes. Matching serialized

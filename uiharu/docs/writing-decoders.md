@@ -34,6 +34,8 @@ its loaded IR, including ports, events, configuration, defaults and localized co
 The generated and interpreted paths must also pass the same independent protocol
 vectors and streaming-invariance tests.
 
+Generated IR is ignored, disposable local output. Run `pnpm dsl:compile` before direct Cargo tests, interpreted CLI decoding or metadata export; `pnpm test`, `pnpm test:watch` and `pnpm bindings` prepare it automatically. Regenerate and commit Rust with the TypeScript sources using [the DSL workflow](dsl.md). Keep the independent, hand-authored `uiharu-ir/tests/fixtures/pwm.json` tracked.
+
 ## The contract
 
 The contract is the event stream between layers — what a decoder emits and what decoders built on it read. Design it for the bus, not for the protocols above it. It is written in Rust (`src/<name>/events.rs`, as `src/microwire/` does) or declared in the DSL — a module under `uiharu/dsl/contracts/` with the event type, its enums and the `eventSchema` call (`contracts/i2c.ts` is the model, [dsl.md](dsl.md) §2.3 describes the declaration), compiled with `pnpm dsl:compile` and generated with `uiharu-codegen`, its types re-exported from the decoder's module as `src/i2c/mod.rs` does — which is what a decoder written in the DSL needs in order to read it. The rules below describe what the contract says, whichever way it is written.
