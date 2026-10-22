@@ -9,7 +9,12 @@ use uiharu_interp::{DynEvent, Interpreter, Program};
 pub fn program(name: &str) -> Arc<Program> {
     let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join(format!("../../dsl/ir/{name}.json"));
-    let contents = std::fs::read_to_string(path).expect("IR exists");
+    let contents = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+        panic!(
+            "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+            path.display()
+        )
+    });
     let module = serde_json::from_str(&contents).expect("IR parses");
     Arc::new(Program::load(&module).expect("IR validates"))
 }

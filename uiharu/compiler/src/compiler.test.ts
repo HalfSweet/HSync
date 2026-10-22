@@ -4,8 +4,8 @@
 /**
  * The compiler on the reference decoders and on snippets outside the subset: the PWM
  * decoder lowers to the IR written by hand in `uiharu-ir`'s fixtures, every reference
- * decoder lowers to the IR checked in under `uiharu/dsl/ir/`, and what the subset leaves out
- * is reported where it is.
+ * decoder compiles without diagnostics, and what the subset leaves out is reported
+ * where it is. Rust tests check generated sources against the freshly compiled IR.
  */
 
 import fs from 'node:fs'
@@ -14,7 +14,6 @@ import { fileURLToPath } from 'node:url'
 
 import { describe, expect, test } from 'vitest'
 
-import { backendFixtureIr, backendFixtures } from './backend-fixtures.ts'
 import { lowerModule } from './module.ts'
 import { loadProject, moduleFiles, type Diagnostic } from './program.ts'
 
@@ -78,21 +77,13 @@ describe('the modules', () => {
   })
 
   test.each(files.map((file) => [path.basename(file.fileName, '.ts'), file] as const))(
-    '%s lowers to the IR checked in',
+    '%s compiles without diagnostics',
     (name, file) => {
       const { module, diagnostics } = lowerModule(project, file)
       expect(diagnostics).toEqual([])
       expect(module?.name).toBe(name)
-      // Out of date? Run `pnpm dsl:compile` and commit the result.
-      expect(module).toEqual(read(path.join(dsl, 'ir', `${name}.json`)))
     },
   )
-})
-
-test('backend acceptance sources lower to their checked-in IR', () => {
-  for (const module of backendFixtures()) {
-    expect(module).toEqual(read(path.join(backendFixtureIr, `${module.name}.json`)))
-  }
 })
 
 /** A decoder module around `body`, the class body, and `extra` top-level statements. */

@@ -460,9 +460,16 @@ fn counts_edges_in_a_segment_as_dsview() {
     assert!(hsync_session::edges(&capture, 0, 10, &[99]).is_err());
 }
 
-/// The IR of the reference decoder `name`, as `pnpm dsl:compile` writes it.
+/// The freshly compiled TS intermediate for `name`, prepared by `pnpm dsl:compile`.
 fn module_path(name: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../uiharu/dsl/ir/{name}.json"))
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../uiharu/dsl/ir/{name}.json"));
+    assert!(
+        path.is_file(),
+        "{} is missing; run `pnpm dsl:compile` before Cargo tests",
+        path.display()
+    );
+    path
 }
 
 #[test]

@@ -1,9 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-import pwm from '../../uiharu/dsl/ir/pwm.json'
-import spiNor from '../../uiharu/dsl/ir/spi-nor.json'
-import spi from '../../uiharu/dsl/ir/spi.json'
-import uart from '../../uiharu/dsl/ir/uart.json'
+import { describe, expect, it } from 'vitest'
 
 import { detectLocale } from '.'
 import enUS from './locales/en-US.json'
@@ -88,7 +87,11 @@ function keysOf(module: ModuleWithCopy, tag: string): Map<string, string> {
 }
 
 describe('the decoders written in the DSL', () => {
-  const modules = [pwm, spi, spiNor, uart] as unknown as ModuleWithCopy[]
+  // Tests prepare IR before running; type-checking and normal builds do not need it.
+  const ir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uiharu/dsl/ir')
+  const modules = ['pwm', 'spi', 'spi-nor', 'uart'].map(
+    (name) => JSON.parse(fs.readFileSync(path.join(ir, `${name}.json`), 'utf8')) as ModuleWithCopy,
+  )
   it.each(modules.map((module) => [module.name, module] as const))(
     '%s carries the copy the app shows for it',
     (_name, module) => {

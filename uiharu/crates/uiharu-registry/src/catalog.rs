@@ -483,8 +483,12 @@ mod tests {
     fn module(name: &str) -> Module {
         let path =
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dsl/ir/{name}.json"));
-        let json = std::fs::read_to_string(&path)
-            .unwrap_or_else(|error| panic!("{} reads: {error}", path.display()));
+        let json = std::fs::read_to_string(&path).unwrap_or_else(|error| {
+            panic!(
+                "{} reads: {error}; run `pnpm dsl:compile` before Cargo tests",
+                path.display()
+            )
+        });
         serde_json::from_str(&json).expect("the module parses")
     }
 
@@ -590,9 +594,12 @@ mod tests {
         let mut catalog = Catalog::new();
         for kind in KINDS {
             let name = kind.name;
-            let path =
-                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../dsl/ir/{name}.json"));
-            if !path.exists() {
+            let dsl = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../dsl");
+            // Nodes without a TS module need no intermediate. Every declared TS module
+            // requires its ignored IR; missing generation must not skip catalog checks.
+            if !dsl.join(format!("decoders/{name}.ts")).is_file()
+                && !dsl.join(format!("contracts/{name}.ts")).is_file()
+            {
                 continue;
             }
             let declared = module(name);

@@ -79,6 +79,11 @@ fn exports_a_segment_as_an_hsync_capture_with_the_decoders_it_can_keep() {
 fn a_capture_file_carries_the_decoder_modules_its_decoders_name() {
     let module_path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../uiharu/dsl/ir/uart.json");
+    assert!(
+        module_path.is_file(),
+        "{} is missing; run `pnpm dsl:compile` before Cargo tests",
+        module_path.display()
+    );
     let (mut workspace, events) = fresh();
     workspace.load_module(&module_path).expect("loads");
     let opened = workspace.open_demo(&demo_path()).expect("demo");
