@@ -1,0 +1,6188 @@
+{
+  "ir": 1,
+  "name": "st25r39xx-spi",
+  "types": [
+    {
+      "name": "RegisterName",
+      "type": "enum",
+      "variants": [
+        "io-configuration-1",
+        "io-configuration-2",
+        "operation-control",
+        "mode-definition",
+        "bit-rate-definition",
+        "iso14443a-nfc",
+        "iso14443b-1",
+        "iso14443b-felica",
+        "nfcip1-passive-target",
+        "stream-mode",
+        "auxiliary-definition",
+        "receiver-configuration-1",
+        "receiver-configuration-2",
+        "receiver-configuration-3",
+        "receiver-configuration-4",
+        "mask-receive-timer",
+        "no-response-timer-1",
+        "no-response-timer-2",
+        "timer-emv-control",
+        "general-purpose-timer-1",
+        "general-purpose-timer-2",
+        "ppon2-field-waiting",
+        "mask-main-interrupt",
+        "mask-timer-nfc-interrupt",
+        "mask-error-wake-interrupt",
+        "mask-passive-target-interrupt",
+        "main-interrupt",
+        "timer-nfc-interrupt",
+        "error-wake-interrupt",
+        "passive-target-interrupt",
+        "fifo-status-1",
+        "fifo-status-2",
+        "collision-display",
+        "passive-target-display",
+        "transmitted-bytes-1",
+        "transmitted-bytes-2",
+        "bit-rate-detection",
+        "adc-output",
+        "antenna-tuning-control-1",
+        "antenna-tuning-control-2",
+        "tx-driver",
+        "passive-target-modulation",
+        "external-field-activation-threshold",
+        "external-field-deactivation-threshold",
+        "regulator-voltage-control",
+        "rssi-display",
+        "gain-reduction-state",
+        "capacitive-sensor-control",
+        "capacitive-sensor-display",
+        "auxiliary-display",
+        "wake-up-timer-control",
+        "amplitude-measurement-configuration",
+        "amplitude-measurement-reference",
+        "amplitude-measurement-auto-average",
+        "amplitude-measurement-display",
+        "phase-measurement-configuration",
+        "phase-measurement-reference",
+        "phase-measurement-auto-average",
+        "phase-measurement-display",
+        "capacitance-measurement-configuration",
+        "capacitance-measurement-reference",
+        "capacitance-measurement-auto-average",
+        "capacitance-measurement-display",
+        "ic-identity",
+        "emd-suppression-configuration",
+        "subcarrier-start-timer",
+        "p2p-receiver-configuration-1",
+        "correlator-configuration-1",
+        "correlator-configuration-2",
+        "squelch-timer",
+        "nfc-field-on-guard-timer",
+        "auxiliary-modulation-setting",
+        "tx-driver-timing",
+        "resistive-am-modulation",
+        "tx-driver-timing-display",
+        "regulator-display",
+        "overshoot-protection-1",
+        "overshoot-protection-2",
+        "undershoot-protection-1",
+        "undershoot-protection-2",
+        "analog-test-observation-1",
+        "unknown"
+      ]
+    },
+    {
+      "name": "Direct",
+      "type": "enum",
+      "variants": [
+        "set-default",
+        "stop",
+        "transmit-crc",
+        "transmit-no-crc",
+        "reqa",
+        "wupa",
+        "initial-field-on",
+        "response-field-on",
+        "sense",
+        "sleep",
+        "mask-rx",
+        "unmask-rx",
+        "change-am",
+        "measure-amplitude",
+        "reset-rx-gain",
+        "adjust-regulators",
+        "calibrate-driver",
+        "measure-phase",
+        "clear-rssi",
+        "clear-fifo",
+        "transparent",
+        "calibrate-capacitance",
+        "measure-capacitance",
+        "measure-supply",
+        "start-general-timer",
+        "start-wake-timer",
+        "start-mask-timer",
+        "start-response-timer",
+        "start-ppon2-timer",
+        "stop-response-timer",
+        "unknown"
+      ]
+    },
+    {
+      "name": "Space",
+      "type": "enum",
+      "variants": ["a", "b", "test"]
+    },
+    {
+      "name": "Operation",
+      "type": "enum",
+      "variants": ["fifo-write", "fifo-read", "direct-command", "read-register", "write-register"]
+    },
+    {
+      "name": "Field",
+      "type": "enum",
+      "variants": [
+        "io-configuration-1",
+        "io-configuration-2",
+        "operation-control",
+        "mode",
+        "bit-rate",
+        "interrupt-main",
+        "interrupt-timer-nfc",
+        "interrupt-error-wake",
+        "fifo-status-1",
+        "fifo-status-2",
+        "identity",
+        "oscillator-enabled",
+        "rx-enabled",
+        "rx-channel",
+        "tx-enabled",
+        "wake-enabled",
+        "fifo-bytes-high",
+        "fifo-overflow",
+        "fifo-underflow"
+      ]
+    },
+    {
+      "name": "End",
+      "type": "enum",
+      "variants": ["complete", "incomplete", "aborted", "unsupported"]
+    },
+    {
+      "name": "Event",
+      "type": "union",
+      "variants": [
+        {
+          "name": "begin",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "command",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "opcode",
+              "type": "u8"
+            },
+            {
+              "name": "address",
+              "type": "u16"
+            },
+            {
+              "name": "read",
+              "type": "bool"
+            },
+            {
+              "name": "status",
+              "type": {
+                "option": "u8"
+              }
+            }
+          ]
+        },
+        {
+          "name": "register",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "space",
+              "type": "Space"
+            },
+            {
+              "name": "address",
+              "type": "u16"
+            },
+            {
+              "name": "register",
+              "type": "RegisterName"
+            },
+            {
+              "name": "value",
+              "type": "u8"
+            },
+            {
+              "name": "read",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "data",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "offset",
+              "type": "u32"
+            },
+            {
+              "name": "address",
+              "type": "u16"
+            },
+            {
+              "name": "value",
+              "type": "u8"
+            },
+            {
+              "name": "read",
+              "type": "bool"
+            }
+          ]
+        },
+        {
+          "name": "direct",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "command",
+              "type": "Direct"
+            }
+          ]
+        },
+        {
+          "name": "space",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "space",
+              "type": "Space"
+            }
+          ]
+        },
+        {
+          "name": "operation",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "operation",
+              "type": "Operation"
+            }
+          ]
+        },
+        {
+          "name": "field",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "address",
+              "type": "u16"
+            },
+            {
+              "name": "field",
+              "type": "Field"
+            },
+            {
+              "name": "value",
+              "type": "u32"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "End"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "record",
+      "fields": []
+    },
+    {
+      "name": "Layout",
+      "type": "record",
+      "fields": [
+        {
+          "name": "address",
+          "type": "u16"
+        },
+        {
+          "name": "read",
+          "type": "bool"
+        },
+        {
+          "name": "step",
+          "type": "u8"
+        },
+        {
+          "name": "count",
+          "type": {
+            "option": "u8"
+          }
+        },
+        {
+          "name": "dummy",
+          "type": "u8"
+        },
+        {
+          "name": "valid",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "st25r39xx-spi.events",
+        "version": 1
+      },
+      "event": "Event",
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "command": {
+          "role": "command"
+        },
+        "data": {
+          "role": "data"
+        },
+        "register": {
+          "role": "data"
+        },
+        "direct": {
+          "role": "command"
+        },
+        "space": {
+          "role": "address"
+        },
+        "operation": {
+          "role": "command"
+        },
+        "field": {
+          "role": "data"
+        },
+        "end": {
+          "role": "framing"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "spi",
+      "contract": {
+        "schema": {
+          "name": "spi.events",
+          "version": 1
+        },
+        "event": "SpiEvent",
+        "framing": {
+          "begin": "begin",
+          "items": ["word"],
+          "end": "end",
+          "id": "tx",
+          "reason": "reason",
+          "normal": ["cs-release"],
+          "partial": "partial",
+          "unframed": 0
+        },
+        "roles": {
+          "begin": {
+            "role": "framing"
+          },
+          "word": {
+            "role": "data"
+          },
+          "end": {
+            "role": "framing"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "EndReason",
+          "type": "enum",
+          "variants": ["cs-release", "aborted"]
+        },
+        {
+          "name": "SpiEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "begin",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "partial",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "word",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "mosi",
+                  "type": {
+                    "option": "u8"
+                  }
+                },
+                {
+                  "name": "miso",
+                  "type": {
+                    "option": "u8"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "end",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "reason",
+                  "type": "EndReason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "registerName",
+      "body": [
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "local",
+              "name": "space"
+            },
+            "right": {
+              "expr": "enum",
+              "type": "Space",
+              "value": "a"
+            }
+          },
+          "then": [
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 0
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "io-configuration-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 1
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "io-configuration-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 2
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "operation-control"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 3
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "mode-definition"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 4
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "bit-rate-definition"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 5
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "iso14443a-nfc"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 6
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "iso14443b-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 7
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "iso14443b-felica"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 8
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "nfcip1-passive-target"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 9
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "stream-mode"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 10
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "auxiliary-definition"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 11
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "receiver-configuration-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 12
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "receiver-configuration-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 13
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "receiver-configuration-3"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 14
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "receiver-configuration-4"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 15
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "mask-receive-timer"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 16
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "no-response-timer-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 17
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "no-response-timer-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 18
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "timer-emv-control"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 19
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "general-purpose-timer-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 20
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "general-purpose-timer-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 21
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "ppon2-field-waiting"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 22
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "mask-main-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 23
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "mask-timer-nfc-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 24
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "mask-error-wake-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 25
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "mask-passive-target-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 26
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "main-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 27
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "timer-nfc-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 28
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "error-wake-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 29
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "passive-target-interrupt"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 30
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "fifo-status-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 31
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "fifo-status-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 32
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "collision-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 33
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "passive-target-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 34
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "transmitted-bytes-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 35
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "transmitted-bytes-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 36
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "bit-rate-detection"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 37
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "adc-output"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 38
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "antenna-tuning-control-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 39
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "antenna-tuning-control-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 40
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "tx-driver"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 41
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "passive-target-modulation"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 42
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "external-field-activation-threshold"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 43
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "external-field-deactivation-threshold"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 44
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "regulator-voltage-control"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 45
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "rssi-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 46
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "gain-reduction-state"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 47
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "capacitive-sensor-control"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 48
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "capacitive-sensor-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 49
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "auxiliary-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 50
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "wake-up-timer-control"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 51
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "amplitude-measurement-configuration"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 52
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "amplitude-measurement-reference"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 53
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "amplitude-measurement-auto-average"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 54
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "amplitude-measurement-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 55
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "phase-measurement-configuration"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 56
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "phase-measurement-reference"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 57
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "phase-measurement-auto-average"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 58
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "phase-measurement-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 59
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "capacitance-measurement-configuration"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 60
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "capacitance-measurement-reference"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 61
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "capacitance-measurement-auto-average"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 62
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "capacitance-measurement-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 63
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "ic-identity"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "eq",
+            "left": {
+              "expr": "local",
+              "name": "space"
+            },
+            "right": {
+              "expr": "enum",
+              "type": "Space",
+              "value": "b"
+            }
+          },
+          "then": [
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 5
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "emd-suppression-configuration"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 6
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "subcarrier-start-timer"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 11
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "p2p-receiver-configuration-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 12
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "correlator-configuration-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 13
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "correlator-configuration-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 15
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "squelch-timer"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 21
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "nfc-field-on-guard-timer"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 40
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "auxiliary-modulation-setting"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 41
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "tx-driver-timing"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 42
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "resistive-am-modulation"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 43
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "tx-driver-timing-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 44
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "regulator-display"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 48
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "overshoot-protection-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 49
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "overshoot-protection-2"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 50
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "undershoot-protection-1"
+                  }
+                }
+              ]
+            },
+            {
+              "stmt": "if",
+              "cond": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "address"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 51
+                }
+              },
+              "then": [
+                {
+                  "stmt": "return",
+                  "value": {
+                    "expr": "enum",
+                    "type": "RegisterName",
+                    "value": "undershoot-protection-2"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "stmt": "if",
+          "cond": {
+            "expr": "binary",
+            "op": "and",
+            "left": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "space"
+              },
+              "right": {
+                "expr": "enum",
+                "type": "Space",
+                "value": "test"
+              }
+            },
+            "right": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 1
+              }
+            }
+          },
+          "then": [
+            {
+              "stmt": "return",
+              "value": {
+                "expr": "enum",
+                "type": "RegisterName",
+                "value": "analog-test-observation-1"
+              }
+            }
+          ]
+        },
+        {
+          "stmt": "return",
+          "value": {
+            "expr": "enum",
+            "type": "RegisterName",
+            "value": "unknown"
+          }
+        }
+      ],
+      "params": [
+        {
+          "name": "space",
+          "type": "Space"
+        },
+        {
+          "name": "address",
+          "type": "u16"
+        }
+      ],
+      "ret": "RegisterName"
+    }
+  ],
+  "decoder": {
+    "name": "st25r39xx-spi",
+    "category": "device",
+    "config": {
+      "type": "Config",
+      "defaults": {}
+    },
+    "input": {
+      "kind": "bus",
+      "schema": {
+        "name": "spi.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "st25r39xx-spi.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "recover",
+        "body": [
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "self",
+              "field": "open"
+            },
+            "bind": "open",
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "open"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "end",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "open"
+                        },
+                        "reason": {
+                          "expr": "local",
+                          "name": "reason"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "reason",
+            "type": "End"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "direct",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 192
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "set-default"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 193
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "set-default"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 194
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "stop"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 195
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "stop"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 196
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "transmit-crc"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 197
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "transmit-no-crc"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 198
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "reqa"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 199
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "wupa"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 200
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "initial-field-on"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 201
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "response-field-on"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 205
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "sense"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 206
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "sleep"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 208
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "mask-rx"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 209
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "unmask-rx"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 210
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "change-am"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 211
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "measure-amplitude"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 213
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "reset-rx-gain"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 214
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "adjust-regulators"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 216
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "calibrate-driver"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 217
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "measure-phase"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 218
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "clear-rssi"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 219
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "clear-fifo"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 220
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "transparent"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 221
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "calibrate-capacitance"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 222
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "measure-capacitance"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 223
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "measure-supply"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 224
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "start-general-timer"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 225
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "start-wake-timer"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 226
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "start-mask-timer"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 227
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "start-response-timer"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 228
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "start-ppon2-timer"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 232
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Direct",
+                  "value": "stop-response-timer"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "enum",
+              "type": "Direct",
+              "value": "unknown"
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "opcode",
+            "type": "u8"
+          }
+        ],
+        "ret": "Direct"
+      },
+      {
+        "name": "layout",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "ge",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 192
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "record",
+                  "type": "Layout",
+                  "fields": {
+                    "address": {
+                      "expr": "binary",
+                      "op": "bit-and",
+                      "left": {
+                        "expr": "local",
+                        "name": "opcode"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 63
+                      }
+                    },
+                    "read": {
+                      "expr": "lit",
+                      "value": false
+                    },
+                    "step": {
+                      "expr": "lit",
+                      "value": 0
+                    },
+                    "count": {
+                      "expr": "lit",
+                      "value": 0
+                    },
+                    "dummy": {
+                      "expr": "lit",
+                      "value": 0
+                    },
+                    "valid": {
+                      "expr": "binary",
+                      "op": "ne",
+                      "left": {
+                        "expr": "method",
+                        "name": "direct",
+                        "args": [
+                          {
+                            "expr": "local",
+                            "name": "opcode"
+                          }
+                        ]
+                      },
+                      "right": {
+                        "expr": "enum",
+                        "type": "Direct",
+                        "value": "unknown"
+                      }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "or",
+              "left": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "opcode"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 128
+                }
+              },
+              "right": {
+                "expr": "binary",
+                "op": "eq",
+                "left": {
+                  "expr": "local",
+                  "name": "opcode"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 159
+                }
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "record",
+                  "type": "Layout",
+                  "fields": {
+                    "address": {
+                      "expr": "lit",
+                      "value": 0
+                    },
+                    "read": {
+                      "expr": "binary",
+                      "op": "eq",
+                      "left": {
+                        "expr": "local",
+                        "name": "opcode"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 159
+                      }
+                    },
+                    "step": {
+                      "expr": "lit",
+                      "value": 0
+                    },
+                    "count": {
+                      "expr": "none"
+                    },
+                    "dummy": {
+                      "expr": "lit",
+                      "value": 0
+                    },
+                    "valid": {
+                      "expr": "lit",
+                      "value": true
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "record",
+              "type": "Layout",
+              "fields": {
+                "address": {
+                  "expr": "binary",
+                  "op": "bit-and",
+                  "left": {
+                    "expr": "local",
+                    "name": "opcode"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 63
+                  }
+                },
+                "read": {
+                  "expr": "binary",
+                  "op": "ne",
+                  "left": {
+                    "expr": "binary",
+                    "op": "bit-and",
+                    "left": {
+                      "expr": "local",
+                      "name": "opcode"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 64
+                    }
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 0
+                  }
+                },
+                "step": {
+                  "expr": "lit",
+                  "value": 1
+                },
+                "count": {
+                  "expr": "none"
+                },
+                "dummy": {
+                  "expr": "lit",
+                  "value": 0
+                },
+                "valid": {
+                  "expr": "binary",
+                  "op": "lt",
+                  "left": {
+                    "expr": "local",
+                    "name": "opcode"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 128
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "opcode",
+            "type": "u8"
+          }
+        ],
+        "ret": "Layout"
+      },
+      {
+        "name": "operation",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 128
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Operation",
+                  "value": "fifo-write"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 159
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Operation",
+                  "value": "fifo-read"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "ge",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 192
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Operation",
+                  "value": "direct-command"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "binary",
+                "op": "bit-and",
+                "left": {
+                  "expr": "local",
+                  "name": "opcode"
+                },
+                "right": {
+                  "expr": "lit",
+                  "value": 192
+                }
+              },
+              "right": {
+                "expr": "lit",
+                "value": 64
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Operation",
+                  "value": "read-register"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "lt",
+              "left": {
+                "expr": "local",
+                "name": "opcode"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 64
+              }
+            },
+            "then": [
+              {
+                "stmt": "return",
+                "value": {
+                  "expr": "enum",
+                  "type": "Operation",
+                  "value": "write-register"
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "return",
+            "value": {
+              "expr": "ternary",
+              "cond": {
+                "expr": "local",
+                "name": "read"
+              },
+              "then": {
+                "expr": "enum",
+                "type": "Operation",
+                "value": "read-register"
+              },
+              "else": {
+                "expr": "enum",
+                "type": "Operation",
+                "value": "write-register"
+              }
+            }
+          }
+        ],
+        "params": [
+          {
+            "name": "opcode",
+            "type": "u8"
+          },
+          {
+            "name": "read",
+            "type": "bool"
+          }
+        ],
+        "ret": "Operation"
+      },
+      {
+        "name": "interpret",
+        "body": [
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 0
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "io-configuration-1"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 1
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "io-configuration-2"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 2
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "operation-control"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 3
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "mode"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 4
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "bit-rate"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 26
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "interrupt-main"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 27
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "interrupt-timer-nfc"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 28
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "interrupt-error-wake"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 30
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "fifo-status-1"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 31
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "fifo-status-2"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 63
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "identity"
+                        },
+                        "value": {
+                          "expr": "local",
+                          "name": "value"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 2
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "oscillator-enabled"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "shr",
+                          "left": {
+                            "expr": "local",
+                            "name": "value"
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 7
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "rx-enabled"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "binary",
+                            "op": "shr",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 6
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "rx-channel"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "binary",
+                            "op": "shr",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 5
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "tx-enabled"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "binary",
+                            "op": "shr",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 3
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "wake-enabled"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "binary",
+                            "op": "shr",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 2
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "eq",
+              "left": {
+                "expr": "local",
+                "name": "address"
+              },
+              "right": {
+                "expr": "lit",
+                "value": 31
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "fifo-bytes-high"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "binary",
+                            "op": "shr",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 6
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 3
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "fifo-overflow"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "binary",
+                            "op": "shr",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 4
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "field",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "tx"
+                        },
+                        "address": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "field": {
+                          "expr": "enum",
+                          "type": "Field",
+                          "value": "fifo-underflow"
+                        },
+                        "value": {
+                          "expr": "binary",
+                          "op": "bit-and",
+                          "left": {
+                            "expr": "binary",
+                            "op": "shr",
+                            "left": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "right": {
+                              "expr": "lit",
+                              "value": 5
+                            }
+                          },
+                          "right": {
+                            "expr": "lit",
+                            "value": 1
+                          }
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tx",
+            "type": "u64"
+          },
+          {
+            "name": "address",
+            "type": "u16"
+          },
+          {
+            "name": "value",
+            "type": "u8"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "transaction",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "space"
+            },
+            "value": {
+              "expr": "enum",
+              "type": "Space",
+              "value": "a"
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "intrinsic",
+              "name": "tx-id",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "tx"
+                }
+              ]
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "Event",
+                  "kind": "begin",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "offset",
+            "value": {
+              "expr": "lit",
+              "value": 0
+            },
+            "mutable": true,
+            "type": "u32"
+          },
+          {
+            "stmt": "loop",
+            "body": [
+              {
+                "stmt": "let",
+                "name": "first",
+                "value": {
+                  "expr": "await",
+                  "op": {
+                    "op": "item-or-end"
+                  }
+                }
+              },
+              {
+                "stmt": "let-some",
+                "bind": "first_2",
+                "value": {
+                  "expr": "local",
+                  "name": "first"
+                },
+                "else": [
+                  {
+                    "stmt": "break"
+                  }
+                ]
+              },
+              {
+                "stmt": "let",
+                "name": "opcode",
+                "value": {
+                  "expr": "required",
+                  "value": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "first_2"
+                    },
+                    "name": "mosi"
+                  }
+                },
+                "type": "u8"
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "or",
+                  "left": {
+                    "expr": "binary",
+                    "op": "eq",
+                    "left": {
+                      "expr": "local",
+                      "name": "opcode"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 251
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "eq",
+                    "left": {
+                      "expr": "local",
+                      "name": "opcode"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 252
+                    }
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "space"
+                    },
+                    "value": {
+                      "expr": "ternary",
+                      "cond": {
+                        "expr": "binary",
+                        "op": "eq",
+                        "left": {
+                          "expr": "local",
+                          "name": "opcode"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 251
+                        }
+                      },
+                      "then": {
+                        "expr": "enum",
+                        "type": "Space",
+                        "value": "b"
+                      },
+                      "else": {
+                        "expr": "enum",
+                        "type": "Space",
+                        "value": "test"
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "space",
+                          "fields": {
+                            "tx": {
+                              "expr": "intrinsic",
+                              "name": "tx-id",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              ]
+                            },
+                            "space": {
+                              "expr": "self",
+                              "field": "space"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "continue"
+                  }
+                ]
+              },
+              {
+                "stmt": "let",
+                "name": "layout",
+                "value": {
+                  "expr": "method",
+                  "name": "layout",
+                  "args": [
+                    {
+                      "expr": "local",
+                      "name": "opcode"
+                    }
+                  ]
+                },
+                "type": "Layout"
+              },
+              {
+                "stmt": "let",
+                "name": "commandAt",
+                "value": {
+                  "expr": "intrinsic",
+                  "name": "consumed",
+                  "args": []
+                },
+                "type": "provenance"
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "command",
+                      "fields": {
+                        "tx": {
+                          "expr": "intrinsic",
+                          "name": "tx-id",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "tx"
+                            }
+                          ]
+                        },
+                        "opcode": {
+                          "expr": "local",
+                          "name": "opcode"
+                        },
+                        "address": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "layout"
+                          },
+                          "name": "address"
+                        },
+                        "read": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "layout"
+                          },
+                          "name": "read"
+                        },
+                        "status": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "first_2"
+                          },
+                          "name": "miso"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "commandAt"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "Event",
+                      "kind": "operation",
+                      "fields": {
+                        "tx": {
+                          "expr": "intrinsic",
+                          "name": "tx-id",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "tx"
+                            }
+                          ]
+                        },
+                        "operation": {
+                          "expr": "method",
+                          "name": "operation",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "opcode"
+                            },
+                            {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "layout"
+                              },
+                              "name": "read"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "commandAt"
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "binary",
+                  "op": "ge",
+                  "left": {
+                    "expr": "local",
+                    "name": "opcode"
+                  },
+                  "right": {
+                    "expr": "lit",
+                    "value": 192
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "direct",
+                          "fields": {
+                            "tx": {
+                              "expr": "intrinsic",
+                              "name": "tx-id",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              ]
+                            },
+                            "command": {
+                              "expr": "method",
+                              "name": "direct",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "opcode"
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "commandAt"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stmt": "if",
+                "cond": {
+                  "expr": "unary",
+                  "op": "not",
+                  "value": {
+                    "expr": "field",
+                    "of": {
+                      "expr": "local",
+                      "name": "layout"
+                    },
+                    "name": "valid"
+                  }
+                },
+                "then": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "drain"
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "self",
+                      "field": "open"
+                    },
+                    "value": {
+                      "expr": "none"
+                    }
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "end",
+                          "fields": {
+                            "tx": {
+                              "expr": "intrinsic",
+                              "name": "tx-id",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              ]
+                            },
+                            "reason": {
+                              "expr": "enum",
+                              "type": "End",
+                              "value": "unsupported"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "return"
+                  }
+                ]
+              },
+              {
+                "stmt": "for",
+                "var": "i",
+                "from": {
+                  "expr": "lit",
+                  "value": 0
+                },
+                "to": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "layout"
+                  },
+                  "name": "dummy"
+                },
+                "body": [
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "item"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "stmt": "let",
+                "name": "address",
+                "value": {
+                  "expr": "field",
+                  "of": {
+                    "expr": "local",
+                    "name": "layout"
+                  },
+                  "name": "address"
+                },
+                "mutable": true,
+                "type": "u16"
+              },
+              {
+                "stmt": "let",
+                "name": "count",
+                "value": {
+                  "expr": "lit",
+                  "value": 0
+                },
+                "mutable": true,
+                "type": "u32"
+              },
+              {
+                "stmt": "loop",
+                "body": [
+                  {
+                    "stmt": "if-some",
+                    "value": {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "layout"
+                      },
+                      "name": "count"
+                    },
+                    "bind": "count_2",
+                    "then": [
+                      {
+                        "stmt": "if",
+                        "cond": {
+                          "expr": "binary",
+                          "op": "ge",
+                          "left": {
+                            "expr": "local",
+                            "name": "count"
+                          },
+                          "right": {
+                            "expr": "local",
+                            "name": "count_2"
+                          }
+                        },
+                        "then": [
+                          {
+                            "stmt": "break"
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "word",
+                    "value": {
+                      "expr": "if-some",
+                      "value": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "layout"
+                        },
+                        "name": "count"
+                      },
+                      "bind": "count_2",
+                      "some": {
+                        "expr": "await",
+                        "op": {
+                          "op": "item"
+                        }
+                      },
+                      "none": {
+                        "expr": "await",
+                        "op": {
+                          "op": "item-or-end"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "let-some",
+                    "bind": "word_2",
+                    "value": {
+                      "expr": "local",
+                      "name": "word"
+                    },
+                    "else": [
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "open"
+                        },
+                        "value": {
+                          "expr": "none"
+                        }
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "end",
+                              "fields": {
+                                "tx": {
+                                  "expr": "intrinsic",
+                                  "name": "tx-id",
+                                  "args": [
+                                    {
+                                      "expr": "local",
+                                      "name": "tx"
+                                    }
+                                  ]
+                                },
+                                "reason": {
+                                  "expr": "enum",
+                                  "type": "End",
+                                  "value": "complete"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "return"
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "value",
+                    "value": {
+                      "expr": "ternary",
+                      "cond": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "local",
+                          "name": "layout"
+                        },
+                        "name": "read"
+                      },
+                      "then": {
+                        "expr": "required",
+                        "value": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "word_2"
+                          },
+                          "name": "miso"
+                        }
+                      },
+                      "else": {
+                        "expr": "required",
+                        "value": {
+                          "expr": "field",
+                          "of": {
+                            "expr": "local",
+                            "name": "word_2"
+                          },
+                          "name": "mosi"
+                        }
+                      }
+                    },
+                    "type": "u8"
+                  },
+                  {
+                    "stmt": "let",
+                    "name": "where",
+                    "value": {
+                      "expr": "intrinsic",
+                      "name": "consumed",
+                      "args": []
+                    },
+                    "type": "provenance"
+                  },
+                  {
+                    "stmt": "expr",
+                    "expr": {
+                      "expr": "await",
+                      "op": {
+                        "op": "emit",
+                        "event": {
+                          "expr": "variant",
+                          "type": "Event",
+                          "kind": "data",
+                          "fields": {
+                            "tx": {
+                              "expr": "intrinsic",
+                              "name": "tx-id",
+                              "args": [
+                                {
+                                  "expr": "local",
+                                  "name": "tx"
+                                }
+                              ]
+                            },
+                            "offset": {
+                              "expr": "local",
+                              "name": "offset"
+                            },
+                            "address": {
+                              "expr": "local",
+                              "name": "address"
+                            },
+                            "value": {
+                              "expr": "local",
+                              "name": "value"
+                            },
+                            "read": {
+                              "expr": "field",
+                              "of": {
+                                "expr": "local",
+                                "name": "layout"
+                              },
+                              "name": "read"
+                            }
+                          }
+                        },
+                        "at": {
+                          "expr": "local",
+                          "name": "where"
+                        }
+                      }
+                    }
+                  },
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "and",
+                      "left": {
+                        "expr": "binary",
+                        "op": "lt",
+                        "left": {
+                          "expr": "local",
+                          "name": "opcode"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 128
+                        }
+                      },
+                      "right": {
+                        "expr": "binary",
+                        "op": "gt",
+                        "left": {
+                          "expr": "local",
+                          "name": "address"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 63
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "drain"
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "assign",
+                        "target": {
+                          "expr": "self",
+                          "field": "open"
+                        },
+                        "value": {
+                          "expr": "none"
+                        }
+                      },
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "end",
+                              "fields": {
+                                "tx": {
+                                  "expr": "intrinsic",
+                                  "name": "tx-id",
+                                  "args": [
+                                    {
+                                      "expr": "local",
+                                      "name": "tx"
+                                    }
+                                  ]
+                                },
+                                "reason": {
+                                  "expr": "enum",
+                                  "type": "End",
+                                  "value": "unsupported"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      },
+                      {
+                        "stmt": "return"
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "lt",
+                      "left": {
+                        "expr": "local",
+                        "name": "opcode"
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 128
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "emit",
+                            "event": {
+                              "expr": "variant",
+                              "type": "Event",
+                              "kind": "register",
+                              "fields": {
+                                "tx": {
+                                  "expr": "intrinsic",
+                                  "name": "tx-id",
+                                  "args": [
+                                    {
+                                      "expr": "local",
+                                      "name": "tx"
+                                    }
+                                  ]
+                                },
+                                "space": {
+                                  "expr": "self",
+                                  "field": "space"
+                                },
+                                "address": {
+                                  "expr": "local",
+                                  "name": "address"
+                                },
+                                "register": {
+                                  "expr": "call",
+                                  "name": "registerName",
+                                  "args": [
+                                    {
+                                      "expr": "self",
+                                      "field": "space"
+                                    },
+                                    {
+                                      "expr": "local",
+                                      "name": "address"
+                                    }
+                                  ]
+                                },
+                                "value": {
+                                  "expr": "local",
+                                  "name": "value"
+                                },
+                                "read": {
+                                  "expr": "field",
+                                  "of": {
+                                    "expr": "local",
+                                    "name": "layout"
+                                  },
+                                  "name": "read"
+                                }
+                              }
+                            },
+                            "at": {
+                              "expr": "local",
+                              "name": "where"
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "if",
+                    "cond": {
+                      "expr": "binary",
+                      "op": "and",
+                      "left": {
+                        "expr": "binary",
+                        "op": "eq",
+                        "left": {
+                          "expr": "self",
+                          "field": "space"
+                        },
+                        "right": {
+                          "expr": "enum",
+                          "type": "Space",
+                          "value": "a"
+                        }
+                      },
+                      "right": {
+                        "expr": "binary",
+                        "op": "lt",
+                        "left": {
+                          "expr": "local",
+                          "name": "opcode"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 128
+                        }
+                      }
+                    },
+                    "then": [
+                      {
+                        "stmt": "expr",
+                        "expr": {
+                          "expr": "await",
+                          "op": {
+                            "op": "method",
+                            "name": "interpret",
+                            "args": [
+                              {
+                                "expr": "intrinsic",
+                                "name": "tx-id",
+                                "args": [
+                                  {
+                                    "expr": "local",
+                                    "name": "tx"
+                                  }
+                                ]
+                              },
+                              {
+                                "expr": "local",
+                                "name": "address"
+                              },
+                              {
+                                "expr": "local",
+                                "name": "value"
+                              },
+                              {
+                                "expr": "local",
+                                "name": "where"
+                              }
+                            ]
+                          }
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "local",
+                      "name": "count"
+                    },
+                    "op": "add",
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "local",
+                      "name": "offset"
+                    },
+                    "op": "add",
+                    "value": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  {
+                    "stmt": "assign",
+                    "target": {
+                      "expr": "local",
+                      "name": "address"
+                    },
+                    "op": "add",
+                    "value": {
+                      "expr": "field",
+                      "of": {
+                        "expr": "local",
+                        "name": "layout"
+                      },
+                      "name": "step"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "Event",
+                  "kind": "end",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    },
+                    "reason": {
+                      "expr": "enum",
+                      "type": "End",
+                      "value": "complete"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tx",
+            "type": "cursor"
+          }
+        ]
+      }
+    ],
+    "requires": [
+      {
+        "key": "wordBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 8
+          }
+        ]
+      },
+      {
+        "key": "bitOrder",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "msb-first"
+          }
+        ]
+      },
+      {
+        "key": "cs",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "mosi",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "miso",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "ST25R39XX-SPI",
+        "summary": "ST25R3916/17 register spaces, FIFO, direct commands and status",
+        "fields": {},
+        "events": {
+          "begin": "Begin",
+          "command": "Command",
+          "data": "Data",
+          "register": "Register",
+          "direct": "Direct",
+          "space": "Space",
+          "operation": "Operation",
+          "field": "Field",
+          "end": "End"
+        },
+        "eventFields": {
+          "tx": "Transaction",
+          "opcode": "Opcode",
+          "address": "Address",
+          "register": "Register name",
+          "read": "Read",
+          "status": "Status",
+          "offset": "Offset",
+          "value": "Value",
+          "command": "Command",
+          "space": "Space",
+          "operation": "Operation",
+          "field": "Field",
+          "reason": "Reason"
+        },
+        "values": {}
+      },
+      "zh-CN": {
+        "name": "ST25R39XX-SPI",
+        "summary": "解析ST25R3916/17寄存器空间、FIFO、直接命令及状态",
+        "fields": {},
+        "events": {
+          "begin": "开始",
+          "command": "命令",
+          "data": "数据通道",
+          "register": "寄存器",
+          "direct": "直接命令",
+          "space": "寄存器空间",
+          "operation": "操作",
+          "field": "字段",
+          "end": "结束"
+        },
+        "eventFields": {
+          "tx": "事务号",
+          "opcode": "操作码",
+          "address": "地址",
+          "register": "寄存器名称",
+          "read": "读取",
+          "status": "状态",
+          "offset": "偏移",
+          "value": "数值",
+          "command": "命令",
+          "space": "寄存器空间",
+          "operation": "操作",
+          "field": "字段",
+          "reason": "结束原因"
+        },
+        "values": {}
+      }
+    },
+    "partial": "drain",
+    "recovery": {
+      "reason": "End",
+      "incomplete": "incomplete",
+      "truncated": "aborted",
+      "missing": "aborted",
+      "gap": "aborted",
+      "end": "aborted"
+    },
+    "state": [
+      {
+        "name": "open",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      },
+      {
+        "name": "space",
+        "type": "Space",
+        "init": {
+          "expr": "enum",
+          "type": "Space",
+          "value": "a"
+        }
+      }
+    ]
+  }
+}

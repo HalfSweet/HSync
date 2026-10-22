@@ -1,0 +1,656 @@
+{
+  "ir": 1,
+  "name": "ad5626",
+  "types": [
+    {
+      "name": "End",
+      "type": "enum",
+      "variants": ["complete", "incomplete", "aborted", "invalid-length"]
+    },
+    {
+      "name": "DeviceEvent",
+      "type": "union",
+      "variants": [
+        {
+          "name": "begin",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            }
+          ]
+        },
+        {
+          "name": "dac",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "code",
+              "type": "u16"
+            },
+            {
+              "name": "microvolts",
+              "type": "u32"
+            }
+          ]
+        },
+        {
+          "name": "end",
+          "fields": [
+            {
+              "name": "tx",
+              "type": "u64"
+            },
+            {
+              "name": "reason",
+              "type": "End"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "record",
+      "fields": []
+    }
+  ],
+  "contracts": [
+    {
+      "schema": {
+        "name": "ad5626.events",
+        "version": 1
+      },
+      "event": "DeviceEvent",
+      "roles": {
+        "begin": {
+          "role": "framing"
+        },
+        "dac": {
+          "role": "data"
+        },
+        "end": {
+          "role": "framing"
+        }
+      }
+    }
+  ],
+  "imports": [
+    {
+      "module": "spi",
+      "contract": {
+        "schema": {
+          "name": "spi.events",
+          "version": 1
+        },
+        "event": "SpiEvent",
+        "framing": {
+          "begin": "begin",
+          "items": ["word"],
+          "end": "end",
+          "id": "tx",
+          "reason": "reason",
+          "normal": ["cs-release"],
+          "partial": "partial",
+          "unframed": 0
+        },
+        "roles": {
+          "begin": {
+            "role": "framing"
+          },
+          "word": {
+            "role": "data"
+          },
+          "end": {
+            "role": "framing"
+          }
+        }
+      },
+      "types": [
+        {
+          "name": "EndReason",
+          "type": "enum",
+          "variants": ["cs-release", "aborted"]
+        },
+        {
+          "name": "SpiEvent",
+          "type": "union",
+          "variants": [
+            {
+              "name": "begin",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "partial",
+                  "type": "bool"
+                }
+              ]
+            },
+            {
+              "name": "word",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "mosi",
+                  "type": {
+                    "option": "u8"
+                  }
+                },
+                {
+                  "name": "miso",
+                  "type": {
+                    "option": "u8"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "end",
+              "fields": [
+                {
+                  "name": "tx",
+                  "type": "u64"
+                },
+                {
+                  "name": "reason",
+                  "type": "EndReason"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "decoder": {
+    "name": "ad5626",
+    "category": "device",
+    "config": {
+      "type": "Config",
+      "defaults": {}
+    },
+    "input": {
+      "kind": "bus",
+      "schema": {
+        "name": "spi.events",
+        "version": 1
+      }
+    },
+    "output": {
+      "schema": {
+        "name": "ad5626.events",
+        "version": 1
+      }
+    },
+    "methods": [
+      {
+        "name": "recover",
+        "body": [
+          {
+            "stmt": "if-some",
+            "value": {
+              "expr": "self",
+              "field": "open"
+            },
+            "bind": "open",
+            "then": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "open"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "DeviceEvent",
+                      "kind": "end",
+                      "fields": {
+                        "tx": {
+                          "expr": "local",
+                          "name": "open"
+                        },
+                        "reason": {
+                          "expr": "local",
+                          "name": "reason"
+                        }
+                      }
+                    },
+                    "at": {
+                      "expr": "local",
+                      "name": "where"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "reason",
+            "type": "End"
+          },
+          {
+            "name": "where",
+            "type": "provenance"
+          }
+        ]
+      },
+      {
+        "name": "transaction",
+        "body": [
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "intrinsic",
+              "name": "tx-id",
+              "args": [
+                {
+                  "expr": "local",
+                  "name": "tx"
+                }
+              ]
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "DeviceEvent",
+                  "kind": "begin",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "stmt": "let",
+            "name": "value",
+            "value": {
+              "expr": "lit",
+              "value": 0
+            },
+            "mutable": true,
+            "type": "u32"
+          },
+          {
+            "stmt": "for",
+            "var": "i",
+            "from": {
+              "expr": "lit",
+              "value": 0
+            },
+            "to": {
+              "expr": "lit",
+              "value": 12
+            },
+            "body": [
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "local",
+                  "name": "value"
+                },
+                "value": {
+                  "expr": "binary",
+                  "op": "bit-or",
+                  "left": {
+                    "expr": "binary",
+                    "op": "shl",
+                    "left": {
+                      "expr": "local",
+                      "name": "value"
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  },
+                  "right": {
+                    "expr": "binary",
+                    "op": "bit-and",
+                    "left": {
+                      "expr": "required",
+                      "value": {
+                        "expr": "field",
+                        "of": {
+                          "expr": "await",
+                          "op": {
+                            "op": "item"
+                          }
+                        },
+                        "name": "mosi"
+                      }
+                    },
+                    "right": {
+                      "expr": "lit",
+                      "value": 1
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "stmt": "if",
+            "cond": {
+              "expr": "binary",
+              "op": "ne",
+              "left": {
+                "expr": "await",
+                "op": {
+                  "op": "item-or-end"
+                }
+              },
+              "right": {
+                "expr": "none"
+              }
+            },
+            "then": [
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "drain"
+                  }
+                }
+              },
+              {
+                "stmt": "assign",
+                "target": {
+                  "expr": "self",
+                  "field": "open"
+                },
+                "value": {
+                  "expr": "none"
+                }
+              },
+              {
+                "stmt": "expr",
+                "expr": {
+                  "expr": "await",
+                  "op": {
+                    "op": "emit",
+                    "event": {
+                      "expr": "variant",
+                      "type": "DeviceEvent",
+                      "kind": "end",
+                      "fields": {
+                        "tx": {
+                          "expr": "intrinsic",
+                          "name": "tx-id",
+                          "args": [
+                            {
+                              "expr": "local",
+                              "name": "tx"
+                            }
+                          ]
+                        },
+                        "reason": {
+                          "expr": "enum",
+                          "type": "End",
+                          "value": "invalid-length"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              {
+                "stmt": "return"
+              }
+            ]
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "DeviceEvent",
+                  "kind": "dac",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    },
+                    "code": {
+                      "expr": "cast",
+                      "value": {
+                        "expr": "binary",
+                        "op": "bit-and",
+                        "left": {
+                          "expr": "local",
+                          "name": "value"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 4095
+                        }
+                      },
+                      "to": "u16"
+                    },
+                    "microvolts": {
+                      "expr": "binary",
+                      "op": "mul",
+                      "left": {
+                        "expr": "binary",
+                        "op": "bit-and",
+                        "left": {
+                          "expr": "local",
+                          "name": "value"
+                        },
+                        "right": {
+                          "expr": "lit",
+                          "value": 4095
+                        }
+                      },
+                      "right": {
+                        "expr": "lit",
+                        "value": 1000
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          {
+            "stmt": "assign",
+            "target": {
+              "expr": "self",
+              "field": "open"
+            },
+            "value": {
+              "expr": "none"
+            }
+          },
+          {
+            "stmt": "expr",
+            "expr": {
+              "expr": "await",
+              "op": {
+                "op": "emit",
+                "event": {
+                  "expr": "variant",
+                  "type": "DeviceEvent",
+                  "kind": "end",
+                  "fields": {
+                    "tx": {
+                      "expr": "intrinsic",
+                      "name": "tx-id",
+                      "args": [
+                        {
+                          "expr": "local",
+                          "name": "tx"
+                        }
+                      ]
+                    },
+                    "reason": {
+                      "expr": "enum",
+                      "type": "End",
+                      "value": "complete"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "async": true,
+        "params": [
+          {
+            "name": "tx",
+            "type": "cursor"
+          }
+        ]
+      }
+    ],
+    "requires": [
+      {
+        "key": "wordBits",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": 1
+          }
+        ]
+      },
+      {
+        "key": "bitOrder",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "text",
+            "value": "msb-first"
+          }
+        ]
+      },
+      {
+        "key": "cs",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      },
+      {
+        "key": "mosi",
+        "requirement": "equals",
+        "values": [
+          {
+            "expr": "lit",
+            "value": true
+          }
+        ]
+      }
+    ],
+    "locales": {
+      "en-US": {
+        "name": "AD5626",
+        "summary": "AD5626 12-bit DAC codes and nominal output microvolts",
+        "fields": {},
+        "events": {
+          "begin": "Begin",
+          "dac": "Dac",
+          "end": "End"
+        },
+        "eventFields": {
+          "tx": "Transaction",
+          "code": "Code",
+          "microvolts": "Voltage (µV)",
+          "reason": "Reason"
+        },
+        "values": {}
+      },
+      "zh-CN": {
+        "name": "AD5626",
+        "summary": "解析AD5626的12位DAC编码及标称输出微伏值",
+        "fields": {},
+        "events": {
+          "begin": "开始",
+          "dac": "DAC输出",
+          "end": "结束"
+        },
+        "eventFields": {
+          "tx": "事务号",
+          "code": "编码",
+          "microvolts": "电压（微伏）",
+          "reason": "结束原因"
+        },
+        "values": {}
+      }
+    },
+    "partial": "drain",
+    "recovery": {
+      "reason": "End",
+      "incomplete": "incomplete",
+      "truncated": "aborted",
+      "missing": "aborted",
+      "gap": "aborted",
+      "end": "aborted"
+    },
+    "state": [
+      {
+        "name": "open",
+        "type": {
+          "option": "u64"
+        },
+        "init": {
+          "expr": "none"
+        }
+      }
+    ]
+  }
+}
