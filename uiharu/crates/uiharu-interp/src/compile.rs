@@ -84,6 +84,7 @@ struct Compiler<'e> {
     ret: Ty,
     outs: Vec<u32>,
     path: String,
+    checking_type: bool,
 }
 
 fn unsupported(path: &str, message: impl Into<String>) -> LoadError {
@@ -107,6 +108,7 @@ impl<'e> Compiler<'e> {
             ret: Ty::Unit,
             outs: Vec::new(),
             path: path.to_owned(),
+            checking_type: false,
         }
     }
 
@@ -524,7 +526,7 @@ impl<'e> Compiler<'e> {
             } => {
                 let aty = self.expr(array, None)?;
                 let item = match aty {
-                    Ty::Array(item, _) => *item,
+                    Ty::Array(item, _) | Ty::FixedArray(item, _) => *item,
                     other => return self.err(format!("for-each over {}", other.describe())),
                 };
                 let array_slot = self.slot();
@@ -662,6 +664,19 @@ impl<'e> Compiler<'e> {
 
     fn pattern_const(&self, value: &Literal, ty: &Ty) -> Result<Const> {
         match (value, ty) {
+            (Literal::Int(number), Ty::Named(enum_name)) => {
+                let Some((_, def)) = self.env.types.enumeration(enum_name) else {
+                    return self.err(format!("{enum_name} is not a numeric enum"));
+                };
+                let index = def
+                    .numbers
+                    .as_ref()
+                    .and_then(|numbers| numbers.iter().position(|value| value == number));
+                match index.and_then(|index| u16::try_from(index).ok()) {
+                    Some(index) => Ok(Const::Enum(index)),
+                    None => self.err(format!("{enum_name} has no numeric variant {number}")),
+                }
+            }
             (Literal::Text(name), Ty::Named(enum_name)) => {
                 match self.env.types.enum_variant(enum_name, name) {
                     Some(index) => Ok(Const::Enum(index)),
@@ -710,7 +725,7 @@ impl<'e> Compiler<'e> {
                     return Ok(None);
                 };
                 let item = match ty {
-                    Ty::Array(item, _) => *item,
+                    Ty::Array(item, _) | Ty::FixedArray(item, _) => *item,
                     other => return self.err(format!("index into {}", other.describe())),
                 };
                 match &**at {
@@ -801,7 +816,10 @@ impl<'e> Compiler<'e> {
             }
             Expr::None => {
                 self.emit(Instr::Const(Const::None));
-                Ok(expected.cloned().unwrap_or(Ty::Option(Box::new(Ty::Unit))))
+                Ok(expected
+                    .filter(|ty| matches!(ty, Ty::Option(_)))
+                    .cloned()
+                    .unwrap_or(Ty::Option(Box::new(Ty::Unit))))
             }
             Expr::Local { name } => {
                 if let Some(binding) = self.lookup(name).cloned() {
@@ -837,7 +855,7 @@ impl<'e> Compiler<'e> {
                     Expr::Index { of, at } => {
                         let of_ty = self.expr(of, None)?;
                         let item = match of_ty {
-                            Ty::Array(item, _) => *item,
+                            Ty::Array(item, _) | Ty::FixedArray(item, _) => *item,
                             other => return self.err(format!("index into {}", other.describe())),
                         };
                         let aty = self.expr(at, Some(&Ty::U64))?;
@@ -850,7 +868,14 @@ impl<'e> Compiler<'e> {
             }
             Expr::Tag { .. } => self.err("a tag is read through a match"),
             Expr::Unary { op, value } => {
-                let ty = self.expr(value, None)?;
+                let ty = self.expr(
+                    value,
+                    if *op == UnaryOp::BitNot {
+                        expected
+                    } else {
+                        None
+                    },
+                )?;
                 match op {
                     UnaryOp::Not => {
                         self.coerce(&ty, &Ty::Bool)?;
@@ -861,6 +886,10 @@ impl<'e> Compiler<'e> {
                         if !ty.is_int() {
                             return self.err(format!("bitwise not of {}", ty.describe()));
                         }
+                        if self.checking_type && expected.is_none() && ty == Ty::IntLit {
+                            return Ok(Ty::IntLit);
+                        }
+                        let ty = width_in(Some(ty), expected).unwrap_or(Ty::U64);
                         let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                         self.emit(Instr::BitNot(ty.width().unwrap_or(Width::W64)));
                         Ok(ty)
@@ -884,13 +913,46 @@ impl<'e> Compiler<'e> {
                     Ok(Ty::Bool)
                 }
                 _ => {
-                    // Arithmetic is done at the width of its context, when that is wider than
-                    // its operands: what the result is assigned to, passed as or returned as.
-                    let context = expected
-                        .filter(|ty| ty.is_int() && **ty != Ty::IntLit)
-                        .cloned();
+                    let context = if self.checking_type {
+                        expected
+                            .filter(|ty| ty.is_int() && **ty != Ty::IntLit)
+                            .cloned()
+                    } else {
+                        let lty = self.expression_type(left)?;
+                        let rty = self.expression_type(right)?;
+                        let operands = if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+                            lty.is_int().then_some(lty)
+                        } else {
+                            common_int(&lty, &rty)
+                        };
+                        width_in(operands, expected.filter(|ty| ty.is_int()))
+                            .filter(|ty| *ty != Ty::IntLit)
+                    };
                     let lty = self.expr(left, context.as_ref())?;
-                    let rty = self.expr(right, context.as_ref().or(Some(&lty)))?;
+                    let rty = self.expr(
+                        right,
+                        if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+                            None
+                        } else {
+                            context.as_ref().or((lty != Ty::IntLit).then_some(&lty))
+                        },
+                    )?;
+                    if self.checking_type
+                        && context.is_none()
+                        && lty == Ty::IntLit
+                        && (rty == Ty::IntLit || matches!(op, BinaryOp::Shl | BinaryOp::Shr))
+                        && !matches!(
+                            op,
+                            BinaryOp::Eq
+                                | BinaryOp::Ne
+                                | BinaryOp::Lt
+                                | BinaryOp::Le
+                                | BinaryOp::Gt
+                                | BinaryOp::Ge
+                        )
+                    {
+                        return Ok(Ty::IntLit);
+                    }
                     self.binary_in(*op, &lty, &rty, context.as_ref())
                 }
             },
@@ -899,7 +961,19 @@ impl<'e> Compiler<'e> {
                 let Some(width) = to.width() else {
                     return self.err(format!("a cast to {}", to.describe()));
                 };
-                let ty = self.expr(value, None)?;
+                let natural = if self.checking_type {
+                    self.expr(value, None)?
+                } else {
+                    self.expression_type(value)?
+                };
+                if !natural.is_int() {
+                    return self.err(format!("a cast of {}", natural.describe()));
+                }
+                if self.checking_type {
+                    return Ok(to);
+                }
+                let context = width_in(Some(natural), Some(&to));
+                let ty = self.expr(value, context.as_ref())?;
                 if !ty.is_int() {
                     return self.err(format!("a cast of {}", ty.describe()));
                 }
@@ -949,8 +1023,20 @@ impl<'e> Compiler<'e> {
                 None => self.err(format!("{ty} has no variant {value}")),
             },
             Expr::Array { items } => {
-                let want = match expected {
-                    Some(Ty::Array(item, _)) => Some((**item).clone()),
+                let context = match expected {
+                    Some(Ty::Option(inner)) => Some(&**inner),
+                    other => other,
+                };
+                if let Some(Ty::FixedArray(_, length)) = context
+                    && items.len() != *length as usize
+                {
+                    return self.err(format!(
+                        "an array of {} items does not have the required length {length}",
+                        items.len()
+                    ));
+                }
+                let want = match context {
+                    Some(Ty::Array(item, _) | Ty::FixedArray(item, _)) => Some((**item).clone()),
                     _ => None,
                 };
                 let mut types = Vec::new();
@@ -965,17 +1051,17 @@ impl<'e> Compiler<'e> {
                         .reduce(|a, b| join_types(&a, &b))
                         .unwrap_or(Ty::U64)
                 });
-                let item_ty = if item_ty == Ty::IntLit {
-                    Ty::U64
-                } else {
-                    item_ty
-                };
+                let item_ty = concrete_inferred_type(item_ty);
                 for ty in &types {
                     self.coerce(ty, &item_ty)?;
                 }
                 let bound = u32::try_from(items.len()).unwrap_or(u32::MAX);
                 self.emit(Instr::MakeArray(bound));
-                Ok(Ty::Array(Box::new(item_ty), bound))
+                if matches!(context, Some(Ty::FixedArray(..))) {
+                    Ok(Ty::FixedArray(Box::new(item_ty), bound))
+                } else {
+                    Ok(Ty::Array(Box::new(item_ty), bound))
+                }
             }
             Expr::Call { name, args } => {
                 let Some(sig) = self.env.functions.get(name).cloned() else {
@@ -1001,6 +1087,12 @@ impl<'e> Compiler<'e> {
                 then,
                 otherwise,
             } => {
+                let inferred = if expected.is_none() && !self.checking_type {
+                    Some(concrete_inferred_type(self.expression_type(expr)?))
+                } else {
+                    None
+                };
+                let expected = expected.or(inferred.as_ref());
                 let cty = self.expr(cond, Some(&Ty::Bool))?;
                 self.coerce(&cty, &Ty::Bool)?;
                 let to_else = self.emit(Instr::JumpIfFalse(0));
@@ -1020,6 +1112,12 @@ impl<'e> Compiler<'e> {
                 some,
                 none,
             } => {
+                let inferred = if expected.is_none() && !self.checking_type {
+                    Some(concrete_inferred_type(self.expression_type(expr)?))
+                } else {
+                    None
+                };
+                let expected = expected.or(inferred.as_ref());
                 let vty = self.expr(value, None)?;
                 let inner = self.option_inner(&vty)?;
                 self.emit(Instr::Dup);
@@ -1048,6 +1146,12 @@ impl<'e> Compiler<'e> {
                 then,
                 otherwise,
             } => {
+                let inferred = if expected.is_none() && !self.checking_type {
+                    Some(concrete_inferred_type(self.expression_type(expr)?))
+                } else {
+                    None
+                };
+                let expected = expected.or(inferred.as_ref());
                 let vty = self.expr(value, None)?;
                 let (tag, fields) = self.variant_of(&vty, variant)?;
                 self.emit(Instr::Dup);
@@ -1111,6 +1215,19 @@ impl<'e> Compiler<'e> {
             }
         }
         Ok(sig.ret.clone())
+    }
+
+    /// Type-check in a scratch compiler so inference cannot emit runtime work twice.
+    fn expression_type(&self, expr: &Expr) -> Result<Ty> {
+        let mut probe = Self::new(self.env, &self.path);
+        probe.scopes = self.scopes.clone();
+        probe.slots = self.slots;
+        probe.in_method = self.in_method;
+        probe.is_async = self.is_async;
+        probe.has_cursor = self.has_cursor;
+        probe.ret = self.ret.clone();
+        probe.checking_type = true;
+        probe.expr(expr, None)
     }
 
     fn binary_in(
@@ -1246,9 +1363,10 @@ impl<'e> Compiler<'e> {
                 }
             }
             (Ty::Option(inner), Ty::Option(wanted)) => {
-                if **inner == Ty::Unit || (inner.is_int() && wanted.is_int()) {
+                if **inner == Ty::Unit {
                     return Ok(want.clone());
                 }
+                self.coerce(inner, wanted)?;
                 Ok(want.clone())
             }
             (h, Ty::Option(inner))
@@ -1278,9 +1396,27 @@ impl<'e> Compiler<'e> {
     fn intrinsic(&mut self, name: &str, args: &[Expr], expected: Option<&Ty>) -> Result<Ty> {
         match name {
             "min" | "max" => {
-                let a = self.arg(name, args, 0, None)?;
-                let b = self.arg(name, args, 1, Some(&a))?;
-                let ty = common_int(&a, &b).unwrap_or(Ty::U64);
+                let context = if self.checking_type {
+                    expected.cloned()
+                } else {
+                    let Some(a) = args.first() else {
+                        return self.err(format!("{name} needs argument 0"));
+                    };
+                    let Some(b) = args.get(1) else {
+                        return self.err(format!("{name} needs argument 1"));
+                    };
+                    width_in(
+                        common_int(&self.expression_type(a)?, &self.expression_type(b)?),
+                        expected,
+                    )
+                };
+                let a = self.arg(name, args, 0, context.as_ref())?;
+                let b = self.arg(name, args, 1, context.as_ref())?;
+                let ty = width_in(common_int(&a, &b), context.as_ref()).unwrap_or(Ty::U64);
+                if self.checking_type && ty == Ty::IntLit {
+                    return Ok(Ty::IntLit);
+                }
+                let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                 self.coerce(&a, &ty)?;
                 self.coerce(&b, &ty)?;
                 self.emit(Instr::Intrinsic(if name == "min" {
@@ -1291,9 +1427,27 @@ impl<'e> Compiler<'e> {
                 Ok(ty)
             }
             "saturating-sub" => {
-                let a = self.arg(name, args, 0, None)?;
-                let b = self.arg(name, args, 1, Some(&a))?;
-                let ty = common_int(&a, &b).unwrap_or(Ty::U64);
+                let context = if self.checking_type {
+                    expected.cloned()
+                } else {
+                    let Some(a) = args.first() else {
+                        return self.err(format!("{name} needs argument 0"));
+                    };
+                    let Some(b) = args.get(1) else {
+                        return self.err(format!("{name} needs argument 1"));
+                    };
+                    width_in(
+                        common_int(&self.expression_type(a)?, &self.expression_type(b)?),
+                        expected,
+                    )
+                };
+                let a = self.arg(name, args, 0, context.as_ref())?;
+                let b = self.arg(name, args, 1, context.as_ref())?;
+                let ty = width_in(common_int(&a, &b), context.as_ref()).unwrap_or(Ty::U64);
+                if self.checking_type && ty == Ty::IntLit {
+                    return Ok(Ty::IntLit);
+                }
+                let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                 self.coerce(&a, &ty)?;
                 self.coerce(&b, &ty)?;
                 self.emit(Instr::Intrinsic(Intrinsic::SaturatingSub));
@@ -1573,6 +1727,15 @@ impl<'e> Compiler<'e> {
     }
 }
 
+/// Inferred stored values use concrete widths even below an option.
+fn concrete_inferred_type(ty: Ty) -> Ty {
+    match ty {
+        Ty::IntLit => Ty::U64,
+        Ty::Option(inner) => Ty::Option(Box::new(concrete_inferred_type(*inner))),
+        other => other,
+    }
+}
+
 /// The width an operation is done at: its context when wider than its operands.
 fn width_in(operands: Option<Ty>, context: Option<&Ty>) -> Option<Ty> {
     match (operands, context) {
@@ -1665,16 +1828,13 @@ pub(crate) fn load(module: &Module) -> Result<Program> {
         None => None,
     };
     let event = module
-        .contracts
+        .imports
         .iter()
+        .map(|import| &import.contract)
+        .chain(module.contracts.iter())
         .find(|contract| contract.schema == decoder.output.schema)
         .map(|contract| contract.event.clone())
-        .ok_or_else(|| {
-            unsupported(
-                "decoder.output",
-                "the output's contract is not declared here",
-            )
-        })?;
+        .ok_or_else(|| unsupported("decoder.output", "the output's contract is not in scope"))?;
     if !types.is_data(&Ty::Named(event.clone())) {
         return Err(unsupported(
             "decoder.output",
@@ -1714,10 +1874,43 @@ pub(crate) fn load(module: &Module) -> Result<Program> {
     let mut consts = HashMap::new();
     for constant in &module.consts {
         let ty = Ty::from_ir(&constant.ty);
-        let value = match &constant.value {
-            Literal::Bool(b) => Const::Bool(*b),
-            Literal::Int(n) => Const::Int(*n),
-            Literal::Text(text) => Const::Text(text.as_str().into()),
+        let value = if let Ty::Named(name) = &ty {
+            if let Some((_, def)) = types.enumeration(name) {
+                let index = match (&constant.value, &def.numbers) {
+                    (Literal::Int(number), Some(numbers)) => {
+                        numbers.iter().position(|value| value == number)
+                    }
+                    (Literal::Text(text), None) => {
+                        def.variants.iter().position(|value| value == text)
+                    }
+                    _ => None,
+                }
+                .and_then(|index| u16::try_from(index).ok())
+                .ok_or_else(|| {
+                    unsupported(
+                        &format!("consts.{}", constant.name),
+                        format!("the constant is not a variant of {name}"),
+                    )
+                })?;
+                Const::Enum(index)
+            } else if let Literal::Text(text) = &constant.value
+                && let Some((tag, variant)) = types.variant(name, text)
+                && variant.fields.is_empty()
+                && types.union(name).is_some_and(|(_, def)| def.external)
+            {
+                Const::UnitVariant(tag)
+            } else {
+                return Err(unsupported(
+                    &format!("consts.{}", constant.name),
+                    format!("the constant is not a scalar value of {name}"),
+                ));
+            }
+        } else {
+            match &constant.value {
+                Literal::Bool(b) => Const::Bool(*b),
+                Literal::Int(n) => Const::Int(*n),
+                Literal::Text(text) => Const::Text(text.as_str().into()),
+            }
         };
         consts.insert(constant.name.clone(), (value, ty));
     }

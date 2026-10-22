@@ -5,9 +5,9 @@
 
 use std::collections::HashMap;
 
-use uiharu_ir::{BinaryOp, Expr, Literal, Op, Pattern, Stmt, UnaryOp};
+use uiharu_ir::{Arm, BinaryOp, Expr, Literal, Op, Pattern, Stmt, TypeKind, UnaryOp};
 
-use crate::names::{pascal, plain_literal, snake, string_literal};
+use crate::names::{plain_literal, snake, string_literal};
 use crate::types::{Defs, Ty};
 use crate::{GenError, Kind};
 
@@ -67,6 +67,7 @@ impl Val {
 }
 
 /// Emits one function's body.
+#[derive(Clone)]
 pub struct Emitter<'a> {
     pub env: &'a Env<'a>,
     scopes: Vec<HashMap<String, Local>>,
@@ -85,6 +86,7 @@ pub struct Emitter<'a> {
     /// a call on `self`, which cannot borrow `self` while the call does.
     hoisted: Vec<String>,
     temps: usize,
+    checking_type: bool,
 }
 
 impl<'a> Emitter<'a> {
@@ -100,6 +102,7 @@ impl<'a> Emitter<'a> {
             indent: 1,
             hoisted: Vec::new(),
             temps: 0,
+            checking_type: false,
         }
     }
 
@@ -339,7 +342,12 @@ impl<'a> Emitter<'a> {
                         format!("{}.clone()", val.code)
                     };
                 self.line(out, &format!("match {subject} {{"));
-                for arm in arms {
+                for (index, arm) in arms.iter().enumerate() {
+                    if matches!(arm.pattern, Pattern::Default)
+                        && self.match_exhaustive(&val.ty, &arms[..index])
+                    {
+                        continue;
+                    }
                     self.scopes.push(HashMap::new());
                     let pattern = match &arm.pattern {
                         Pattern::Variant { name, binds } => {
@@ -365,10 +373,23 @@ impl<'a> Emitter<'a> {
                                 parts.push(pattern_field(field, local));
                             }
                             if fields.is_empty() {
-                                format!("{union}::{}", pascal(name))
+                                format!("{union}::{}", self.env.defs.variant_name(&union, name))
+                            } else if self.env.defs.is_external_enum(&union) {
+                                let payload = binds
+                                    .get("value")
+                                    .map(|name| snake(name))
+                                    .unwrap_or_else(|| "_".into());
+                                format!(
+                                    "{union}::{}({payload})",
+                                    self.env.defs.variant_name(&union, name)
+                                )
                             } else {
                                 parts.push("..".into());
-                                format!("{union}::{} {{ {} }}", pascal(name), parts.join(", "))
+                                format!(
+                                    "{union}::{} {{ {} }}",
+                                    self.env.defs.variant_name(&union, name),
+                                    parts.join(", ")
+                                )
                             }
                         }
                         Pattern::Values { values } => values
@@ -384,11 +405,29 @@ impl<'a> Emitter<'a> {
                     out.push_str(&body);
                     self.line(out, "}");
                 }
+                // TS switches may cover only the variants reachable under a surrounding
+                // guard. Rust still sees the complete enum, so unmatched cases are a no-op.
+                if !self.match_exhaustive(&val.ty, arms) {
+                    self.line(out, "_ => {} ,");
+                }
                 self.line(out, "}");
             }
             Stmt::Loop { label, body } => {
-                let body = self.nested(body)?;
-                self.line(out, &format!("{}loop {{", label_prefix(label)));
+                // The frontend expresses switch exits with an existing IR loop. When
+                // its only iteration is guaranteed, Rust's labelled block preserves
+                // that exit target and avoids a synthetic loop that can never repeat.
+                let block = label.is_some()
+                    && matches!(body.last(), Some(Stmt::Break { label: None }))
+                    && !loop_jump(&body[..body.len() - 1], label.as_deref(), 0);
+                let body = self.nested(if block { &body[..body.len() - 1] } else { body })?;
+                self.line(
+                    out,
+                    &format!(
+                        "{}{}{{",
+                        label_prefix(label),
+                        if block { "" } else { "loop " }
+                    ),
+                );
                 out.push_str(&body);
                 self.line(out, "}");
             }
@@ -410,6 +449,7 @@ impl<'a> Emitter<'a> {
                 let from = self.expr(from, None)?;
                 let to = self.expr(to, None)?;
                 let ty = common_int(&from.ty, &to.ty).unwrap_or(Ty::U64);
+                let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                 let from = self.coerce(from, &ty)?.code;
                 let to = self.coerce(to, &ty)?.code;
                 self.scopes.push(HashMap::new());
@@ -434,9 +474,19 @@ impl<'a> Emitter<'a> {
                 array,
                 body,
             } => {
-                let array = self.expr(array, None)?;
+                // An inline literal exists only for this iteration, so emit its exact
+                // stack array. Declared bounded values keep their Vec representation.
+                let context = if matches!(array, Expr::Array { .. }) {
+                    match self.expression_type(array)? {
+                        Ty::Array(item, bound) => Some(Ty::FixedArray(item, bound)),
+                        _ => None,
+                    }
+                } else {
+                    None
+                };
+                let array = self.expr(array, context.as_ref())?;
                 let item = match &array.ty {
-                    Ty::Array(item, _) => (**item).clone(),
+                    Ty::Array(item, _) | Ty::FixedArray(item, _) => (**item).clone(),
                     other => return Err(GenError::new(format!("for-each over a {other:?}"))),
                 };
                 self.scopes.push(HashMap::new());
@@ -484,10 +534,77 @@ impl<'a> Emitter<'a> {
         Ok(())
     }
 
+    fn match_exhaustive(&self, ty: &Ty, arms: &[Arm]) -> bool {
+        if arms
+            .iter()
+            .any(|arm| matches!(arm.pattern, Pattern::Default))
+        {
+            return true;
+        }
+        let values: Vec<_> = arms
+            .iter()
+            .flat_map(|arm| match &arm.pattern {
+                Pattern::Values { values } => values.as_slice(),
+                _ => &[],
+            })
+            .collect();
+        if *ty == Ty::Bool {
+            return values.contains(&&Literal::Bool(true))
+                && values.contains(&&Literal::Bool(false));
+        }
+        let Ty::Named(name) = ty else {
+            return false;
+        };
+        let Some(def) = self.env.defs.get(name) else {
+            return false;
+        };
+        let variants: Vec<(&str, Option<u64>)> = match &def.kind {
+            TypeKind::Enum { variants } => variants.iter().map(|v| (v.0.as_str(), None)).collect(),
+            TypeKind::NumericEnum { variants } => variants
+                .iter()
+                .map(|v| (v.name.as_str(), Some(v.value)))
+                .collect(),
+            TypeKind::ExternalEnum { variants } => {
+                variants.iter().map(|v| (v.name.as_str(), None)).collect()
+            }
+            TypeKind::Union { variants } => {
+                variants.iter().map(|v| (v.name.as_str(), None)).collect()
+            }
+            _ => return false,
+        };
+        variants.into_iter().all(|(name, number)| {
+            arms.iter().any(|arm| match &arm.pattern {
+                Pattern::Variant { name: matched, .. } => matched == name,
+                Pattern::Values { values } => values.iter().any(|value| match value {
+                    Literal::Text(text) => text == name,
+                    Literal::Int(value) => number == Some(*value),
+                    _ => false,
+                }),
+                Pattern::Default => true,
+            })
+        })
+    }
+
     fn pattern_literal(&self, value: &Literal, ty: &Ty) -> Result<String, GenError> {
         match (value, ty) {
-            (Literal::Text(name), Ty::Named(enum_name)) => {
-                Ok(format!("{enum_name}::{}", pascal(name)))
+            (Literal::Text(name), Ty::Named(enum_name)) => Ok(format!(
+                "{enum_name}::{}",
+                self.env.defs.variant_name(enum_name, name)
+            )),
+            (Literal::Int(n), Ty::Named(name)) if self.env.defs.is_numeric_enum(name) => {
+                let Some(uiharu_ir::TypeKind::NumericEnum { variants }) =
+                    self.env.defs.get(name).map(|def| &def.kind)
+                else {
+                    unreachable!()
+                };
+                let variant = variants
+                    .iter()
+                    .find(|variant| variant.value == *n)
+                    .ok_or_else(|| GenError::new(format!("{n} is not a value of {name}")))?;
+                Ok(format!(
+                    "{name}::{}",
+                    self.env.defs.variant_name(name, &variant.name)
+                ))
             }
             (Literal::Int(n), _) => Ok(n.to_string()),
             (Literal::Bool(b), _) => Ok(b.to_string()),
@@ -523,7 +640,17 @@ impl<'a> Emitter<'a> {
                         format.push_str(&literal[1..literal.len() - 1]);
                     } else {
                         format.push_str("{}");
-                        args.push(deref(&self.expr(part, None)?));
+                        let value = self.expr(part, None)?;
+                        let code = if matches!(&value.ty, Ty::Named(name) if self.env.defs.is_numeric_enum(name))
+                        {
+                            format!("{}.value()", deref(&value))
+                        } else if matches!(&value.ty, Ty::Named(name) if self.env.defs.is_enum(name))
+                        {
+                            format!("{}.name()", deref(&value))
+                        } else {
+                            deref(&value)
+                        };
+                        args.push(code);
                     }
                 }
                 if args.is_empty() {
@@ -537,7 +664,10 @@ impl<'a> Emitter<'a> {
             }
             Expr::None => Ok(Val::new(
                 "None",
-                expected.cloned().unwrap_or(Ty::Option(Box::new(Ty::Unit))),
+                expected
+                    .filter(|ty| matches!(ty, Ty::Option(_)))
+                    .cloned()
+                    .unwrap_or(Ty::Option(Box::new(Ty::Unit))),
             )),
             Expr::Local { name } => {
                 if let Some(local) = self.local(name) {
@@ -576,36 +706,109 @@ impl<'a> Emitter<'a> {
                 let of = self.expr(of, None)?;
                 let at = self.expr(at, Some(&Ty::U64))?;
                 let item = match &of.ty {
-                    Ty::Array(item, _) => (**item).clone(),
+                    Ty::Array(item, _) | Ty::FixedArray(item, _) => (**item).clone(),
                     other => return Err(GenError::new(format!("index into a {other:?}"))),
                 };
                 Ok(Val::new(format!("{}[{} as usize]", of.code, at.code), item))
             }
             Expr::Tag { .. } => Err(GenError::new("a tag is read through a match")),
             Expr::Unary { op, value } => {
-                let val = self.expr(value, None)?;
+                let val = self.expr(
+                    value,
+                    if *op == UnaryOp::BitNot {
+                        expected
+                    } else {
+                        None
+                    },
+                )?;
                 match op {
                     UnaryOp::Not => Ok(Val::new(format!("(!{})", deref(&val)), Ty::Bool)),
-                    UnaryOp::BitNot => Ok(Val::new(format!("(!{})", deref(&val)), val.ty)),
+                    UnaryOp::BitNot => {
+                        if self.checking_type && expected.is_none() && val.ty == Ty::IntLit {
+                            return Ok(Val::new("0", Ty::IntLit));
+                        }
+                        let ty = self
+                            .width_in(Some(val.ty.clone()), expected)
+                            .unwrap_or(Ty::U64);
+                        let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
+                        let value = self.coerce(val, &ty)?;
+                        Ok(Val::new(format!("(!{})", deref(&value)), ty))
+                    }
                 }
             }
             Expr::Binary { op, left, right } => {
-                // Arithmetic is done at the width of its context, when that is wider than its
-                // operands: what the result is assigned to, passed as or returned as.
-                let context = expected
-                    .filter(|ty| ty.is_int() && **ty != Ty::IntLit)
-                    .cloned();
+                // Inspect both operand types before emitting either expression: a wider
+                // sibling (including the other side of a comparison) is also context for
+                // nested arithmetic. Type probes never contribute hoisted runtime work.
+                let context = if self.checking_type {
+                    expected
+                        .filter(|ty| ty.is_int() && **ty != Ty::IntLit)
+                        .cloned()
+                } else {
+                    let lty = self.expression_type(left)?;
+                    let rty = self.expression_type(right)?;
+                    let operands = if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+                        lty.is_int().then_some(lty)
+                    } else {
+                        common_int(&lty, &rty)
+                    };
+                    self.width_in(operands, expected.filter(|ty| ty.is_int()))
+                        .filter(|ty| *ty != Ty::IntLit)
+                };
                 let left = self.expr(left, context.as_ref())?;
-                let right = self.expr(right, context.as_ref().or(Some(&left.ty)))?;
+                // Shift counts have their own width; widening the shifted value must not
+                // change a count's arithmetic, nor may the count widen the shifted value.
+                let right = self.expr(
+                    right,
+                    if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+                        None
+                    } else {
+                        context
+                            .as_ref()
+                            .or((left.ty != Ty::IntLit).then_some(&left.ty))
+                    },
+                )?;
+                if self.checking_type
+                    && context.is_none()
+                    && left.ty == Ty::IntLit
+                    && (right.ty == Ty::IntLit || matches!(op, BinaryOp::Shl | BinaryOp::Shr))
+                    && !matches!(
+                        op,
+                        BinaryOp::Eq
+                            | BinaryOp::Ne
+                            | BinaryOp::Lt
+                            | BinaryOp::Le
+                            | BinaryOp::Gt
+                            | BinaryOp::Ge
+                            | BinaryOp::And
+                            | BinaryOp::Or
+                    )
+                {
+                    return Ok(Val::new("0", Ty::IntLit));
+                }
                 self.binary_in(*op, left, right, context.as_ref())
             }
             Expr::Cast { value, to } => {
                 let to = Ty::from_ir(to);
-                let val = self.expr(value, None)?;
-                Ok(Val::new(
-                    format!("({} as {})", deref(&val), to.rust(None)),
-                    to,
-                ))
+                let natural = if self.checking_type {
+                    self.expr(value, None)?.ty
+                } else {
+                    self.expression_type(value)?
+                };
+                if !to.is_int() || !natural.is_int() {
+                    return Err(GenError::new("a cast requires integer types"));
+                }
+                if self.checking_type {
+                    return Ok(Val::new("0", to));
+                }
+                let context = self.width_in(Some(natural), Some(&to));
+                let val = self.expr(value, context.as_ref())?;
+                let code = if val.ty == Ty::IntLit {
+                    concrete_int(&val.code, &Ty::U64)
+                } else {
+                    deref(&val)
+                };
+                Ok(Val::new(format!("({code} as {})", to.rust(None)), to))
             }
             Expr::Record { ty, fields } => {
                 let defs = self
@@ -638,8 +841,31 @@ impl<'a> Emitter<'a> {
                     .variant_fields(ty, kind)
                     .ok_or_else(|| GenError::new(format!("{ty} has no variant {kind}")))?;
                 if defs.is_empty() {
+                    if !fields.is_empty() {
+                        return Err(GenError::new(format!("{ty}::{kind} takes no fields")));
+                    }
                     return Ok(Val::new(
-                        format!("{ty}::{}", pascal(kind)),
+                        format!("{ty}::{}", self.env.defs.variant_name(ty, kind)),
+                        Ty::Named(ty.clone()),
+                    ));
+                }
+                if self.env.defs.is_external_enum(ty) {
+                    if fields.len() != 1 {
+                        return Err(GenError::new(format!(
+                            "{ty}::{kind} needs exactly its value payload"
+                        )));
+                    }
+                    let value = fields
+                        .get("value")
+                        .ok_or_else(|| GenError::new(format!("{ty}::{kind} needs value")))?;
+                    let want = Ty::from_ir(&defs[0].ty);
+                    let value = self.expr(value, Some(&want))?;
+                    return Ok(Val::new(
+                        format!(
+                            "{ty}::{}({})",
+                            self.env.defs.variant_name(ty, kind),
+                            self.coerce(value, &want)?.code
+                        ),
                         Ty::Named(ty.clone()),
                     ));
                 }
@@ -657,19 +883,36 @@ impl<'a> Emitter<'a> {
                     ));
                 }
                 Ok(Val::new(
-                    format!("{ty}::{} {{ {} }}", pascal(kind), parts.join(", ")),
+                    format!(
+                        "{ty}::{} {{ {} }}",
+                        self.env.defs.variant_name(ty, kind),
+                        parts.join(", ")
+                    ),
                     Ty::Named(ty.clone()),
                 ))
             }
             Expr::Enum { ty, value } => Ok(Val::new(
-                format!("{ty}::{}", pascal(value)),
+                format!("{ty}::{}", self.env.defs.variant_name(ty, value)),
                 Ty::Named(ty.clone()),
             )),
             Expr::Array { items } => {
+                let expected = expected.map(|ty| match ty {
+                    Ty::Option(inner) => inner.as_ref(),
+                    other => other,
+                });
                 let want = match expected {
-                    Some(Ty::Array(item, _)) => Some((**item).clone()),
+                    Some(Ty::Array(item, _)) | Some(Ty::FixedArray(item, _)) => {
+                        Some((**item).clone())
+                    }
                     _ => None,
                 };
+                if let Some(Ty::FixedArray(_, length)) = expected
+                    && items.len() != *length as usize
+                {
+                    return Err(GenError::new(format!(
+                        "a fixed array needs exactly {length} items"
+                    )));
+                }
                 // The items meet at one type: an option when any of them is one.
                 let mut vals = Vec::new();
                 for item in items {
@@ -681,22 +924,23 @@ impl<'a> Emitter<'a> {
                         .reduce(|a, b| join_types(&a, &b))
                         .unwrap_or(Ty::U64)
                 });
-                let item_ty = if item_ty == Ty::IntLit {
-                    Ty::U64
-                } else {
-                    item_ty
-                };
+                let item_ty = concrete_inferred_type(item_ty);
                 let mut codes = Vec::new();
                 for val in vals {
                     codes.push(self.coerce(val, &item_ty)?.code);
                 }
                 let bound = u32::try_from(items.len()).unwrap_or(u32::MAX);
-                let code = if matches!(expected, Some(Ty::Array(..))) {
-                    format!("vec![{}]", codes.join(", "))
+                if matches!(expected, Some(Ty::FixedArray(..))) {
+                    Ok(Val::new(
+                        format!("[{}]", codes.join(", ")),
+                        Ty::FixedArray(Box::new(item_ty), bound),
+                    ))
                 } else {
-                    format!("[{}]", codes.join(", "))
-                };
-                Ok(Val::new(code, Ty::Array(Box::new(item_ty), bound)))
+                    Ok(Val::new(
+                        format!("vec![{}]", codes.join(", ")),
+                        Ty::Array(Box::new(item_ty), bound),
+                    ))
+                }
             }
             Expr::Call { name, args } => {
                 let sig = self
@@ -743,6 +987,12 @@ impl<'a> Emitter<'a> {
                 then,
                 otherwise,
             } => {
+                let inferred = if expected.is_none() && !self.checking_type {
+                    Some(concrete_inferred_type(self.expression_type(expr)?))
+                } else {
+                    None
+                };
+                let expected = expected.or(inferred.as_ref());
                 let cond = self.expr(cond, Some(&Ty::Bool))?;
                 let cond = self.coerce(cond, &Ty::Bool)?.code;
                 let then = self.expr(then, expected)?;
@@ -763,6 +1013,12 @@ impl<'a> Emitter<'a> {
                 some,
                 none,
             } => {
+                let inferred = if expected.is_none() && !self.checking_type {
+                    Some(concrete_inferred_type(self.expression_type(expr)?))
+                } else {
+                    None
+                };
+                let expected = expected.or(inferred.as_ref());
                 let val = self.expr(value, None)?;
                 let inner = match &val.ty {
                     Ty::Option(inner) => (**inner).clone(),
@@ -794,6 +1050,12 @@ impl<'a> Emitter<'a> {
                 then,
                 otherwise,
             } => {
+                let inferred = if expected.is_none() && !self.checking_type {
+                    Some(concrete_inferred_type(self.expression_type(expr)?))
+                } else {
+                    None
+                };
+                let expected = expected.or(inferred.as_ref());
                 let val = self.expr(value, None)?;
                 let union =
                     named(&val.ty).ok_or_else(|| GenError::new("if-variant on a non-union"))?;
@@ -824,10 +1086,23 @@ impl<'a> Emitter<'a> {
                 let then = self.coerce(then, &ty)?.code;
                 let otherwise = self.coerce(otherwise, &ty)?.code;
                 let pattern = if fields.is_empty() {
-                    format!("{union}::{}", pascal(variant))
+                    format!("{union}::{}", self.env.defs.variant_name(&union, variant))
+                } else if self.env.defs.is_external_enum(&union) {
+                    let payload = binds
+                        .get("value")
+                        .map(|name| snake(name))
+                        .unwrap_or_else(|| "_".into());
+                    format!(
+                        "{union}::{}({payload})",
+                        self.env.defs.variant_name(&union, variant)
+                    )
                 } else {
                     parts.push("..".into());
-                    format!("{union}::{} {{ {} }}", pascal(variant), parts.join(", "))
+                    format!(
+                        "{union}::{} {{ {} }}",
+                        self.env.defs.variant_name(&union, variant),
+                        parts.join(", ")
+                    )
                 };
                 let subject = if self.env.defs.is_copy(&val.ty) {
                     deref(&val)
@@ -940,6 +1215,13 @@ impl<'a> Emitter<'a> {
         Ok(out)
     }
 
+    /// Determine a natural type without retaining emitted temporaries or borrows.
+    fn expression_type(&self, expr: &Expr) -> Result<Ty, GenError> {
+        let mut probe = self.clone();
+        probe.checking_type = true;
+        probe.expr(expr, None).map(|value| value.ty)
+    }
+
     fn binary(&mut self, op: BinaryOp, left: Val, right: Val) -> Result<Val, GenError> {
         self.binary_in(op, left, right, None)
     }
@@ -997,7 +1279,11 @@ impl<'a> Emitter<'a> {
                 };
                 let ty = self.width_in(operand, context).unwrap_or(Ty::U64);
                 let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
-                let l = self.coerce(left, &ty)?.code;
+                let l = if left.ty == Ty::IntLit {
+                    concrete_int(&left.code, &ty)
+                } else {
+                    self.coerce(left, &ty)?.code
+                };
                 let amount = if right.ty == Ty::U64 || right.ty == Ty::IntLit {
                     deref(&right)
                 } else {
@@ -1017,6 +1303,7 @@ impl<'a> Emitter<'a> {
                     GenError::new(format!("arithmetic on {:?} and {:?}", left.ty, right.ty))
                 })?;
                 let ty = self.width_in(Some(operands), context).unwrap_or(Ty::U64);
+                let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                 let l = self.coerce(left, &ty)?.code;
                 let r = self.coerce(right, &ty)?.code;
                 Ok(Val::new(format!("Int::{method}({l}, {r})"), ty))
@@ -1030,6 +1317,7 @@ impl<'a> Emitter<'a> {
                 let operands = common_int(&left.ty, &right.ty)
                     .ok_or_else(|| GenError::new("bit operation on non-integers"))?;
                 let ty = self.width_in(Some(operands), context).unwrap_or(Ty::U64);
+                let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                 let l = self.coerce(left, &ty)?.code;
                 let r = self.coerce(right, &ty)?.code;
                 Ok(Val::new(format!("({l} {symbol} {r})"), ty))
@@ -1060,9 +1348,10 @@ impl<'a> Emitter<'a> {
             return Ok(Val::new(deref(&val), want.clone()));
         }
         match (&val.ty, want) {
-            (Ty::IntLit, w) if w.is_int() => Ok(Val::new(val.code, w.clone())),
+            (Ty::IntLit, w) if w.is_int() => Ok(Val::new(concrete_int(&val.code, w), w.clone())),
             (Ty::IntLit, Ty::Option(inner)) if inner.is_int() => {
-                Ok(Val::new(format!("Some({})", val.code), want.clone()))
+                let value = self.coerce(val, inner)?;
+                Ok(Val::new(format!("Some({})", value.code), want.clone()))
             }
             (have, w) if have.is_int() && w.is_int() => {
                 let (hw, ww) = (have.width().unwrap_or(64), w.width().unwrap_or(64));
@@ -1083,6 +1372,12 @@ impl<'a> Emitter<'a> {
                     return Ok(Val::new("None", want.clone()));
                 }
                 if inner.is_int() && wanted.is_int() && inner.width() != wanted.width() {
+                    if inner.width() > wanted.width() {
+                        return Err(GenError::new(format!(
+                            "a {:?} does not fit {want:?}",
+                            val.ty
+                        )));
+                    }
                     let inner_rust = wanted.rust(None);
                     return Ok(Val::new(
                         format!("{}.map({inner_rust}::from)", deref(&val)),
@@ -1092,7 +1387,14 @@ impl<'a> Emitter<'a> {
                 if **inner == Ty::Unit {
                     return Ok(Val::new(val.code, want.clone()));
                 }
-                Ok(Val::new(deref(&val), want.clone()))
+                if inner == wanted {
+                    Ok(Val::new(deref(&val), want.clone()))
+                } else {
+                    Err(GenError::new(format!(
+                        "a {:?} does not fit {want:?}",
+                        val.ty
+                    )))
+                }
             }
             (have, Ty::Option(inner))
                 if have == &**inner || (have.is_int() && inner.is_int()) || (have == &Ty::Unit) =>
@@ -1130,17 +1432,57 @@ impl<'a> Emitter<'a> {
         };
         match name {
             "min" | "max" => {
-                let a = arg(self, 0, None)?;
-                let b = arg(self, 1, Some(&a.ty))?;
-                let ty = common_int(&a.ty, &b.ty).unwrap_or(Ty::U64);
+                let context = if self.checking_type {
+                    expected.cloned()
+                } else {
+                    let a = args
+                        .first()
+                        .ok_or_else(|| GenError::new(format!("{name} needs argument 0")))?;
+                    let b = args
+                        .get(1)
+                        .ok_or_else(|| GenError::new(format!("{name} needs argument 1")))?;
+                    self.width_in(
+                        common_int(&self.expression_type(a)?, &self.expression_type(b)?),
+                        expected,
+                    )
+                };
+                let a = arg(self, 0, context.as_ref())?;
+                let b = arg(self, 1, context.as_ref())?;
+                let ty = self
+                    .width_in(common_int(&a.ty, &b.ty), context.as_ref())
+                    .unwrap_or(Ty::U64);
+                if self.checking_type && ty == Ty::IntLit {
+                    return Ok(Val::new("0", Ty::IntLit));
+                }
+                let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                 let a = self.coerce(a, &ty)?.code;
                 let b = self.coerce(b, &ty)?.code;
                 Ok(Val::new(format!("std::cmp::{name}({a}, {b})"), ty))
             }
             "saturating-sub" => {
-                let a = arg(self, 0, None)?;
-                let b = arg(self, 1, Some(&a.ty))?;
-                let ty = common_int(&a.ty, &b.ty).unwrap_or(Ty::U64);
+                let context = if self.checking_type {
+                    expected.cloned()
+                } else {
+                    let a = args
+                        .first()
+                        .ok_or_else(|| GenError::new(format!("{name} needs argument 0")))?;
+                    let b = args
+                        .get(1)
+                        .ok_or_else(|| GenError::new(format!("{name} needs argument 1")))?;
+                    self.width_in(
+                        common_int(&self.expression_type(a)?, &self.expression_type(b)?),
+                        expected,
+                    )
+                };
+                let a = arg(self, 0, context.as_ref())?;
+                let b = arg(self, 1, context.as_ref())?;
+                let ty = self
+                    .width_in(common_int(&a.ty, &b.ty), context.as_ref())
+                    .unwrap_or(Ty::U64);
+                if self.checking_type && ty == Ty::IntLit {
+                    return Ok(Val::new("0", Ty::IntLit));
+                }
+                let ty = if ty == Ty::IntLit { Ty::U64 } else { ty };
                 let a = self.coerce(a, &ty)?.code;
                 let b = self.coerce(b, &ty)?.code;
                 Ok(Val::new(format!("Int::ssub({a}, {b})"), ty))
@@ -1423,6 +1765,26 @@ pub fn named(ty: &Ty) -> Option<String> {
     }
 }
 
+/// Inferred stored values need a real width, including literals wrapped in an
+/// option. A local loaded from that storage is no longer an untyped literal.
+fn concrete_inferred_type(ty: Ty) -> Ty {
+    match ty {
+        Ty::IntLit => Ty::U64,
+        Ty::Option(inner) => Ty::Option(Box::new(concrete_inferred_type(*inner))),
+        other => other,
+    }
+}
+
+/// Integer suffixes apply only to literal tokens. Any otherwise-untyped
+/// expression needs a cast rather than concatenating a suffix to its identifier.
+fn concrete_int(code: &str, ty: &Ty) -> String {
+    if !code.is_empty() && code.bytes().all(|byte| byte.is_ascii_digit()) {
+        format!("{code}{}", ty.rust(None))
+    } else {
+        format!("({code} as {})", ty.rust(None))
+    }
+}
+
 /// A value read through a reference.
 fn deref(val: &Val) -> String {
     if val.is_ref {
@@ -1482,6 +1844,31 @@ fn label_suffix(label: &Option<String>) -> String {
         .map_or(String::new(), |l| format!(" '{}", snake(l)))
 }
 
+/// Whether removing a loop would change a jump's target. Labelled breaks remain
+/// legal in a labelled block; its continues and unlabelled jumps require a loop.
+fn loop_jump(body: &[Stmt], target: Option<&str>, depth: usize) -> bool {
+    body.iter().any(|stmt| match stmt {
+        Stmt::Continue { label } => match label {
+            Some(label) => Some(label.as_str()) == target,
+            None => depth == 0,
+        },
+        Stmt::Break { label: None } => depth == 0,
+        Stmt::If {
+            then, otherwise, ..
+        }
+        | Stmt::IfSome {
+            then, otherwise, ..
+        } => loop_jump(then, target, depth) || loop_jump(otherwise, target, depth),
+        Stmt::LetSome { otherwise, .. } => loop_jump(otherwise, target, depth),
+        Stmt::Match { arms, .. } => arms.iter().any(|arm| loop_jump(&arm.body, target, depth)),
+        Stmt::Loop { body, .. }
+        | Stmt::While { body, .. }
+        | Stmt::For { body, .. }
+        | Stmt::ForEach { body, .. } => loop_jump(body, target, depth + 1),
+        _ => false,
+    })
+}
+
 /// Whether every path through the block leaves the function: it ends with a return, a loop
 /// that never breaks, a match or an if-else whose every branch does.
 fn ends_with_return(body: &[Stmt]) -> bool {
@@ -1520,4 +1907,189 @@ fn breaks(body: &[Stmt]) -> bool {
             .any(|s| matches!(s, Stmt::Break { label: Some(_) })),
         _ => false,
     })
+}
+
+#[cfg(test)]
+mod integer_tests {
+    use super::*;
+
+    fn lit(value: u64) -> Expr {
+        Expr::Lit {
+            value: Literal::Int(value),
+        }
+    }
+
+    fn local(name: &str) -> Expr {
+        Expr::Local { name: name.into() }
+    }
+
+    fn bin(op: BinaryOp, left: Expr, right: Expr) -> Expr {
+        Expr::Binary {
+            op,
+            left: Box::new(left),
+            right: Box::new(right),
+        }
+    }
+
+    fn cast(value: Expr, to: &str) -> Expr {
+        Expr::Cast {
+            value: Box::new(value),
+            to: uiharu_ir::Type::Name(to.into()),
+        }
+    }
+
+    #[test]
+    fn direct_literal_iteration_uses_a_stack_array_and_bounded_values_remain_vectors() {
+        let defs = Defs::new([]);
+        let env = Env {
+            defs: &defs,
+            consts: HashMap::new(),
+            functions: HashMap::new(),
+            methods: HashMap::new(),
+            state: HashMap::new(),
+            kind: Kind::Logic,
+            lower: None,
+        };
+        let array = Expr::Array {
+            items: vec![lit(1), lit(2)],
+        };
+        let body = Emitter::new(&env)
+            .function(
+                &[],
+                Ty::Unit,
+                false,
+                false,
+                &[Stmt::ForEach {
+                    label: None,
+                    var: "point".into(),
+                    array: array.clone(),
+                    body: vec![],
+                }],
+            )
+            .expect("literal iteration emits");
+        assert!(body.contains("for point in [1u64, 2u64]"), "{body}");
+        assert!(!body.contains("vec!"), "{body}");
+        let bounded = Ty::Array(Box::new(Ty::U64), 2);
+        let value = Emitter::new(&env)
+            .expr(&array, Some(&bounded))
+            .expect("declared bounded array emits");
+        assert_eq!(value.ty, bounded);
+        assert_eq!(value.code, "vec![1u64, 2u64]");
+    }
+
+    #[test]
+    fn inferred_optional_literals_have_concrete_u64_elements() {
+        let defs = Defs::new([]);
+        let env = Env {
+            defs: &defs,
+            consts: HashMap::new(),
+            functions: HashMap::new(),
+            methods: HashMap::new(),
+            state: HashMap::new(),
+            kind: Kind::Logic,
+            lower: None,
+        };
+        let array = Expr::Array {
+            items: vec![lit(300), Expr::None],
+        };
+        let value = Emitter::new(&env)
+            .expr(&array, None)
+            .expect("optional literal array emits");
+        assert_eq!(
+            value.ty,
+            Ty::Array(Box::new(Ty::Option(Box::new(Ty::U64))), 2)
+        );
+        assert_eq!(value.code, "vec![Some(300u64), None]");
+    }
+
+    #[test]
+    fn inferred_conditional_option_values_store_u64_without_affecting_type_probes() {
+        let defs = Defs::new([]);
+        let env = Env {
+            defs: &defs,
+            consts: HashMap::new(),
+            functions: HashMap::new(),
+            methods: HashMap::new(),
+            state: HashMap::new(),
+            kind: Kind::Logic,
+            lower: None,
+        };
+        let mut emit = Emitter::new(&env);
+        emit.declare("flag", Ty::Bool, false);
+        emit.declare("maybe", Ty::Option(Box::new(Ty::U8)), false);
+        let values = [
+            Expr::Ternary {
+                cond: Box::new(local("flag")),
+                then: Box::new(lit(300)),
+                otherwise: Box::new(Expr::None),
+            },
+            Expr::IfSome {
+                value: Box::new(local("maybe")),
+                bind: "present".into(),
+                some: Box::new(lit(300)),
+                none: Box::new(Expr::None),
+            },
+        ];
+        for expr in values {
+            assert_eq!(
+                emit.expression_type(&expr).expect("probe succeeds"),
+                Ty::Option(Box::new(Ty::IntLit))
+            );
+            let value = emit.expr(&expr, None).expect("conditional emits");
+            assert_eq!(value.ty, Ty::Option(Box::new(Ty::U64)));
+            assert!(value.code.contains("Some(300u64)"), "{}", value.code);
+        }
+    }
+
+    #[test]
+    fn contextual_width_reaches_nested_arithmetic_without_crossing_narrow_casts() {
+        let defs = Defs::new([]);
+        let env = Env {
+            defs: &defs,
+            consts: HashMap::new(),
+            functions: HashMap::new(),
+            methods: HashMap::new(),
+            state: HashMap::new(),
+            kind: Kind::Logic,
+            lower: None,
+        };
+        let mut emit = Emitter::new(&env);
+        emit.declare("small", Ty::U8, false);
+        emit.declare("wide", Ty::U16, false);
+        let product = bin(BinaryOp::Mul, local("small"), lit(100));
+        let comparison = emit
+            .expr(&bin(BinaryOp::Lt, product.clone(), local("wide")), None)
+            .expect("compares at u16");
+        assert_eq!(comparison.ty, Ty::Bool);
+        assert!(
+            comparison
+                .code
+                .contains("Int::wmul(u16::from(small), 100u16)"),
+            "{}",
+            comparison.code
+        );
+        let narrowed = emit
+            .expr(&cast(cast(product, "u8"), "u64"), Some(&Ty::U64))
+            .expect("casts explicitly");
+        assert!(
+            narrowed.code.contains("Int::wmul(small, 100u8)"),
+            "{}",
+            narrowed.code
+        );
+        let literal_tree = bin(
+            BinaryOp::Add,
+            bin(BinaryOp::Mul, lit(2), lit(3)),
+            local("small"),
+        );
+        assert_eq!(
+            emit.expr(&literal_tree, Some(&Ty::U8))
+                .expect("literals adopt context")
+                .ty,
+            Ty::U8
+        );
+        let shift = emit
+            .expr(&cast(bin(BinaryOp::Shl, lit(1), lit(40)), "u64"), None)
+            .expect("unsigned wide shift");
+        assert!(shift.code.contains("Int::shl(1u64, 40)"), "{}", shift.code);
+    }
 }

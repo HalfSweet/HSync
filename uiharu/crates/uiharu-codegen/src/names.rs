@@ -58,6 +58,38 @@ pub fn pascal(name: &str) -> String {
     out
 }
 
+/// A variant identifier unique within its complete enum/union, retaining readable
+/// PascalCase names whenever that spelling is legal and unambiguous. Encoded
+/// names use a prefix that no readable candidate has, so user strings cannot
+/// collide with the fallback namespace either. Serialization always uses the wire name.
+pub fn variant_name<'a>(name: &str, names: impl IntoIterator<Item = &'a str>) -> String {
+    let names: Vec<_> = names.into_iter().collect();
+    let candidates: Vec<_> = names.iter().map(|name| pascal(name)).collect();
+    let candidate = pascal(name);
+    let legal = candidate.starts_with(|c: char| c.is_ascii_alphabetic())
+        && candidate.chars().all(|c| c.is_ascii_alphanumeric())
+        && !RESERVED.contains(&candidate.as_str())
+        && !KEYWORDS.contains(&candidate.as_str());
+    if legal
+        && candidates
+            .iter()
+            .filter(|value| **value == candidate)
+            .count()
+            <= 1
+    {
+        return candidate;
+    }
+    let mut prefix = String::from("Wire");
+    while candidates.iter().any(|name| name.starts_with(&prefix)) {
+        prefix.push('X');
+    }
+    for byte in name.as_bytes() {
+        use std::fmt::Write;
+        let _ = write!(prefix, "{byte:02X}");
+    }
+    prefix
+}
+
 /// Escapes a keyword.
 pub fn escape(name: String) -> String {
     if RESERVED.contains(&name.as_str()) {
@@ -104,6 +136,37 @@ pub fn plain_literal(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn variant_names_are_legal_unique_and_preserve_wire_identity() {
+        let names = [
+            "1.2",
+            "2.0",
+            "foo-bar",
+            "foo_bar",
+            "FooBar",
+            "Self",
+            "",
+            "😀",
+            "Wire666F6F",
+        ];
+        let rust: Vec<_> = names
+            .iter()
+            .map(|name| variant_name(name, names.iter().copied()))
+            .collect();
+        let unique: std::collections::HashSet<_> = rust.iter().collect();
+        assert_eq!(unique.len(), names.len());
+        for name in &rust {
+            assert!(!name.is_empty());
+            assert!(name.starts_with(|c: char| c.is_ascii_alphabetic()));
+            assert!(name.chars().all(|c| c.is_ascii_alphanumeric()));
+            assert_ne!(name, "Self");
+        }
+        assert_eq!(
+            variant_name("read-status", ["read-status", "write"]),
+            "ReadStatus"
+        );
+    }
 
     #[test]
     fn names_convert() {

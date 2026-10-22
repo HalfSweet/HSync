@@ -19,6 +19,7 @@
 declare const width: unique symbol
 declare const channel: unique symbol
 declare const bound: unique symbol
+declare const hex: unique symbol
 
 /** An unsigned 8-bit integer. */
 export type u8 = number & { readonly [width]?: 8 }
@@ -28,6 +29,10 @@ export type u16 = number & { readonly [width]?: 8 | 16 }
 export type u32 = number & { readonly [width]?: 8 | 16 | 32 }
 /** An unsigned 64-bit integer. */
 export type u64 = number & { readonly [width]?: 8 | 16 | 32 | 64 }
+/** A u64 contract field serialized losslessly as hexadecimal text in JSON. */
+export type HexU64 = u64 & { readonly [hex]?: true }
+/** A validated numeric enum, with stable names for its generated Rust variants. */
+export type NumericEnum<V extends Record<string, number>> = V[keyof V]
 /** A yes or no. */
 export type bool = boolean
 /** A sample index on the source's clock, counted from its first sample. */
@@ -40,7 +45,8 @@ export type Channel = u8 & { readonly [channel]?: true }
 export declare const MAX_CHANNELS: u8
 
 /** An array of at most `N` items: the one kind of list a decoder keeps or emits. A batch's
- * items fit a bound at or above the batch's capacity. */
+ * items fit a bound at or above the batch's capacity. Exact arrays instead use homogeneous
+ * tuples (`readonly [u8, u8, u8, u8]`), of length 1 through 32. */
 export type Bounded<T, N extends number> = readonly T[] & { readonly [bound]?: N }
 
 // Provenance

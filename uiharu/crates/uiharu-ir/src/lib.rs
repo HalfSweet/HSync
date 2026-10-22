@@ -24,10 +24,11 @@ mod model;
 mod validate;
 
 pub use model::{
-    Arm, BinaryOp, Category, Config, Const, Contract, Decoder, EnumVariant, EventRole, Expr, Field,
-    Framing, Function, Import, Input, Literal, Locale, Module, Op, Output, Param, Partial, Pattern,
-    PropSpec, Recovery, RequireKind, RequireSpec, Role, SchemaRef, StateField, Stmt, Type, TypeDef,
-    TypeKind, UnaryOp, UnionVariant,
+    Arm, BinaryOp, Category, Config, Const, Contract, Decoder, EnumVariant, EventRole, Expr,
+    ExternalEnumVariant, Field, FieldJson, Framing, Function, Import, Input, Literal, Locale,
+    Module, NumericEnumVariant, Op, Output, Param, Partial, Pattern, PropSpec, Recovery,
+    RequireKind, RequireSpec, Role, SchemaRef, StateField, Stmt, Type, TypeDef, TypeKind, UnaryOp,
+    UnionVariant,
 };
 pub use validate::{Diagnostic, validate};
 

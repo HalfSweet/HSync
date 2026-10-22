@@ -317,8 +317,12 @@ impl Machine {
                         .types
                         .enums
                         .get(*index as usize)
-                        .and_then(|def| def.variants.get(usize::from(variant)))
-                        .cloned()
+                        .and_then(|def| match &def.numbers {
+                            Some(numbers) => {
+                                numbers.get(usize::from(variant)).map(ToString::to_string)
+                            }
+                            None => def.variants.get(usize::from(variant)).cloned(),
+                        })
                         .unwrap_or_default();
                     stack.push(Value::Text(name.into()));
                 }
@@ -791,6 +795,7 @@ fn constant(value: &Const) -> Value {
         Const::Bool(b) => Value::Bool(*b),
         Const::Int(n) => Value::Int(*n),
         Const::Enum(index) => Value::Enum(*index),
+        Const::UnitVariant(index) => Value::variant(*index, Vec::new()),
         Const::Text(text) => Value::Text(Arc::clone(text)),
     }
 }
@@ -801,6 +806,7 @@ fn const_eq(constant: &Const, value: &Value) -> bool {
         (Const::Bool(a), Value::Bool(b)) => a == b,
         (Const::Int(a), Value::Int(b)) => a == b,
         (Const::Enum(a), Value::Enum(b)) => a == b,
+        (Const::UnitVariant(a), Value::Variant(b, fields)) => a == b && fields.is_empty(),
         (Const::Text(a), Value::Text(b)) => **a == **b,
         _ => false,
     }

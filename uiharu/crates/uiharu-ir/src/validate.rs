@@ -253,6 +253,31 @@ impl<'a> Checker<'a> {
         } else if module.contracts.is_empty() {
             self.report("decoder", "a module declares a decoder or a contract");
         }
+        let mut schemas = BTreeMap::new();
+        for (path, contract) in
+            module
+                .contracts
+                .iter()
+                .enumerate()
+                .map(|(index, contract)| (format!("contracts[{index}]"), contract))
+                .chain(module.imports.iter().enumerate().map(|(index, import)| {
+                    (format!("imports[{index}].contract"), &import.contract)
+                }))
+        {
+            let identity = (&contract.schema.name, contract.schema.version);
+            if schemas
+                .insert(identity, contract)
+                .is_some_and(|prior| prior != contract)
+            {
+                self.report(
+                    path,
+                    format!(
+                        "{}@{} has conflicting contract declarations",
+                        contract.schema.name, contract.schema.version
+                    ),
+                );
+            }
+        }
         for (index, contract) in module.contracts.iter().enumerate() {
             self.contract(&format!("contracts[{index}]"), contract);
         }
@@ -271,12 +296,44 @@ impl<'a> Checker<'a> {
         match &def.kind {
             TypeKind::Record { fields } => {
                 for (index, field) in fields.iter().enumerate() {
-                    self.type_ref(&format!("{path}.fields[{index}]"), &field.ty);
+                    self.field(&format!("{path}.fields[{index}]"), field);
                 }
             }
             TypeKind::Enum { variants } => {
                 if variants.is_empty() {
                     self.report(path, "an enum has at least one variant");
+                }
+            }
+            TypeKind::NumericEnum { variants } => {
+                if variants.is_empty() {
+                    self.report(path, "an enum has at least one variant");
+                }
+                let mut names = BTreeSet::new();
+                let mut values = BTreeSet::new();
+                for variant in variants {
+                    if !names.insert(&variant.name) {
+                        self.report(path, format!("{} is declared twice", variant.name));
+                    }
+                    if !values.insert(variant.value) {
+                        self.report(
+                            path,
+                            format!("numeric value {} is declared twice", variant.value),
+                        );
+                    }
+                }
+            }
+            TypeKind::ExternalEnum { variants } => {
+                if variants.is_empty() {
+                    self.report(path, "an enum has at least one variant");
+                }
+                let mut names = BTreeSet::new();
+                for (index, variant) in variants.iter().enumerate() {
+                    if !names.insert(&variant.name) {
+                        self.report(path, format!("{} is declared twice", variant.name));
+                    }
+                    if let Some(payload) = &variant.payload {
+                        self.type_ref(&format!("{path}.variants[{index}].payload"), payload);
+                    }
                 }
             }
             TypeKind::Union { variants } => {
@@ -285,10 +342,17 @@ impl<'a> Checker<'a> {
                 }
                 for (i, variant) in variants.iter().enumerate() {
                     for (j, field) in variant.fields.iter().enumerate() {
-                        self.type_ref(&format!("{path}.variants[{i}].fields[{j}]"), &field.ty);
+                        self.field(&format!("{path}.variants[{i}].fields[{j}]"), field);
                     }
                 }
             }
+        }
+    }
+
+    fn field(&mut self, path: &str, field: &Field) {
+        self.type_ref(path, &field.ty);
+        if field.json == Some(crate::model::FieldJson::HexU64) && !field.ty.is("u64") {
+            self.report(path, "hex-u64 requires a u64 field");
         }
     }
 
@@ -301,6 +365,15 @@ impl<'a> Checker<'a> {
                 }
             }
             Type::Option { option } => self.type_ref(path, option),
+            Type::FixedArray {
+                fixed_array,
+                length,
+            } => {
+                if !(1..=32).contains(length) {
+                    self.report(path, "a fixed array has 1 to 32 items, the native array lengths supported by serde");
+                }
+                self.type_ref(path, fixed_array);
+            }
             Type::Array { array, bound }
             | Type::Batch {
                 batch: array,
@@ -372,7 +445,7 @@ impl<'a> Checker<'a> {
                             path,
                             format!("roles.{kind}.errorWhen: {kind} has no field {name}"),
                         ),
-                        Some(field) if !self.takes(&field.ty, value) => self.report(
+                        Some(field) if !self.field_takes(field, value) => self.report(
                             path,
                             format!("roles.{kind}.errorWhen: {name} is never {value}"),
                         ),
@@ -391,14 +464,49 @@ impl<'a> Checker<'a> {
                 "bool" => value.is_boolean(),
                 "u8" | "u16" | "u32" | "u64" => value.is_u64(),
                 "text" => value.is_string(),
-                other => self.enum_variants(other).is_some_and(|variants| {
-                    value
+                other => match self.types.get(other) {
+                    Some(TypeKind::Enum { variants }) => value
                         .as_str()
-                        .is_some_and(|value| variants.iter().any(|variant| variant.0 == value))
-                }),
+                        .is_some_and(|value| variants.iter().any(|variant| variant.0 == value)),
+                    Some(TypeKind::NumericEnum { variants }) => value
+                        .as_u64()
+                        .is_some_and(|value| variants.iter().any(|variant| variant.value == value)),
+                    Some(TypeKind::ExternalEnum { variants }) => {
+                        if let Some(name) = value.as_str() {
+                            variants
+                                .iter()
+                                .any(|variant| variant.name == name && variant.payload.is_none())
+                        } else if let Some(object) =
+                            value.as_object().filter(|object| object.len() == 1)
+                        {
+                            let (name, payload) = object.iter().next().expect("one key");
+                            variants
+                                .iter()
+                                .find(|variant| &variant.name == name)
+                                .and_then(|variant| variant.payload.as_ref())
+                                .is_some_and(|ty| self.takes(ty, payload))
+                        } else {
+                            false
+                        }
+                    }
+                    _ => false,
+                },
             },
-            Type::Array { .. } | Type::Batch { .. } => false,
+            Type::Array { .. } | Type::FixedArray { .. } | Type::Batch { .. } => false,
         }
+    }
+
+    fn field_takes(&self, field: &Field, value: &serde_json::Value) -> bool {
+        if field.json == Some(crate::model::FieldJson::HexU64) {
+            return value.as_str().is_some_and(|text| {
+                let digits = text
+                    .strip_prefix("0x")
+                    .or_else(|| text.strip_prefix("0X"))
+                    .unwrap_or(text);
+                u64::from_str_radix(digits, 16).is_ok()
+            });
+        }
+        self.takes(&field.ty, value)
     }
 
     fn framing(&mut self, path: &str, framing: &Framing, variants: &[crate::model::UnionVariant]) {
@@ -663,8 +771,19 @@ impl<'a> Checker<'a> {
                     Type::Option { option } => option.as_ref(),
                     other => other,
                 };
-                let variants = match ty {
-                    Type::Name(name) => self.enum_variants(name),
+                let variants: Option<Vec<String>> = match ty {
+                    Type::Name(name) => match self.types.get(name.as_str()) {
+                        Some(TypeKind::Enum { variants }) => {
+                            Some(variants.iter().map(|variant| variant.0.clone()).collect())
+                        }
+                        Some(TypeKind::NumericEnum { variants }) => Some(
+                            variants
+                                .iter()
+                                .map(|variant| variant.value.to_string())
+                                .collect(),
+                        ),
+                        _ => None,
+                    },
                     _ => None,
                 };
                 let Some(variants) = variants else {
@@ -675,7 +794,7 @@ impl<'a> Checker<'a> {
                     continue;
                 };
                 for value in values.keys() {
-                    if !variants.iter().any(|variant| &variant.0 == value) {
+                    if !variants.iter().any(|variant| variant == value) {
                         self.report(
                             format!("{path}.values.{name}.{value}"),
                             format!("{value} is not a value of {name}"),
@@ -1062,19 +1181,47 @@ impl<'a> Checker<'a> {
                 }
             }
             Expr::Variant { ty, kind, fields } => {
-                match self.union(ty) {
-                    Some(variants) if variants.iter().any(|variant| &variant.name == kind) => {}
-                    Some(_) => self.report(path.clone(), format!("{ty} has no variant {kind}")),
-                    None => self.report(path.clone(), format!("{ty} is not a union")),
+                match self.types.get(ty.as_str()) {
+                    Some(TypeKind::ExternalEnum { variants }) => match variants
+                        .iter()
+                        .find(|variant| &variant.name == kind)
+                    {
+                        Some(variant)
+                            if variant.payload.is_some()
+                                && (fields.len() != 1 || !fields.contains_key("value")) =>
+                        {
+                            self.report(
+                                path.clone(),
+                                format!("{ty}::{kind} requires exactly the value payload"),
+                            )
+                        }
+                        Some(variant) if variant.payload.is_none() && !fields.is_empty() => self
+                            .report(
+                                path.clone(),
+                                format!("{ty}::{kind} unit variant takes no payload"),
+                            ),
+                        Some(_) => {}
+                        None => self.report(path.clone(), format!("{ty} has no variant {kind}")),
+                    },
+                    _ => match self.union(ty) {
+                        Some(variants) if variants.iter().any(|variant| &variant.name == kind) => {}
+                        Some(_) => self.report(path.clone(), format!("{ty} has no variant {kind}")),
+                        None => self.report(path.clone(), format!("{ty} is not a union")),
+                    },
                 }
                 for value in fields.values() {
                     self.expr(cx, value);
                 }
             }
-            Expr::Enum { ty, value } => match self.enum_variants(ty) {
-                Some(variants) if variants.iter().any(|variant| &variant.0 == value) => {}
-                Some(_) => self.report(path, format!("{ty} has no variant {value}")),
-                None => self.report(path, format!("{ty} is not an enum")),
+            Expr::Enum { ty, value } => match self.types.get(ty.as_str()) {
+                Some(TypeKind::Enum { variants })
+                    if variants.iter().any(|variant| &variant.0 == value) => {}
+                Some(TypeKind::NumericEnum { variants })
+                    if variants.iter().any(|variant| &variant.name == value) => {}
+                Some(TypeKind::Enum { .. } | TypeKind::NumericEnum { .. }) => {
+                    self.report(path, format!("{ty} has no variant {value}"))
+                }
+                _ => self.report(path, format!("{ty} is not an enum")),
             },
             Expr::Array { items } => {
                 if items.is_empty() {

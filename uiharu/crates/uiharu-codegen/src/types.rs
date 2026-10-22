@@ -6,9 +6,9 @@
 use std::collections::BTreeMap;
 use std::fmt::Write;
 
-use uiharu_ir::{Field, Type, TypeDef, TypeKind};
+use uiharu_ir::{Field, FieldJson, Type, TypeDef, TypeKind};
 
-use crate::names::{pascal, plain_literal, snake};
+use crate::names::{plain_literal, snake, variant_name};
 
 /// A type as the emitter sees it: the IR's, plus what the runtime's operations hand out.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,6 +26,7 @@ pub enum Ty {
     Cursor,
     Option(Box<Ty>),
     Array(Box<Ty>, u32),
+    FixedArray(Box<Ty>, u32),
     Batch(Box<Ty>, u32),
     /// A declared record, enum or union.
     Named(String),
@@ -61,6 +62,10 @@ impl Ty {
             },
             Type::Option { option } => Ty::Option(Box::new(Ty::from_ir(option))),
             Type::Array { array, bound } => Ty::Array(Box::new(Ty::from_ir(array)), *bound),
+            Type::FixedArray {
+                fixed_array,
+                length,
+            } => Ty::FixedArray(Box::new(Ty::from_ir(fixed_array)), *length),
             Type::Batch { batch, bound } => Ty::Batch(Box::new(Ty::from_ir(batch)), *bound),
         }
     }
@@ -105,6 +110,7 @@ impl Ty {
             Ty::Cursor => format!("Transaction<'_, {}>", lower.unwrap_or("()")),
             Ty::Option(inner) => format!("Option<{}>", inner.rust(lower)),
             Ty::Array(item, _) => format!("Vec<{}>", item.rust(lower)),
+            Ty::FixedArray(item, length) => format!("[{}; {length}]", item.rust(lower)),
             Ty::Batch(item, bound) => format!("Batch<{}, {bound}>", item.rust(lower)),
             Ty::Named(name) => name.clone(),
             Ty::Edge => "Edge".into(),
@@ -135,6 +141,24 @@ impl<'a> Defs<'a> {
         self.defs.get(name).copied()
     }
 
+    /// The legal, collision-free Rust spelling of a wire enum/union value.
+    pub fn variant_name(&self, ty: &str, name: &str) -> String {
+        let names: Vec<&str> = match self.get(ty).map(|def| &def.kind) {
+            Some(TypeKind::Enum { variants }) => variants.iter().map(|v| v.0.as_str()).collect(),
+            Some(TypeKind::NumericEnum { variants }) => {
+                variants.iter().map(|v| v.name.as_str()).collect()
+            }
+            Some(TypeKind::ExternalEnum { variants }) => {
+                variants.iter().map(|v| v.name.as_str()).collect()
+            }
+            Some(TypeKind::Union { variants }) => {
+                variants.iter().map(|v| v.name.as_str()).collect()
+            }
+            _ => Vec::new(),
+        };
+        variant_name(name, names)
+    }
+
     pub fn record_fields(&self, name: &str) -> Option<&'a [Field]> {
         match &self.get(name)?.kind {
             TypeKind::Record { fields } => Some(fields),
@@ -152,12 +176,39 @@ impl<'a> Defs<'a> {
         )
     }
 
-    pub fn variant_fields(&self, union: &str, variant: &str) -> Option<&'a [Field]> {
+    pub fn is_numeric_enum(&self, name: &str) -> bool {
+        matches!(
+            self.get(name).map(|def| &def.kind),
+            Some(TypeKind::NumericEnum { .. })
+        )
+    }
+
+    pub fn is_external_enum(&self, name: &str) -> bool {
+        matches!(
+            self.get(name).map(|def| &def.kind),
+            Some(TypeKind::ExternalEnum { .. })
+        )
+    }
+
+    pub fn variant_fields(&self, union: &str, variant: &str) -> Option<Vec<Field>> {
         match &self.get(union)?.kind {
             TypeKind::Union { variants } => variants
                 .iter()
                 .find(|v| v.name == variant)
-                .map(|v| v.fields.as_slice()),
+                .map(|v| v.fields.clone()),
+            TypeKind::ExternalEnum { variants } => {
+                variants.iter().find(|v| v.name == variant).map(|v| {
+                    v.payload
+                        .iter()
+                        .map(|ty| Field {
+                            name: "value".into(),
+                            ty: ty.clone(),
+                            channel: false,
+                            json: None,
+                        })
+                        .collect()
+                })
+            }
             _ => None,
         }
     }
@@ -168,7 +219,10 @@ impl<'a> Defs<'a> {
             Ty::Bool | Ty::U8 | Ty::U16 | Ty::U32 | Ty::U64 | Ty::IntLit | Ty::Text | Ty::Unit => {
                 true
             }
-            Ty::Option(inner) | Ty::Array(inner, _) | Ty::Taken(inner) => self.is_data(inner),
+            Ty::Option(inner)
+            | Ty::Array(inner, _)
+            | Ty::FixedArray(inner, _)
+            | Ty::Taken(inner) => self.is_data(inner),
             Ty::Mask
             | Ty::Levels
             | Ty::Range
@@ -179,7 +233,13 @@ impl<'a> Defs<'a> {
             | Ty::Timed
             | Ty::Received(_) => false,
             Ty::Named(name) => match self.get(name).map(|def| &def.kind) {
-                Some(TypeKind::Enum { .. }) => true,
+                Some(TypeKind::Enum { .. } | TypeKind::NumericEnum { .. }) => true,
+                Some(TypeKind::ExternalEnum { variants }) => variants.iter().all(|variant| {
+                    variant
+                        .payload
+                        .as_ref()
+                        .is_none_or(|ty| self.is_data(&Ty::from_ir(ty)))
+                }),
                 Some(TypeKind::Record { fields }) => {
                     fields.iter().all(|f| self.is_data(&Ty::from_ir(&f.ty)))
                 }
@@ -207,7 +267,7 @@ impl<'a> Defs<'a> {
             | Ty::Edge
             | Ty::Timed
             | Ty::Unit => true,
-            Ty::Option(inner) => self.is_copy(inner),
+            Ty::Option(inner) | Ty::FixedArray(inner, _) => self.is_copy(inner),
             Ty::Text
             | Ty::Cursor
             | Ty::Array(..)
@@ -215,7 +275,13 @@ impl<'a> Defs<'a> {
             | Ty::Received(_)
             | Ty::Taken(_) => false,
             Ty::Named(name) => match self.get(name).map(|def| &def.kind) {
-                Some(TypeKind::Enum { .. }) => true,
+                Some(TypeKind::Enum { .. } | TypeKind::NumericEnum { .. }) => true,
+                Some(TypeKind::ExternalEnum { variants }) => variants.iter().all(|variant| {
+                    variant
+                        .payload
+                        .as_ref()
+                        .is_none_or(|ty| self.is_copy(&Ty::from_ir(ty)))
+                }),
                 Some(TypeKind::Record { fields }) => {
                     fields.iter().all(|f| self.is_copy(&Ty::from_ir(&f.ty)))
                 }
@@ -284,6 +350,9 @@ pub fn emit_types(defs: &Defs<'_>, types: &[TypeDef], config: &str, lower: Optio
                 }
                 let _ = writeln!(out, "pub struct {} {{", def.name);
                 for field in fields {
+                    if field.json == Some(FieldJson::HexU64) {
+                        out.push_str("    #[serde(with = \"uiharu_core::hex_u64\")]\n");
+                    }
                     let _ = writeln!(
                         out,
                         "    pub {}: {},",
@@ -300,7 +369,7 @@ pub fn emit_types(defs: &Defs<'_>, types: &[TypeDef], config: &str, lower: Optio
                 let _ = writeln!(out, "pub enum {} {{", def.name);
                 for variant in variants {
                     let _ = writeln!(out, "    #[serde(rename = {})]", plain_literal(&variant.0));
-                    let _ = writeln!(out, "    {},", pascal(&variant.0));
+                    let _ = writeln!(out, "    {},", defs.variant_name(&def.name, &variant.0));
                 }
                 out.push_str("}\n\n");
                 let _ = writeln!(out, "impl {} {{", def.name);
@@ -313,7 +382,7 @@ pub fn emit_types(defs: &Defs<'_>, types: &[TypeDef], config: &str, lower: Optio
                         out,
                         "            {}::{} => {},",
                         def.name,
-                        pascal(&variant.0),
+                        defs.variant_name(&def.name, &variant.0),
                         plain_literal(&variant.0)
                     );
                 }
@@ -338,10 +407,18 @@ pub fn emit_types(defs: &Defs<'_>, types: &[TypeDef], config: &str, lower: Optio
                         plain_literal(&variant.name)
                     );
                     if variant.fields.is_empty() {
-                        let _ = writeln!(out, "    {},", pascal(&variant.name));
+                        let _ =
+                            writeln!(out, "    {},", defs.variant_name(&def.name, &variant.name));
                     } else {
-                        let _ = writeln!(out, "    {} {{", pascal(&variant.name));
+                        let _ = writeln!(
+                            out,
+                            "    {} {{",
+                            defs.variant_name(&def.name, &variant.name)
+                        );
                         for field in &variant.fields {
+                            if field.json == Some(FieldJson::HexU64) {
+                                out.push_str("        #[serde(with = \"uiharu_core::hex_u64\")]\n");
+                            }
                             let _ = writeln!(
                                 out,
                                 "        {}: {},",
@@ -350,6 +427,91 @@ pub fn emit_types(defs: &Defs<'_>, types: &[TypeDef], config: &str, lower: Optio
                             );
                         }
                         out.push_str("    },\n");
+                    }
+                }
+                out.push_str("}\n\n");
+            }
+            TypeKind::NumericEnum { variants } => {
+                out.push_str("#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]\n");
+                let _ = writeln!(out, "pub enum {} {{", def.name);
+                for variant in variants {
+                    let _ = writeln!(out, "    {},", defs.variant_name(&def.name, &variant.name));
+                }
+                out.push_str("}\n\n");
+                let _ = writeln!(out, "impl {} {{", def.name);
+                out.push_str("    /// The number the contract spells the value with.\n    pub const fn value(self) -> u64 {\n        match self {\n");
+                for variant in variants {
+                    let _ = writeln!(
+                        out,
+                        "            Self::{} => {},",
+                        defs.variant_name(&def.name, &variant.name),
+                        variant.value
+                    );
+                }
+                out.push_str("        }\n    }\n}\n\n");
+                let _ = writeln!(
+                    out,
+                    "impl Serialize for {} {{\n    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {{\n        serializer.serialize_u64(self.value())\n    }}\n}}\n",
+                    def.name
+                );
+                let _ = writeln!(
+                    out,
+                    "impl<'de> Deserialize<'de> for {} {{\n    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {{\n        match u64::deserialize(deserializer)? {{",
+                    def.name
+                );
+                for variant in variants {
+                    let _ = writeln!(
+                        out,
+                        "            {} => Ok(Self::{}),",
+                        variant.value,
+                        defs.variant_name(&def.name, &variant.name)
+                    );
+                }
+                out.push_str("            value => Err(serde::de::Error::custom(format!(\"unknown numeric enum value {value}\"))),\n        }\n    }\n}\n\n");
+            }
+            TypeKind::ExternalEnum { variants } => {
+                let copy = variants.iter().all(|variant| {
+                    variant
+                        .payload
+                        .as_ref()
+                        .is_none_or(|ty| defs.is_copy(&Ty::from_ir(ty)))
+                });
+                let data = variants.iter().all(|variant| {
+                    variant
+                        .payload
+                        .as_ref()
+                        .is_none_or(|ty| defs.is_data(&Ty::from_ir(ty)))
+                });
+                let mut derives = vec!["Clone"];
+                if copy {
+                    derives.push("Copy");
+                }
+                derives.extend(["Debug", "PartialEq", "Eq"]);
+                if data {
+                    derives.extend(["Serialize", "Deserialize"]);
+                }
+                let _ = writeln!(
+                    out,
+                    "#[derive({})]\npub enum {} {{",
+                    derives.join(", "),
+                    def.name
+                );
+                for variant in variants {
+                    if data {
+                        let _ = writeln!(
+                            out,
+                            "    #[serde(rename = {})]",
+                            plain_literal(&variant.name)
+                        );
+                    }
+                    let name = defs.variant_name(&def.name, &variant.name);
+                    match &variant.payload {
+                        Some(ty) => {
+                            let _ = writeln!(out, "    {name}({}),", Ty::from_ir(ty).rust(lower));
+                        }
+                        None => {
+                            let _ = writeln!(out, "    {name},");
+                        }
                     }
                 }
                 out.push_str("}\n\n");

@@ -201,16 +201,16 @@ impl SpiConfig {
     /// What the decoder's input requires of the output it reads.
     pub fn requires(&self) -> Requires {
         let config = self;
-        Requires::new().at_least("channels", i64::from(Int::wadd(highest(&*config), 1)))
+        Requires::new().at_least("channels", i64::from(Int::wadd(highest(&*config), 1u8)))
     }
 }
 
 pub fn cpol(config: &SpiConfig) -> bool {
-    return ((config.mode & 2) != 0);
+    return ((config.mode & 2u8) != 0u8);
 }
 
 pub fn cpha(config: &SpiConfig) -> bool {
-    return ((config.mode & 1) != 0);
+    return ((config.mode & 1u8) != 0u8);
 }
 
 pub fn samples_on_rising(config: &SpiConfig) -> bool {
@@ -227,19 +227,19 @@ pub fn selected(config: &SpiConfig, levels: Levels) -> bool {
 
 pub fn highest(config: &SpiConfig) -> u8 {
     return std::cmp::max(
-        std::cmp::max(config.clk, config.cs.unwrap_or(0)),
-        std::cmp::max(config.mosi.unwrap_or(0), config.miso.unwrap_or(0)),
+        std::cmp::max(config.clk, config.cs.unwrap_or(0u8)),
+        std::cmp::max(config.mosi.unwrap_or(0u8), config.miso.unwrap_or(0u8)),
     );
 }
 
 pub fn validate(config: &SpiConfig) -> Option<String> {
-    if (config.mode > 3) {
+    if (config.mode > 3u8) {
         return Some(format!(
             "SPI mode {} does not exist; modes are 0 to 3",
             config.mode
         ));
     }
-    if ((config.word_bits < 1) || (config.word_bits > 8)) {
+    if ((config.word_bits < 1u8) || (config.word_bits > 8u8)) {
         return Some(format!(
             "{} bits per word; 1 to 8 are supported",
             config.word_bits
@@ -260,7 +260,7 @@ pub fn validate(config: &SpiConfig) -> Option<String> {
             return Some(format!(
                 "channel {} is out of range; channels are 0 to {}",
                 line_2,
-                Int::wsub(MAX_CHANNELS, 1)
+                Int::wsub(MAX_CHANNELS, 1u8)
             ));
         }
         if seen.has(line_2) {
@@ -274,10 +274,10 @@ pub fn validate(config: &SpiConfig) -> Option<String> {
 pub fn new_transfer(tx: u64) -> Transfer {
     return Transfer {
         tx,
-        bits: 0,
-        mosi: 0,
-        miso: 0,
-        first_bit: 0,
+        bits: 0u8,
+        mosi: 0u8,
+        miso: 0u8,
+        first_bit: 0u64,
     };
 }
 
@@ -348,8 +348,12 @@ impl State {
         } else {
             false
         };
-        let next_tx: u64 = 1;
-        let transfer: Option<Transfer> = if framed { None } else { Some(new_transfer(0)) };
+        let next_tx: u64 = 1u64;
+        let transfer: Option<Transfer> = if framed {
+            None
+        } else {
+            Some(new_transfer(0u64))
+        };
         let selected: bool = false;
         Self {
             config,
@@ -364,7 +368,7 @@ impl State {
 
     fn hold(&self) -> Option<u64> {
         return if let Some(transfer) = self.transfer {
-            if (transfer.bits > 0) {
+            if (transfer.bits > 0u8) {
                 Some(transfer.first_bit)
             } else {
                 None
@@ -401,16 +405,16 @@ impl State {
                 )
                 .await;
         } else {
-            transfer.bits = 0;
-            transfer.mosi = 0;
-            transfer.miso = 0;
+            transfer.bits = 0u8;
+            transfer.mosi = 0u8;
+            transfer.miso = 0u8;
         }
         Ok(())
     }
 
     fn begin(&mut self) -> u64 {
         let tx: u64 = self.next_tx;
-        self.next_tx = Int::wadd(self.next_tx, 1);
+        self.next_tx = Int::wadd(self.next_tx, 1u64);
         self.transfer = Some(new_transfer(tx));
         return tx;
     }
@@ -425,7 +429,7 @@ impl State {
         let Some(transfer) = self.transfer.as_mut() else {
             return Ok(());
         };
-        if (transfer.bits == 0) {
+        if (transfer.bits == 0u8) {
             transfer.first_bit = tick;
         }
         let mosi: u8 = u8::from(if let Some(mosi) = config.mosi {
@@ -445,7 +449,7 @@ impl State {
             transfer.mosi = (transfer.mosi | Int::shl(mosi, u64::from(transfer.bits)));
             transfer.miso = (transfer.miso | Int::shl(miso, u64::from(transfer.bits)));
         }
-        transfer.bits = Int::wadd(transfer.bits, 1);
+        transfer.bits = Int::wadd(transfer.bits, 1u8);
         if (transfer.bits < config.word_bits) {
             return Ok(());
         }
@@ -463,12 +467,12 @@ impl State {
             },
         };
         let r#where: Provenance = Provenance::over(
-            TickRange::new(Tick(transfer.first_bit), Tick(Int::wadd(tick, 1))),
+            TickRange::new(Tick(transfer.first_bit), Tick(Int::wadd(tick, 1u64))),
             Tick(tick),
         );
-        transfer.bits = 0;
-        transfer.mosi = 0;
-        transfer.miso = 0;
+        transfer.bits = 0u8;
+        transfer.mosi = 0u8;
+        transfer.miso = 0u8;
         io.out.emit(r#where, word).await;
         Ok(())
     }

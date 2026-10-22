@@ -108,11 +108,13 @@ impl<'a> Generator<'a> {
             None => None,
         };
         let event = module
-            .contracts
+            .imports
             .iter()
+            .map(|import| &import.contract)
+            .chain(module.contracts.iter())
             .find(|contract| contract.schema == decoder.output.schema)
             .map(|contract| contract.event.clone())
-            .ok_or_else(|| GenError::new("the output's contract is not declared here"))?;
+            .ok_or_else(|| GenError::new("the output's contract is not in scope"))?;
         Ok(Self {
             module,
             decoder: Some(decoder),
@@ -151,10 +153,20 @@ impl<'a> Generator<'a> {
         self.imports(&mut out);
         for constant in &self.module.consts {
             let ty = Ty::from_ir(&constant.ty);
-            let value = match &constant.value {
-                uiharu_ir::Literal::Int(n) => n.to_string(),
-                uiharu_ir::Literal::Bool(b) => b.to_string(),
-                uiharu_ir::Literal::Text(text) => plain_literal(text),
+            let value = match (&constant.value, &ty) {
+                (uiharu_ir::Literal::Int(n), Ty::Named(name))
+                    if self.defs.is_numeric_enum(name) =>
+                {
+                    self.json_literal(&serde_json::Value::from(*n), &ty)?
+                }
+                (uiharu_ir::Literal::Text(value), Ty::Named(name))
+                    if self.defs.is_enum(name) || self.defs.is_external_enum(name) =>
+                {
+                    self.json_literal(&serde_json::Value::from(value.as_str()), &ty)?
+                }
+                (uiharu_ir::Literal::Int(n), _) => n.to_string(),
+                (uiharu_ir::Literal::Bool(b), _) => b.to_string(),
+                (uiharu_ir::Literal::Text(text), _) => plain_literal(text),
             };
             let _ = writeln!(
                 out,
@@ -297,7 +309,7 @@ impl<'a> Generator<'a> {
             out,
             "            {}::{} {{ {id}, {} .. }} => Frame::Begin {{ id: *{id}, partial: {} }},",
             contract.event,
-            pascal(&framing.begin),
+            self.defs.variant_name(&contract.event, &framing.begin),
             partial.as_ref().map_or(String::new(), |p| format!("{p},")),
             partial
                 .as_ref()
@@ -329,9 +341,13 @@ impl<'a> Generator<'a> {
             let item = if single {
                 format!("{item_name} {{ {} }}", inits.join(", "))
             } else if inits.is_empty() {
-                format!("{item_name}::{}", pascal(kind))
+                format!("{item_name}::{}", self.defs.variant_name(&item_name, kind))
             } else {
-                format!("{item_name}::{} {{ {} }}", pascal(kind), inits.join(", "))
+                format!(
+                    "{item_name}::{} {{ {} }}",
+                    self.defs.variant_name(&item_name, kind),
+                    inits.join(", ")
+                )
             };
             let pattern = if binds.is_empty() {
                 String::new()
@@ -342,20 +358,25 @@ impl<'a> Generator<'a> {
                 out,
                 "            {}::{} {{ {id}{pattern} }} => Frame::Item {{ id: *{id}, item: {item} }},",
                 contract.event,
-                pascal(kind)
+                self.defs.variant_name(&contract.event, kind)
             );
         }
         let reason = snake(&framing.reason);
         let normal: Vec<String> = framing
             .normal
             .iter()
-            .map(|value| format!("{reason_enum}::{}", pascal(value)))
+            .map(|value| {
+                format!(
+                    "{reason_enum}::{}",
+                    self.defs.variant_name(&reason_enum, value)
+                )
+            })
             .collect();
         let _ = writeln!(
             out,
             "            {}::{} {{ {id}, {reason}, .. }} => Frame::End {{ id: *{id}, normal: matches!({reason}, {}) }},",
             contract.event,
-            pascal(&framing.end),
+            self.defs.variant_name(&contract.event, &framing.end),
             normal.join(" | ")
         );
         let others: Vec<&str> = variants
@@ -409,7 +430,7 @@ impl<'a> Generator<'a> {
                 out,
                 "            {}: {},",
                 snake(&field.name),
-                self.json_literal(value, &Ty::from_ir(&field.ty))?
+                self.json_field_literal(value, field)?
             );
         }
         out.push_str("        }\n    }\n}\n\n");
@@ -502,6 +523,9 @@ impl<'a> Generator<'a> {
             Ty::IntLit => Ok(format!("{code}i64")),
             Ty::Text => Ok(format!("{code}.as_str()")),
             Ty::Named(name) if self.defs.is_enum(name) => Ok(format!("{code}.name()")),
+            Ty::Named(name) if self.defs.is_numeric_enum(name) => {
+                Ok(format!("i64::try_from({code}.value()).unwrap_or(i64::MAX)"))
+            }
             ty if ty.is_int() => to_i64(code, ty),
             other => Err(GenError::new(format!(
                 "a {other:?} is not a property value"
@@ -509,14 +533,106 @@ impl<'a> Generator<'a> {
         }
     }
 
+    fn json_field_literal(
+        &self,
+        value: &serde_json::Value,
+        field: &uiharu_ir::Field,
+    ) -> Result<String, GenError> {
+        if field.json == Some(uiharu_ir::FieldJson::HexU64) {
+            let number = value
+                .as_u64()
+                .or_else(|| {
+                    value.as_str().and_then(|text| {
+                        let digits = text
+                            .strip_prefix("0x")
+                            .or_else(|| text.strip_prefix("0X"))
+                            .unwrap_or(text);
+                        u64::from_str_radix(digits, 16).ok()
+                    })
+                })
+                .ok_or_else(|| GenError::new(format!("{value} is not a hexadecimal u64")))?;
+            return Ok(number.to_string());
+        }
+        self.json_literal(value, &Ty::from_ir(&field.ty))
+    }
+
     fn json_literal(&self, value: &serde_json::Value, ty: &Ty) -> Result<String, GenError> {
         match (value, ty) {
             (serde_json::Value::Null, Ty::Option(_)) => Ok("None".into()),
             (value, Ty::Option(inner)) => Ok(format!("Some({})", self.json_literal(value, inner)?)),
             (serde_json::Value::Bool(b), Ty::Bool) => Ok(b.to_string()),
-            (serde_json::Value::Number(n), ty) if ty.is_int() => Ok(n.to_string()),
+            (serde_json::Value::Number(n), ty) if ty.is_int() => {
+                let number = n
+                    .as_u64()
+                    .ok_or_else(|| GenError::new(format!("{n} is not an unsigned integer")))?;
+                if ty
+                    .width()
+                    .is_some_and(|width| width < 64 && number >= (1u64 << width))
+                {
+                    return Err(GenError::new(format!("{n} is out of range for {ty:?}")));
+                }
+                Ok(number.to_string())
+            }
             (serde_json::Value::String(text), Ty::Named(name)) if self.defs.is_enum(name) => {
-                Ok(format!("{name}::{}", pascal(text)))
+                let Some(TypeKind::Enum { variants }) = self.defs.get(name).map(|def| &def.kind)
+                else {
+                    unreachable!()
+                };
+                if !variants.iter().any(|variant| &variant.0 == text) {
+                    return Err(GenError::new(format!("{name} has no variant {text}")));
+                }
+                Ok(format!("{name}::{}", self.defs.variant_name(name, text)))
+            }
+            (serde_json::Value::Number(number), Ty::Named(name))
+                if self.defs.is_numeric_enum(name) =>
+            {
+                let Some(TypeKind::NumericEnum { variants }) =
+                    self.defs.get(name).map(|def| &def.kind)
+                else {
+                    unreachable!()
+                };
+                let variant = variants
+                    .iter()
+                    .find(|variant| Some(variant.value) == number.as_u64())
+                    .ok_or_else(|| GenError::new(format!("{number} is not a value of {name}")))?;
+                Ok(format!(
+                    "{name}::{}",
+                    self.defs.variant_name(name, &variant.name)
+                ))
+            }
+            (value, Ty::Named(name)) if self.defs.is_external_enum(name) => {
+                let Some(TypeKind::ExternalEnum { variants }) =
+                    self.defs.get(name).map(|def| &def.kind)
+                else {
+                    unreachable!()
+                };
+                let (kind, payload) = match value {
+                    serde_json::Value::String(kind) => (kind, None),
+                    serde_json::Value::Object(object) if object.len() == 1 => {
+                        let (kind, payload) = object.iter().next().expect("one key");
+                        (kind, Some(payload))
+                    }
+                    _ => {
+                        return Err(GenError::new(format!(
+                            "{value} is not an externally tagged {name}"
+                        )));
+                    }
+                };
+                let variant = variants
+                    .iter()
+                    .find(|variant| &variant.name == kind)
+                    .ok_or_else(|| GenError::new(format!("{name} has no variant {kind}")))?;
+                let rust = format!("{name}::{}", self.defs.variant_name(name, kind));
+                match (&variant.payload, payload) {
+                    (None, None | Some(serde_json::Value::Null)) => Ok(rust),
+                    (Some(ty), Some(payload)) => Ok(format!(
+                        "{rust}({})",
+                        self.json_literal(payload, &Ty::from_ir(ty))?
+                    )),
+                    _ => Err(GenError::new(format!(
+                        "{value} has the wrong payload for {name}::{kind}"
+                    ))),
+                }
             }
             (serde_json::Value::String(text), Ty::Text) => {
                 Ok(format!("String::from({})", plain_literal(text)))
@@ -527,6 +643,44 @@ impl<'a> Generator<'a> {
                     .map(|value| self.json_literal(value, item))
                     .collect::<Result<_, _>>()?;
                 Ok(format!("vec![{}]", items.join(", ")))
+            }
+            (serde_json::Value::Array(items), Ty::FixedArray(item, length)) => {
+                if items.len() != *length as usize {
+                    return Err(GenError::new(format!(
+                        "a fixed array needs exactly {length} items"
+                    )));
+                }
+                let items = items
+                    .iter()
+                    .map(|value| self.json_literal(value, item))
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(format!("[{}]", items.join(", ")))
+            }
+            (serde_json::Value::Object(object), Ty::Named(name)) => {
+                let fields = self
+                    .defs
+                    .record_fields(name)
+                    .ok_or_else(|| GenError::new(format!("{name} is not a record")))?;
+                if object.len() != fields.len() {
+                    return Err(GenError::new(format!(
+                        "{name} has the wrong default fields"
+                    )));
+                }
+                let fields = fields
+                    .iter()
+                    .map(|field| {
+                        let value = object
+                            .get(&field.name)
+                            .or_else(|| object.get(&snake(&field.name)))
+                            .ok_or_else(|| GenError::new(format!("{name} needs {}", field.name)))?;
+                        Ok(format!(
+                            "{}: {}",
+                            snake(&field.name),
+                            self.json_field_literal(value, field)?
+                        ))
+                    })
+                    .collect::<Result<Vec<_>, GenError>>()?;
+                Ok(format!("{name} {{ {} }}", fields.join(", ")))
             }
             (value, ty) => Err(GenError::new(format!("{value} is not a {ty:?}"))),
         }
@@ -816,11 +970,11 @@ impl<'a> Generator<'a> {
                 let _ = write!(
                     out,
                     "impl BusDecoder for State {{\n    type Lower = {lower};\n    type Framer = Declared<{lower}>;\n    type Event = {event};\n\n    const PARTIAL: Partial = {partial};\n\n    fn framer(&self) -> Declared<{lower}> {{\n        Declared::new()\n    }}\n\n    fn hold(&self) -> Option<u64> {{\n        State::hold(self)\n    }}\n\n    async fn transaction(&mut self, io: &mut {io}, tx: &mut Transaction<'_, {lower}>) -> Result<(), Cut> {{\n        State::transaction(self, io, tx).await\n    }}\n\n    async fn recover(&mut self, io: &mut {io}, cut: CutKind, at: Provenance) {{\n        let reason = match cut {{\n            CutKind::Incomplete => {reason}::{},\n            CutKind::Truncated => {reason}::{},\n            CutKind::Missing => {reason}::{},\n            CutKind::Gap => {reason}::{},\n            CutKind::End => {reason}::{},\n        }};\n        let _ = State::recover(self, io, reason, at).await;\n    }}\n\n{hooks}}}\n",
-                    pascal(&recovery.incomplete),
-                    pascal(&recovery.truncated),
-                    pascal(&recovery.missing),
-                    pascal(&recovery.gap),
-                    pascal(&recovery.end)
+                    self.defs.variant_name(reason, &recovery.incomplete),
+                    self.defs.variant_name(reason, &recovery.truncated),
+                    self.defs.variant_name(reason, &recovery.missing),
+                    self.defs.variant_name(reason, &recovery.gap),
+                    self.defs.variant_name(reason, &recovery.end)
                 );
             }
         }

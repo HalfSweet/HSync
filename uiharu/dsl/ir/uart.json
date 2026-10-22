@@ -1224,8 +1224,12 @@
             "stmt": "for",
             "var": "i",
             "from": {
-              "expr": "lit",
-              "value": 0
+              "expr": "cast",
+              "value": {
+                "expr": "lit",
+                "value": 0
+              },
+              "to": "u64"
             },
             "to": {
               "expr": "local",
