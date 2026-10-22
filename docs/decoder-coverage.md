@@ -293,7 +293,7 @@ A decoder or capability becomes Verified only when all applicable gates pass:
    recoverable and diagnosed.
 5. **Verification at task wrap-up**: relevant frontend lint/typecheck/tests,
    Rust fmt/clippy/tests, fixture generation and formatting checks. DSL changes
-   also run DSL/IR/codegen freshness and generated/interpreted equivalence checks.
+   also run `pnpm dsl:check`, code-generation reproducibility and generated/interpreted equivalence checks.
    Run the full workspace suite at integrated milestone boundaries and P7, not
    after every edit. UI changes get the required four theme/density checks.
 
@@ -433,10 +433,9 @@ collisions. Existing IR version 1 modules remain supported.
 The supported source forms and limits are in
 [the DSL specification](../uiharu/docs/dsl.md#21-types). Acceptance sources in
 `uiharu/compiler/fixtures/backend-*.ts` and their generated/interpreted pipeline
-exercise these capabilities outside the production catalog. `pnpm dsl:compile`
-regenerates both production and backend-fixture IR as ignored, disposable local
-output and prunes stale JSON. Regenerate their tracked Rust with
-`cargo run -p uiharu-codegen -- uiharu/crates/uiharu-interp/tests/fixtures/backend/ir uiharu/crates/uiharu-interp/tests/fixtures/backend/generated`.
+exercise these capabilities outside the production catalog. `pnpm dsl:generate`
+regenerates production and backend-fixture IR and Rust as ignored, disposable
+local output; see [the DSL workflow](../uiharu/docs/dsl.md#local-generation-workflow).
 
 The acceptance pipeline covers all four compiled/interpreted producer-consumer
 combinations, including a direct native connection using the imported Rust
@@ -451,14 +450,14 @@ ESLint, TypeScript checking, the frontend build, DSL IR freshness and generated
 Rust freshness also pass. The fixture checks cover both source-to-IR and
 IR-to-Rust freshness; generated files are not edited by hand.
 
-The current workflow keeps TypeScript sources and generated Rust tracked, not
-generated IR. `pnpm dsl:check` freshly compiles both IR directories and checks
-both tracked Rust output directories without rewriting Rust. `pnpm test`,
-`pnpm test:watch` and `pnpm bindings` prepare local IR automatically; run
-`pnpm dsl:compile` first for direct Cargo tests,
-interpreted CLI decoding or metadata export. Ordinary Rust builds and installer
-bundles use committed Rust and manifests without local IR. The independent,
-hand-authored `uiharu/crates/uiharu-ir/tests/fixtures/pwm.json` remains tracked.
+The current workflow tracks TypeScript sources, the handwritten production
+`src/lib.rs` wrapper and the independent PWM IR fixture. Generated IR and Rust
+are ignored local output. Run `pnpm dsl:generate` before direct workspace Cargo
+commands; `pnpm dsl:check` regenerates and type-checks both Rust outputs,
+including fixtures. `pnpm test` prepares only IR; Tauri wrappers, bundle and
+bindings commands generate Rust too. Code-generation tests check reproducibility
+and independent protocol vectors check generated/interpreted semantics. See
+[the DSL workflow](../uiharu/docs/dsl.md#local-generation-workflow) for setup and paths.
 
 These backend capabilities were delivered before the protocol continuation below;
 at that checkpoint the catalog still contained 100 nodes. Matching serialized

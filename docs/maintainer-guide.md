@@ -21,9 +21,9 @@ How HSync is checked, released and packaged: continuous integration, the release
 | Frontend        | `pnpm format:check`, `lint`, `typecheck`, `test`, `build`                                                                                                                      |
 | Rust            | `cargo fmt --check`, `cargo clippy --workspace --all-targets --locked -D warnings`, `cargo test --workspace --locked`, and that the tests left `src/ipc/bindings` as committed |
 
-Generated decoder IR is disposable local output: `uiharu/dsl/ir/` and `uiharu/crates/uiharu-interp/tests/fixtures/backend/ir/` are ignored. `pnpm dsl:compile` regenerates both directories and prunes stale JSON. The frontend job's `pnpm test` prepares IR automatically; the Rust job installs the Node/pnpm dependencies and explicitly compiles IR before all-target clippy and tests. Run the same command before direct Cargo tests locally, and before interpreted CLI decoding or decoder metadata export. `pnpm test:watch` and `pnpm bindings` also prepare IR automatically.
+Generated decoder IR and Rust are ignored, disposable local output. The frontend job's `pnpm test` prepares only IR. The Rust and bundle CI jobs install the Node/pnpm dependencies and explicitly run `pnpm dsl:generate` before Cargo checks or packaging. This requires Rust and rustfmt as well. For output paths and local checks, see [the DSL workflow](../uiharu/docs/dsl.md).
 
-Commit TypeScript sources and regenerated Rust, including backend-fixture Rust when affected. `pnpm dsl:check` freshly compiles both sets of IR and checks both tracked Rust output directories without rewriting Rust. The hand-authored `uiharu/crates/uiharu-ir/tests/fixtures/pwm.json` stays tracked. Ordinary Rust builds use the committed Rust without Node or IR; installer builds package committed Rust and manifests and do not require or ship local IR.
+Commit TypeScript sources, not generated IR or Rust. `pnpm dsl:check` regenerates both and runs `cargo check --locked -p uiharu-dsl-protocols -p uiharu-interp --all-targets`, including backend-fixture Rust. Run `pnpm dsl:generate` before direct workspace Cargo commands, CLI tools or examples; the `pnpm tauri` wrapper, `pnpm bundle` and `pnpm bindings` do this automatically. Keep the handwritten production `src/lib.rs` wrapper and independent PWM IR fixture tracked.
 
 When the bindings check fails, run `pnpm bindings` and commit the result.
 
@@ -110,7 +110,7 @@ The macOS build is universal: Tauri builds `aarch64-apple-darwin` and `x86_64-ap
 
 On each runner it:
 
-1. Builds with tauri-action. When the `TAURI_SIGNING_PRIVATE_KEY` secret exists, it also passes `--config src-tauri/tauri.updater.conf.json`, which produces the signed update artifacts.
+1. Generates decoder IR and Rust with `pnpm dsl:generate`, then builds with tauri-action. When the `TAURI_SIGNING_PRIVATE_KEY` secret exists, it also passes `--config src-tauri/tauri.updater.conf.json`, which produces the signed update artifacts.
 
 The Release workflow calls it with a draft release to fill. You can also run it by hand (**Actions → Bundle → Run workflow**) to check packaging without releasing. The installers then stay with the run as artifacts. Artifact zips drop hidden files and file modes: to try a macOS build, use the `.dmg` artifact rather than the zipped `.app`.
 

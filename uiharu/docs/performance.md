@@ -24,6 +24,7 @@ Rules followed for every number here: release builds; the machine's load average
 Reproducing:
 
 ```sh
+pnpm dsl:generate                                                   # prepare local decoder IR and Rust
 cargo run --release -p uiharu-cli -- bench --samples 50000000          # dense, SPI -> NOR
 cargo run --release -p hsync-bench -- --repeats 128 --samples 50000000 --runs 3
 CARGO_PROFILE_RELEASE_DEBUG=1 cargo build --release -p uiharu-cli --target-dir target/prof
