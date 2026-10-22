@@ -152,6 +152,26 @@ describe('decode lane', () => {
     expect(wrapper.find('button').attributes('aria-label')).toContain('Capture-IR')
   })
 
+  it.each(['cjtag', 'jtag-chain'])('localizes shared TAP state intervals for %s', async (kind) => {
+    const wrapper = lane([
+      {
+        type: 'event',
+        index: 0,
+        start: 0,
+        end: 600,
+        kind: 'state',
+        role: 'command',
+        payload: { kind: 'state', state: 'shift-ir' },
+      },
+    ])
+    await wrapper.setProps({ kind, annotation: 'states' })
+    expect(wrapper.find('button').text()).toBe('Shift-IR')
+    setLocale('zh-CN')
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('button').text()).toBe('指令移位')
+    expect(wrapper.find('button').attributes('title')).not.toContain('shift-ir')
+  })
+
   it('colours blocks by role and shows text wherever it fits', async () => {
     const wrapper = lane([
       {

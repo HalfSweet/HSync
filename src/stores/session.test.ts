@@ -232,3 +232,16 @@ describe('session store', () => {
     expect(sessions.snapshot().decoders).toEqual(UART)
   })
 })
+
+it('keeps unsupported DSView configurations in the first-capture preset and session snapshot', async () => {
+  setActivePinia(createPinia())
+  const sessions = useSessionStore()
+  const capture = useCaptureStore()
+  const raw = [
+    { id: 'future-bus', options: { bytes: [0, 255] }, 'stacked decoders': [{ id: 'future-chip' }] },
+  ]
+  files.set('retained.dsc', JSON.stringify({ Version: 3, Device: 'DSLogic', decoder: raw }))
+  await sessions.load('retained.dsc')
+  expect(capture.preset?.decoders).toEqual(raw)
+  expect(sessions.snapshot().decoders).toEqual(raw)
+})

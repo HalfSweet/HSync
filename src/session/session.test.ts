@@ -166,3 +166,19 @@ describe('sessions', () => {
     expect(optionRank('channelMode')).toBeLessThan(optionRank('sampleLimit'))
   })
 })
+
+it('retains raw decoder configurations through DSView and HSync session serialization', () => {
+  const raw = [
+    {
+      id: 'future-bus',
+      options: { arbitrary: [1, 2] },
+      'stacked decoders': [{ id: 'future-layer' }],
+    },
+  ]
+  const imported = parseSession(JSON.stringify({ Version: 3, Device: 'DSLogic', decoder: raw }))
+  expect(imported?.decoders).toEqual(raw)
+  const saved = parseSession(
+    JSON.stringify({ format: 'hsync-session', version: 1, decoders: imported?.decoders }),
+  )
+  expect(saved?.decoders).toEqual(raw)
+})
