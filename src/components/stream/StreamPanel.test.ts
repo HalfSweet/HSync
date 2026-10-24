@@ -105,14 +105,26 @@ const quiet = new Proxy(backend, {
           : () => Promise.resolve(null),
 })
 vi.mock('@/ipc/backend', () => ({ getBackend: () => Promise.resolve(quiet) }))
+const windows = vi.hoisted(() => ({ opened: 0 }))
+vi.mock('@/ipc/windowLink', () => ({
+  openStreamWindow: () => {
+    windows.opened += 1
+    return Promise.resolve()
+  },
+  closeStreamWindow: () => Promise.resolve(),
+}))
 
-async function panel() {
+async function panel(props: { detached?: boolean } = {}) {
   const capture = useCaptureStore()
   const decode = useDecodeStore()
   capture.summary = summary
   decode.statuses = statuses
   useStreamStore().show(0)
-  const wrapper = mount(StreamPanel, { global: { plugins: [i18n] }, attachTo: document.body })
+  const wrapper = mount(StreamPanel, {
+    props,
+    global: { plugins: [i18n] },
+    attachTo: document.body,
+  })
   await flushPromises()
   return wrapper
 }
@@ -220,6 +232,25 @@ describe('data stream panel', () => {
     expect(useViewStore().segment).toEqual({ from: 700, to: 700 })
     await list.trigger('keydown', { key: 'ArrowUp' })
     expect(useViewStore().segment).toEqual({ from: 400, to: 600 })
+    wrapper.unmount()
+  })
+
+  it('moves into a window of its own from its header', async () => {
+    const wrapper = await panel()
+    expect(wrapper.find('[role="separator"]').exists()).toBe(true)
+    await wrapper.get('[aria-label="Open in its own window"]').trigger('click')
+    const stream = useStreamStore()
+    expect([stream.detached, stream.open, windows.opened]).toEqual([true, false, 1])
+    wrapper.unmount()
+  })
+
+  it('fills its own window, and is put back from there', async () => {
+    const wrapper = await panel({ detached: true })
+    expect(wrapper.find('[role="separator"]').exists()).toBe(false)
+    expect(wrapper.find('[aria-label="Close the data stream"]').exists()).toBe(false)
+    expect(wrapper.get('aside').attributes('style')).toBeUndefined()
+    await wrapper.get('[aria-label="Put back in the main window"]').trigger('click')
+    expect(wrapper.emitted('dock')).toHaveLength(1)
     wrapper.unmount()
   })
 })
