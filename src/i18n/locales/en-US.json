@@ -1715,6 +1715,9 @@
     },
     "copy": "Copy",
     "close": "Close the data stream",
+    "detach": "Open in its own window",
+    "dock": "Put back in the main window",
+    "windowTitle": "Data stream — HSync",
     "column": {
       "time": "Time ms",
       "counter": "#",
@@ -1958,6 +1961,9 @@
     "update": {
       "check": "Could not check for updates: {detail}",
       "install": "Could not update: {detail}"
+    },
+    "window": {
+      "stream": "Could not open the data stream window: {detail}"
     }
   },
   "about": {

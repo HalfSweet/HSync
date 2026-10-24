@@ -18,7 +18,7 @@ const { t } = useI18n()
 const copy = useDecoderCopy()
 const stream = useStreamStore()
 const decode = useDecodeStore()
-const showing = computed(() => stream.open && stream.decoder === props.group.decoder)
+const showing = computed(() => stream.shown && stream.decoder === props.group.decoder)
 
 /** The decoder's label, else the name of its node type; the unnamed group has its own. */
 const title = computed(() => {

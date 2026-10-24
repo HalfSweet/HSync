@@ -19,7 +19,7 @@ const tip = useShortcutTip()
     class="btn w-8 justify-center p-0 aria-pressed:bg-control-on max-[640px]:hidden"
     :aria-label="t('stream.title')"
     :title="tip(t('stream.title'), 'dataStream')"
-    :aria-pressed="stream.open"
+    :aria-pressed="stream.shown"
     @click="stream.toggle()"
   >
     <PanelRight />

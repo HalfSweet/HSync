@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "stream",
+  "description": "Permissions granted to the data stream's own window",
+  "windows": ["stream"],
+  "permissions": ["core:default", "dialog:allow-save", "core:window:allow-set-title"]
+}

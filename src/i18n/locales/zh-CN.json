@@ -1715,6 +1715,9 @@
     },
     "copy": "复制",
     "close": "收起数据流",
+    "detach": "在独立窗口中打开",
+    "dock": "放回主窗口",
+    "windowTitle": "数据流 — HSync",
     "column": {
       "time": "时间 ms",
       "counter": "#",
@@ -1958,6 +1961,9 @@
     "update": {
       "check": "检查更新失败：{detail}",
       "install": "更新失败：{detail}"
+    },
+    "window": {
+      "stream": "无法打开数据流窗口：{detail}"
     }
   },
   "about": {

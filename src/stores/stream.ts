@@ -1,9 +1,12 @@
+import { useStorage } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed, shallowRef, watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
 import type { EventRow } from '@/ipc/bindings/EventRow'
+import { closeStreamWindow, openStreamWindow } from '@/ipc/windowLink'
 import { PANEL_WIDTH } from '@/stream/layout'
+import type { Span } from '@/windows/messages'
 
 import { useCaptureStore } from './capture'
 import { useDecodeStore } from './decode'
@@ -30,13 +33,20 @@ export interface Listing {
   streams: number
 }
 
-/** The data stream panel beside the timeline (DESIGN.md §9). */
+/** The data stream (DESIGN.md §9): a panel beside the timeline, or a window of its own. */
 export const useStreamStore = defineStore('stream', () => {
   const capture = useCaptureStore()
   const decode = useDecodeStore()
   const view = useViewStore()
 
+  /** Whether the panel shows beside the timeline; in the data stream window, always. */
   const open = shallowRef(false)
+  /** Whether the data stream opens in a window of its own; remembered between runs. */
+  const detached = useStorage('hsync.stream.detached', false)
+  /** Whether that window is open, as the main window knows it. */
+  const windowOpen = shallowRef(false)
+  /** Whether the data stream shows, beside the timeline or in its window. */
+  const shown = computed(() => (detached.value ? windowOpen.value : open.value))
   /** Position of the decoder listed. */
   const decoder = shallowRef<number | null>(null)
   /** Position of the stream listed among the decoder's. */
@@ -199,8 +209,32 @@ export const useStreamStore = defineStore('stream', () => {
     return rows
   }
 
-  /** Opens the panel on a decoder's stream, or closes it when it already shows that one. */
+  /** Opens the data stream's window, or brings it to the front. */
+  function openWindow(): void {
+    windowOpen.value = true
+    openStreamWindow().catch((error: unknown) => {
+      windowOpen.value = false
+      console.error('data stream window failed', error)
+    })
+  }
+
+  /** Lists the first stream when none is chosen yet. */
+  function pickFirst(): void {
+    if (decoder.value !== null) return
+    decoder.value = listings.value[0]?.decoder ?? null
+    stream.value = listings.value[0]?.stream ?? 0
+  }
+
+  /**
+   * Opens the data stream on a decoder's stream. The panel closes again when it already shows
+   * that one; the data stream's window comes to the front instead.
+   */
   function show(index: number, streamIndex = 0): void {
+    if (detached.value) {
+      select(index, streamIndex)
+      openWindow()
+      return
+    }
     if (open.value && decoder.value === index && stream.value === streamIndex) {
       open.value = false
       return
@@ -210,12 +244,48 @@ export const useStreamStore = defineStore('stream', () => {
     open.value = true
   }
 
+  /** The top bar's button and its shortcut: the panel opens or closes; the data stream's
+   * window opens or comes to the front. */
   function toggle(): void {
-    open.value = !open.value
-    if (open.value && decoder.value === null) {
-      decoder.value = listings.value[0]?.decoder ?? null
-      stream.value = listings.value[0]?.stream ?? 0
+    if (detached.value) {
+      pickFirst()
+      openWindow()
+      return
     }
+    open.value = !open.value
+    if (open.value) pickFirst()
+  }
+
+  /** Moves the data stream from beside the timeline into its own window, from now on. */
+  function detach(): void {
+    detached.value = true
+    open.value = false
+    openWindow()
+  }
+
+  /** Moves the data stream back beside the timeline, from now on. */
+  function dock(): void {
+    detached.value = false
+    windowOpen.value = false
+    open.value = true
+    closeStreamWindow().catch((error: unknown) => console.error('data stream window failed', error))
+  }
+
+  // Selecting an event shows it on the timeline and marks it as the segment: here, or, from the
+  // data stream's window, in the main window (src/windows/streamGuest.ts).
+  let revealer = (span: Span): void => {
+    view.centerOn((span.start + span.end) / 2)
+    view.setSegment({ from: span.start, to: span.end })
+  }
+
+  /** Shows an event on the timeline, with the segment over it. */
+  function reveal(span: Span): void {
+    revealer(span)
+  }
+
+  /** Has `next` show the events selected instead. */
+  function revealWith(next: (span: Span) => void): void {
+    revealer = next
   }
 
   /** Switches to a decoder's stream without opening the panel, as clicking a block does. */
@@ -226,6 +296,9 @@ export const useStreamStore = defineStore('stream', () => {
 
   return {
     open,
+    detached,
+    windowOpen,
+    shown,
     decoder,
     stream,
     scope,
@@ -246,5 +319,9 @@ export const useStreamStore = defineStore('stream', () => {
     show,
     toggle,
     select,
+    detach,
+    dock,
+    reveal,
+    revealWith,
   }
 })

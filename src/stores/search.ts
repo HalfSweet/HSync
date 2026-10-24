@@ -5,6 +5,7 @@ import { getBackend } from '@/ipc/backend'
 import type { SearchHit } from '@/ipc/bindings/SearchHit'
 import type { SearchResult } from '@/ipc/bindings/SearchResult'
 import { parsePattern, type PatternChannel } from '@/search/pattern'
+import { inStreamWindow } from '@/windows/role'
 
 import { useCaptureStore } from './capture'
 import { useDecodeStore } from './decode'
@@ -53,32 +54,34 @@ export const useSearchStore = defineStore('search', () => {
     current.value === null ? null : (result.value?.hits[current.value] ?? null),
   )
 
-  // The decoders are searched again as the query, the listing or their results change.
+  // The decoders are searched again as the query, the listing or their results change; the
+  // data stream's own window takes what the main window found instead (src/windows/).
   let sequence = 0
   let timer: ReturnType<typeof setTimeout> | undefined
-  watch(
-    () =>
-      [kind.value === 'decode' ? query.value : '', capture.summary?.id, decode.revision] as const,
-    ([text, id]) => {
-      clearTimeout(timer)
-      const mine = ++sequence
-      current.value = null
-      if (!text.trim() || id === undefined) {
-        result.value = null
-        return
-      }
-      timer = setTimeout(() => {
-        void (async () => {
-          try {
-            const next = await (await getBackend()).decodeSearch(id, text)
-            if (mine === sequence) result.value = next
-          } catch (error) {
-            console.error('search failed', error)
-          }
-        })()
-      }, DEBOUNCE_MS)
-    },
-  )
+  if (!inStreamWindow)
+    watch(
+      () =>
+        [kind.value === 'decode' ? query.value : '', capture.summary?.id, decode.revision] as const,
+      ([text, id]) => {
+        clearTimeout(timer)
+        const mine = ++sequence
+        current.value = null
+        if (!text.trim() || id === undefined) {
+          result.value = null
+          return
+        }
+        timer = setTimeout(() => {
+          void (async () => {
+            try {
+              const next = await (await getBackend()).decodeSearch(id, text)
+              if (mine === sequence) result.value = next
+            } catch (error) {
+              console.error('search failed', error)
+            }
+          })()
+        }, DEBOUNCE_MS)
+      },
+    )
 
   // A new pattern or capture starts from the view again.
   watch(

@@ -18,6 +18,7 @@ use state::AppState;
 use tauri::path::BaseDirectory;
 use tauri::{App, Emitter, Manager};
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
+use tauri_plugin_window_state::StateFlags;
 
 /// Crates whose messages follow the log level of the settings; others log warnings and up.
 const OWN_LOG_TARGETS: [&str; 9] = [
@@ -113,6 +114,16 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        // Only the data stream window comes back where it was; the main window opens as set.
+        .plugin(
+            tauri_plugin_window_state::Builder::new()
+                .with_denylist(&[commands::window::MAIN_WINDOW])
+                .with_state_flags(
+                    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED,
+                )
+                .build(),
+        )
+        .on_window_event(commands::window::on_window_event)
         .setup(setup)
         .invoke_handler(tauri::generate_handler![
             commands::app::log_configure,
@@ -154,6 +165,8 @@ pub fn run() {
             commands::device::device_state,
             commands::device::device_set_option,
             commands::device::device_set_channel,
+            commands::window::stream_window_open,
+            commands::window::stream_window_close,
         ])
         .run(tauri::generate_context!())
         .expect("failed to run the HSync application");

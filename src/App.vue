@@ -10,6 +10,7 @@ import { useDecodeStore } from '@/stores/decode'
 import { useDeviceStore } from '@/stores/device'
 import { useSessionStore } from '@/stores/session'
 import { useUpdateStore } from '@/stores/update'
+import { useStreamWindowHost } from '@/windows/streamHost'
 
 // Lucide icons draw like the design's own: 16 px, with a 1.5 px stroke at any size.
 setLucideProps({ size: 16, strokeWidth: 1.5, nonScalingStroke: true, class: 'flex-none' })
@@ -21,6 +22,8 @@ const decode = useDecodeStore()
 const update = useUpdateStore()
 // Remembers each driver's settings and brings them back when it opens.
 useSessionStore()
+// Keeps the data stream's own window, when it is open, on what this window shows.
+useStreamWindowHost()
 
 onMounted(() => {
   void capture.init()
