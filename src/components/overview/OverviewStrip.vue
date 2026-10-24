@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useElementSize } from '@vueuse/core'
+import { refDebounced, useElementSize } from '@vueuse/core'
 import { computed, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -20,6 +20,9 @@ const capture = useCaptureStore()
 const view = useViewStore()
 const strip = useTemplateRef<HTMLElement>('strip')
 const { width } = useElementSize(strip)
+/** The strip's width once it stops changing, as while the data stream opens or closes: what
+ * the activity rows are fetched at, which lie where they should meanwhile, placed in percent. */
+const settledWidth = refDebounced(width, 150)
 
 const decode = useDecodeStore()
 const stream = useStreamStore()
@@ -63,7 +66,7 @@ watch(
     [
       capture.summary?.id,
       capture.extent,
-      Math.round(width.value),
+      Math.round(settledWidth.value),
       decode.revision,
       markedKey.value,
     ] as const,
