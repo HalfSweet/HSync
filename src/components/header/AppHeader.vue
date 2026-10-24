@@ -15,6 +15,7 @@ import CaptureButton from './CaptureButton.vue'
 import DeviceMenu from './DeviceMenu.vue'
 import ExportMenu from './ExportMenu.vue'
 import SettingsButton from './SettingsButton.vue'
+import StreamButton from './StreamButton.vue'
 
 const { t } = useI18n()
 const capture = useCaptureStore()
@@ -120,6 +121,7 @@ function onSearchKey(event: KeyboardEvent): void {
     </label>
 
     <ExportMenu />
+    <StreamButton />
     <SettingsButton />
   </header>
 </template>
