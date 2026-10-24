@@ -56,7 +56,7 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 - **Decoding keeps up with the capture**: results appear while the device is still filling it, and decoders can be added or changed meanwhile.
 - **Decoders of your own**, written in HSync's TypeScript decoder language with their names in any language, loaded from Settings without rebuilding the app and carried along in the captures that use them; one named like a built-in decoder stands in for it.
 - **Values in hex, decimal, octal, binary or ASCII**, chosen per decoder.
-- **The data stream** beside the waveforms lists everything a decoder found. Click a row to jump to it on the waveform and read all of its fields; copy the list or export it as CSV or text.
+- **The data stream** beside the waveforms, or in a window of its own on another screen, lists everything a decoder found. Click a row to jump to it on the waveform and read all of its fields; copy the list or export it as CSV or text.
 
 ![A search for 0x4F: the I²C data byte that holds it, highlighted on the timeline and in the data stream](assets/screenshots/en-US/search.webp)
 
