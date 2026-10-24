@@ -481,15 +481,31 @@ class TauriBackend implements Backend {
 
 let backend: Promise<Backend> | undefined
 
+/** A development window's mock, which a pop-up it opened uses too. */
+interface MockHolder {
+  hsyncMock?: Promise<Backend>
+}
+
+/** The mock of the window that opened this one: the data stream's pop-up shows its capture. */
+function openerMock(): Promise<Backend> | undefined {
+  try {
+    return (window.opener as MockHolder | null)?.hsyncMock
+  } catch {
+    return undefined
+  }
+}
+
 /**
  * The Tauri backend inside the app. Outside Tauri, development builds fall back to an
  * in-browser mock that replays the demo capture so the UI can be worked on in a browser.
  */
 export function getBackend(): Promise<Backend> {
-  backend ??= isTauri()
-    ? Promise.resolve(new TauriBackend())
-    : import.meta.env.DEV
-      ? import('./mock/mockBackend').then((module) => module.createMockBackend())
-      : Promise.reject(new Error('HSync must run inside its desktop shell'))
+  if (backend) return backend
+  if (isTauri()) backend = Promise.resolve(new TauriBackend())
+  else if (import.meta.env.DEV) {
+    backend =
+      openerMock() ?? import('./mock/mockBackend').then((module) => module.createMockBackend())
+    ;(window as MockHolder).hsyncMock = backend
+  } else backend = Promise.reject(new Error('HSync must run inside its desktop shell'))
   return backend
 }
