@@ -71,8 +71,9 @@ import ChannelMenu from './ChannelMenu.vue'
 import TraceGrip from './TraceGrip.vue'
 import TriggerMenu from './TriggerMenu.vue'
 
-/** Rows are never narrower than this, label column included; narrower windows scroll. */
-const MIN_ROWS_WIDTH = 860
+/** Rows are never narrower than this, label column included; a narrower timeline scrolls. It
+ * is what the timeline keeps beside the data stream (`TIMELINE_MIN`). */
+const MIN_ROWS_WIDTH = 640
 /** Height of the trigger menu, for keeping it inside the timeline. */
 const MENU_HEIGHT = 236
 
@@ -915,7 +916,7 @@ useEventListener(scroller, 'gesturechange', (event: Event) => {
       @scroll.passive="onScroll"
       @wheel="onWheel"
     >
-      <div ref="rows" class="relative flex min-h-full min-w-[860px] flex-col overflow-x-clip">
+      <div ref="rows" class="relative flex min-h-full min-w-[640px] flex-col overflow-x-clip">
         <TimelineRuler class="sticky top-0 z-[5]" />
 
         <!-- The channel rows' bottom edges, across the boundary with the row below: over the

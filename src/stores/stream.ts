@@ -3,6 +3,7 @@ import { computed, shallowRef, watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
 import type { EventRow } from '@/ipc/bindings/EventRow'
+import { PANEL_WIDTH } from '@/stream/layout'
 
 import { useCaptureStore } from './capture'
 import { useDecodeStore } from './decode'
@@ -29,7 +30,7 @@ export interface Listing {
   streams: number
 }
 
-/** The data stream panel under the timeline (DESIGN.md §9). */
+/** The data stream panel beside the timeline (DESIGN.md §9). */
 export const useStreamStore = defineStore('stream', () => {
   const capture = useCaptureStore()
   const decode = useDecodeStore()
@@ -41,8 +42,8 @@ export const useStreamStore = defineStore('stream', () => {
   /** Position of the stream listed among the decoder's. */
   const stream = shallowRef(0)
   const scope = shallowRef<StreamScope>('all')
-  /** Panel height in CSS pixels; the timeline keeps the rest. */
-  const height = shallowRef(260)
+  /** The width asked for the panel, in CSS pixels; the timeline keeps the rest. */
+  const width = shallowRef(PANEL_WIDTH)
   /** The row under the pointer, marked on the overview and the timeline. */
   const hot = shallowRef<{ start: number; end: number } | null>(null)
 
@@ -164,6 +165,15 @@ export const useStreamStore = defineStore('stream', () => {
     return rows[index - page * PAGE]
   }
 
+  /** Where the event at `index` of the stream is listed, when its page is at hand. */
+  function positionOf(index: number): number | null {
+    for (const [page, rows] of [...pages.value, ...held]) {
+      const at = rows.findIndex((one) => one.index === index)
+      if (at >= 0) return page * PAGE + at
+    }
+    return null
+  }
+
   /** Every row of the scope, for copying. */
   async function allRows(): Promise<EventRow[]> {
     const pagesNeeded = Math.ceil(total.value / PAGE)
@@ -219,7 +229,7 @@ export const useStreamStore = defineStore('stream', () => {
     decoder,
     stream,
     scope,
-    height,
+    width,
     hot,
     total,
     events,
@@ -230,6 +240,7 @@ export const useStreamStore = defineStore('stream', () => {
     segment,
     onlySegment,
     row,
+    positionOf,
     allRows,
     fetchAll,
     show,
