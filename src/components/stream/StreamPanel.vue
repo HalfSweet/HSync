@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { PanelRight, SquareArrowOutUpRight } from '@lucide/vue'
 import { onClickOutside, useClipboard, useElementSize, useWindowSize } from '@vueuse/core'
 import { computed, nextTick, ref, shallowRef, useTemplateRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -28,6 +29,10 @@ import { formatSpan } from '@/utils/units'
  * row each, with the event's kind and its fields as the contract names them, and below them
  * every field of the event selected.
  */
+/** In the data stream's own window: the panel fills it, and is put back from there. */
+const props = defineProps<{ detached?: boolean }>()
+const emit = defineEmits<{ dock: [] }>()
+
 const { t } = useI18n()
 const capture = useCaptureStore()
 const decode = useDecodeStore()
@@ -292,8 +297,7 @@ function isPicked(row: EventRow): boolean {
 /** Selects an event: the traces pan there and the segment spans it. */
 function pick(row: EventRow): void {
   picked.value = row
-  view.centerOn((row.start + row.end) / 2)
-  view.setSegment({ from: row.start, to: row.end })
+  stream.reveal({ start: row.start, end: row.end })
 }
 
 // Another listing, another capture or decoders set up anew let go of the event selected; the
@@ -524,10 +528,12 @@ function onGripUp(): void {
 <template>
   <aside
     class="relative flex-none"
-    :style="{ width: `${width}px` }"
+    :class="props.detached && 'h-full w-full'"
+    :style="props.detached ? undefined : { width: `${width}px` }"
     :aria-label="t('stream.title')"
   >
     <div
+      v-if="!props.detached"
       class="group absolute inset-y-0 -left-1 z-[6] w-[7px] cursor-col-resize touch-none"
       role="separator"
       aria-orientation="vertical"
@@ -542,8 +548,9 @@ function onGripUp(): void {
     </div>
     <!-- As wide as the panel, which opens and closes around it (src/motion/drawer.ts). -->
     <div
-      class="flex h-full flex-col border-l border-line bg-canvas"
-      :style="{ width: `${width}px` }"
+      class="flex h-full flex-col bg-canvas"
+      :class="props.detached ? 'w-full' : 'border-l border-line'"
+      :style="props.detached ? undefined : { width: `${width}px` }"
     >
       <div
         class="flex h-(--h-overview) flex-none flex-col justify-center gap-1 border-b border-line bg-chrome px-2"
@@ -589,13 +596,32 @@ function onGripUp(): void {
           </div>
           <span class="min-w-0 flex-1 truncate text-small text-ink-2">{{ summary }}</span>
           <button
+            v-if="props.detached"
             class="btn-icon flex-none"
-            :aria-label="t('stream.close')"
-            :title="t('stream.close')"
-            @click="stream.open = false"
+            :aria-label="t('stream.dock')"
+            :title="t('stream.dock')"
+            @click="emit('dock')"
           >
-            <AppIcon name="close" />
+            <PanelRight />
           </button>
+          <template v-else>
+            <button
+              class="btn-icon flex-none"
+              :aria-label="t('stream.detach')"
+              :title="t('stream.detach')"
+              @click="stream.detach()"
+            >
+              <SquareArrowOutUpRight />
+            </button>
+            <button
+              class="btn-icon flex-none"
+              :aria-label="t('stream.close')"
+              :title="t('stream.close')"
+              @click="stream.open = false"
+            >
+              <AppIcon name="close" />
+            </button>
+          </template>
         </div>
         <div class="flex h-6 items-center gap-2">
           <div
