@@ -23,7 +23,7 @@ Capture, trigger, decode and measure, with one app for logic analyzers from seve
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/en-US/hero-dark.webp">
-  <img src="assets/screenshots/en-US/hero-light.webp" alt="HSync showing a capture of I²C, UART, SPI and CAN-FD buses, with decoded transfers above their waveforms and the I²C data stream below">
+  <img src="assets/screenshots/en-US/hero-light.webp" alt="HSync showing a capture of I²C, UART, SPI and CAN-FD buses, with decoded transfers above their waveforms and the I²C data stream beside them">
 </picture>
 
 HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic and PXLogic's PX-Logic analyzers, with experimental support for Sipeed's SLogic16U3 ([full list](#supported-devices)), and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, while the capture is still running, and dozens of protocol decoders are a search away. HSync saves captures in its own `.hsync` format, opens and exports DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware and the decoders.
@@ -56,7 +56,7 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 - **Decoding keeps up with the capture**: results appear while the device is still filling it, and decoders can be added or changed meanwhile.
 - **Decoders of your own**, written in HSync's TypeScript decoder language with their names in any language, loaded from Settings without rebuilding the app and carried along in the captures that use them; one named like a built-in decoder stands in for it.
 - **Values in hex, decimal, octal, binary or ASCII**, chosen per decoder.
-- **The data stream** lists everything a decoder found. Click a row to jump to it on the waveform; copy the list or export it as CSV or text.
+- **The data stream** beside the waveforms lists everything a decoder found. Click a row to jump to it on the waveform and read all of its fields; copy the list or export it as CSV or text.
 
 ![A search for 0x4F: the I²C data byte that holds it, highlighted on the timeline and in the data stream](assets/screenshots/en-US/search.webp)
 
@@ -134,7 +134,7 @@ HSync looks for a new version each time it starts (turn this off under **Setting
 2. **Set up the capture.** The button next to the device menu shows the sample rate, duration and channel count; click it to change them and the device's options: the operation mode (Buffer or Stream), the threshold and whatever else the device offers, such as a glitch filter or an external clock.
 3. **Set a trigger** (optional). Click the trigger slot to the right of a channel's name and pick an edge or a level. **Trigger** in the top bar has the trigger position, stage triggers and serial triggers.
 4. **Capture.** Press **Capture**. The arrow beside it switches between **Single**, **Repeat** and **Loop**, or starts an **Instant** capture that ignores the trigger.
-5. **Decode.** Click **Add decoder**, search for a protocol and choose its channels. Open the **Data stream** from the status bar to list everything it decoded.
+5. **Decode.** Click **Add decoder**, search for a protocol and choose its channels. Open the **Data stream** from the button at the right of the top bar to list everything it decoded.
 6. **Look closer.** Ctrl/⌘ + wheel zooms, dragging pans and `Home` shows the whole capture. Hover a pulse to read it, click two edges to measure between them and press `/` to search.
 7. **Save.** ⌘S / Ctrl+S saves an `.hsync` file with the decoders, colours and view; **Export…** in the export menu writes DSView `.dsl`, CSV, VCD, FST, sigrok and binary files.
 

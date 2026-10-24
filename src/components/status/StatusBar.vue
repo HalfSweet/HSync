@@ -6,10 +6,9 @@ import AppIcon from '@/components/common/AppIcon.vue'
 import SegmentMeasure from '@/components/status/SegmentMeasure.vue'
 import TimelineReadout from '@/components/status/TimelineReadout.vue'
 import { useBackendText } from '@/composables/useBackendText'
-import { useShortcutLabel, useShortcutTip, useShortcuts } from '@/composables/useShortcuts'
+import { useShortcutTip } from '@/composables/useShortcuts'
 import { useCaptureStore, type FileJob } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
-import { useStreamStore } from '@/stores/stream'
 import { useViewStore } from '@/stores/view'
 import { formatCount, formatTimeShort } from '@/utils/units'
 
@@ -17,12 +16,8 @@ const { t, locale } = useI18n()
 const text = useBackendText()
 const capture = useCaptureStore()
 const device = useDeviceStore()
-const stream = useStreamStore()
 const view = useViewStore()
 
-// The data stream shortcut, unbound until the user gives it one, opens and closes the panel.
-useShortcuts({ dataStream: () => stream.toggle() })
-const shortcut = useShortcutLabel()
 const tip = useShortcutTip()
 
 const percent = (part: number, whole: number) =>
@@ -99,15 +94,6 @@ const perDivision = computed(() =>
   <footer
     class="flex min-h-(--h-status) flex-wrap items-center gap-x-4 gap-y-1 border-t border-line px-3 py-0.5 text-small text-ink-2"
   >
-    <button
-      class="-ml-1 inline-flex h-[22px] items-center gap-1 rounded-4 pr-2 pl-1 whitespace-nowrap text-ink-2 hover:bg-hover hover:text-ink aria-pressed:bg-hover aria-pressed:text-ink"
-      :aria-pressed="stream.open"
-      :title="shortcut('dataStream') ? tip(t('stream.title'), 'dataStream') : undefined"
-      @click="stream.toggle()"
-    >
-      <AppIcon name="stream" />
-      <span>{{ t('stream.title') }}</span>
-    </button>
     <span :aria-live="capture.running ? 'off' : 'polite'">{{ status }}</span>
     <span
       v-if="capture.job"

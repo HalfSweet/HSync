@@ -31,6 +31,11 @@ const isNumbers = (value: unknown): value is number[] =>
 /** Fields that count or number things rather than carry what the bus said. */
 const COUNTERS = new Set(['tx', 'index', 'op', 'seq', 'frame', 'packet', 'pkt', 'xact', 'scan'])
 
+/** Whether a field numbers the transfer an event belongs to, the same for all its events. */
+export function isCounter(name: string): boolean {
+  return COUNTERS.has(name)
+}
+
 /**
  * Fields that measure or count — ticks, bits, lengths, offsets, currents — and so read in
  * decimal whatever the number format, which is for what the bus carried (values, bytes,

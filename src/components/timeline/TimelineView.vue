@@ -71,8 +71,9 @@ import ChannelMenu from './ChannelMenu.vue'
 import TraceGrip from './TraceGrip.vue'
 import TriggerMenu from './TriggerMenu.vue'
 
-/** Rows are never narrower than this, label column included; narrower windows scroll. */
-const MIN_ROWS_WIDTH = 860
+/** Rows are never narrower than this, label column included; a narrower timeline scrolls. It
+ * is what the timeline keeps beside the data stream (`TIMELINE_MIN`). */
+const MIN_ROWS_WIDTH = 640
 /** Height of the trigger menu, for keeping it inside the timeline. */
 const MENU_HEIGHT = 236
 
@@ -226,9 +227,14 @@ let resizeObserver: ResizeObserver | undefined
 function measure(): void {
   const element = scroller.value
   if (!element) return
-  client.value = { width: element.clientWidth, height: element.clientHeight }
-  const rowsWidth = Math.max(element.clientWidth, MIN_ROWS_WIDTH)
+  const { clientWidth: width, clientHeight: height } = element
+  const resized = width !== client.value.width || height !== client.value.height
+  client.value = { width, height }
+  const rowsWidth = Math.max(width, MIN_ROWS_WIDTH)
   view.setWidth(Math.max(0, rowsWidth - metrics.value.label))
+  // The canvas takes its new size in the frame being painted, as the data stream comes or goes:
+  // it is drawn before that, not a frame later, its old picture stretched or squeezed meanwhile.
+  if (resized) void nextTick(drawQueuedFrame)
 }
 
 function onScroll(): void {
@@ -429,7 +435,12 @@ let drawQueued = false
 function requestDraw(): void {
   if (drawQueued) return
   drawQueued = true
-  onFrameDrawn(draw)
+  onFrameDrawn(drawQueuedFrame)
+}
+
+/** Draws what was asked for, unless it has been drawn already. */
+function drawQueuedFrame(): void {
+  if (drawQueued) draw()
 }
 
 function draw(): void {
@@ -914,7 +925,7 @@ useEventListener(scroller, 'gesturechange', (event: Event) => {
       @scroll.passive="onScroll"
       @wheel="onWheel"
     >
-      <div ref="rows" class="relative flex min-h-full min-w-[860px] flex-col overflow-x-clip">
+      <div ref="rows" class="relative flex min-h-full min-w-[640px] flex-col overflow-x-clip">
         <TimelineRuler class="sticky top-0 z-[5]" />
 
         <!-- The channel rows' bottom edges, across the boundary with the row below: over the

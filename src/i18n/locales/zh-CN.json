@@ -1700,10 +1700,11 @@
   },
   "stream": {
     "title": "数据流",
-    "resize": "拖动调整数据流的高度",
-    "resizeTip": "拖动调整高度",
+    "resize": "拖动调整数据流的宽度",
+    "resizeTip": "拖动调整宽度",
     "decoders": "解码器",
-    "tab": "{decoder} › {stream}",
+    "name": "{decoder} › {stream}",
+    "pick": "切换列出的解码器",
     "scope": {
       "label": "范围",
       "all": "全程",
@@ -1716,8 +1717,16 @@
     "close": "收起数据流",
     "column": {
       "time": "时间 ms",
+      "counter": "#",
       "kind": "事件",
       "fields": "内容"
+    },
+    "list": "解码结果，↑ ↓ 逐条选择",
+    "details": {
+      "label": "事件详情",
+      "time": "{time} ms",
+      "length": "时长 {length}",
+      "close": "关闭详情"
     },
     "summary": {
       "events": "{count} 个事件",

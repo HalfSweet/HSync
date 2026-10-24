@@ -3,6 +3,7 @@ import { computed, shallowRef, watch } from 'vue'
 
 import { getBackend } from '@/ipc/backend'
 import type { EventRow } from '@/ipc/bindings/EventRow'
+import { PANEL_WIDTH } from '@/stream/layout'
 
 import { useCaptureStore } from './capture'
 import { useDecodeStore } from './decode'
@@ -29,7 +30,7 @@ export interface Listing {
   streams: number
 }
 
-/** The data stream panel under the timeline (DESIGN.md §9). */
+/** The data stream panel beside the timeline (DESIGN.md §9). */
 export const useStreamStore = defineStore('stream', () => {
   const capture = useCaptureStore()
   const decode = useDecodeStore()
@@ -41,8 +42,8 @@ export const useStreamStore = defineStore('stream', () => {
   /** Position of the stream listed among the decoder's. */
   const stream = shallowRef(0)
   const scope = shallowRef<StreamScope>('all')
-  /** Panel height in CSS pixels; the timeline keeps the rest. */
-  const height = shallowRef(260)
+  /** The width asked for the panel, in CSS pixels; the timeline keeps the rest. */
+  const width = shallowRef(PANEL_WIDTH)
   /** The row under the pointer, marked on the overview and the timeline. */
   const hot = shallowRef<{ start: number; end: number } | null>(null)
 
@@ -102,6 +103,9 @@ export const useStreamStore = defineStore('stream', () => {
 
   let generation = 0
   const loading = new Set<number>()
+  /** Pages of the whole stream fetched before the segment moved or more was decoded: they still
+   * hold, so they stay listed until their page comes again, and the list keeps its place. */
+  let held = new Map<number, EventRow[]>()
 
   async function load(page: number): Promise<void> {
     const query = request.value
@@ -127,13 +131,24 @@ export const useStreamStore = defineStore('stream', () => {
 
   watch(
     request,
-    () => {
+    (next, previous) => {
       generation += 1
       loading.clear()
+      const same =
+        next !== null &&
+        previous != null &&
+        !next.onlySegment &&
+        !previous.onlySegment &&
+        next.captureId === previous.captureId &&
+        next.index === previous.index &&
+        next.stream === previous.stream
+      held = same ? new Map([...held, ...pages.value]) : new Map()
       pages.value = new Map()
-      total.value = 0
-      events.value = 0
-      inside.value = null
+      if (!same) {
+        total.value = 0
+        events.value = 0
+        inside.value = null
+      }
       void load(0)
     },
     { immediate: true },
@@ -145,9 +160,18 @@ export const useStreamStore = defineStore('stream', () => {
     const rows = pages.value.get(page)
     if (!rows) {
       void load(page)
-      return undefined
+      return held.get(page)?.[index - page * PAGE]
     }
     return rows[index - page * PAGE]
+  }
+
+  /** Where the event at `index` of the stream is listed, when its page is at hand. */
+  function positionOf(index: number): number | null {
+    for (const [page, rows] of [...pages.value, ...held]) {
+      const at = rows.findIndex((one) => one.index === index)
+      if (at >= 0) return page * PAGE + at
+    }
+    return null
   }
 
   /** Every row of the scope, for copying. */
@@ -205,7 +229,7 @@ export const useStreamStore = defineStore('stream', () => {
     decoder,
     stream,
     scope,
-    height,
+    width,
     hot,
     total,
     events,
@@ -216,6 +240,7 @@ export const useStreamStore = defineStore('stream', () => {
     segment,
     onlySegment,
     row,
+    positionOf,
     allRows,
     fetchAll,
     show,

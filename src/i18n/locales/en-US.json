@@ -1703,7 +1703,8 @@
     "resize": "Drag to resize the data stream",
     "resizeTip": "Drag to resize",
     "decoders": "Decoders",
-    "tab": "{decoder} › {stream}",
+    "name": "{decoder} › {stream}",
+    "pick": "Choose what to list",
     "scope": {
       "label": "Range",
       "all": "All",
@@ -1716,8 +1717,16 @@
     "close": "Close the data stream",
     "column": {
       "time": "Time ms",
+      "counter": "#",
       "kind": "Event",
       "fields": "Content"
+    },
+    "list": "Decoded items, ↑ ↓ to step",
+    "details": {
+      "label": "Event details",
+      "time": "{time} ms",
+      "length": "Lasts {length}",
+      "close": "Close the details"
     },
     "summary": {
       "events": "{count} events",
