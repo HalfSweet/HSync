@@ -217,9 +217,14 @@ let resizeObserver: ResizeObserver | undefined
 function measure(): void {
   const element = scroller.value
   if (!element) return
-  client.value = { width: element.clientWidth, height: element.clientHeight }
-  const rowsWidth = Math.max(element.clientWidth, MIN_ROWS_WIDTH)
+  const { clientWidth: width, clientHeight: height } = element
+  const resized = width !== client.value.width || height !== client.value.height
+  client.value = { width, height }
+  const rowsWidth = Math.max(width, MIN_ROWS_WIDTH)
   view.setWidth(Math.max(0, rowsWidth - metrics.value.label))
+  // The canvas takes its new size in the frame being painted, as the data stream comes or goes:
+  // it is drawn before that, not a frame later, its old picture stretched or squeezed meanwhile.
+  if (resized) void nextTick(drawQueuedFrame)
 }
 
 function onScroll(): void {
@@ -420,7 +425,12 @@ let drawQueued = false
 function requestDraw(): void {
   if (drawQueued) return
   drawQueued = true
-  onFrameDrawn(draw)
+  onFrameDrawn(drawQueuedFrame)
+}
+
+/** Draws what was asked for, unless it has been drawn already. */
+function drawQueuedFrame(): void {
+  if (drawQueued) draw()
 }
 
 function draw(): void {
