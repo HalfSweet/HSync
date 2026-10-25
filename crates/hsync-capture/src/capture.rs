@@ -1,9 +1,10 @@
 //! A logic capture: per-channel samples plus the facts that place them in time.
 
-use hsync_core::{ChannelIndex, SampleIndex};
+use hsync_core::{AnalogScale, ChannelIndex, SampleIndex};
 use serde::Serialize;
 use ts_rs::TS;
 
+use crate::analog::AnalogData;
 use crate::channel::ChannelData;
 use crate::ingest::CrossDeinterleaver;
 
@@ -22,15 +23,20 @@ pub struct CaptureInfo {
     pub trigger_time_ms: Option<i64>,
     /// Channels that hold data, in ascending order.
     pub channels: Vec<ChannelIndex>,
+    /// Analog channels that hold data, in ascending order (from
+    /// [`hsync_core::ANALOG_BASE`]).
+    pub analog: Vec<ChannelIndex>,
 }
 
-/// Samples of the channels of one capture.
+/// Samples of the channels of one capture: logic channels and, sampled alongside them at the
+/// same rate, analog channels.
 #[derive(Debug, Clone)]
 pub struct LogicCapture {
     samplerate: u64,
     trigger_sample: Option<SampleIndex>,
     trigger_time_ms: Option<i64>,
     channels: Vec<(ChannelIndex, ChannelData)>,
+    analog: Vec<(ChannelIndex, AnalogData)>,
 }
 
 impl LogicCapture {
@@ -47,7 +53,23 @@ impl LogicCapture {
             trigger_sample: None,
             trigger_time_ms: None,
             channels,
+            analog: Vec::new(),
         }
+    }
+
+    /// Adds empty analog channels, each with the scale that turns its codes into volts.
+    pub fn with_analog(
+        mut self,
+        channels: impl IntoIterator<Item = (ChannelIndex, AnalogScale)>,
+    ) -> Self {
+        self.analog.extend(
+            channels
+                .into_iter()
+                .map(|(index, scale)| (index, AnalogData::new(scale))),
+        );
+        self.analog.sort_by_key(|(index, _)| *index);
+        self.analog.dedup_by_key(|(index, _)| *index);
+        self
     }
 
     /// Samples per second.
@@ -55,13 +77,11 @@ impl LogicCapture {
         self.samplerate
     }
 
-    /// Number of samples every channel holds.
+    /// Number of samples every channel, logic and analog, holds.
     pub fn len(&self) -> SampleIndex {
-        self.channels
-            .iter()
-            .map(|(_, data)| data.len())
-            .min()
-            .unwrap_or(0)
+        let logic = self.channels.iter().map(|(_, data)| data.len());
+        let analog = self.analog.iter().map(|(_, data)| data.len());
+        logic.chain(analog).min().unwrap_or(0)
     }
 
     /// Whether the capture holds no samples.
@@ -101,6 +121,40 @@ impl LogicCapture {
         self.channels.iter().map(|(index, data)| (*index, data))
     }
 
+    /// The samples of analog channel `index`.
+    pub fn analog_channel(&self, index: ChannelIndex) -> Option<&AnalogData> {
+        self.analog
+            .binary_search_by_key(&index, |(i, _)| *i)
+            .ok()
+            .map(|at| &self.analog[at].1)
+    }
+
+    /// Analog channels in ascending order.
+    pub fn analog_channels(&self) -> impl Iterator<Item = (ChannelIndex, &AnalogData)> {
+        self.analog.iter().map(|(index, data)| (*index, data))
+    }
+
+    /// Appends analog samples: one code per analog channel, in ascending order, for each
+    /// sample in turn.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `codes` holds whole samples of every analog channel.
+    pub fn append_analog(&mut self, codes: &[u16]) {
+        let count = self.analog.len();
+        assert!(
+            count > 0 && codes.len().is_multiple_of(count),
+            "{} codes for {count} analog channels",
+            codes.len()
+        );
+        let mut staged = Vec::with_capacity(codes.len() / count);
+        for (position, (_, data)) in self.analog.iter_mut().enumerate() {
+            staged.clear();
+            staged.extend(codes.iter().skip(position).step_by(count));
+            data.extend(&staged);
+        }
+    }
+
     /// A de-interleaver matching this capture's channels.
     pub fn deinterleaver(&self) -> CrossDeinterleaver {
         CrossDeinterleaver::new(self.channels.len().max(1))
@@ -130,6 +184,12 @@ impl LogicCapture {
             .filter(|&index| self.channel(index).is_some())
             .collect();
         let mut out = Self::new(self.samplerate, kept);
+        out.analog = self
+            .analog
+            .iter()
+            .filter(|(index, _)| channels.contains(index))
+            .map(|(index, data)| (*index, data.slice(from, to)))
+            .collect();
         out.trigger_time_ms = self.trigger_time_ms;
         out.trigger_sample = self
             .trigger_sample
@@ -174,6 +234,9 @@ impl LogicCapture {
         for (_, data) in &mut self.channels {
             data.drop_front(samples);
         }
+        for (_, data) in &mut self.analog {
+            data.drop_front(samples);
+        }
         self.trigger_sample = self
             .trigger_sample
             .and_then(|sample| sample.checked_sub(samples));
@@ -185,6 +248,9 @@ impl LogicCapture {
         for (_, data) in &mut self.channels {
             data.compact();
         }
+        for (_, data) in &mut self.analog {
+            data.compact();
+        }
     }
 
     /// Shortens every channel to `len` samples.
@@ -192,14 +258,20 @@ impl LogicCapture {
         for (_, data) in &mut self.channels {
             data.truncate(len);
         }
+        for (_, data) in &mut self.analog {
+            data.truncate(len);
+        }
     }
 
     /// Bytes of heap memory held by sample data.
     pub fn heap_bytes(&self) -> usize {
-        self.channels
+        let logic: usize = self
+            .channels
             .iter()
             .map(|(_, data)| data.heap_bytes())
-            .sum()
+            .sum();
+        let analog: usize = self.analog.iter().map(|(_, data)| data.heap_bytes()).sum();
+        logic + analog
     }
 
     /// Summary for the UI.
@@ -210,6 +282,47 @@ impl LogicCapture {
             trigger_sample: self.trigger_sample,
             trigger_time_ms: self.trigger_time_ms,
             channels: self.channels.iter().map(|(index, _)| *index).collect(),
+            analog: self.analog.iter().map(|(index, _)| *index).collect(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use hsync_core::ANALOG_BASE;
+
+    use super::*;
+
+    const UNIT: AnalogScale = AnalogScale {
+        step: 1.0,
+        offset: 0.0,
+    };
+
+    #[test]
+    fn analog_samples_split_by_channel_and_count_towards_the_length() {
+        let mut capture = LogicCapture::new(1_000, [0])
+            .with_analog([(ANALOG_BASE + 1, UNIT), (ANALOG_BASE, UNIT)]);
+        assert_eq!(capture.info().analog, [ANALOG_BASE, ANALOG_BASE + 1]);
+        capture.channel_mut(0).expect("D0").append_words(&[0; 2]);
+        // A0 and A1 interleaved, ascending.
+        let codes: Vec<u16> = (0..64).flat_map(|n| [n, 1000 + n]).collect();
+        capture.append_analog(&codes);
+        assert_eq!(capture.len(), 64);
+        let a1 = capture.analog_channel(ANALOG_BASE + 1).expect("A1");
+        assert_eq!((a1.code(0), a1.code(63)), (1000, 1063));
+        capture.append_analog(&codes);
+        assert_eq!(capture.len(), 128);
+
+        capture.drop_front(64);
+        let a0 = capture.analog_channel(ANALOG_BASE).expect("A0");
+        assert_eq!((a0.len(), a0.code(0)), (64, 0));
+        let part = capture.slice(10, 20, &[0, ANALOG_BASE + 1]);
+        assert_eq!(part.info().analog, [ANALOG_BASE + 1]);
+        assert_eq!(
+            part.analog_channel(ANALOG_BASE + 1).expect("A1").code(0),
+            1010
+        );
+        capture.truncate(5);
+        assert_eq!(capture.analog_channel(ANALOG_BASE).expect("A0").len(), 5);
     }
 }
