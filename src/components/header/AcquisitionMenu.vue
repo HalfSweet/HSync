@@ -19,14 +19,16 @@ import {
   tierForRate,
   tierRates,
 } from '@/acquisition/tiers'
+import { ANALOG_SAMPLE_BITS, analogNumber } from '@/analog/channels'
 import AppIcon from '@/components/common/AppIcon.vue'
 import { useBackendText } from '@/composables/useBackendText'
 import { getBackend } from '@/ipc/backend'
+import type { AnalogInput } from '@/ipc/bindings/AnalogInput'
 import type { RateTier } from '@/ipc/bindings/RateTier'
 import { vIndicator } from '@/motion/indicator'
 import { useCaptureStore } from '@/stores/capture'
 import { useDeviceStore } from '@/stores/device'
-import { formatBytes, formatSamplerate, formatTimeShort } from '@/utils/units'
+import { formatBytes, formatSamplerate, formatTimeShort, formatVolts } from '@/utils/units'
 
 import DeviceOptions from './DeviceOptions.vue'
 
@@ -100,14 +102,29 @@ const rate = computed(() => (device.state ? device.samplerate : capture.samplera
 const seconds = computed(() =>
   device.state ? (rate.value > 0 ? device.sampleLimit / rate.value : 0) : capture.duration,
 )
-const channelCount = computed(() =>
-  device.state ? device.enabledChannels.length : (capture.summary?.channels.length ?? 0),
+/** The analog inputs read, each in place of its logic inputs. */
+const analogRead = computed(() => device.analogInputs.filter((input) => input.enabled))
+/** The inputs the capture takes: its logic channels and those its analog ones are read from. */
+const occupied = computed(() =>
+  [
+    ...new Set([...device.enabledChannels, ...analogRead.value.flatMap((input) => input.inputs)]),
+  ].sort((a, b) => a - b),
 )
+/** Logic and analog channels of the next capture, or of the open one without a device. */
+const counts = computed(() =>
+  device.state
+    ? { logic: device.enabledChannels.length, analog: analogRead.value.length }
+    : {
+        logic: capture.summary?.channels.length ?? 0,
+        analog: capture.summary?.analog.length ?? 0,
+      },
+)
+const channelCount = computed(() => counts.value.logic + counts.value.analog)
+/** Bits a sample takes in memory: one per logic channel, a code per analog channel. */
+const sampleBits = computed(() => counts.value.logic + ANALOG_SAMPLE_BITS * counts.value.analog)
 /** Stream captures go to this machine's memory, which bounds them before the device does. */
 const maxSamples = computed(() =>
-  streaming.value
-    ? memoryLimit(memory.value, channelCount.value, deviceMax.value)
-    : deviceMax.value,
+  streaming.value ? memoryLimit(memory.value, sampleBits.value, deviceMax.value) : deviceMax.value,
 )
 const durations = computed(() => durationChoices(rate.value, maxSamples.value))
 const currentDuration = computed(() => closestDuration(durations.value, seconds.value))
@@ -137,7 +154,7 @@ const needsRle = (duration: number) => {
   return depth != null && samplesFor(duration, rate.value) > depth
 }
 
-const needed = computed(() => (device.sampleLimit * channelCount.value) / 8)
+const needed = computed(() => (device.sampleLimit * sampleBits.value) / 8)
 const tooLarge = computed(() => memory.value !== null && needed.value > memory.value * MEMORY_SHARE)
 
 /** What bounds the duration: the device's memory, this machine's, or the device itself. */
@@ -234,7 +251,7 @@ const shortcuts = computed(() =>
  */
 const spanHint = computed(() => {
   const tier = currentTier.value === null ? undefined : tiers.value[currentTier.value]
-  const enabled = device.enabledChannels
+  const enabled = occupied.value
   const highest = enabled.at(-1)
   if (!tier?.leading || highest === undefined) return null
   const fit = tiers.value.find((other) => other.channels >= enabled.length)
@@ -305,13 +322,46 @@ function toggleChannel(channel: number): void {
     void keepingDuration(() => device.setChannel(channel, false))
     return
   }
-  // A channel beyond the tier moves to the fastest tier that takes it.
+  // A channel beyond the tier moves to the fastest tier that takes it, and the inputs of the
+  // analog channels read.
   const next = [...enabled, channel].sort((a, b) => a - b)
+  const taken = [...occupied.value, channel]
   const tier = currentTier.value === null ? undefined : tiers.value[currentTier.value]
-  const index = tier && !fits(tier, next) ? tierForChannels(tiers.value, next) : -1
+  const index = tier && !fits(tier, taken) ? tierForChannels(tiers.value, taken) : -1
   void keepingDuration(() =>
     index >= 0 ? device.selectRateTier(index, next) : device.setChannel(channel, true),
   )
+}
+
+/** The channel grid, eight to a row, each row with the analog input read from its channels. */
+const channelRows = computed(() => {
+  const count = device.state?.channelCount ?? 0
+  return Array.from({ length: Math.ceil(count / 8) }, (_, row) => {
+    const channels = leadingChannels(Math.min(8, count - row * 8)).map((n) => row * 8 + n)
+    const analog = device.analogInputs.find(
+      (input) => input.inputs.length > 0 && input.inputs.every((one) => channels.includes(one)),
+    )
+    return { channels, analog }
+  })
+})
+
+function analogRange(input: AnalogInput): string {
+  return input.low === -input.high
+    ? `±${formatVolts(input.high)}`
+    : `${formatVolts(input.low)} – ${formatVolts(input.high)}`
+}
+
+function analogTip(input: AnalogInput): string {
+  return t('header.acquisition.analogTip', {
+    first: input.inputs[0] ?? 0,
+    last: input.inputs.at(-1) ?? 0,
+    channel: analogNumber(input.index),
+  })
+}
+
+/** Reads a row as its analog channel, or as logic channels again. */
+function toggleAnalog(input: AnalogInput): void {
+  void keepingDuration(() => device.setAnalog(input.index, !input.enabled))
 }
 
 // A Stream capture stays within memory as channels come and go; one running until stopped
@@ -427,22 +477,61 @@ watch([maxSamples, streaming], ([next, stream], [previous, wasStream]) => {
                     >
                   </button>
                 </div>
-                <div class="grid grid-cols-8 gap-1">
-                  <button
-                    v-for="channel in device.state.channelCount"
-                    :key="channel"
-                    class="h-6 rounded-4 text-caption tabular-nums disabled:opacity-55"
-                    :class="
-                      device.enabledChannels.includes(channel - 1)
-                        ? 'bg-control-on font-medium text-ink'
-                        : 'bg-control text-ink-3 hover:bg-control-hover'
-                    "
-                    :aria-pressed="device.enabledChannels.includes(channel - 1)"
-                    :disabled="locked"
-                    @click="toggleChannel(channel - 1)"
-                  >
-                    {{ channel - 1 }}
-                  </button>
+                <div
+                  class="grid gap-1"
+                  :class="
+                    device.analogInputs.length > 0
+                      ? 'grid-cols-[repeat(8,minmax(0,1fr))_auto]'
+                      : 'grid-cols-8'
+                  "
+                >
+                  <template v-for="row in channelRows" :key="row.channels[0]">
+                    <div
+                      v-if="row.analog?.enabled"
+                      class="col-span-8 flex h-6 items-center justify-center rounded-4 bg-control-on text-caption font-medium text-ink tabular-nums"
+                    >
+                      {{
+                        t('header.acquisition.analogRow', {
+                          channel: analogNumber(row.analog.index),
+                          range: analogRange(row.analog),
+                        })
+                      }}
+                    </div>
+                    <template v-else>
+                      <button
+                        v-for="channel in row.channels"
+                        :key="channel"
+                        class="h-6 rounded-4 text-caption tabular-nums disabled:opacity-55"
+                        :class="
+                          device.enabledChannels.includes(channel)
+                            ? 'bg-control-on font-medium text-ink'
+                            : 'bg-control text-ink-3 hover:bg-control-hover'
+                        "
+                        :aria-pressed="device.enabledChannels.includes(channel)"
+                        :disabled="locked"
+                        @click="toggleChannel(channel)"
+                      >
+                        {{ channel }}
+                      </button>
+                    </template>
+                    <button
+                      v-if="row.analog"
+                      class="col-start-9 h-6 rounded-4 px-2 text-caption disabled:opacity-55"
+                      :class="
+                        row.analog.enabled
+                          ? 'bg-control-on font-medium text-ink'
+                          : 'bg-control text-ink-3 hover:bg-control-hover'
+                      "
+                      :aria-pressed="row.analog.enabled"
+                      :aria-label="analogTip(row.analog)"
+                      :title="analogTip(row.analog)"
+                      :disabled="locked"
+                      @click="toggleAnalog(row.analog)"
+                    >
+                      {{ t('header.acquisition.analog') }}
+                    </button>
+                    <span v-else-if="device.analogInputs.length > 0" class="col-start-9" />
+                  </template>
                 </div>
                 <p v-if="spanHint" class="rise-in text-caption text-ink-2 tabular-nums">
                   {{ spanHint }}

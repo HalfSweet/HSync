@@ -16,3 +16,6 @@ export function isAnalog(index: number): boolean {
 export function analogNumber(index: number): string {
   return `A${index - ANALOG_BASE}`
 }
+
+/** Bits a sample of an analog channel takes in a capture: its code, 16 bits wide. */
+export const ANALOG_SAMPLE_BITS = 16

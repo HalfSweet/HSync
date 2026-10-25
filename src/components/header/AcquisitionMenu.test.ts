@@ -2,7 +2,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ANALOG_BASE } from '@/analog/channels'
 import { i18n } from '@/i18n'
+import type { AnalogInput } from '@/ipc/bindings/AnalogInput'
 import type { DeviceState } from '@/ipc/bindings/DeviceState'
 import type { OptionKey } from '@/ipc/bindings/OptionKey'
 import type { OptionState } from '@/ipc/bindings/OptionState'
@@ -134,6 +136,10 @@ async function menu(device: DeviceState = state({})) {
     calls.push(['selectRateTier', index, channels])
     return Promise.resolve(true)
   }
+  store.setAnalog = (index: number, enabled: boolean) => {
+    calls.push(['setAnalog', index, enabled])
+    return Promise.resolve(true)
+  }
   const wrapper = mount(AcquisitionMenu, { global: { plugins: [i18n] }, attachTo: document.body })
   await flushPromises()
   await wrapper.find('button').trigger('click')
@@ -244,6 +250,50 @@ describe('acquisition menu', () => {
       ['setChannel', 1, false],
       ['setChannel', 2, true],
     ])
+    wrapper.unmount()
+  })
+
+  it('reads a row of channels as an analog channel', async () => {
+    // An ADC module over each group of eight; A0 is read in place of channels 0–7.
+    const analogInputs: AnalogInput[] = [0, 1].map((group) => ({
+      index: ANALOG_BASE + group,
+      inputs: Array.from({ length: 8 }, (_, bit) => group * 8 + bit),
+      low: -15,
+      high: 15,
+      enabled: group === 0,
+    }))
+    const { wrapper, calls } = await menu(
+      state({ ...streaming(), enabledChannels: [12], rateTier: 2, analogInputs }),
+    )
+    expect(wrapper.text()).toContain('A0 · analog ±15 V')
+    expect(() => button(wrapper, '3')).toThrow()
+    expect(wrapper.find('button').text()).toContain('2 ch')
+    const toggles = wrapper.findAll('button').filter((one) => one.text() === 'Analog')
+    expect(toggles.map((one) => one.attributes('aria-pressed'))).toEqual(['true', 'false'])
+    expect(toggles[1]?.attributes('title')).toBe(
+      'Read channels 8–15 as the ADC module’s analog channel A1',
+    )
+    await toggles[1]?.trigger('click')
+    await toggles[0]?.trigger('click')
+    await flushPromises()
+    expect(calls).toEqual([
+      ['setAnalog', ANALOG_BASE + 1, true],
+      ['setAnalog', ANALOG_BASE, false],
+    ])
+    wrapper.unmount()
+  })
+
+  it('keeps the inputs of the analog channels read in the tier', async () => {
+    const analogInputs: AnalogInput[] = [
+      { index: ANALOG_BASE, inputs: [0, 1, 2, 3, 4, 5, 6, 7], low: -15, high: 15, enabled: true },
+    ]
+    const { wrapper, calls } = await menu(
+      state({ ...streaming(), enabledChannels: [], rateTier: 1, analogInputs }),
+    )
+    // Channel 9 and A0's inputs need channels 0–15.
+    await button(wrapper, '9').trigger('click')
+    await flushPromises()
+    expect(calls).toEqual([['selectRateTier', 2, [9]]])
     wrapper.unmount()
   })
 
