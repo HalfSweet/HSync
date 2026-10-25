@@ -24,6 +24,9 @@ pub struct Model {
     /// Bytes the firmware sends before the first whole sample, discarded once per RUN
     /// (`first_drop_bytes`).
     pub head_bytes: usize,
+    /// Groups of eight inputs, D0 upwards, that an ADC module can be read from as analog
+    /// channels (see [`crate::adc`]); HSync offers the module on the SLogic32U3.
+    pub analog_groups: u8,
 }
 
 /// Sipeed SLogic16U3: 16 inputs on a 5 Gbps link (`slogic16u3.c`).
@@ -51,6 +54,7 @@ pub static SLOGIC16U3: Model = Model {
     wire_modes: &[(4, 800 * MHZ), (8, 400 * MHZ), (16, 200 * MHZ)],
     // Its firmware still opens the gate mid-word.
     head_bytes: 4,
+    analog_groups: 0,
 };
 
 /// Sipeed SLogic32U3: 32 inputs on a 10 Gbps link (`slogic32u3.c`).
@@ -84,6 +88,7 @@ pub static SLOGIC32U3: Model = Model {
     ],
     // Firmware from S/N 202610120954 gates on whole words.
     head_bytes: 0,
+    analog_groups: 4,
 };
 
 /// Every supported model.

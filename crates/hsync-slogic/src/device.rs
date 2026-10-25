@@ -6,15 +6,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crossbeam_channel::Sender;
-use hsync_core::{ChannelIndex, UiError};
+use hsync_core::{ANALOG_BASE, ChannelIndex, UiError};
 use hsync_driver::{
-    Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, Label, OptionKey,
-    OptionKind, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
+    Acquisition, AnalogInput, CapturePlan, Choice, Device, DeviceInfo, DriverError, Label,
+    OptionKey, OptionKind, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
 };
 
-use crate::acquisition;
 use crate::model::{Model, UsbSpeed};
 use crate::protocol::Link;
+use crate::{acquisition, adc};
 
 /// HSync sends logic in blocks of 64 samples per enabled channel.
 pub const MIN_SAMPLES: u64 = 64;
@@ -35,6 +35,9 @@ pub struct Settings {
     pub vth: f64,
     /// Bit `n` selects physical channel `n` for HSync's capture.
     pub enabled: u32,
+    /// Bit `g` reads inputs `8g..8g + 8` as the ADC module's analog channel `g`; those
+    /// inputs are not captured as logic meanwhile, whatever `enabled` says of them.
+    pub analog: u8,
     /// Contiguous low channels transferred by the device, including disabled inputs.
     channels: u8,
 }
@@ -47,6 +50,7 @@ impl Settings {
             limit_samples: DEFAULT_SAMPLES,
             vth: 1.7,
             enabled: model.all_channels(),
+            analog: 0,
             channels: model.channels,
         }
     }
@@ -56,17 +60,53 @@ impl Settings {
         self.channels
     }
 
-    /// The adapter selects its mode from the highest enabled channel, rather than their
-    /// count: a lone D15 still travels in the 16-channel wire format.
+    /// The inputs the analog channels are read from.
+    fn analog_lines(&self) -> u32 {
+        (0..4)
+            .filter(|group| self.analog & (1 << group) != 0)
+            .fold(0, |inputs, group| inputs | 0xff << (group * adc::GROUP))
+    }
+
+    /// Bit `n` captures input `n` as logic.
+    pub fn logic(&self) -> u32 {
+        self.enabled & !self.analog_lines()
+    }
+
+    /// The analog groups read, in order.
+    pub fn analog_groups(&self) -> Vec<u8> {
+        (0..8)
+            .filter(|group| self.analog & (1 << group) != 0)
+            .collect()
+    }
+
+    /// Rates of wire mode `channels` with these analog channels read.
+    fn samplerates(&self, model: &Model, speed: UsbSpeed, channels: u8) -> Vec<u64> {
+        let rates = model.samplerates(channels, speed);
+        if self.analog == 0 {
+            rates
+        } else {
+            adc::samplerates(&rates)
+        }
+    }
+
+    /// The adapter selects its mode from the highest input it captures, rather than their
+    /// count: a lone D15 still travels in the 16-channel wire format. The sample rate moves
+    /// to the fastest the mode allows below it, or else its slowest.
     fn reconcile_channels(&mut self, model: &Model, speed: UsbSpeed) {
-        if let Some(highest) = self.enabled.checked_ilog2()
+        if let Some(highest) = (self.logic() | self.analog_lines()).checked_ilog2()
             && let Some(channels) = model.wire_mode(highest as u8)
         {
             self.channels = channels;
         }
-        self.samplerate = self
-            .samplerate
-            .min(model.max_samplerate(self.channels, speed));
+        let rates = self.samplerates(model, speed, self.channels);
+        if !rates.contains(&self.samplerate) {
+            self.samplerate = rates
+                .iter()
+                .copied()
+                .rfind(|&rate| rate <= self.samplerate)
+                .or(rates.first().copied())
+                .unwrap_or(self.samplerate);
+        }
     }
 }
 
@@ -124,7 +164,8 @@ impl SlogicDevice {
 
     /// Rates the current wire mode offers on this link.
     fn samplerates(&self) -> Vec<u64> {
-        self.model.samplerates(self.settings.channels, self.speed)
+        self.settings
+            .samplerates(self.model, self.speed, self.settings.channels)
     }
 
     fn ensure_idle(&self) -> Result<(), DriverError> {
@@ -246,8 +287,9 @@ impl Device for SlogicDevice {
     }
 
     fn enabled_channels(&self) -> Vec<ChannelIndex> {
+        let logic = self.settings.logic();
         (0..self.channel_count())
-            .filter(|channel| self.settings.enabled & (1 << channel) != 0)
+            .filter(|channel| logic & (1 << channel) != 0)
             .collect()
     }
 
@@ -271,17 +313,57 @@ impl Device for SlogicDevice {
         Ok(())
     }
 
+    fn analog_inputs(&self) -> Vec<AnalogInput> {
+        (0..self.model.analog_groups)
+            .map(|group| AnalogInput {
+                index: ANALOG_BASE + ChannelIndex::from(group),
+                inputs: (0..adc::GROUP)
+                    .map(|bit| ChannelIndex::from(group * adc::GROUP + bit))
+                    .collect(),
+                low: adc::LOW,
+                high: adc::HIGH,
+                enabled: self.settings.analog & (1 << group) != 0,
+            })
+            .collect()
+    }
+
+    fn set_analog_enabled(
+        &mut self,
+        index: ChannelIndex,
+        enabled: bool,
+    ) -> Result<(), DriverError> {
+        self.ensure_idle()?;
+        let group = index
+            .checked_sub(ANALOG_BASE)
+            .and_then(|group| u8::try_from(group).ok())
+            .filter(|&group| group < self.model.analog_groups)
+            .ok_or_else(|| DriverError::InvalidRequest(format!("no analog input {index}")))?;
+        if enabled {
+            self.settings.analog |= 1 << group;
+        } else {
+            self.settings.analog &= !(1 << group);
+        }
+        self.settings.reconcile_channels(self.model, self.speed);
+        Ok(())
+    }
+
     /// The wire modes: the inputs from D0 up to the mode's width share the link's bandwidth.
+    /// Those that keep an analog channel offer only the rates the ADC module allows.
     fn rate_tiers(&self) -> Vec<RateTier> {
         self.model
             .wire_modes
             .iter()
-            .map(|&(channels, _)| RateTier {
-                channels: channels.into(),
-                leading: true,
-                span: channels.into(),
-                max_samplerate: self.model.max_samplerate(channels, self.speed),
-                samplerates: self.model.samplerates(channels, self.speed),
+            .map(|&(channels, _)| {
+                let mut kept = self.settings.clone();
+                kept.analog &= analog_within(channels);
+                let samplerates = kept.samplerates(self.model, self.speed, channels);
+                RateTier {
+                    channels: channels.into(),
+                    leading: true,
+                    span: channels.into(),
+                    max_samplerate: samplerates.last().copied().unwrap_or(0),
+                    samplerates,
+                }
             })
             .collect()
     }
@@ -308,6 +390,9 @@ impl Device for SlogicDevice {
                 "channels {channels:?} do not fit rate tier {index}"
             )));
         }
+        // Analog channels beyond the tier's inputs stop being read.
+        self.ensure_idle()?;
+        self.settings.analog &= analog_within(wire);
         self.set_enabled_channels(channels)?;
         // With no input on, the wire mode stays where it was; take the tier's.
         if channels.is_empty() {
@@ -323,7 +408,7 @@ impl Device for SlogicDevice {
         sink: Sender<Packet>,
     ) -> Result<Box<dyn Acquisition>, DriverError> {
         self.ensure_idle()?;
-        if self.settings.enabled == 0 {
+        if self.settings.logic() == 0 && self.settings.analog == 0 {
             return Err(DriverError::Localized(UiError::new(
                 "error.device.slogic.noChannels",
             )));
@@ -342,8 +427,10 @@ impl Device for SlogicDevice {
                 UiError::new("error.device.slogic.triggerChannel").with("channel", channel),
             ));
         }
+        // Only inputs captured as logic trigger; the analog channels do not.
+        let logic = self.settings.logic();
         plan.triggers
-            .retain(|&(channel, _)| self.settings.enabled & (1 << channel) != 0);
+            .retain(|&(channel, _)| logic & (1 << channel) != 0);
         acquisition::start(
             self.link.clone(),
             self.model,
@@ -353,6 +440,11 @@ impl Device for SlogicDevice {
             sink,
         )
     }
+}
+
+/// The analog groups wholly inside the first `channels` inputs.
+fn analog_within(channels: u8) -> u8 {
+    ((1u16 << (channels / adc::GROUP)) - 1) as u8
 }
 
 #[cfg(test)]
@@ -549,6 +641,96 @@ mod tests {
         let two = device(&SLOGIC32U3, UsbSpeed::High);
         assert!(two.info().slow_port);
         assert_eq!(two.settings().samplerate, 10_000_000);
+    }
+
+    #[test]
+    fn reads_the_adc_module_in_place_of_a_group_of_inputs() {
+        assert!(
+            device(&SLOGIC16U3, UsbSpeed::Super)
+                .analog_inputs()
+                .is_empty()
+        );
+        assert!(
+            device(&SLOGIC16U3, UsbSpeed::Super)
+                .set_analog_enabled(ANALOG_BASE, true)
+                .is_err()
+        );
+        let mut device = device(&SLOGIC32U3, UsbSpeed::SuperPlus);
+        assert_eq!(
+            device
+                .analog_inputs()
+                .iter()
+                .map(|input| (input.index, input.inputs.clone(), input.enabled))
+                .collect::<Vec<_>>(),
+            (0..4)
+                .map(|group| (
+                    ANALOG_BASE + group,
+                    (group * 8..group * 8 + 8).collect(),
+                    false
+                ))
+                .collect::<Vec<_>>()
+        );
+        select(&mut device, 0b1001);
+        device
+            .set_option(OptionKey::Samplerate, &OptionValue::Integer(1_400_000_000))
+            .expect("1400 MHz on D0 through D3");
+        device
+            .set_analog_enabled(ANALOG_BASE + 3, true)
+            .expect("A3 on inputs 24–31");
+        // The mode carries inputs 24–31 now, at the rates of the module's clock.
+        assert_eq!(device.settings().channels(), 32);
+        assert_eq!(device.settings().samplerate, 200_000_000);
+        let OptionKind::Integers { values } = &device.options()[1].kind else {
+            panic!("discrete sample rates");
+        };
+        assert_eq!(values, &[100, 160, 200].map(|mhz| mhz * 1_000_000));
+        assert_eq!(device.enabled_channels(), [0, 3]);
+        // Inputs under an analog channel are no logic channels, and come back as they were.
+        device.set_channel_enabled(24, true).expect("D24 under A3");
+        assert_eq!(device.enabled_channels(), [0, 3]);
+        device
+            .set_analog_enabled(ANALOG_BASE + 3, false)
+            .expect("A3 off");
+        assert_eq!(device.enabled_channels(), [0, 3, 24]);
+        assert!(device.analog_inputs().iter().all(|input| !input.enabled));
+        // A rate below the module's minimum moves up to it.
+        select(&mut device, 1);
+        device
+            .set_option(OptionKey::Samplerate, &OptionValue::Integer(5_000_000))
+            .expect("5 MHz");
+        device.set_analog_enabled(ANALOG_BASE, true).expect("A0");
+        assert_eq!(device.settings().channels(), 8);
+        assert_eq!(device.settings().samplerate, 100_000_000);
+        assert!(device.enabled_channels().is_empty());
+        assert!(device.set_analog_enabled(ANALOG_BASE + 4, true).is_err());
+        assert!(device.set_analog_enabled(4, true).is_err());
+    }
+
+    #[test]
+    fn rate_tiers_keep_the_analog_channels_within_them() {
+        let mut device = device(&SLOGIC32U3, UsbSpeed::SuperPlus);
+        device.set_analog_enabled(ANALOG_BASE, true).expect("A0");
+        device
+            .set_analog_enabled(ANALOG_BASE + 2, true)
+            .expect("A2");
+        let tiers = device.rate_tiers();
+        // Four inputs hold no group of eight; eight hold A0, on the module's clock.
+        assert_eq!(tiers[0].max_samplerate, 1_400_000_000);
+        assert_eq!(tiers[1].samplerates.first(), Some(&100_000_000));
+        assert_eq!(tiers[1].max_samplerate, 800_000_000);
+        assert_eq!(tiers[3].max_samplerate, 200_000_000);
+        device.select_rate_tier(1, &[]).expect("D0–D7");
+        let enabled: Vec<_> = device
+            .analog_inputs()
+            .into_iter()
+            .filter(|input| input.enabled)
+            .map(|input| input.index)
+            .collect();
+        assert_eq!(enabled, [ANALOG_BASE]);
+        assert_eq!(device.rate_tier(), Some(1));
+        device.select_rate_tier(0, &[0]).expect("D0–D3");
+        assert!(device.analog_inputs().iter().all(|input| !input.enabled));
+        assert_eq!(device.enabled_channels(), [0]);
     }
 
     #[test]

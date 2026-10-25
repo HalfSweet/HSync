@@ -5,6 +5,7 @@
 #![forbid(unsafe_code)]
 
 mod acquisition;
+pub mod adc;
 mod assemble;
 mod device;
 mod driver;

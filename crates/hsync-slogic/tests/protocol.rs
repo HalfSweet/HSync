@@ -85,6 +85,7 @@ fn replays_the_official_control_sequences() {
             channels: fields[2].parse().expect("channel count"),
             samplerate: fields[3].parse().expect("sample rate"),
             threshold: fields[4].parse().expect("threshold"),
+            clock_mhz: None,
         };
         let mut script = VecDeque::new();
         for line in lines.by_ref() {
@@ -138,6 +139,7 @@ fn settings() -> CaptureSettings {
         channels: 16,
         samplerate: 200_000_000,
         threshold: 3.3,
+        clock_mhz: None,
     }
 }
 
@@ -320,6 +322,47 @@ fn slogic32u3_keeps_every_rate_but_1400_mhz_on_its_800_mhz_clock() {
         );
         assert_eq!(device.channel_mask, u32::MAX);
     }
+}
+
+#[test]
+fn a_required_clock_is_the_only_one_taken() {
+    for (rate, slot) in [(200_000_000, Some(1)), (1_400_000_000, None)] {
+        let mut device = AuxDevice::new();
+        device.clock_mhz = vec![1400, 800];
+        let transport = MockTransport::new(device);
+        let link = Link::new(Arc::new(transport.clone()));
+        let result = link.configure(&CaptureSettings {
+            channels: 32,
+            samplerate: rate,
+            clock_mhz: Some(800),
+            ..settings()
+        });
+        match slot {
+            Some(slot) => {
+                result.expect("a rate of the 800 MHz clock");
+                assert_eq!(transport.device().clock_index, slot);
+                assert_eq!(transport.device().divider, (800_000_000 / rate - 1) as u32);
+            }
+            None => assert_localized(
+                result.expect_err("1400 MHz is not of the 800 MHz clock"),
+                "error.device.slogic.sampleClock",
+            ),
+        }
+    }
+    // Without the 800 MHz clock the search gives up after both laps.
+    let mut device = AuxDevice::new();
+    device.clock_mhz = vec![1400, 400];
+    let transport = MockTransport::new(device);
+    let link = Link::new(Arc::new(transport.clone()));
+    assert_localized(
+        link.configure(&CaptureSettings {
+            samplerate: 200_000_000,
+            clock_mhz: Some(800),
+            ..settings()
+        })
+        .expect_err("no 800 MHz clock"),
+        "error.device.slogic.sampleClock",
+    );
 }
 
 #[test]

@@ -9,12 +9,12 @@ use std::time::Duration;
 use common::{AuxDevice, Event, sample_bytes};
 use crossbeam_channel::{Receiver, bounded, unbounded};
 use hsync_capture::LogicCapture;
-use hsync_core::TriggerCondition;
+use hsync_core::{ANALOG_BASE, TriggerCondition};
 use hsync_driver::mock::MockTransport;
 use hsync_driver::usb::UsbError;
 use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionValue, Packet};
 use hsync_slogic::protocol::Link;
-use hsync_slogic::{Model, SLOGIC16U3, SLOGIC32U3, SlogicDevice, UsbSpeed};
+use hsync_slogic::{Model, SLOGIC16U3, SLOGIC32U3, SlogicDevice, UsbSpeed, adc};
 use nusb::transfer::TransferError;
 
 const WAIT: Duration = Duration::from_secs(5);
@@ -238,6 +238,73 @@ fn software_trigger_watches_the_upper_inputs_of_the_32_channel_mode() {
     );
     assert!(packets.contains(&Packet::Trigger { sample: 32 }));
     assert_capture(&packets, enabled, &samples[141..269]);
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+}
+
+#[test]
+fn reads_the_adc_module_on_its_clock_beside_the_logic_inputs() {
+    let (transport, mut device) = open_model(&SLOGIC32U3, UsbSpeed::SuperPlus);
+    transport.device().clock_mhz = vec![1400, 800];
+    device
+        .set_enabled_channels(&[0, 9, 16])
+        .expect("D0, D9 and D16");
+    device
+        .set_analog_enabled(ANALOG_BASE + 2, true)
+        .expect("A2 on inputs 16–23");
+    assert_eq!(device.enabled_channels(), [0, 9]);
+    device
+        .set_option(OptionKey::Samplerate, &OptionValue::Integer(200_000_000))
+        .expect("200 MHz");
+    device
+        .set_option(OptionKey::SampleLimit, &OptionValue::Integer(128))
+        .expect("sample limit");
+    // A2 counts up; D0 toggles each sample and D9 every other one.
+    let samples: Vec<u32> = (0u32..256)
+        .map(|n| u32::from((n as u8).reverse_bits()) << 16 | (n & 1) | (n >> 1 & 1) << 9)
+        .collect();
+    transport.device().samples.extend(
+        sample_bytes(&SLOGIC32U3, 32, &samples)
+            .chunks(100)
+            .map(|part| Ok(part.to_vec())),
+    );
+    let packets = run(
+        &mut device,
+        CapturePlan {
+            // A2's inputs are not logic, so a condition on one is dropped.
+            triggers: vec![(16, TriggerCondition::High)],
+            ..CapturePlan::default()
+        },
+    );
+    let analog = vec![(ANALOG_BASE + 2, adc::SCALE)];
+    assert_eq!(
+        packets.first(),
+        Some(&Packet::Start {
+            channels: vec![0, 9],
+            samplerate: 200_000_000,
+            analog: analog.clone(),
+        })
+    );
+    // The sample clock comes from the 800 MHz PLL, in slot 1.
+    assert_eq!(transport.device().clock_index, 1);
+    assert_eq!(transport.device().divider, 3);
+    let mut capture = LogicCapture::new(200_000_000, [0, 9]).with_analog(analog);
+    let mut deinterleaver = capture.deinterleaver();
+    for packet in &packets {
+        match packet {
+            Packet::Logic(bytes) => capture.append_cross(&mut deinterleaver, bytes),
+            Packet::Analog(codes) => capture.append_analog(codes),
+            _ => {}
+        }
+    }
+    assert_eq!(capture.len(), 128);
+    let a2 = capture.analog_channel(ANALOG_BASE + 2).expect("A2");
+    let d0 = capture.channel(0).expect("D0");
+    let d9 = capture.channel(9).expect("D9");
+    for n in 0..128 {
+        assert_eq!(a2.code(n), n as u16, "A2 at sample {n}");
+        assert_eq!(d0.sample(n), n & 1 != 0, "D0 at sample {n}");
+        assert_eq!(d9.sample(n), n >> 1 & 1 != 0, "D9 at sample {n}");
+    }
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
 }
 
