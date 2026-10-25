@@ -8,7 +8,7 @@ use crossbeam_channel::Sender;
 use hsync_core::{ChannelIndex, TriggerCondition};
 use hsync_driver::{
     Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, FirmwareDir, Label,
-    OptionKey, OptionKind, OptionState, OptionValue, Packet, TriggerCaps,
+    OptionKey, OptionKind, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
 };
 
 use crate::acquisition::{self, AcquisitionParams, TriggerMasks};
@@ -257,6 +257,13 @@ impl PxlogicDevice {
             return Err(DriverError::InvalidRequest("a capture is running".into()));
         }
         Ok(())
+    }
+
+    /// The channel modes of the operation mode as rate tiers, fewest channels first.
+    fn tier_modes(&self) -> Vec<&'static ChannelMode> {
+        let mut modes: Vec<_> = self.profile.channel_modes(self.settings.stream).collect();
+        modes.sort_by_key(|mode| mode.channels);
+        modes
     }
 
     fn channel_mode_choices(&self) -> Vec<Choice> {
@@ -533,6 +540,49 @@ impl Device for PxlogicDevice {
         } else {
             self.settings.enabled &= !(1 << channel);
         }
+        Ok(())
+    }
+
+    fn rate_tiers(&self) -> Vec<RateTier> {
+        self.tier_modes()
+            .into_iter()
+            .map(|mode| RateTier {
+                channels: mode.channels,
+                leading: true,
+                span: mode.channels,
+                max_samplerate: mode.max_samplerate,
+                samplerates: mode.samplerates(),
+            })
+            .collect()
+    }
+
+    fn rate_tier(&self) -> Option<usize> {
+        self.tier_modes()
+            .iter()
+            .position(|mode| mode.id == self.settings.channel_mode.id)
+    }
+
+    fn select_rate_tier(
+        &mut self,
+        index: usize,
+        channels: &[ChannelIndex],
+    ) -> Result<(), DriverError> {
+        self.ensure_idle()?;
+        let mode = *self
+            .tier_modes()
+            .get(index)
+            .ok_or_else(|| DriverError::InvalidRequest(format!("no rate tier {index}")))?;
+        let mut mask = 0u32;
+        for &channel in channels {
+            if channel >= mode.channels {
+                return Err(DriverError::InvalidRequest(format!(
+                    "channel {channel} does not exist in this mode"
+                )));
+            }
+            mask |= 1 << channel;
+        }
+        self.settings.select_channel_mode(mode);
+        self.settings.enabled = mask;
         Ok(())
     }
 

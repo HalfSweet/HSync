@@ -31,6 +31,8 @@ function stateOf(device: DeviceSummary): DeviceState {
     trigger: { maxPosition: 90, advanced: false, advancedOtherMode: false },
     canLoop: false,
     hardwareDepth: null,
+    rateTiers: [],
+    rateTier: null,
   }
 }
 

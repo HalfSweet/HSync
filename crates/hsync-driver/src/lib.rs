@@ -16,7 +16,7 @@ pub mod usb;
 
 pub use device::{
     Acquisition, Candidate, CandidateStatus, CapturePlan, CapturePreset, Device, DeviceInfo,
-    DeviceSummary, Driver,
+    DeviceSummary, Driver, RateTier,
 };
 pub use error::DriverError;
 pub use firmware::FirmwareDir;

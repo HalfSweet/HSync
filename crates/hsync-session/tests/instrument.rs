@@ -250,6 +250,7 @@ fn stops_and_locks_settings_while_capturing() {
             .is_err()
     );
     assert!(instrument.open("virtual-demo").is_err());
+    assert!(instrument.set_enabled_channels(&[0]).is_err());
     instrument.stop();
     let last = until_ended(&statuses).pop().expect("status");
     assert_eq!(last.end, Some(EndKind::Stopped));
@@ -257,4 +258,22 @@ fn stops_and_locks_settings_while_capturing() {
     instrument
         .set_option(OptionKey::Samplerate, &OptionValue::Integer(2_000))
         .expect("unlocked");
+}
+
+#[test]
+fn sets_every_enabled_channel_at_once() {
+    let mut instrument = instrument();
+    let state = instrument
+        .set_enabled_channels(&[2, 0, 9])
+        .expect("three channels");
+    assert_eq!(state.enabled_channels, [0, 2, 9]);
+    // The demo device's rate does not depend on its channels.
+    assert!(state.rate_tiers.is_empty());
+    assert_eq!(state.rate_tier, None);
+    assert!(instrument.select_rate_tier(0, &[0]).is_err());
+    assert!(instrument.set_enabled_channels(&[16]).is_err());
+    assert_eq!(
+        instrument.state().expect("open").enabled_channels,
+        [0, 2, 9]
+    );
 }

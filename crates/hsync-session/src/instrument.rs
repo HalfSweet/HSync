@@ -10,7 +10,7 @@ use hsync_core::{ChannelIndex, TriggerCondition, UiError};
 use hsync_driver::{
     Acquisition, AdvancedTrigger, Candidate, CandidateStatus, CapturePlan, CapturePreset, Device,
     DeviceInfo, DeviceManager, DeviceSummary, DriverError, EndReason, OptionKey, OptionState,
-    OptionValue, Packet, TriggerCaps,
+    OptionValue, Packet, RateTier, TriggerCaps,
 };
 use hsync_uiharu::Position;
 use parking_lot::{Mutex, RwLock};
@@ -46,6 +46,10 @@ pub struct DeviceState {
     pub can_loop: bool,
     /// Samples per channel the device's memory holds (Buffer mode); longer captures use RLE.
     pub hardware_depth: Option<u64>,
+    /// How fewer channels allow faster sample rates in the current mode, fewest channels first.
+    pub rate_tiers: Vec<RateTier>,
+    /// Index of the current tier in `rate_tiers`.
+    pub rate_tier: Option<u32>,
 }
 
 /// A capture request from the UI (DESIGN.md §7).
@@ -290,6 +294,11 @@ impl Instrument {
             trigger: open.device.trigger_caps(),
             can_loop: open.device.can_loop(),
             hardware_depth: open.device.hardware_depth(),
+            rate_tiers: open.device.rate_tiers(),
+            rate_tier: open
+                .device
+                .rate_tier()
+                .and_then(|index| u32::try_from(index).ok()),
         })
     }
 
@@ -323,6 +332,29 @@ impl Instrument {
     ) -> Result<DeviceState, SessionError> {
         self.device_mut()?
             .set_channel_enabled(channel, enabled)
+            .map_err(|error| driver_error(&error))?;
+        self.state().ok_or(SessionError::NoDevice)
+    }
+
+    /// Enables exactly `channels` of the open device.
+    pub fn set_enabled_channels(
+        &mut self,
+        channels: &[ChannelIndex],
+    ) -> Result<DeviceState, SessionError> {
+        self.device_mut()?
+            .set_enabled_channels(channels)
+            .map_err(|error| driver_error(&error))?;
+        self.state().ok_or(SessionError::NoDevice)
+    }
+
+    /// Moves the open device to rate tier `index` with exactly `channels` enabled.
+    pub fn select_rate_tier(
+        &mut self,
+        index: usize,
+        channels: &[ChannelIndex],
+    ) -> Result<DeviceState, SessionError> {
+        self.device_mut()?
+            .select_rate_tier(index, channels)
             .map_err(|error| driver_error(&error))?;
         self.state().ok_or(SessionError::NoDevice)
     }

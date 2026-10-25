@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { closestDuration, durationChoices, samplesFor } from './durations'
+import { closestDuration, durationChoices, memoryLimit, samplesFor } from './durations'
 
 describe('durationChoices', () => {
   it('steps down a 1-2-5 sequence from the longest capture', () => {
@@ -16,6 +16,12 @@ describe('durationChoices', () => {
     const choices = durationChoices(1000, 1000 * 2 * 3600)
     // As DSView: 2 h, 1 h, 50 min, then 20, 10, 5, 2, 1 min and 50 s.
     expect(choices.slice(0, 10)).toEqual([7200, 3600, 3000, 1200, 600, 300, 120, 60, 50, 20])
+  })
+
+  it('takes each step once at microseconds', () => {
+    const choices = durationChoices(800_000_000, 2 ** 34)
+    expect(choices.slice(-4)).toEqual([2e-5, 1e-5, 5e-6, 2e-6])
+    expect(new Set(choices).size).toBe(choices.length)
   })
 
   it('offers nothing below the minimum capture', () => {
@@ -37,5 +43,19 @@ describe('closestDuration', () => {
     expect(closestDuration([1, 0.5, 0.2, 0.1], 0.3)).toBe(0.2)
     expect(closestDuration([1, 0.5, 0.2, 0.1], 0.4)).toBe(0.5)
     expect(closestDuration([], 1)).toBeUndefined()
+  })
+})
+
+describe('memoryLimit', () => {
+  it('fits a Stream capture into half of this machine’s memory', () => {
+    // 16 GiB: 8 GiB hold 4 Gi samples of 16 channels.
+    expect(memoryLimit(2 ** 34, 16, 2 ** 40)).toBe(2 ** 32)
+    expect(memoryLimit(2 ** 34, 3, 2 ** 40)).toBe(Math.floor(2 ** 36 / 3 / 1024) * 1024)
+  })
+
+  it('stays within the device', () => {
+    expect(memoryLimit(2 ** 34, 1, 16 * 2 ** 30)).toBe(16 * 2 ** 30)
+    expect(memoryLimit(null, 16, 2 ** 30)).toBe(2 ** 30)
+    expect(memoryLimit(2 ** 34, 0, 2 ** 30)).toBe(2 ** 30)
   })
 })

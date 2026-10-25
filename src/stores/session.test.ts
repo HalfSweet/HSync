@@ -81,6 +81,8 @@ function stateOf(driver: string): DeviceState {
     trigger: { maxPosition: 90, advanced: false, advancedOtherMode: false },
     canLoop: false,
     hardwareDepth: null,
+    rateTiers: [],
+    rateTier: null,
   }
 }
 

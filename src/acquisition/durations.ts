@@ -10,6 +10,8 @@ const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 /** The fewest samples a capture takes. */
 export const MIN_SAMPLES = 1024
+/** Share of this machine's memory a capture may fill before the menu warns about it. */
+export const MEMORY_SHARE = 0.5
 
 /** Durations in seconds, longest first. */
 export function durationChoices(samplerate: number, maxSamples: number): number[] {
@@ -20,9 +22,11 @@ export function durationChoices(samplerate: number, maxSamples: number): number[
     choices.push(duration)
     const unit = duration >= DAY ? DAY : duration >= HOUR ? HOUR : duration >= MINUTE ? MINUTE : 1
     const decade = 10 ** Math.floor(Math.log10(duration / unit))
-    if (duration > 5 * decade * unit) duration = 5 * decade * unit
-    else if (duration > 2 * decade * unit) duration = 2 * decade * unit
-    else if (duration > decade * unit) duration = decade * unit
+    // Past a step by more than rounding: 5 × 1e-6 falls just short of the 5 µs it should be.
+    const past = (step: number) => duration > step * decade * unit * (1 + 1e-9)
+    if (past(5)) duration = 5 * decade * unit
+    else if (past(2)) duration = 2 * decade * unit
+    else if (past(1)) duration = decade * unit
     else if (decade > 1) duration *= 0.5
     else if (unit === DAY) duration = 20 * HOUR
     else if (unit === HOUR) duration = 50 * MINUTE
@@ -36,6 +40,17 @@ export function durationChoices(samplerate: number, maxSamples: number): number[
 export function samplesFor(seconds: number, samplerate: number): number {
   const samples = Math.ceil(seconds * samplerate)
   return Math.max(MIN_SAMPLES, Math.ceil(samples / 1024) * 1024)
+}
+
+/**
+ * Samples per channel a Stream capture of `channels` channels may take: as many as fit, bit
+ * packed, in {@link MEMORY_SHARE} of this machine's `memory`, in whole kilo-samples, and no more
+ * than the device's own `deviceMax`.
+ */
+export function memoryLimit(memory: number | null, channels: number, deviceMax: number): number {
+  if (memory === null || !(channels > 0)) return deviceMax
+  const samples = Math.floor((memory * MEMORY_SHARE * 8) / channels / 1024) * 1024
+  return Math.min(deviceMax, Math.max(MIN_SAMPLES, samples))
 }
 
 /** The choice closest to `seconds`, so a rate change keeps the capture about as long. */

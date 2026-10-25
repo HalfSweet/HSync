@@ -579,6 +579,18 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
       return Promise.resolve(device.state())
     },
 
+    async deviceSetChannels(channels: number[]) {
+      if (!device) return Promise.reject(uiError('error.session.noDevice'))
+      device.setChannels(channels)
+      return Promise.resolve(device.state())
+    },
+
+    async deviceSelectRateTier(index: number, channels: number[]) {
+      if (!device) return Promise.reject(uiError('error.session.noDevice'))
+      device.selectRateTier(index, channels)
+      return Promise.resolve(device.state())
+    },
+
     async captureStart(request: CaptureRequest): Promise<CaptureSummary> {
       if (!device) return Promise.reject(uiError('error.session.noDevice'))
       if (live) return Promise.reject(uiError('error.session.busy'))

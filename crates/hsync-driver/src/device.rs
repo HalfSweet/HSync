@@ -81,6 +81,38 @@ pub struct DeviceInfo {
     pub slow_port: bool,
 }
 
+/// One step of how a device trades channels for sample rate in its current mode: with at most
+/// `channels` channels it reaches `max_samplerate` (DSLogic and PXLogic channel modes, the
+/// USB bandwidth of the ATK-Logic and SLogic16U3).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RateTier {
+    /// Channels it captures at most.
+    pub channels: u16,
+    /// Whether they must be the first `channels` (D0 upwards) rather than any of the device's.
+    pub leading: bool,
+    /// Channels it offers, D0 upwards, of which `channels` may be enabled at once: `channels`
+    /// itself when leading, else the device's channels or fewer (a DSLogic's 3-channel mode
+    /// takes any 3 of D0–D7).
+    pub span: u16,
+    /// Its fastest sample rate, Hz.
+    pub max_samplerate: u64,
+    /// Its sample rates, ascending, Hz.
+    pub samplerates: Vec<u64>,
+}
+
+impl RateTier {
+    /// Whether exactly `channels` may be enabled in this tier.
+    pub fn fits(&self, channels: &[ChannelIndex]) -> bool {
+        let mut seen = std::collections::BTreeSet::new();
+        channels.len() <= usize::from(self.channels)
+            && channels
+                .iter()
+                .all(|&channel| channel < self.span && seen.insert(channel))
+    }
+}
+
 /// One kind of device.
 pub trait Driver: Send + Sync {
     /// Short name, also recorded in capture files (`DSLogic`, `virtual-demo`).
@@ -175,6 +207,58 @@ pub trait Device: Send {
         enabled: bool,
     ) -> Result<(), DriverError>;
 
+    /// Enables exactly `channels` and disables the others. Devices whose mode caps how many
+    /// channels it captures check the request first, so that a rejected one changes nothing.
+    fn set_enabled_channels(&mut self, channels: &[ChannelIndex]) -> Result<(), DriverError> {
+        let count = self.channel_count();
+        if let Some(channel) = channels.iter().find(|&&channel| channel >= count) {
+            return Err(DriverError::InvalidRequest(format!(
+                "channel {channel} is out of range"
+            )));
+        }
+        for channel in 0..count {
+            if !channels.contains(&channel) {
+                self.set_channel_enabled(channel, false)?;
+            }
+        }
+        for &channel in channels {
+            self.set_channel_enabled(channel, true)?;
+        }
+        Ok(())
+    }
+
+    /// How fewer channels allow faster sample rates in the current mode, fewest channels
+    /// first; empty when the channels do not bound the sample rate.
+    fn rate_tiers(&self) -> Vec<RateTier> {
+        Vec::new()
+    }
+
+    /// Index in [`Self::rate_tiers`] of the tier the device is in.
+    fn rate_tier(&self) -> Option<usize> {
+        None
+    }
+
+    /// Moves to rate tier `index` with exactly `channels` enabled, which must fit it. The
+    /// sample rate stays where the tier allows it and is brought into the tier otherwise.
+    /// By default the tier follows from the channels alone, as with a USB bandwidth limit;
+    /// devices with channel modes select the mode first.
+    fn select_rate_tier(
+        &mut self,
+        index: usize,
+        channels: &[ChannelIndex],
+    ) -> Result<(), DriverError> {
+        let tiers = self.rate_tiers();
+        let tier = tiers
+            .get(index)
+            .ok_or_else(|| DriverError::InvalidRequest(format!("no rate tier {index}")))?;
+        if !tier.fits(channels) {
+            return Err(DriverError::InvalidRequest(format!(
+                "channels {channels:?} do not fit rate tier {index}"
+            )));
+        }
+        self.set_enabled_channels(channels)
+    }
+
     /// Starts an acquisition that reports through `sink` until it sends [`Packet::End`].
     fn start(
         &mut self,
@@ -190,4 +274,121 @@ pub trait Acquisition: Send {
 
     /// Waits until the acquisition has ended.
     fn wait(self: Box<Self>);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Eight channels whose rate follows how many are on, as a USB bandwidth limit does.
+    struct Bandwidth {
+        enabled: Vec<ChannelIndex>,
+    }
+
+    impl Device for Bandwidth {
+        fn info(&self) -> DeviceInfo {
+            DeviceInfo {
+                id: "test".into(),
+                driver: "test".into(),
+                vendor: "test".into(),
+                model: "test".into(),
+                firmware: None,
+                usb_speed: None,
+                slow_port: false,
+            }
+        }
+
+        fn options(&self) -> Vec<OptionState> {
+            Vec::new()
+        }
+
+        fn set_option(&mut self, _: OptionKey, _: &OptionValue) -> Result<(), DriverError> {
+            Ok(())
+        }
+
+        fn channel_count(&self) -> u16 {
+            8
+        }
+
+        fn enabled_channels(&self) -> Vec<ChannelIndex> {
+            self.enabled.clone()
+        }
+
+        fn set_channel_enabled(
+            &mut self,
+            channel: ChannelIndex,
+            enabled: bool,
+        ) -> Result<(), DriverError> {
+            self.enabled.retain(|&other| other != channel);
+            if enabled {
+                self.enabled.push(channel);
+                self.enabled.sort_unstable();
+            }
+            Ok(())
+        }
+
+        fn rate_tiers(&self) -> Vec<RateTier> {
+            [(2, 100), (8, 25)]
+                .into_iter()
+                .map(|(channels, max_samplerate)| RateTier {
+                    channels,
+                    leading: false,
+                    span: 8,
+                    max_samplerate,
+                    samplerates: vec![max_samplerate],
+                })
+                .collect()
+        }
+
+        fn start(
+            &mut self,
+            _: CapturePlan,
+            _: Sender<Packet>,
+        ) -> Result<Box<dyn Acquisition>, DriverError> {
+            Err(DriverError::Unsupported)
+        }
+    }
+
+    #[test]
+    fn a_tier_fits_channels_within_its_count_and_span() {
+        let tier = RateTier {
+            channels: 3,
+            leading: false,
+            span: 8,
+            max_samplerate: 1,
+            samplerates: vec![1],
+        };
+        assert!(tier.fits(&[]));
+        assert!(tier.fits(&[7, 0, 3]));
+        assert!(!tier.fits(&[0, 1, 2, 3]));
+        assert!(!tier.fits(&[8]));
+        assert!(!tier.fits(&[1, 1]));
+    }
+
+    #[test]
+    fn sets_exactly_the_channels_asked_for() {
+        let mut device = Bandwidth {
+            enabled: vec![0, 1, 2],
+        };
+        device.set_enabled_channels(&[5, 1]).expect("two channels");
+        assert_eq!(device.enabled_channels(), [1, 5]);
+        assert!(device.set_enabled_channels(&[1, 8]).is_err());
+        assert_eq!(device.enabled_channels(), [1, 5]);
+    }
+
+    #[test]
+    fn selects_a_tier_that_follows_from_the_channels() {
+        let mut device = Bandwidth {
+            enabled: (0..8).collect(),
+        };
+        device.select_rate_tier(0, &[3, 6]).expect("two channels");
+        assert_eq!(device.enabled_channels(), [3, 6]);
+        for (index, channels) in [(0, vec![0, 1, 2]), (2, vec![0])] {
+            assert!(matches!(
+                device.select_rate_tier(index, &channels),
+                Err(DriverError::InvalidRequest(_))
+            ));
+            assert_eq!(device.enabled_channels(), [3, 6]);
+        }
+    }
 }

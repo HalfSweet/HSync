@@ -532,6 +532,96 @@ fn offers_rates_by_mode_and_channels() {
     );
 }
 
+/// `channels` and `max_samplerate` of each rate tier.
+fn tiers(device: &AtkLogicDevice) -> Vec<(u16, u64)> {
+    device
+        .rate_tiers()
+        .iter()
+        .map(|tier| {
+            assert!(!tier.leading);
+            assert_eq!(tier.span, 16);
+            assert_eq!(tier.samplerates.last(), Some(&tier.max_samplerate));
+            (tier.channels, tier.max_samplerate)
+        })
+        .collect()
+}
+
+#[test]
+fn offers_rate_tiers_by_channel_count() {
+    // A DL16 Plus.
+    let (_, mut device) = open(FakeAtk {
+        version: Some([0x0a, 0x81, 0x01, 0x61, 1, 2, 3, 0, 1]),
+        ..FakeAtk::default()
+    });
+    assert_eq!(
+        tiers(&device),
+        [
+            (3, 100_000_000),
+            (6, 50_000_000),
+            (8, 40_000_000),
+            (12, 25_000_000),
+            (16, 20_000_000),
+        ]
+    );
+    assert_eq!(device.rate_tier(), Some(4));
+
+    device.select_rate_tier(0, &[2, 9]).expect("two channels");
+    assert_eq!(device.enabled_channels(), [2, 9]);
+    assert_eq!(device.rate_tier(), Some(0));
+    assert_eq!(device.settings().samplerate, 20_000_000);
+    set(
+        &mut device,
+        OptionKey::Samplerate,
+        OptionValue::Integer(100_000_000),
+    );
+    assert!(
+        device
+            .select_rate_tier(0, &[0, 1, 2, 3])
+            .is_err_and(|error| matches!(error, DriverError::InvalidRequest(_)))
+    );
+    assert!(device.select_rate_tier(5, &[0]).is_err());
+    assert_eq!(device.enabled_channels(), [2, 9]);
+    assert_eq!(device.settings().samplerate, 100_000_000);
+    device
+        .select_rate_tier(2, &(0..8).collect::<Vec<_>>())
+        .expect("eight channels");
+    assert_eq!(device.rate_tier(), Some(2));
+    assert_eq!(device.settings().samplerate, 40_000_000);
+
+    set(
+        &mut device,
+        OptionKey::OperationMode,
+        OptionValue::Choice("buffer".into()),
+    );
+    assert_eq!(tiers(&device), [(8, 1_000_000_000), (16, 500_000_000)]);
+    assert_eq!(device.rate_tier(), Some(0));
+    set(
+        &mut device,
+        OptionKey::Samplerate,
+        OptionValue::Integer(1_000_000_000),
+    );
+    device.set_enabled_channels(&[0, 15]).expect("two channels");
+    assert_eq!(device.settings().samplerate, 1_000_000_000);
+    device
+        .select_rate_tier(1, &(0..16).collect::<Vec<_>>())
+        .expect("every channel");
+    assert_eq!(device.settings().samplerate, 500_000_000);
+}
+
+#[test]
+fn has_one_rate_tier_in_buffer_mode_on_the_dl16() {
+    let settings = hsync_atklogic::Settings {
+        stream: false,
+        ..hsync_atklogic::Settings::defaults(false)
+    };
+    let tiers = settings.rate_tiers(false);
+    assert_eq!(tiers.len(), 1);
+    assert_eq!(
+        (tiers[0].channels, tiers[0].max_samplerate),
+        (16, 250_000_000)
+    );
+}
+
 #[test]
 fn captures_in_buffer_mode() {
     const LIMIT: u64 = 8192;
