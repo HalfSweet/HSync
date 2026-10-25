@@ -87,6 +87,16 @@ export const useDeviceStore = defineStore('device', () => {
     return attempt(async () => (await getBackend()).deviceSetChannel(channel, enabled))
   }
 
+  /** Enables exactly `channels`. */
+  function setChannels(channels: number[]): Promise<boolean> {
+    return attempt(async () => (await getBackend()).deviceSetChannels(channels))
+  }
+
+  /** Moves to rate tier `index` (DESIGN.md §4) with exactly `channels` enabled. */
+  function selectRateTier(index: number, channels: number[]): Promise<boolean> {
+    return attempt(async () => (await getBackend()).deviceSelectRateTier(index, channels))
+  }
+
   /**
    * Reopens a device that went away when one of the same model shows up again within
    * {@link RECONNECT_MS} (a USB hiccup, a re-enumeration); its remembered settings come back
@@ -182,6 +192,8 @@ export const useDeviceStore = defineStore('device', () => {
     open,
     setOption,
     setChannel,
+    setChannels,
+    selectRateTier,
     acceptArrival,
     dismissArrival,
     init,

@@ -141,6 +141,10 @@ export interface Backend {
   deviceState(): Promise<DeviceState | null>
   deviceSetOption(key: OptionKey, value: OptionValue): Promise<DeviceState>
   deviceSetChannel(channel: number, enabled: boolean): Promise<DeviceState>
+  /** Enables exactly `channels`. */
+  deviceSetChannels(channels: number[]): Promise<DeviceState>
+  /** Moves to rate tier `index` of the open device with exactly `channels` enabled. */
+  deviceSelectRateTier(index: number, channels: number[]): Promise<DeviceState>
   /** Starts a capture on the open device; the returned capture fills as it runs. */
   captureStart(request: CaptureRequest): Promise<CaptureSummary>
   captureStop(): Promise<void>
@@ -340,6 +344,14 @@ class TauriBackend implements Backend {
 
   deviceSetChannel(channel: number, enabled: boolean) {
     return invoke<DeviceState>('device_set_channel', { channel, enabled })
+  }
+
+  deviceSetChannels(channels: number[]) {
+    return invoke<DeviceState>('device_set_channels', { channels })
+  }
+
+  deviceSelectRateTier(index: number, channels: number[]) {
+    return invoke<DeviceState>('device_select_rate_tier', { index, channels })
   }
 
   captureStart(request: CaptureRequest) {

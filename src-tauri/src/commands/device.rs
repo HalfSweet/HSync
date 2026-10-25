@@ -60,6 +60,34 @@ pub async fn device_set_channel(
     .await
 }
 
+/// Enables exactly these channels of the open device.
+#[tauri::command]
+pub async fn device_set_channels(
+    app: AppHandle,
+    channels: Vec<ChannelIndex>,
+) -> CommandResult<DeviceState> {
+    blocking(app, move |state| {
+        state.instrument.lock().set_enabled_channels(&channels)
+    })
+    .await
+}
+
+/// Moves the open device to a rate tier with exactly these channels enabled.
+#[tauri::command]
+pub async fn device_select_rate_tier(
+    app: AppHandle,
+    index: u32,
+    channels: Vec<ChannelIndex>,
+) -> CommandResult<DeviceState> {
+    blocking(app, move |state| {
+        state
+            .instrument
+            .lock()
+            .select_rate_tier(index as usize, &channels)
+    })
+    .await
+}
+
 /// Rescans after USB devices came or went and tells the UI.
 pub fn devices_changed(app: &AppHandle) {
     let state = app.state::<AppState>();
