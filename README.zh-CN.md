@@ -28,9 +28,18 @@
 
 HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic、PXLogic 的 PX-Logic 与矽速（Sipeed）的 SLogic 系列（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，采集还没结束就能看到，数十种协议解码器搜索即用。HSync 以自己的 `.hsync` 格式保存采集，能打开、导出 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件与解码器。
 
-SLogic 系列逻辑分析仪由[矽速科技（Sipeed）](https://sipeed.com/)官方赞助。
-
 手边没有硬件？HSync 会打开内置的「演示设备」，回放一段包含四种总线的采集数据，所有功能都可以马上试用。
+
+## 支持者
+
+SLogic 系列逻辑分析仪的适配得到了矽速科技（Sipeed）的大力支持。
+
+<a href="https://sipeed.com/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/supporters/sipeed-dark.svg">
+    <img src="assets/supporters/sipeed.svg" height="36" alt="矽速科技 Sipeed">
+  </picture>
+</a>
 
 ## 功能
 
