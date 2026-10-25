@@ -9,7 +9,7 @@ use crossbeam_channel::Sender;
 use hsync_core::{ChannelIndex, UiError};
 use hsync_driver::{
     Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, Label, OptionKey,
-    OptionKind, OptionState, OptionValue, Packet, TriggerCaps,
+    OptionKind, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
 };
 
 use crate::acquisition;
@@ -271,6 +271,52 @@ impl Device for SlogicDevice {
         Ok(())
     }
 
+    /// The wire modes: the inputs from D0 up to the mode's width share the link's bandwidth.
+    fn rate_tiers(&self) -> Vec<RateTier> {
+        self.model
+            .wire_modes
+            .iter()
+            .map(|&(channels, _)| RateTier {
+                channels: channels.into(),
+                leading: true,
+                span: channels.into(),
+                max_samplerate: self.model.max_samplerate(channels, self.speed),
+                samplerates: self.model.samplerates(channels, self.speed),
+            })
+            .collect()
+    }
+
+    fn rate_tier(&self) -> Option<usize> {
+        self.model
+            .wire_modes
+            .iter()
+            .position(|&(channels, _)| channels == self.settings.channels)
+    }
+
+    fn select_rate_tier(
+        &mut self,
+        index: usize,
+        channels: &[ChannelIndex],
+    ) -> Result<(), DriverError> {
+        let &(wire, _) = self
+            .model
+            .wire_modes
+            .get(index)
+            .ok_or_else(|| DriverError::InvalidRequest(format!("no rate tier {index}")))?;
+        if !self.rate_tiers()[index].fits(channels) {
+            return Err(DriverError::InvalidRequest(format!(
+                "channels {channels:?} do not fit rate tier {index}"
+            )));
+        }
+        self.set_enabled_channels(channels)?;
+        // With no input on, the wire mode stays where it was; take the tier's.
+        if channels.is_empty() {
+            self.settings.channels = wire;
+            self.settings.reconcile_channels(self.model, self.speed);
+        }
+        Ok(())
+    }
+
     fn start(
         &mut self,
         mut plan: CapturePlan,
@@ -396,6 +442,72 @@ mod tests {
         assert_eq!(device.settings().channels(), 16);
         device.set_channel_enabled(0, true).expect("enable D0");
         assert_eq!(device.settings().channels(), 4);
+    }
+
+    #[test]
+    fn offers_the_wire_modes_as_rate_tiers() {
+        for (model, speed, ceilings) in [
+            (&SLOGIC16U3, UsbSpeed::Super, &[800, 400, 200][..]),
+            (&SLOGIC16U3, UsbSpeed::High, &[80, 40, 20]),
+            (&SLOGIC32U3, UsbSpeed::SuperPlus, &[1400, 800, 400, 200]),
+            (&SLOGIC32U3, UsbSpeed::Super, &[800, 400, 200, 100]),
+        ] {
+            let device = device(model, speed);
+            let tiers = device.rate_tiers();
+            assert_eq!(
+                tiers
+                    .iter()
+                    .map(|tier| (tier.channels, tier.leading, tier.span, tier.max_samplerate))
+                    .collect::<Vec<_>>(),
+                model
+                    .wire_modes
+                    .iter()
+                    .zip(ceilings)
+                    .map(|(&(channels, _), &mhz)| {
+                        (channels.into(), true, channels.into(), mhz * 1_000_000)
+                    })
+                    .collect::<Vec<_>>(),
+                "{} on {speed:?}",
+                model.name
+            );
+            for tier in &tiers {
+                assert_eq!(tier.samplerates.first(), Some(&5_000_000));
+                assert_eq!(tier.samplerates.last(), Some(&tier.max_samplerate));
+            }
+            // Every input starts enabled, in the widest mode.
+            assert_eq!(device.rate_tier(), Some(tiers.len() - 1));
+        }
+    }
+
+    #[test]
+    fn selects_a_rate_tier_by_its_channels() {
+        let mut device = device(&SLOGIC16U3, UsbSpeed::Super);
+        device
+            .select_rate_tier(0, &[0, 3])
+            .expect("D0 and D3 at up to 800 MHz");
+        assert_eq!(device.rate_tier(), Some(0));
+        assert_eq!(device.enabled_channels(), [0, 3]);
+        assert_eq!(device.settings().samplerate, 200_000_000);
+        device
+            .set_option(OptionKey::Samplerate, &OptionValue::Integer(800_000_000))
+            .expect("800 MHz");
+
+        let before = device.settings().clone();
+        for (index, channels) in [(0, vec![4]), (1, vec![0; 2]), (3, vec![0])] {
+            assert!(matches!(
+                device.select_rate_tier(index, &channels),
+                Err(DriverError::InvalidRequest(_))
+            ));
+            assert_eq!(device.settings(), &before);
+        }
+
+        device.select_rate_tier(1, &[1, 7]).expect("two of D0–D7");
+        assert_eq!(device.rate_tier(), Some(1));
+        assert_eq!(device.settings().samplerate, 400_000_000);
+        device.select_rate_tier(2, &[]).expect("none on");
+        assert!(device.enabled_channels().is_empty());
+        assert_eq!(device.rate_tier(), Some(2));
+        assert_eq!(device.settings().samplerate, 200_000_000);
     }
 
     #[test]
