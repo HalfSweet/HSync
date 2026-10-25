@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.2.5 (2026-10-25)
+
+### Features
+
+- **timeline:** Colour decode blocks by what each event is (#51) ([81877fa](https://github.com/HalfSweet/HSync/commit/81877fa066f50baeb57b180ca231700a3d7703e8))
+- **timeline:** Glide smoothly when zooming and panning (#52) ([662d87f](https://github.com/HalfSweet/HSync/commit/662d87f1c1c313da2cb53177477c8abf7091cc15))
+- **uiharu:** Support native wire shapes and shared DSL outputs ([078a71d](https://github.com/HalfSweet/HSync/commit/078a71d2a90fd253d5cfa5da60936339e63e9ddd))
+- **Breaking:** **uiharu:** Expose native decoder contracts to TypeScript ([9df62e4](https://github.com/HalfSweet/HSync/commit/9df62e4f1f84efe624db31b7da5279569173a6df))
+- **uiharu:** Expand flash phases and native SD decoding ([07be7a3](https://github.com/HalfSweet/HSync/commit/07be7a3555a6e995aaf56ec11d72e6170249ea93))
+- **uiharu:** Add debug and trace protocol layers ([864100a](https://github.com/HalfSweet/HSync/commit/864100a6a307612c76230efda9a19250ae35a950))
+- **uiharu:** Interpret common bus messages and timing ([4bc3e90](https://github.com/HalfSweet/HSync/commit/4bc3e904b7efd94c5d7e7df30f4ae173b622b17e))
+- **uiharu:** Decode I2C sensor and memory devices ([6f95fc1](https://github.com/HalfSweet/HSync/commit/6f95fc17b1753b51dfbb51db41c5db7b38e1e17c))
+- **uiharu:** Decode SPI peripheral and radio devices ([ff1f3eb](https://github.com/HalfSweet/HSync/commit/ff1f3eb44dae1db832918e8b94bb5c5d570aedf9))
+- **uiharu:** Decode 1-Wire devices and sensor values ([a52ae19](https://github.com/HalfSweet/HSync/commit/a52ae197da89563c526a3353f49b01f3637d0ca0))
+- **uiharu:** Decode UART display and radio commands ([f649af5](https://github.com/HalfSweet/HSync/commit/f649af5a0f3c90ffd48ed68a9543953eacc0fffa))
+- **uiharu:** Register the expanded decoder catalog ([b97eb63](https://github.com/HalfSweet/HSync/commit/b97eb6357980e4fb2a00ce4655d133006e07e222))
+- **decode:** Edit deep decoder chains and preserve DSView imports ([c76ca39](https://github.com/HalfSweet/HSync/commit/c76ca39e97cea175b18a4ffcde2c26e3f9f5fb7c))
+- **stream:** Show the data stream beside the timeline (#54) ([b38edd8](https://github.com/HalfSweet/HSync/commit/b38edd82002e957e51bc9edf4488bb0222b4f6eb))
+- **stream:** Open the data stream in a window of its own (#55) ([d4b382c](https://github.com/HalfSweet/HSync/commit/d4b382c0876609bc9ab4849fecfd5fb1e1c80a03))
+- **driver:** Add SLogic32U3 support (#56) ([e8b3377](https://github.com/HalfSweet/HSync/commit/e8b33776221791ab4c6c80bb5a5b5ab1539dba8a))
+- **ui:** Show how channels bound the sample rate in acquisition settings (#57) ([05b34a9](https://github.com/HalfSweet/HSync/commit/05b34a91ca75926a953ba04f2f126018b3fa3eec))
+
+### Bug Fixes
+
+- **timeline:** Show complete decoder annotations and JTAG states (#50) ([cdcae28](https://github.com/HalfSweet/HSync/commit/cdcae280a6b566ab9fdef7f3e88c1cc8ef4f7cb7))
+
 ## 0.2.4 (2026-10-21)
 
 ### Features
