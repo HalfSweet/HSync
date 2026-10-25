@@ -87,6 +87,9 @@ export const useSessionStore = defineStore('session', () => {
         .sort((a, b) => optionRank(a.key) - optionRank(b.key))
         .map((option) => [option.key, option.value]),
       enabledChannels: state ? [...state.enabledChannels] : null,
+      analogInputs: state
+        ? state.analogInputs.filter((input) => input.enabled).map((input) => input.index)
+        : null,
       channelNames: summary ? namesOf(summary) : { ...capture.preset?.channelNames },
       colours: { ...channels.colours } as Record<string, number>,
       heights: { ...channels.heights } as Record<string, number>,
@@ -152,6 +155,13 @@ export const useSessionStore = defineStore('session', () => {
         for (let index = 0; index < (device.state?.channelCount ?? 0); index++) {
           const enabled = device.enabledChannels.includes(index)
           if (enabled !== wanted.has(index)) await device.setChannel(index, wanted.has(index))
+        }
+      }
+      if (session.analogInputs) {
+        const wanted = new Set(session.analogInputs)
+        for (const input of device.analogInputs) {
+          if (input.enabled !== wanted.has(input.index))
+            await device.setAnalog(input.index, wanted.has(input.index))
         }
       }
       for (const [key, value] of refused) await device.setOption(key, value)

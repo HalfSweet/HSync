@@ -94,6 +94,7 @@ function session(patch: Partial<Session>): Session {
     device: null,
     options: [],
     enabledChannels: null,
+    analogInputs: null,
     channelNames: {},
     colours: {},
     heights: {},
