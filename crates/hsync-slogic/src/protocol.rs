@@ -12,7 +12,7 @@ use hsync_core::UiError;
 use hsync_driver::DriverError;
 use hsync_driver::usb::{UsbError, UsbTransport};
 
-/// SLogic16U3's sample endpoint.
+/// The U3 models' sample endpoint.
 pub const EP_IN: u8 = 0x82;
 
 const READ: u8 = 0;
@@ -26,7 +26,7 @@ const AUX_POLLS: usize = 8;
 /// Settings carried by the U3 AUX commands.
 #[derive(Debug, Clone, Copy)]
 pub struct CaptureSettings {
-    /// Physical channels in the wire format: 4, 8, or 16, starting at D0.
+    /// Physical channels in the wire format: 4, 8, 16 or 32, starting at D0.
     pub channels: u8,
     /// Requested samples per second.
     pub samplerate: u64,
@@ -241,7 +241,7 @@ impl Link {
     /// Programs channel mode, sample clock, threshold, then normal pattern mode.
     /// The caller queues bulk transfers before calling [`Self::run`].
     pub fn configure(&self, settings: &CaptureSettings) -> Result<(), DriverError> {
-        if !matches!(settings.channels, 4 | 8 | 16)
+        if !matches!(settings.channels, 4 | 8 | 16 | 32)
             || settings.samplerate == 0
             || !settings.threshold.is_finite()
             || !(0.0..=6.0).contains(&settings.threshold)
@@ -251,7 +251,7 @@ impl Link {
             )));
         }
         self.stop()?;
-        self.aux_word(1, (1_u32 << settings.channels) - 1)?;
+        self.aux_word(1, u32::MAX >> (32 - settings.channels))?;
         self.samplerate(settings.samplerate)?;
         self.aux_word(3, threshold_dac(settings.threshold))?;
         self.aux_word(5, 0)

@@ -9,7 +9,7 @@ export type DeviceInfo = { id: string, driver: string, vendor: string, model: st
  */
 firmware: string | null, 
 /**
- * USB link speed: `high` or `super`.
+ * USB link speed: `high`, `super` or `superPlus` (10 Gbps).
  */
 usbSpeed: string | null, 
 /**

@@ -14,7 +14,7 @@ use hsync_driver::mock::MockTransport;
 use hsync_driver::usb::UsbError;
 use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionValue, Packet};
 use hsync_slogic::protocol::Link;
-use hsync_slogic::{SlogicDevice, UsbSpeed};
+use hsync_slogic::{SLOGIC16U3, SlogicDevice, UsbSpeed};
 use nusb::transfer::TransferError;
 
 const WAIT: Duration = Duration::from_secs(5);
@@ -22,7 +22,8 @@ const WAIT: Duration = Duration::from_secs(5);
 fn open() -> (MockTransport<AuxDevice>, SlogicDevice) {
     let transport = MockTransport::new(AuxDevice::new());
     let link = Link::new(Arc::new(transport.clone()));
-    let device = SlogicDevice::open(link, UsbSpeed::Super, "test".to_owned()).expect("open");
+    let device =
+        SlogicDevice::open(link, &SLOGIC16U3, UsbSpeed::Super, "test".to_owned()).expect("open");
     transport.clear_calls();
     transport.device().events.clear();
     (transport, device)
