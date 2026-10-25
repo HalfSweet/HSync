@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use crossbeam_channel::Receiver;
-use hsync_core::TriggerCondition;
+use hsync_core::{ANALOG_BASE, TriggerCondition};
 use hsync_demo::DemoDriver;
 use hsync_driver::{DeviceManager, OptionKey, OptionValue};
 use hsync_session::{
@@ -79,6 +79,19 @@ fn captures_into_the_workspace() {
     assert_eq!(last.limit, 65_536);
     let capture = workspace.capture(summary.id).expect("live capture");
     assert_eq!(capture.read().len(), 65_536);
+    // The demo's two sines, named by their numbers.
+    assert_eq!(summary.info.analog, [ANALOG_BASE, ANALOG_BASE + 1]);
+    let names: Vec<_> = summary
+        .analog
+        .iter()
+        .map(|channel| channel.name.as_str())
+        .collect();
+    assert_eq!(names, ["A0", "A1"]);
+    let a1 = capture
+        .read()
+        .analog_channel(ANALOG_BASE + 1)
+        .map(|data| data.len());
+    assert_eq!(a1, Some(65_536));
     assert!(!instrument.is_capturing());
     assert_eq!(
         workspace.summary().expect("summary").info.sample_count,
@@ -153,6 +166,12 @@ fn loops_until_stopped_keeping_the_newest_samples() {
     let capture = capture.read();
     assert_eq!(capture.len(), 65_536);
     let first = last.dropped;
+    // The analog samples were dropped alongside: A0's 1 kHz sine goes on from the same sample.
+    let a0 = capture.analog_channel(ANALOG_BASE).expect("A0");
+    assert_eq!(a0.len(), 65_536);
+    let turns = (first as f64 * 1_000.0 / 100_000_000.0).fract();
+    let expected = 1.65 + 1.65 * (std::f64::consts::TAU * turns).sin();
+    assert!((f64::from(a0.volts(0)) - expected).abs() < 0.01);
     for channel in 0..6u16 {
         let data = capture.channel(channel).expect("channel");
         assert!(data.is_compact());

@@ -135,6 +135,7 @@ pub fn run() {
             commands::capture::capture_start,
             commands::capture::capture_stop,
             commands::capture::capture_bins,
+            commands::capture::capture_analog_bins,
             commands::capture::capture_pulse,
             commands::capture::capture_edge,
             commands::capture::capture_edges,

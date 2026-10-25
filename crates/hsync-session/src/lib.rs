@@ -28,7 +28,9 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 use uiharu_registry::Catalog;
 
-pub use bins::{BINS_FORMAT_VERSION, BinsRequest, encode_bins};
+pub use bins::{
+    ANALOG_BINS_FORMAT_VERSION, BINS_FORMAT_VERSION, BinsRequest, encode_analog_bins, encode_bins,
+};
 pub use decoding::{
     DecodeSet, DecodeState, DecoderLanes, DecoderStatus, LANE_LIMIT, SEARCH_LIMIT, SearchHit,
     SearchResult, StreamLanes, StreamPage, StreamStatus,
@@ -96,6 +98,8 @@ pub struct CaptureSummary {
     pub info: CaptureInfo,
     /// Names of the channels, ascending by index.
     pub channels: Vec<ChannelSummary>,
+    /// Names of the analog channels, ascending by index.
+    pub analog: Vec<ChannelSummary>,
     /// The decoders stored with the capture: HSync's entries (see [`DecoderEntry`]).
     #[ts(type = "unknown")]
     pub decoders: Option<serde_json::Value>,
@@ -673,9 +677,11 @@ impl Workspace {
         name: &str,
     ) -> Result<CaptureSummary, SessionError> {
         let open = self.find_mut(id)?;
-        if open.capture.read().channel(channel).is_none() {
+        let capture = open.capture.read();
+        if capture.channel(channel).is_none() && capture.analog_channel(channel).is_none() {
             return Err(SessionError::UnknownChannel(channel));
         }
+        drop(capture);
         let name = name.trim();
         if name.is_empty() {
             open.channel_names.remove(&channel);
@@ -798,23 +804,27 @@ fn decoding_part(decoders: Option<&serde_json::Value>) -> Vec<serde_json::Value>
 
 fn summarize(open: &OpenCapture) -> CaptureSummary {
     let info = open.capture.read().info();
+    // Unnamed channels go by their number: `2` as DSView does, `A0` for analog ones.
+    let named = |index: ChannelIndex, number: String| ChannelSummary {
+        index,
+        name: open.channel_names.get(&index).cloned().unwrap_or(number),
+    };
     let channels = info
         .channels
         .iter()
-        .map(|&index| ChannelSummary {
-            index,
-            name: open
-                .channel_names
-                .get(&index)
-                .cloned()
-                .unwrap_or_else(|| index.to_string()),
-        })
+        .map(|&index| named(index, index.to_string()))
+        .collect();
+    let analog = info
+        .analog
+        .iter()
+        .map(|&index| named(index, format!("A{}", index - hsync_core::ANALOG_BASE)))
         .collect();
     CaptureSummary {
         id: open.id,
         source: open.source.clone(),
         info,
         channels,
+        analog,
         decoders: open.decoders.clone(),
         session: open.hsync_session.clone(),
     }
