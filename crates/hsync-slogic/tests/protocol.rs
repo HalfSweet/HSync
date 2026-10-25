@@ -6,6 +6,7 @@ use std::sync::Arc;
 use hsync_driver::DriverError;
 use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
+use hsync_slogic::SLOGIC32U3;
 use hsync_slogic::protocol::{CaptureSettings, Link, TransferPlan, threshold_dac};
 
 mod common;
@@ -129,7 +130,7 @@ fn replays_the_official_control_sequences() {
         );
         cases += 1;
     }
-    assert_eq!(cases, 7);
+    assert_eq!(cases, 13);
 }
 
 fn settings() -> CaptureSettings {
@@ -242,6 +243,10 @@ fn rejects_short_register_reads_and_invalid_settings() {
             ..settings()
         },
         CaptureSettings {
+            channels: 64,
+            ..settings()
+        },
+        CaptureSettings {
             samplerate: 0,
             ..settings()
         },
@@ -286,6 +291,34 @@ fn encodes_every_advertised_rate_on_the_800_mhz_clock() {
         .expect("supported rate");
         assert_eq!(transport.device().divider, (800 / mhz - 1) as u32);
         assert_eq!(transport.device().channel_mask, 0xf);
+    }
+}
+
+#[test]
+fn slogic32u3_keeps_every_rate_but_1400_mhz_on_its_800_mhz_clock() {
+    for &rate in SLOGIC32U3.samplerates {
+        let mut device = AuxDevice::new();
+        device.clock_mhz = vec![1400, 800];
+        let transport = MockTransport::new(device);
+        let link = Link::new(Arc::new(transport.clone()));
+        link.configure(&CaptureSettings {
+            channels: 32,
+            samplerate: rate,
+            ..settings()
+        })
+        .expect("supported rate");
+        let device = transport.device();
+        let (slot, base) = if rate == 1_400_000_000 {
+            (0, 1_400_000_000)
+        } else {
+            (1, 800_000_000)
+        };
+        assert_eq!(
+            (device.clock_index, device.divider),
+            (slot, (base / rate - 1) as u32),
+            "{rate} Hz"
+        );
+        assert_eq!(device.channel_mask, u32::MAX);
     }
 }
 
@@ -335,11 +368,18 @@ fn keeps_the_transfer_ring_bounded_and_aligned_for_every_mode() {
     let slowest = TransferPlan::new(4, 5_000_000);
     assert_eq!(slowest.size, 160 * 1024);
     assert_eq!(slowest.expected_rate_bytes, 2_500_000);
-    for (channels, rate) in [(4, 800_000_000), (8, 400_000_000), (16, 200_000_000)] {
+    for (channels, rate, bytes) in [
+        (4, 800_000_000, 400_000_000),
+        (8, 400_000_000, 400_000_000),
+        (16, 200_000_000, 400_000_000),
+        (4, 1_400_000_000, 700_000_000),
+        (8, 800_000_000, 800_000_000),
+        (32, 200_000_000, 800_000_000),
+    ] {
         let plan = TransferPlan::new(channels, rate);
         assert_eq!(plan.size, 1024 * 1024);
         assert_eq!(plan.count, 16);
-        assert_eq!(plan.expected_rate_bytes, 400_000_000);
+        assert_eq!(plan.expected_rate_bytes, bytes);
         assert_eq!(plan.timeout.as_millis(), 50);
     }
 }

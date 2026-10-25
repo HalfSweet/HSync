@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 
 use hsync_driver::mock::MockDevice;
 use hsync_driver::usb::UsbError;
+use hsync_slogic::Model;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Event {
@@ -27,6 +28,8 @@ pub struct AuxDevice {
     pub starts: usize,
     pub events: Vec<Event>,
     pub clock_mhz: Vec<u16>,
+    /// The clock slot the rate command selected last.
+    pub clock_index: u16,
     pub busy_polls: usize,
     pub never_ready: bool,
     pub short_read: bool,
@@ -58,6 +61,7 @@ impl AuxDevice {
             starts: 0,
             events: Vec::new(),
             clock_mhz: vec![800],
+            clock_index: 0,
             busy_polls: 0,
             never_ready: false,
             short_read: false,
@@ -75,6 +79,7 @@ impl AuxDevice {
 
     fn select_clock(&mut self, index: u16) {
         let mhz = self.clock_mhz.get(usize::from(index)).copied().unwrap_or(0);
+        self.clock_index = index;
         self.payload[..2].copy_from_slice(&index.to_le_bytes());
         self.payload[2..4].copy_from_slice(&mhz.to_le_bytes());
     }
@@ -167,7 +172,7 @@ impl MockDevice for AuxDevice {
     }
 
     fn bulk_out(&mut self, _endpoint: u8, _data: &[u8]) -> Result<(), UsbError> {
-        panic!("SLogic16U3 has no bulk OUT commands")
+        panic!("the SLogic U3 models have no bulk OUT commands")
     }
 
     fn bulk_in(&mut self, endpoint: u8, _length: usize) -> Option<Result<Vec<u8>, UsbError>> {
@@ -193,9 +198,9 @@ impl MockDevice for AuxDevice {
     }
 }
 
-/// Packs physical-channel masks in the official wire order, including the discarded head.
-pub fn sample_bytes(channels: u8, samples: &[u16]) -> Vec<u8> {
-    let mut bytes = vec![0xff; 4];
+/// Packs physical-channel masks in the official wire order, after the model's discarded head.
+pub fn sample_bytes(model: &Model, channels: u8, samples: &[u32]) -> Vec<u8> {
+    let mut bytes = vec![0xff; model.head_bytes];
     match channels {
         4 => {
             assert!(samples.len().is_multiple_of(2));
@@ -208,7 +213,12 @@ pub fn sample_bytes(channels: u8, samples: &[u16]) -> Vec<u8> {
             );
         }
         8 => bytes.extend(samples.iter().map(|&sample| sample as u8)),
-        16 => bytes.extend(samples.iter().flat_map(|sample| sample.to_le_bytes())),
+        16 => bytes.extend(
+            samples
+                .iter()
+                .flat_map(|&sample| (sample as u16).to_le_bytes()),
+        ),
+        32 => bytes.extend(samples.iter().flat_map(|sample| sample.to_le_bytes())),
         _ => panic!("invalid wire mode"),
     }
     bytes
