@@ -656,6 +656,71 @@ fn offers_the_modes_of_the_model() {
     assert_eq!(rates(&device).last(), Some(&200_000_000));
 }
 
+/// `channels`, `leading`, `span` and `max_samplerate` of each rate tier.
+fn tiers(device: &PxlogicDevice) -> Vec<(u16, bool, u16, u64)> {
+    device
+        .rate_tiers()
+        .iter()
+        .map(|tier| {
+            assert_eq!(tier.samplerates.last(), Some(&tier.max_samplerate));
+            (tier.channels, tier.leading, tier.span, tier.max_samplerate)
+        })
+        .collect()
+}
+
+#[test]
+fn offers_channel_modes_as_rate_tiers() {
+    // A PX-Logic 16 Pro over USB 3.0.
+    let (_, mut device) = open_model(FakePx::default(), 1, SCANNED_SUPER);
+    assert_eq!(
+        tiers(&device),
+        [(8, true, 8, 1_000_000_000), (16, true, 16, 500_000_000)]
+    );
+    assert_eq!(device.rate_tier(), Some(1));
+
+    set(
+        &mut device,
+        OptionKey::OperationMode,
+        OptionValue::Choice("stream".into()),
+    );
+    assert_eq!(
+        tiers(&device),
+        [
+            (2, true, 2, 1_000_000_000),
+            (4, true, 4, 500_000_000),
+            (8, true, 8, 250_000_000),
+            (16, true, 16, 125_000_000),
+        ]
+    );
+    assert_eq!(device.rate_tier(), Some(3));
+
+    device.select_rate_tier(1, &[0, 3]).expect("4 channels");
+    assert_eq!(device.rate_tier(), Some(1));
+    assert_eq!(device.channel_count(), 4);
+    assert_eq!(device.enabled_channels(), [0, 3]);
+    assert_eq!(device.settings().samplerate, 125_000_000);
+
+    set(
+        &mut device,
+        OptionKey::Samplerate,
+        OptionValue::Integer(500_000_000),
+    );
+    for (index, channels) in [(0, vec![2]), (4, vec![0])] {
+        assert!(device.select_rate_tier(index, &channels).is_err());
+        assert_eq!(device.rate_tier(), Some(1));
+        assert_eq!(device.enabled_channels(), [0, 3]);
+    }
+    device
+        .select_rate_tier(3, &[])
+        .expect("16 channels, none on");
+    assert!(device.enabled_channels().is_empty());
+    assert_eq!(device.settings().samplerate, 125_000_000);
+    device.set_enabled_channels(&[1, 15]).expect("two channels");
+    assert_eq!(device.enabled_channels(), [1, 15]);
+    assert!(device.set_enabled_channels(&[16]).is_err());
+    assert_eq!(device.enabled_channels(), [1, 15]);
+}
+
 #[test]
 fn holds_more_samples_on_fewer_channels() {
     let (_, mut device) = open(FakePx::default());
