@@ -2,6 +2,8 @@
  * Waveform renderers draw the canvas layer of the timeline: grid lines and
  * traces. Canvas2D is the baseline; a WebGPU renderer can implement the same interface.
  */
+import type { VerticalScale } from '@/analog/scale'
+import type { AnalogBinsResult } from '@/ipc/analogBins'
 import type { BinsResult } from '@/ipc/bins'
 import type { Viewport } from '@/timeline/viewport'
 
@@ -10,6 +12,8 @@ import type { ColumnRun } from './shape'
 /** Colours resolved from the design tokens of the current theme. */
 export interface RenderTokens {
   grid: string
+  /** The 0 V line of analog rows. */
+  axis: string
   /** Line colour of each of the eight wire colours. */
   wires: string[]
   /** Fill of the high level of each wire colour (the line colour at its wash opacity). */
@@ -32,6 +36,18 @@ export interface TraceDraw {
   wash: boolean
 }
 
+/** An analog channel's row: its graticule, 0 V line and curve (DESIGN.md §6.2). */
+export interface AnalogDraw {
+  /** Top of the row in canvas CSS pixels. */
+  top: number
+  height: number
+  wire: number
+  /** Lowest and highest volts of each column of {@link FrameDescriptor.analogBins}; `null`
+   * before they arrive. */
+  columns: Float32Array | null
+  scale: VerticalScale
+}
+
 export interface FrameDescriptor {
   /** Canvas size in CSS pixels. */
   width: number
@@ -47,6 +63,9 @@ export interface FrameDescriptor {
   /** The columns every trace's cells refer to. */
   bins: BinsResult | null
   traces: TraceDraw[]
+  /** The columns every analog row's columns refer to. */
+  analogBins: AnalogBinsResult | null
+  analog: AnalogDraw[]
 }
 
 export interface WaveformRenderer {

@@ -20,8 +20,12 @@ const stream = useStreamStore()
 const decode = useDecodeStore()
 const showing = computed(() => stream.shown && stream.decoder === props.group.decoder)
 
-/** The decoder's label, else the name of its node type; the unnamed group has its own. */
+/** Groups of channels no decoder reads: "Other channels" and the analog channels. */
+const plain = computed(() => props.group.unnamed || props.group.analog === true)
+
+/** The decoder's label, else the name of its node type; the plain groups have their own. */
 const title = computed(() => {
+  if (props.group.analog) return t('group.analog')
   if (props.group.unnamed) return t('group.unnamed')
   if (props.group.title) return props.group.title
   return copy.typeName(props.group.type ?? '')
@@ -29,7 +33,7 @@ const title = computed(() => {
 
 /** A decoder's square is neutral: colour on the timeline says what an event is (§3.2). */
 const square = computed(() =>
-  props.group.unnamed ? 'shadow-[inset_0_0_0_1px_var(--trace-2)]' : 'bg-ink-2',
+  plain.value ? 'shadow-[inset_0_0_0_1px_var(--trace-2)]' : 'bg-ink-2',
 )
 
 const clockChannel = computed(
@@ -40,7 +44,7 @@ const clock = useClockFrequency(clockChannel)
 
 /** I²C shows its nominal bus speed with the measured clock as a tip; SPI the measured clock. */
 const meta = computed<{ text: string; tip?: string } | null>(() => {
-  if (props.group.unnamed) return { text: String(props.group.channels.length) }
+  if (plain.value) return { text: String(props.group.channels.length) }
   if (props.group.kind === 'uart') {
     const format = uartFormat(props.group.options)
     return format ? { text: format } : null
@@ -69,9 +73,7 @@ const meta = computed<{ text: string; tip?: string } | null>(() => {
       />
     </button>
     <i class="size-2 flex-none rounded-2" :class="square" />
-    <span class="truncate" :class="group.unnamed ? 'font-medium' : 'font-semibold'">{{
-      title
-    }}</span>
+    <span class="truncate" :class="plain ? 'font-medium' : 'font-semibold'">{{ title }}</span>
     <button
       v-if="!group.unnamed && group.decoder !== null"
       class="ml-auto hidden h-[18px] w-5 flex-none items-center justify-center rounded-4 text-ink-2 group-hover/label:inline-flex hover:bg-hover hover:text-ink focus-visible:inline-flex max-[640px]:!hidden"
@@ -94,7 +96,7 @@ const meta = computed<{ text: string; tip?: string } | null>(() => {
     <span
       v-if="meta"
       class="text-small text-ink-3 tabular-nums max-[640px]:hidden"
-      :class="group.unnamed && 'ml-auto'"
+      :class="plain && 'ml-auto'"
       :title="meta.tip"
     >
       {{ meta.text }}

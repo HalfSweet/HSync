@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 
+import type { VerticalScale } from '@/analog/scale'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
 
 /**
- * Per-channel settings the user makes on the timeline: trigger conditions, colours, row heights
- * and open groups.
+ * Per-channel settings the user makes on the timeline: trigger conditions, colours, row heights,
+ * analog channels' scales and open groups.
  */
 export const useChannelsStore = defineStore('channels', () => {
   /** Trigger condition by channel index; channels without one are absent. */
@@ -14,6 +15,8 @@ export const useChannelsStore = defineStore('channels', () => {
   const colours = ref<Partial<Record<number, number>>>({})
   /** Row height in CSS pixels the user dragged by channel index; others take their kind's. */
   const heights = ref<Partial<Record<number, number>>>({})
+  /** Vertical scale the user set by analog channel index; others fit their samples. */
+  const scales = ref<Partial<Record<number, VerticalScale>>>({})
   /** Collapsed state by group key; groups not listed use their default. */
   const collapsed = ref<Record<string, boolean>>({})
 
@@ -56,6 +59,14 @@ export const useChannelsStore = defineStore('channels', () => {
     heights.value = next
   }
 
+  /** Sets an analog channel's scale, or with `null` has it fit its samples again. */
+  function setScale(index: number, scale: VerticalScale | null): void {
+    const next = { ...scales.value }
+    if (scale === null) delete next[index]
+    else next[index] = scale
+    scales.value = next
+  }
+
   function isCollapsed(key: string, fallback = false): boolean {
     return collapsed.value[key] ?? fallback
   }
@@ -74,6 +85,8 @@ export const useChannelsStore = defineStore('channels', () => {
     setColour,
     heights,
     setHeight,
+    scales,
+    setScale,
     collapsed,
     isCollapsed,
     toggleGroup,

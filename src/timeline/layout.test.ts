@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import fixture from '@/ipc/mock/fixtures/protocol-demo.json'
 import decoded from '@/ipc/mock/fixtures/protocol-uiharu.json'
 
-import { groupChannels, uartFormat } from './groups'
+import { analogGroup, groupChannels, uartFormat } from './groups'
 import {
   clampTraceHeight,
   collapsedByDefault,
@@ -91,6 +91,22 @@ describe('groupChannels', () => {
     expect(parallel[0]?.type).toBe('parallel')
   })
 
+  it('puts the analog channels in a group of their own, numbered A0 upwards', () => {
+    expect(analogGroup([])).toBeNull()
+    const analog = analogGroup(
+      [
+        { index: 0x8000, name: 'A0' },
+        { index: 0x8001, name: 'Supply' },
+      ],
+      { 0x8001: 5 },
+    )
+    expect(analog).toMatchObject({ key: 'analog', analog: true, unnamed: false, decoder: null })
+    expect(analog?.channels).toEqual([
+      { index: 0x8000, label: 'A0', numeric: true, wire: 0, analog: true },
+      { index: 0x8001, label: 'Supply', numeric: false, wire: 5, analog: true },
+    ])
+  })
+
   it('formats the UART line settings', () => {
     expect(uartFormat(groups[1]?.options ?? {})).toBe('115200 8N1')
     expect(uartFormat({ baud: 9600, data_bits: 7, parity: 'even', stop_bits: 'two' })).toBe(
@@ -163,6 +179,32 @@ describe('layoutRows', () => {
     expect(clampTraceHeight(41.6, COMFORTABLE_METRICS)).toBe(42)
     expect(clampTraceHeight(-20, COMFORTABLE_METRICS)).toBe(COMFORTABLE_METRICS.traceNarrow)
     expect(clampTraceHeight(Number.POSITIVE_INFINITY, COMFORTABLE_METRICS)).toBe(MAX_TRACE_HEIGHT)
+  })
+
+  it('lays analog channels out on taller rows that resize like the others', () => {
+    const analog = analogGroup([
+      { index: 0x8000, name: 'A0' },
+      { index: 0x8001, name: 'A1' },
+    ])
+    const rows = layoutRows(
+      [analog!],
+      COMFORTABLE_METRICS,
+      () => false,
+      undefined,
+      (channel) => (channel.index === 0x8001 ? 120 : undefined),
+    ).rows
+    expect(rows.map((row) => [row.kind, row.height])).toEqual([
+      ['gap', COMFORTABLE_METRICS.gap],
+      ['header', COMFORTABLE_METRICS.lane],
+      ['analog', COMFORTABLE_METRICS.analog],
+      ['analog', 120],
+      ['gap', COMFORTABLE_METRICS.gap],
+    ])
+    const fitted = fitRows({ rows, height: 0 }, COMFORTABLE_METRICS, 1000)
+    expect(fitted.rows.filter((row) => row.kind === 'analog').map((row) => row.height)).toEqual([
+      MAX_TRACE_HEIGHT,
+      MAX_TRACE_HEIGHT,
+    ])
   })
 
   it('finds the rows in view', () => {

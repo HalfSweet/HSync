@@ -11,7 +11,7 @@ import type { ImportRequest } from '@/ipc/bindings/ImportRequest'
 import type { LiveStatus } from '@/ipc/bindings/LiveStatus'
 import type { WaveformSummary } from '@/ipc/bindings/WaveformSummary'
 import { toUiError, type UiError } from '@/ipc/errors'
-import { groupChannels, type ChannelGroup } from '@/timeline/groups'
+import { analogGroup, groupChannels, type ChannelGroup } from '@/timeline/groups'
 
 import { useChannelsStore } from './channels'
 import { useDeviceStore } from './device'
@@ -128,7 +128,13 @@ export const useCaptureStore = defineStore('capture', () => {
   const triggered = computed(() => summary.value?.info.triggerSample != null)
   const duration = computed(() => (samplerate.value > 0 ? sampleCount.value / samplerate.value : 0))
   const channelNames = computed(
-    () => new Map(summary.value?.channels.map((channel) => [channel.index, channel.name]) ?? []),
+    () =>
+      new Map(
+        [...(summary.value?.channels ?? []), ...(summary.value?.analog ?? [])].map((channel) => [
+          channel.index,
+          channel.name,
+        ]),
+      ),
   )
   /** Channels grouped by decoder, in timeline order. */
   const groups = computed<ChannelGroup[]>(() =>
@@ -142,9 +148,18 @@ export const useCaptureStore = defineStore('capture', () => {
       : [],
   )
 
+  /** The analog channels' group, after the others on the timeline; `null` without any. */
+  const analog = computed<ChannelGroup | null>(() =>
+    summary.value ? analogGroup(summary.value.analog, useChannelsStore().colours) : null,
+  )
+  /** Every group the timeline shows, in its order. */
+  const timelineGroups = computed<ChannelGroup[]>(() =>
+    analog.value ? [...groups.value, analog.value] : groups.value,
+  )
+
   /** How the timeline labels a channel: its decoder role (SDA, RX…) or its own name. */
   function channelLabel(index: number): string {
-    for (const group of groups.value) {
+    for (const group of timelineGroups.value) {
       const channel = group.channels.find((candidate) => candidate.index === index)
       if (channel) return channel.label
     }
@@ -449,6 +464,7 @@ export const useCaptureStore = defineStore('capture', () => {
     duration,
     channelNames,
     groups,
+    timelineGroups,
     channelLabel,
     timeOf,
     sampleAt,

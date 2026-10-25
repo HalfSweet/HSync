@@ -23,6 +23,7 @@ function read(): TimelineMetrics {
     lane: px('--h-lane', FALLBACK.lane),
     trace: px('--h-tr', FALLBACK.trace),
     traceNarrow: px('--h-trc', FALLBACK.traceNarrow),
+    analog: px('--h-an', FALLBACK.analog),
     gap: px('--gap', FALLBACK.gap),
     label: px('--lab', FALLBACK.label),
     ruler: px('--h-ruler', FALLBACK.ruler),
