@@ -20,9 +20,11 @@ export function durationChoices(samplerate: number, maxSamples: number): number[
     choices.push(duration)
     const unit = duration >= DAY ? DAY : duration >= HOUR ? HOUR : duration >= MINUTE ? MINUTE : 1
     const decade = 10 ** Math.floor(Math.log10(duration / unit))
-    if (duration > 5 * decade * unit) duration = 5 * decade * unit
-    else if (duration > 2 * decade * unit) duration = 2 * decade * unit
-    else if (duration > decade * unit) duration = decade * unit
+    // Past a step by more than rounding: 5 × 1e-6 falls just short of the 5 µs it should be.
+    const past = (step: number) => duration > step * decade * unit * (1 + 1e-9)
+    if (past(5)) duration = 5 * decade * unit
+    else if (past(2)) duration = 2 * decade * unit
+    else if (past(1)) duration = decade * unit
     else if (decade > 1) duration *= 0.5
     else if (unit === DAY) duration = 20 * HOUR
     else if (unit === HOUR) duration = 50 * MINUTE

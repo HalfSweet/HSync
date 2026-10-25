@@ -18,6 +18,12 @@ describe('durationChoices', () => {
     expect(choices.slice(0, 10)).toEqual([7200, 3600, 3000, 1200, 600, 300, 120, 60, 50, 20])
   })
 
+  it('takes each step once at microseconds', () => {
+    const choices = durationChoices(800_000_000, 2 ** 34)
+    expect(choices.slice(-4)).toEqual([2e-5, 1e-5, 5e-6, 2e-6])
+    expect(new Set(choices).size).toBe(choices.length)
+  })
+
   it('offers nothing below the minimum capture', () => {
     expect(durationChoices(1_000_000, 512)).toEqual([])
     expect(durationChoices(0, 1 << 20)).toEqual([])
