@@ -26,7 +26,7 @@ Capture, trigger, decode and measure, with one app for logic analyzers from seve
   <img src="assets/screenshots/en-US/hero-light.webp" alt="HSync showing a capture of I²C, UART, SPI and CAN-FD buses, with decoded transfers above their waveforms and the I²C data stream beside them">
 </picture>
 
-HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic and PXLogic's PX-Logic analyzers, with experimental support for Sipeed's SLogic16U3 ([full list](#supported-devices)), and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, while the capture is still running, and dozens of protocol decoders are a search away. HSync saves captures in its own `.hsync` format, opens and exports DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware and the decoders.
+HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic, PXLogic's PX-Logic and Sipeed's SLogic analyzers ([full list](#supported-devices)), and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, while the capture is still running, and dozens of protocol decoders are a search away. HSync saves captures in its own `.hsync` format, opens and exports DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware and the decoders.
 
 No hardware at hand? HSync opens its built-in **Demo device**, which plays back a recording of four buses, so you can try everything straight away.
 
@@ -34,7 +34,7 @@ No hardware at hand? HSync opens its built-in **Demo device**, which plays back 
 
 ### Capture
 
-- **Logic analyzers from several makers**: every DreamSourceLab DSLogic, ALIENTEK's ATK-Logic DL16 and DL16 Plus, PXLogic's PX-Logic 32, 16 Pro, 16 Plus and 16 Base, and experimental Sipeed SLogic16U3 support ([full list](#supported-devices)). HSync drives each one the way its maker's own app does, and loads the firmware and FPGA bitstreams they need by itself.
+- **Logic analyzers from several makers**: every DreamSourceLab DSLogic, ALIENTEK's ATK-Logic DL16 and DL16 Plus, PXLogic's PX-Logic 32, 16 Pro, 16 Plus and 16 Base, and Sipeed's SLogic16U3 and SLogic32U3 ([full list](#supported-devices)). HSync drives each one the way its maker's own app does, and loads the firmware and FPGA bitstreams they need by itself.
 - **Buffer and Stream modes**, with RLE compression for captures longer than the device's memory where the device has it, and a warning when a capture would need more than half of your computer's memory.
 - **Single, Repeat, Loop and Instant capture.** Repeat keeps the last complete capture on screen while the next one records in the background; Loop keeps capturing and holds on to the most recent stretch.
 - **Device options** for the threshold voltage, glitch filter, external clock, external trigger input and more, remembered for next time.
@@ -116,9 +116,9 @@ The firmware and the protocol decoders are included; you don't need any maker's 
   SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5237", MODE="0666"
   SUBSYSTEM=="usb", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="05dc", ATTRS{manufacturer}=="PX*", MODE="0666"
   EOF
-  # Sipeed SLogic16U3
+  # Sipeed SLogic
   sudo tee /etc/udev/rules.d/60-sipeed-slogic.rules > /dev/null <<'EOF'
-  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="3031", MODE="0666"
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="3031|3032", MODE="0666"
   EOF
   sudo udevadm control --reload-rules
   sudo udevadm trigger
@@ -142,28 +142,29 @@ The [user guide](docs/user-guide.md) covers every feature and keyboard shortcut.
 
 ## Supported devices
 
-| Maker          | Device                    | Channels | USB      |
-| -------------- | ------------------------- | -------- | -------- |
-| DreamSourceLab | DSLogic                   | 16       | 2.0      |
-| DreamSourceLab | DSLogic Pro               | 16       | 2.0      |
-| DreamSourceLab | DSLogic Plus              | 16       | 2.0      |
-| DreamSourceLab | DSLogic Basic             | 16       | 2.0      |
-| DreamSourceLab | DSLogic U2Basic           | 16       | 2.0      |
-| DreamSourceLab | DSLogic U2Pro16           | 16       | 2.0      |
-| DreamSourceLab | DSLogic U3Pro16           | 16       | 3.0      |
-| DreamSourceLab | DSLogic U3Pro32           | 32       | 3.0      |
-| ALIENTEK       | ATK-Logic DL16            | 16       | 2.0      |
-| ALIENTEK       | ATK-Logic DL16 Plus       | 16       | 2.0      |
-| PXLogic        | PX-Logic 32               | 32       | 3.0      |
-| PXLogic        | PX-Logic 16 Pro           | 16       | 3.0      |
-| PXLogic        | PX-Logic 16 Plus          | 16       | 3.0      |
-| PXLogic        | PX-Logic 16 Base          | 16       | 3.0      |
-| Sipeed         | SLogic16U3 (experimental) | 16       | 3.0      |
-| —              | Demo device               | 16       | built in |
+| Maker          | Device              | Channels | USB       |
+| -------------- | ------------------- | -------- | --------- |
+| DreamSourceLab | DSLogic             | 16       | 2.0       |
+| DreamSourceLab | DSLogic Pro         | 16       | 2.0       |
+| DreamSourceLab | DSLogic Plus        | 16       | 2.0       |
+| DreamSourceLab | DSLogic Basic       | 16       | 2.0       |
+| DreamSourceLab | DSLogic U2Basic     | 16       | 2.0       |
+| DreamSourceLab | DSLogic U2Pro16     | 16       | 2.0       |
+| DreamSourceLab | DSLogic U3Pro16     | 16       | 3.0       |
+| DreamSourceLab | DSLogic U3Pro32     | 32       | 3.0       |
+| ALIENTEK       | ATK-Logic DL16      | 16       | 2.0       |
+| ALIENTEK       | ATK-Logic DL16 Plus | 16       | 2.0       |
+| PXLogic        | PX-Logic 32         | 32       | 3.0       |
+| PXLogic        | PX-Logic 16 Pro     | 16       | 3.0       |
+| PXLogic        | PX-Logic 16 Plus    | 16       | 3.0       |
+| PXLogic        | PX-Logic 16 Base    | 16       | 3.0       |
+| Sipeed         | SLogic16U3          | 16       | 3.0       |
+| Sipeed         | SLogic32U3          | 32       | 3.2 Gen 2 |
+| —              | Demo device         | 16       | built in  |
 
 HSync talks to each device the way its maker's app does, byte for byte: to DSLogic devices like DSView, to ATK-Logic devices like ALIENTEK's ATK-Logic app and to PX-Logic devices like PXView. It has been tested on a DSLogic U2Pro16; if you use another model, please [let us know how it went](https://github.com/HalfSweet/HSync/issues/new). DSCope oscilloscopes, DSView's oscilloscope and data acquisition modes, the PWM outputs of ATK-Logic devices, and the trigger and PWM outputs of PX-Logic devices aren't supported yet. To update the firmware of an ATK-Logic device, use ALIENTEK's ATK-Logic app. When HSync opens a PX-Logic device that runs another firmware version, it first writes the firmware of PXView 1.6.5 into the device, as PXView does with its own.
 
-The SLogic16U3 port follows [Sipeed's official libsigrok driver](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer) using Rust and nusb. It supports Stream capture, simple software triggers, Loop capture and a 0–6 V threshold. With USB 3.0, the maximum advertised sample rate is 200 MHz across 16 channels, 400 MHz when only D0–D7 are used, or 800 MHz when only D0–D3 are used; USB 2.0 limits those rates to 20, 40 and 80 MHz. It uses the device's installed firmware and does not flash it. This experimental port has passed mock tests and real USB 3.0 smoke tests: three consecutive 65,536-sample captures at 5 MHz in each of the 4-, 8- and 16-channel modes, plus short captures configured at their 800, 400 and 200 MHz limits. Channel mapping, signal timing, sustained high-rate throughput and USB 2.0 still need hardware validation. Other SLogic models and bootloader mode are not supported. See the [connection and capture notes](docs/user-guide.md#sipeed-slogic16u3).
+The SLogic16U3 and SLogic32U3 follow [Sipeed's official driver](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer), ported to Rust and nusb. They capture in Stream mode, with simple software triggers, Loop capture and a 0–6 V threshold, and sample faster the fewer high channels are in use. Over USB 3.0 the SLogic16U3 reaches 200 MHz across 16 channels, 400 MHz on D0–D7 and 800 MHz on D0–D3. On a 10 Gbps USB port the SLogic32U3 reaches 200 MHz across 32 channels, 400 MHz on D0–D15, 800 MHz on D0–D7 and 1400 MHz on D0–D3; on a 5 Gbps port, 100, 200, 400 and 800 MHz. HSync uses the firmware installed on the analyzer and doesn't flash it; the SLogic32U3 needs firmware S/N 202610150528 or newer ([how to update it](https://wiki.sipeed.com/hardware/en/logic_analyzer/slogic32u3/Hardware_Specification.html#Firmware-Update)). The SLogic Combo 8, the SLogic32U3's ADC module and bootloader mode aren't supported. See the [connection and capture notes](docs/user-guide.md#sipeed-slogic).
 
 ## Questions
 

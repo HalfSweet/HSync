@@ -26,7 +26,7 @@
   <img src="assets/screenshots/zh-CN/hero-light.webp" alt="HSync 显示一段包含 I²C、UART、SPI 与 CAN-FD 总线的采集：解码结果位于对应波形上方，右侧是 I²C 的数据流">
 </picture>
 
-HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic 与 PXLogic 的 PX-Logic 系列，并实验性支持矽速（Sipeed）的 SLogic16U3（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，采集还没结束就能看到，数十种协议解码器搜索即用。HSync 以自己的 `.hsync` 格式保存采集，能打开、导出 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件与解码器。
+HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 DreamSourceLab 的 DSLogic、正点原子（ALIENTEK）的 ATK-Logic、PXLogic 的 PX-Logic 与矽速（Sipeed）的 SLogic 系列（[完整列表](#支持的设备)），每台设备都能用上同样的功能。接上设备，按下「采集」：I²C、UART、SPI 与 CAN 的解码结果就显示在对应波形的正上方，采集还没结束就能看到，数十种协议解码器搜索即用。HSync 以自己的 `.hsync` 格式保存采集，能打开、导出 DSView 的 `.dsl` 文件，也能导入 VCD、FST、GHW 波形，以前的采集照常可用；运行所需的一切都已打包在内：设备固件与解码器。
 
 手边没有硬件？HSync 会打开内置的「演示设备」，回放一段包含四种总线的采集数据，所有功能都可以马上试用。
 
@@ -34,7 +34,7 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 
 ### 采集
 
-- **支持多家厂商的逻辑分析仪**：全部 DreamSourceLab DSLogic 型号、正点原子 ATK-Logic DL16 与 DL16 Plus、PXLogic 的 PX-Logic 32、16 Pro、16 Plus 与 16 Base，以及实验性支持的矽速 SLogic16U3（[完整列表](#支持的设备)）。HSync 按各厂商自家软件的方式驱动设备，所需的固件与 FPGA 位流自动加载。
+- **支持多家厂商的逻辑分析仪**：全部 DreamSourceLab DSLogic 型号、正点原子 ATK-Logic DL16 与 DL16 Plus、PXLogic 的 PX-Logic 32、16 Pro、16 Plus 与 16 Base，以及矽速 SLogic16U3 与 SLogic32U3（[完整列表](#支持的设备)）。HSync 按各厂商自家软件的方式驱动设备，所需的固件与 FPGA 位流自动加载。
 - **Buffer 与 Stream 两种模式**：设备支持时，可启用 RLE 压缩让时长超出设备内存；所需内存超过本机一半时会提前提醒。
 - **单次、重复、循环、即时四种采集方式。** 重复采集时，屏幕保留上一次的完整结果，新的一次在后台采集；循环采集持续进行，只保留最新的一段。
 - **设备选项**：阈值电压、毛刺滤波、外部时钟、外部触发输入等，设置会被记住。
@@ -116,9 +116,9 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
   SUBSYSTEM=="usb", ATTRS{idVendor}=="1a86", ATTRS{idProduct}=="5237", MODE="0666"
   SUBSYSTEM=="usb", ATTRS{idVendor}=="16c0", ATTRS{idProduct}=="05dc", ATTRS{manufacturer}=="PX*", MODE="0666"
   EOF
-  # 矽速 SLogic16U3
+  # 矽速 SLogic
   sudo tee /etc/udev/rules.d/60-sipeed-slogic.rules > /dev/null <<'EOF'
-  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="3031", MODE="0666"
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="3031|3032", MODE="0666"
   EOF
   sudo udevadm control --reload-rules
   sudo udevadm trigger
@@ -142,28 +142,29 @@ HSync 每次启动时检查新版本（可在「设置 → 行为」里关闭）
 
 ## 支持的设备
 
-| 厂商           | 设备                 | 通道数 | USB  |
-| -------------- | -------------------- | ------ | ---- |
-| DreamSourceLab | DSLogic              | 16     | 2.0  |
-| DreamSourceLab | DSLogic Pro          | 16     | 2.0  |
-| DreamSourceLab | DSLogic Plus         | 16     | 2.0  |
-| DreamSourceLab | DSLogic Basic        | 16     | 2.0  |
-| DreamSourceLab | DSLogic U2Basic      | 16     | 2.0  |
-| DreamSourceLab | DSLogic U2Pro16      | 16     | 2.0  |
-| DreamSourceLab | DSLogic U3Pro16      | 16     | 3.0  |
-| DreamSourceLab | DSLogic U3Pro32      | 32     | 3.0  |
-| 正点原子       | ATK-Logic DL16       | 16     | 2.0  |
-| 正点原子       | ATK-Logic DL16 Plus  | 16     | 2.0  |
-| PXLogic        | PX-Logic 32          | 32     | 3.0  |
-| PXLogic        | PX-Logic 16 Pro      | 16     | 3.0  |
-| PXLogic        | PX-Logic 16 Plus     | 16     | 3.0  |
-| PXLogic        | PX-Logic 16 Base     | 16     | 3.0  |
-| 矽速           | SLogic16U3（实验性） | 16     | 3.0  |
-| —              | 演示设备             | 16     | 内置 |
+| 厂商           | 设备                | 通道数 | USB       |
+| -------------- | ------------------- | ------ | --------- |
+| DreamSourceLab | DSLogic             | 16     | 2.0       |
+| DreamSourceLab | DSLogic Pro         | 16     | 2.0       |
+| DreamSourceLab | DSLogic Plus        | 16     | 2.0       |
+| DreamSourceLab | DSLogic Basic       | 16     | 2.0       |
+| DreamSourceLab | DSLogic U2Basic     | 16     | 2.0       |
+| DreamSourceLab | DSLogic U2Pro16     | 16     | 2.0       |
+| DreamSourceLab | DSLogic U3Pro16     | 16     | 3.0       |
+| DreamSourceLab | DSLogic U3Pro32     | 32     | 3.0       |
+| 正点原子       | ATK-Logic DL16      | 16     | 2.0       |
+| 正点原子       | ATK-Logic DL16 Plus | 16     | 2.0       |
+| PXLogic        | PX-Logic 32         | 32     | 3.0       |
+| PXLogic        | PX-Logic 16 Pro     | 16     | 3.0       |
+| PXLogic        | PX-Logic 16 Plus    | 16     | 3.0       |
+| PXLogic        | PX-Logic 16 Base    | 16     | 3.0       |
+| 矽速           | SLogic16U3          | 16     | 3.0       |
+| 矽速           | SLogic32U3          | 32     | 3.2 Gen 2 |
+| —              | 演示设备            | 16     | 内置      |
 
 HSync 与每台设备的通信方式都与其厂商的软件逐字节一致：DSLogic 同 DSView，ATK-Logic 同正点原子的 ATK-Logic 软件，PX-Logic 同 PXView。已在 DSLogic U2Pro16 上实测；如果你在用其他型号，欢迎[反馈使用情况](https://github.com/HalfSweet/HSync/issues/new)。DSCope 示波器、DSView 的示波器与数据采集模式、ATK-Logic 设备的 PWM 输出，以及 PX-Logic 设备的触发输出与 PWM 输出暂不支持。ATK-Logic 设备的固件请用正点原子的 ATK-Logic 软件更新。HSync 打开固件版本不同的 PX-Logic 设备时，会先把 PXView 1.6.5 的固件写入设备，与 PXView 对待自家固件的做法相同。
 
-SLogic16U3 驱动使用 Rust 与 nusb，参照[矽速官方的 libsigrok 驱动](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer)移植。支持 Stream 采集、简单软件触发、循环采集和 0–6 V 阈值。USB 3.0 下，设备标称 16 通道最高 200 MHz，仅使用 D0–D7 时最高 400 MHz，仅使用 D0–D3 时最高 800 MHz；USB 2.0 下分别限为 20、40 和 80 MHz。驱动使用设备已安装的固件，不会刷写固件。目前属于实验性支持，已通过模拟测试和真机 USB 3.0 基础测试：4、8、16 通道模式下各以 5 MHz 连续采集三次，每次 65,536 个样本；另分别按 800、400、200 MHz 上限完成短采集。通道映射、信号时序、高采样率持续吞吐量和 USB 2.0 仍待真机验证。其他 SLogic 型号及引导加载模式暂不支持。详见[连接与采集说明（英文）](docs/user-guide.md#sipeed-slogic16u3)。
+SLogic16U3 与 SLogic32U3 的驱动使用 Rust 与 nusb，参照[矽速官方驱动](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer)移植。支持 Stream 采集、简单软件触发、循环采集和 0–6 V 阈值，用到的高位通道越少，采样率越高。SLogic16U3 在 USB 3.0 下 16 通道最高 200 MHz，仅用 D0–D7 时 400 MHz，仅用 D0–D3 时 800 MHz。SLogic32U3 接 10 Gbps USB 端口时 32 通道最高 200 MHz，仅用 D0–D15 时 400 MHz，仅用 D0–D7 时 800 MHz，仅用 D0–D3 时 1400 MHz；接 5 Gbps 端口时依次为 100、200、400 和 800 MHz。HSync 使用设备已安装的固件，不会刷写固件；SLogic32U3 需要 S/N 202610150528 或更新的固件（[升级方法](https://wiki.sipeed.com/hardware/zh/logic_analyzer/slogic32u3/Hardware_Specification.html#%E6%9B%B4%E6%96%B0%E5%9B%BA%E4%BB%B6)）。SLogic Combo 8、SLogic32U3 的 ADC 模组及引导加载模式暂不支持。详见[连接与采集说明（英文）](docs/user-guide.md#sipeed-slogic)。
 
 ## 常见问题
 
