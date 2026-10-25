@@ -166,6 +166,7 @@ fn capture_once(
             Ok(Packet::Start {
                 channels,
                 samplerate,
+                ..
             }) => {
                 println!("start: {} channels at {samplerate} Hz", channels.len());
                 let new = LogicCapture::new(samplerate, channels);
@@ -181,7 +182,7 @@ fn capture_once(
             }
             Ok(Packet::Trigger { sample }) => println!("trigger: sample {sample}"),
             Ok(Packet::Overflow) => overflow = true,
-            Ok(Packet::Progress { .. }) => {}
+            Ok(Packet::Progress { .. } | Packet::Analog(_)) => {}
             Ok(Packet::End(reason)) => break Ok(reason),
             Err(crossbeam_channel::RecvTimeoutError::Timeout) => {}
             Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {

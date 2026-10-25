@@ -71,6 +71,7 @@ pub(crate) fn start(
             let reason = match worker.send(Packet::Start {
                 channels,
                 samplerate,
+                analog: Vec::new(),
             }) {
                 Ok(()) => worker.receive(),
                 Err(reason) => reason,

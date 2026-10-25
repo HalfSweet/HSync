@@ -417,7 +417,8 @@ fn captures_in_stream_mode() {
         packets[0],
         Packet::Start {
             channels: (0..16).collect(),
-            samplerate: 1_000_000
+            samplerate: 1_000_000,
+            analog: Vec::new(),
         }
     );
     assert_eq!(packets[1], Packet::Trigger { sample: 1234 });

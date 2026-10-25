@@ -401,11 +401,12 @@ impl Instrument {
             .device
             .start(plan, sink)
             .map_err(|error| driver_error(&error))?;
-        let (channels, samplerate) = match packets.recv_timeout(START_TIMEOUT) {
+        let (channels, samplerate, analog) = match packets.recv_timeout(START_TIMEOUT) {
             Ok(Packet::Start {
                 channels,
                 samplerate,
-            }) => (channels, samplerate),
+                analog,
+            }) => (channels, samplerate, analog),
             other => {
                 acquisition.stop();
                 log::warn!("the capture did not start: {other:?}");
@@ -421,7 +422,7 @@ impl Instrument {
         };
         let live = workspace.begin_live(
             source,
-            LogicCapture::new(samplerate, channels),
+            LogicCapture::new(samplerate, channels).with_analog(analog),
             request.hold,
             request.preset.or_else(|| open.device.preset()),
         );
@@ -504,6 +505,36 @@ impl Ingest {
         (self.events)(SessionEvent::Live(self.status.clone()));
     }
 
+    /// After samples arrived: drops the oldest beyond a loop's limit, tells the decoders how
+    /// far the capture has got and, now and then, the interface.
+    fn appended(&mut self, last_emit: &mut Instant) {
+        let mut capture = self.capture.write();
+        if self.looping && self.status.limit > 0 {
+            // Whole words, as the samples arrive.
+            let excess = capture.len().saturating_sub(self.status.limit) / 64 * 64;
+            if excess > 0 {
+                capture.drop_front(excess);
+                self.status.dropped += excess;
+                if self.status.trigger_sample.is_some() {
+                    self.status.trigger_sample = capture.trigger_sample();
+                }
+            }
+        }
+        self.status.samples = capture.len();
+        drop(capture);
+        (self.advance)(Position {
+            len: self.status.samples,
+            dropped: self.status.dropped,
+            finishing: false,
+        });
+        let first = self.status.phase == LivePhase::Waiting;
+        self.status.phase = LivePhase::Capturing;
+        if first || last_emit.elapsed() >= STATUS_INTERVAL {
+            *last_emit = Instant::now();
+            self.emit();
+        }
+    }
+
     fn run(mut self) {
         let mut deinterleaver = self.capture.read().deinterleaver();
         let mut last_emit = Instant::now();
@@ -514,32 +545,14 @@ impl Ingest {
             match packet {
                 Packet::Start { .. } => {}
                 Packet::Logic(bytes) => {
-                    let mut capture = self.capture.write();
-                    capture.append_cross(&mut deinterleaver, &bytes);
-                    if self.looping && self.status.limit > 0 {
-                        // Whole words, as the samples arrive.
-                        let excess = capture.len().saturating_sub(self.status.limit) / 64 * 64;
-                        if excess > 0 {
-                            capture.drop_front(excess);
-                            self.status.dropped += excess;
-                            if self.status.trigger_sample.is_some() {
-                                self.status.trigger_sample = capture.trigger_sample();
-                            }
-                        }
-                    }
-                    self.status.samples = capture.len();
-                    drop(capture);
-                    (self.advance)(Position {
-                        len: self.status.samples,
-                        dropped: self.status.dropped,
-                        finishing: false,
-                    });
-                    let first = self.status.phase == LivePhase::Waiting;
-                    self.status.phase = LivePhase::Capturing;
-                    if first || last_emit.elapsed() >= STATUS_INTERVAL {
-                        last_emit = Instant::now();
-                        self.emit();
-                    }
+                    self.capture
+                        .write()
+                        .append_cross(&mut deinterleaver, &bytes);
+                    self.appended(&mut last_emit);
+                }
+                Packet::Analog(codes) => {
+                    self.capture.write().append_analog(&codes);
+                    self.appended(&mut last_emit);
                 }
                 Packet::Trigger { sample } => {
                     // Counted from the start of the capture, before anything was dropped.

@@ -80,6 +80,7 @@ fn assert_capture(packets: &[Packet], enabled: u32, expected: &[u32]) {
         Some(&Packet::Start {
             channels: channels.clone(),
             samplerate: 5_000_000,
+            analog: Vec::new(),
         })
     );
     let mut capture = LogicCapture::new(5_000_000, channels.iter().copied());

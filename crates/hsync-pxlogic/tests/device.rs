@@ -366,6 +366,7 @@ fn capture(packets: &[Packet]) -> LogicCapture {
     let Some(Packet::Start {
         channels,
         samplerate,
+        ..
     }) = packets.first()
     else {
         panic!("the capture starts with Start");
@@ -790,6 +791,7 @@ fn captures_in_buffer_mode() {
             Packet::Start {
                 channels: vec![0, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
                 samplerate: RATE,
+                analog: Vec::new(),
             },
             Packet::Progress {
                 triggered: false,

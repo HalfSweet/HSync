@@ -64,6 +64,7 @@ pub(crate) fn start(
     let _ = sink.send(Packet::Start {
         channels: params.channels.clone(),
         samplerate: params.samplerate,
+        analog: Vec::new(),
     });
     let thread = std::thread::Builder::new()
         .name("demo-acquisition".into())

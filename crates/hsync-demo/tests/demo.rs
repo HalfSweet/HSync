@@ -38,8 +38,9 @@ fn capture(packets: &Receiver<Packet>) -> (LogicCapture, Option<u64>, EndReason)
             Packet::Start {
                 channels,
                 samplerate,
+                analog,
             } => {
-                let new = LogicCapture::new(samplerate, channels);
+                let new = LogicCapture::new(samplerate, channels).with_analog(analog);
                 deinterleaver = Some(new.deinterleaver());
                 capture = Some(new);
             }
@@ -47,6 +48,9 @@ fn capture(packets: &Receiver<Packet>) -> (LogicCapture, Option<u64>, EndReason)
             Packet::Logic(bytes) => {
                 let capture = capture.as_mut().expect("start first");
                 capture.append_cross(deinterleaver.as_mut().expect("start first"), &bytes);
+            }
+            Packet::Analog(codes) => {
+                capture.as_mut().expect("start first").append_analog(&codes);
             }
             Packet::Progress { .. } | Packet::Overflow => {}
             Packet::End(reason) => return (capture.expect("start first"), trigger, reason),
