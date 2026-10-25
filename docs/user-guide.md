@@ -15,7 +15,7 @@ From top to bottom, the window has a top bar, the work area and a status bar; th
 ## Devices
 
 - HSync starts with an empty timeline; waveforms appear once you capture or open a file.
-- Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**; click **Capture** and it plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD), with its decoders already set up the first time.
+- Click the device button at the left end of the top bar to choose a device. Without hardware, HSync opens the **Demo device**; click **Capture** and it plays back the bundled protocol demo data (I²C, UART, SPI, CAN-FD), with its decoders already set up the first time, plus two analog channels: a 1 kHz sine wave from 0 to 3.3 V on A0 and a 3 kHz one of ±2.5 V on A1.
 - The first time you open a DSLogic, HSync loads the firmware and FPGA bitstream onto it automatically; this takes a few seconds.
 - An ATK-Logic is listed as **ATK-Logic** until it is opened, then by its model, such as **DL16 Plus**. HSync does not update its firmware: if it reports that the firmware needs an update, update it with ALIENTEK's ATK-Logic app, then plug the device in again.
 - A PX-Logic is likewise listed as **PXLogic** until it is opened (except the first 32-channel devices, named at once), then by its model, such as **PX-Logic 16 Plus**. HSync loads its FPGA bitstreams each time it opens it. If the device runs another firmware version than the one HSync brings (PXView 1.6.5's), HSync first writes its own into the device, which restarts and is opened again; this takes a few seconds more.
@@ -88,6 +88,7 @@ Click the sample rate │ duration │ channels button in the top bar. The pop-u
 - **Waveform height**: drag the bottom edge of a channel's label to make its waveform taller or shorter; double-click the edge to give it back its default height. Like colours, heights are saved in sessions and `.hsync` files.
 - **Fitting the window**: the waveforms grow and shrink with the window, keeping their proportions, so that they fill the timeline: up to three times their height in a tall window, and in a short one down to the height of the narrow rows before the channels scroll. Dragging an edge then makes that waveform taller while the others make room. To keep fixed heights instead, turn off **Fit waveform heights to the window** in the settings (Behaviour).
 - The arrow at the start of a group header expands or collapses the group.
+- **Analog channels** are listed last, under **Analog channels**, on taller rows drawn like an oscilloscope's screen: four divisions, a line at 0 V, and the volts per division under the channel's name. Zoomed in far enough, every sample shows as a dot on the waveform. The scale fits the channel's samples by default. To change it, hold Alt (⌥ on macOS) and turn the wheel over the row (the volts under the pointer stay put), or hold Alt (⌥) and drag the row up or down to move the waveform; the + and − beside the scale, shown while the pointer is over the label, change it too. **Fit** puts the scale back to fit the samples. Resting the pointer on an analog waveform shows its voltage there; when zoomed out so that a pixel holds a range of voltages, the readout gives the range.
 
 ## Protocol decoding
 
