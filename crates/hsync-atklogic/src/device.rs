@@ -8,7 +8,7 @@ use crossbeam_channel::Sender;
 use hsync_core::ChannelIndex;
 use hsync_driver::{
     Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, Label, OptionKey,
-    OptionKind, OptionState, OptionValue, Packet, TriggerCaps,
+    OptionKind, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
 };
 
 use crate::acquisition::{self, AcquisitionParams};
@@ -92,6 +92,26 @@ impl Settings {
         {
             self.samplerate = fastest;
         }
+    }
+
+    /// How the rates narrow as channels are added: one tier per run of channel counts with
+    /// the same rate list, named after the most channels of the run.
+    pub fn rate_tiers(&self, plus: bool) -> Vec<RateTier> {
+        let mut tiers: Vec<RateTier> = Vec::new();
+        for channels in 1..=CHANNELS {
+            let samplerates = models::samplerates(plus, self.stream, u32::from(channels));
+            match tiers.last_mut() {
+                Some(tier) if tier.samplerates == samplerates => tier.channels = channels,
+                _ => tiers.push(RateTier {
+                    channels,
+                    leading: false,
+                    span: CHANNELS,
+                    max_samplerate: samplerates.last().copied().unwrap_or(0),
+                    samplerates,
+                }),
+            }
+        }
+        tiers
     }
 
     /// Samples per channel the device's memory holds (Buffer mode).
@@ -506,6 +526,19 @@ impl Device for AtkLogicDevice {
         }
         self.settings.adjust_samplerate(self.plus);
         Ok(())
+    }
+
+    /// The rates follow from how many channels are on, which USB carries in Stream mode and
+    /// the DL16 Plus samples at 1 GHz only up to 8 of in Buffer mode.
+    fn rate_tiers(&self) -> Vec<RateTier> {
+        self.settings.rate_tiers(self.plus)
+    }
+
+    fn rate_tier(&self) -> Option<usize> {
+        let enabled = self.settings.enabled_count().max(1);
+        self.rate_tiers()
+            .iter()
+            .position(|tier| u32::from(tier.channels) >= enabled)
     }
 
     fn start(
