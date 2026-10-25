@@ -33,6 +33,7 @@ function stateOf(device: DeviceSummary): DeviceState {
     hardwareDepth: null,
     rateTiers: [],
     rateTier: null,
+    analogInputs: [],
   }
 }
 

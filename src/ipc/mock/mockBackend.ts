@@ -607,6 +607,12 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
       return Promise.resolve(device.state())
     },
 
+    async deviceSetAnalog(index: number, enabled: boolean) {
+      if (!device) return Promise.reject(uiError('error.session.noDevice'))
+      device.setAnalog(index, enabled)
+      return Promise.resolve(device.state())
+    },
+
     async deviceSelectRateTier(index: number, channels: number[]) {
       if (!device) return Promise.reject(uiError('error.session.noDevice'))
       device.selectRateTier(index, channels)
@@ -617,7 +623,9 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
       if (!device) return Promise.reject(uiError('error.session.noDevice'))
       if (live) return Promise.reject(uiError('error.session.busy'))
       const enabled = device.state().enabledChannels
-      if (enabled.length === 0) return Promise.reject(uiError('error.device.invalidRequest'))
+      const analog = device.analogChannels()
+      if (enabled.length === 0 && analog.length === 0)
+        return Promise.reject(uiError('error.device.invalidRequest'))
       const limit = Math.ceil(device.limit / 1024) * 1024
       const total = Math.min(limit, data.sampleCount)
       if (request.advanced && !device.state().trigger.advanced) {
@@ -653,13 +661,12 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
           triggerSample: null,
           triggerTimeMs: null,
           channels: enabled,
-          analog: [...MOCK_ANALOG],
+          analog,
         },
         channels: enabled.map((index) => ({ index, name: names.get(index) ?? String(index) })),
-        analog: mockAnalogNames().map(({ index, name }) => ({
-          index,
-          name: analogNames.get(index) ?? name,
-        })),
+        analog: mockAnalogNames()
+          .filter(({ index }) => analog.includes(index))
+          .map(({ index, name }) => ({ index, name: analogNames.get(index) ?? name })),
         decoders,
         session: null,
       }

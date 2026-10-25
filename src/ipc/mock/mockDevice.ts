@@ -2,12 +2,16 @@
  * The demo device of the in-browser mock: the options of `hsync-demo`'s device and a capture
  * that reveals the demo capture over about a second, with a short wait when triggered.
  */
+import { ANALOG_BASE } from '@/analog/channels'
+
+import type { AnalogInput } from '../bindings/AnalogInput'
 import type { DeviceState } from '../bindings/DeviceState'
 import type { DeviceSummary } from '../bindings/DeviceSummary'
 import type { OptionKey } from '../bindings/OptionKey'
 import type { OptionState } from '../bindings/OptionState'
 import type { OptionValue } from '../bindings/OptionValue'
 import type { RateTier } from '../bindings/RateTier'
+import { MOCK_ANALOG } from './mockAnalog'
 
 export const DEMO_ID = 'virtual-demo'
 
@@ -26,6 +30,14 @@ const ADVANCED_TRIGGERS =
  */
 const TIERED =
   typeof location !== 'undefined' && new URLSearchParams(location.search).get('mocktiers') === '1'
+
+/**
+ * `?mockadc=1` gives the mock demo device an ADC module's analog inputs over channels 0–7 and
+ * 8–15, as an SLogic32U3 has over each group of eight, to work on the acquisition menu in a
+ * browser; its analog channels are then captured only while they are read.
+ */
+const ADC =
+  typeof location !== 'undefined' && new URLSearchParams(location.search).get('mockadc') === '1'
 
 const MHZ = 1_000_000
 /** Sample rates of the tiered mock, up to 1 GHz. */
@@ -75,6 +87,8 @@ export class MockDemoDevice {
   samplerate: number
   limit: number
   enabled = new Set(Array.from({ length: 16 }, (_, index) => index))
+  /** With `?mockadc=1`, the analog inputs read. */
+  analog = new Set<number>()
   capturing = false
   /** With `?mocktiers=1`, Buffer or Stream mode. */
   mode: 'buffer' | 'stream' = 'stream'
@@ -95,6 +109,31 @@ export class MockDemoDevice {
         samplerates: TIERED_RATES.filter((rate) => rate <= max),
       }),
     )
+  }
+
+  /** With `?mockadc=1`, one analog input over each group of eight channels. */
+  analogInputs(): AnalogInput[] {
+    if (!ADC) return []
+    return [0, 1].map((group) => ({
+      index: ANALOG_BASE + group,
+      inputs: Array.from({ length: 8 }, (_, bit) => group * 8 + bit),
+      low: -15,
+      high: 15,
+      enabled: this.analog.has(ANALOG_BASE + group),
+    }))
+  }
+
+  /** The analog channels a capture holds: those read, or else always the demo's. */
+  analogChannels(): number[] {
+    return ADC ? [...this.analog].sort((a, b) => a - b) : [...MOCK_ANALOG]
+  }
+
+  /** Channels read as analog are not captured as logic. */
+  private logic(): number[] {
+    const read = this.analogInputs().filter((input) => input.enabled)
+    return [...this.enabled]
+      .filter((channel) => !read.some((input) => input.inputs.includes(channel)))
+      .sort((a, b) => a - b)
   }
 
   /** The tier the enabled channels put the device in. */
@@ -188,13 +227,14 @@ export class MockDemoDevice {
       },
       options: this.options(),
       channelCount: 16,
-      enabledChannels: [...this.enabled].sort((a, b) => a - b),
+      enabledChannels: this.logic(),
       capturing: this.capturing,
       trigger: { maxPosition: 90, advanced: ADVANCED_TRIGGERS, advancedOtherMode: false },
       canLoop: !TIERED || this.mode === 'stream',
       hardwareDepth: this.hardwareDepth(),
       rateTiers: this.tiers(),
       rateTier: this.tier(),
+      analogInputs: this.analogInputs(),
     }
   }
 
@@ -235,6 +275,14 @@ export class MockDemoDevice {
       throw uiError('error.device.invalidRequest')
     this.enabled = new Set(channels)
     this.clampRate()
+  }
+
+  setAnalog(index: number, enabled: boolean): void {
+    if (this.capturing) throw uiError('error.session.busy')
+    if (!this.analogInputs().some((input) => input.index === index))
+      throw uiError('error.device.invalidRequest')
+    if (enabled) this.analog.add(index)
+    else this.analog.delete(index)
   }
 
   selectRateTier(index: number, channels: number[]): void {

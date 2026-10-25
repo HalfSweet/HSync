@@ -83,6 +83,7 @@ function stateOf(driver: string): DeviceState {
     hardwareDepth: null,
     rateTiers: [],
     rateTier: null,
+    analogInputs: [],
   }
 }
 

@@ -94,6 +94,7 @@ function state(overrides: Partial<DeviceState>): DeviceState {
     hardwareDepth: null,
     rateTiers: [],
     rateTier: null,
+    analogInputs: [],
     ...overrides,
   }
 }

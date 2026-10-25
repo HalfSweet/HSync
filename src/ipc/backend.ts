@@ -146,6 +146,8 @@ export interface Backend {
   deviceSetChannel(channel: number, enabled: boolean): Promise<DeviceState>
   /** Enables exactly `channels`. */
   deviceSetChannels(channels: number[]): Promise<DeviceState>
+  /** Reads analog input `index` of the open device in place of its logic inputs, or not. */
+  deviceSetAnalog(index: number, enabled: boolean): Promise<DeviceState>
   /** Moves to rate tier `index` of the open device with exactly `channels` enabled. */
   deviceSelectRateTier(index: number, channels: number[]): Promise<DeviceState>
   /** Starts a capture on the open device; the returned capture fills as it runs. */
@@ -355,6 +357,10 @@ class TauriBackend implements Backend {
 
   deviceSetChannels(channels: number[]) {
     return invoke<DeviceState>('device_set_channels', { channels })
+  }
+
+  deviceSetAnalog(index: number, enabled: boolean) {
+    return invoke<DeviceState>('device_set_analog', { index, enabled })
   }
 
   deviceSelectRateTier(index: number, channels: number[]) {

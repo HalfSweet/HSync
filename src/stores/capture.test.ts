@@ -81,6 +81,7 @@ function deviceState(canLoop: boolean): DeviceState {
     hardwareDepth: null,
     rateTiers: [],
     rateTier: null,
+    analogInputs: [],
   }
 }
 
