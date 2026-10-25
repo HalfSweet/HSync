@@ -24,6 +24,10 @@ info: CaptureInfo,
  */
 channels: Array<ChannelSummary>, 
 /**
+ * Names of the analog channels, ascending by index.
+ */
+analog: Array<ChannelSummary>, 
+/**
  * The decoders stored with the capture: HSync's entries (see [`DecoderEntry`]).
  */
 decoders: unknown, 

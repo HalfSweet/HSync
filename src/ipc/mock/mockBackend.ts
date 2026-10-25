@@ -36,6 +36,9 @@ import {
   mockStream,
   mockView,
 } from './mockDecode'
+import { isAnalog } from '@/analog/channels'
+
+import { MOCK_ANALOG, mockAnalogBins, mockAnalogNames } from './mockAnalog'
 import { DEMO_ID, MOCK_DEVICES, MockDemoDevice, uiError } from './mockDevice'
 
 /** How long a simulated capture takes to fill, and in how many steps. */
@@ -243,8 +246,10 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
           triggerSample: data.triggerSample,
           triggerTimeMs: data.triggerTimeMs,
           channels: data.channels.map((channel) => channel.index),
+          analog: [...MOCK_ANALOG],
         },
         channels: data.channels.map(({ index, name }) => ({ index, name })),
+        analog: mockAnalogNames(),
         decoders: MOCK_ENTRIES,
         session: null,
       }
@@ -325,6 +330,16 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
         bins,
         channels: new Map(cells),
       })
+    },
+
+    async analogBins(request: BinsRequest) {
+      const shown = [held?.summary, summary].find((one) => one?.id === request.captureId)
+      if (!shown) return Promise.reject(uiError('error.session.staleCapture'))
+      const unknown = request.channels.find((index) => !shown.info.analog.includes(index))
+      if (unknown !== undefined) {
+        return Promise.reject(uiError('error.session.unknownChannel', { channel: unknown }))
+      }
+      return Promise.resolve(mockAnalogBins(request, shown.info.samplerate, shown.info.sampleCount))
     },
 
     async pulse(captureId, index, sample): Promise<PulseInfo | null> {
@@ -497,15 +512,22 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
     async renameChannel(captureId, index, name) {
       if (!summary || !known(captureId))
         return Promise.reject(uiError('error.session.staleCapture'))
-      if (!channels.has(index))
+      if (!channels.has(index) && !summary.info.analog.includes(index))
         return Promise.reject(uiError('error.session.unknownChannel', { channel: index }))
       const trimmed = name.trim()
-      summary = {
-        ...summary,
-        channels: summary.channels.map((channel) =>
-          channel.index === index ? { index, name: trimmed || String(index) } : channel,
-        ),
-      }
+      const renamed = (list: CaptureSummary['channels'], number: (index: number) => string) =>
+        list.map((channel) =>
+          channel.index === index ? { index, name: trimmed || number(index) } : channel,
+        )
+      summary = isAnalog(index)
+        ? {
+            ...summary,
+            analog: renamed(
+              summary.analog,
+              (one) => mockAnalogNames().find((named) => named.index === one)?.name ?? String(one),
+            ),
+          }
+        : { ...summary, channels: renamed(summary.channels, String) }
       return Promise.resolve(summary)
     },
 
@@ -619,6 +641,9 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
             : data.channels.map(({ index, name }) => [index, name]),
       )
       const decoders = summary ? summary.decoders : preset ? preset.decoders : MOCK_ENTRIES
+      const analogNames = new Map(
+        (summary?.analog ?? mockAnalogNames()).map(({ index, name }) => [index, name]),
+      )
       summary = {
         id: lastId,
         source: { kind: 'device', driver: 'virtual-demo', model: 'Demo' },
@@ -628,8 +653,13 @@ export function createMockBackend(data: Fixture = fixture): MockBackend {
           triggerSample: null,
           triggerTimeMs: null,
           channels: enabled,
+          analog: [...MOCK_ANALOG],
         },
         channels: enabled.map((index) => ({ index, name: names.get(index) ?? String(index) })),
+        analog: mockAnalogNames().map(({ index, name }) => ({
+          index,
+          name: analogNames.get(index) ?? name,
+        })),
         decoders,
         session: null,
       }

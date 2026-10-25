@@ -28,8 +28,16 @@ function summary(
   return {
     id,
     source: kind === 'device' ? { kind, driver: 'virtual-demo', model: 'Demo' } : { kind },
-    info: { samplerate, sampleCount, triggerSample, triggerTimeMs: null, channels: [0] },
+    info: {
+      samplerate,
+      sampleCount,
+      triggerSample,
+      triggerTimeMs: null,
+      channels: [0],
+      analog: [],
+    },
     channels: [{ index: 0, name: '0' }],
+    analog: [],
     decoders: null,
     session: null,
   }

@@ -117,8 +117,10 @@ function captured(source: CaptureSummary['source'], names: string[], decoders: u
       triggerSample: null,
       triggerTimeMs: null,
       channels: names.map((_, index) => index),
+      analog: [],
     },
     channels: names.map((name, index) => ({ index, name })),
+    analog: [],
     decoders,
     session: null,
   } satisfies CaptureSummary

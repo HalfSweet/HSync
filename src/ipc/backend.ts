@@ -27,6 +27,7 @@ import type { RolePart } from './bindings/RolePart'
 import type { SearchResult } from './bindings/SearchResult'
 import type { StreamPage } from './bindings/StreamPage'
 import type { WaveformSummary } from './bindings/WaveformSummary'
+import { decodeAnalogBins, type AnalogBinsResult } from './analogBins'
 import { decodeBins, type BinsResult } from './bins'
 import type { UiError } from './errors'
 import type { LogLevel } from './logLevels'
@@ -108,6 +109,8 @@ export interface Backend {
   /** Reads a small text file, such as a session. */
   readText(path: string): Promise<string>
   bins(request: BinsRequest): Promise<BinsResult>
+  /** The lowest and highest volts of each column of analog channels. */
+  analogBins(request: BinsRequest): Promise<AnalogBinsResult>
   pulse(captureId: number, channel: number, sample: number): Promise<PulseInfo | null>
   edge(
     captureId: number,
@@ -300,6 +303,10 @@ class TauriBackend implements Backend {
 
   async bins(request: BinsRequest) {
     return decodeBins(await invoke<ArrayBuffer>('capture_bins', { request }))
+  }
+
+  async analogBins(request: BinsRequest) {
+    return decodeAnalogBins(await invoke<ArrayBuffer>('capture_analog_bins', { request }))
   }
 
   pulse(captureId: number, channel: number, sample: number) {

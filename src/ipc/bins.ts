@@ -26,8 +26,11 @@ export interface BinsResult {
   channels: Map<number, Uint8Array>
 }
 
-/** First sample of column `column`. */
-export function binStart(result: BinsResult, column: number): number {
+/** First sample of column `column`, of logic or analog columns alike. */
+export function binStart(
+  result: Pick<BinsResult, 'start' | 'end' | 'bins'>,
+  column: number,
+): number {
   return result.start + Math.floor(((result.end - result.start) * column) / result.bins)
 }
 
