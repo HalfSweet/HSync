@@ -8,9 +8,9 @@ use crossbeam_channel::Receiver;
 use hsync_capture::LogicCapture;
 use hsync_core::{ChannelIndex, TriggerCondition, UiError};
 use hsync_driver::{
-    Acquisition, AdvancedTrigger, Candidate, CandidateStatus, CapturePlan, CapturePreset, Device,
-    DeviceInfo, DeviceManager, DeviceSummary, DriverError, EndReason, OptionKey, OptionState,
-    OptionValue, Packet, RateTier, TriggerCaps,
+    Acquisition, AdvancedTrigger, AnalogInput, Candidate, CandidateStatus, CapturePlan,
+    CapturePreset, Device, DeviceInfo, DeviceManager, DeviceSummary, DriverError, EndReason,
+    OptionKey, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
 };
 use hsync_uiharu::Position;
 use parking_lot::{Mutex, RwLock};
@@ -50,6 +50,8 @@ pub struct DeviceState {
     pub rate_tiers: Vec<RateTier>,
     /// Index of the current tier in `rate_tiers`.
     pub rate_tier: Option<u32>,
+    /// Analog channels the device can capture in place of some of its logic inputs.
+    pub analog_inputs: Vec<AnalogInput>,
 }
 
 /// A capture request from the UI (DESIGN.md §7).
@@ -299,6 +301,7 @@ impl Instrument {
                 .device
                 .rate_tier()
                 .and_then(|index| u32::try_from(index).ok()),
+            analog_inputs: open.device.analog_inputs(),
         })
     }
 
@@ -343,6 +346,18 @@ impl Instrument {
     ) -> Result<DeviceState, SessionError> {
         self.device_mut()?
             .set_enabled_channels(channels)
+            .map_err(|error| driver_error(&error))?;
+        self.state().ok_or(SessionError::NoDevice)
+    }
+
+    /// Reads analog input `index` of the open device in place of its logic inputs, or not.
+    pub fn set_analog_enabled(
+        &mut self,
+        index: ChannelIndex,
+        enabled: bool,
+    ) -> Result<DeviceState, SessionError> {
+        self.device_mut()?
+            .set_analog_enabled(index, enabled)
             .map_err(|error| driver_error(&error))?;
         self.state().ok_or(SessionError::NoDevice)
     }

@@ -166,6 +166,7 @@ pub fn run() {
             commands::device::device_state,
             commands::device::device_set_option,
             commands::device::device_set_channel,
+            commands::device::device_set_analog,
             commands::device::device_set_channels,
             commands::device::device_select_rate_tier,
             commands::window::stream_window_open,

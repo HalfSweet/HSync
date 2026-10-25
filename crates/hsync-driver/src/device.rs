@@ -113,6 +113,24 @@ impl RateTier {
     }
 }
 
+/// An analog channel a device can capture in place of some of its logic inputs, as an ADC
+/// module on a group of a logic analyzer's inputs is read.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct AnalogInput {
+    /// Its channel, from [`hsync_core::ANALOG_BASE`] up.
+    pub index: ChannelIndex,
+    /// The logic inputs it is read from, which are not captured as logic while it is.
+    pub inputs: Vec<ChannelIndex>,
+    /// The volts of its lowest code.
+    pub low: f32,
+    /// The volts of its highest code.
+    pub high: f32,
+    /// Whether the next capture reads it.
+    pub enabled: bool,
+}
+
 /// One kind of device.
 pub trait Driver: Send + Sync {
     /// Short name, also recorded in capture files (`DSLogic`, `virtual-demo`).
@@ -225,6 +243,23 @@ pub trait Device: Send {
             self.set_channel_enabled(channel, true)?;
         }
         Ok(())
+    }
+
+    /// Analog channels the device can capture in place of some of its logic inputs.
+    fn analog_inputs(&self) -> Vec<AnalogInput> {
+        Vec::new()
+    }
+
+    /// Reads analog input `index` in place of its logic inputs, or those inputs as logic again.
+    /// The logic channels enabled among them come back with them.
+    fn set_analog_enabled(
+        &mut self,
+        index: ChannelIndex,
+        _enabled: bool,
+    ) -> Result<(), DriverError> {
+        Err(DriverError::InvalidRequest(format!(
+            "no analog input {index}"
+        )))
     }
 
     /// How fewer channels allow faster sample rates in the current mode, fewest channels
