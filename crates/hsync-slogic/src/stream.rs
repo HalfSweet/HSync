@@ -12,23 +12,23 @@ use crate::Settings;
 
 // Unlike the reference's 1 GiB allocation, reserve at most 64 MiB for history in
 // the desktop application. The marker reports the actual retained history.
-const MAX_PRE_SAMPLES: u64 = (64 << 20) / 2;
+const MAX_PRE_SAMPLES: u64 = (64 << 20) / size_of::<u32>() as u64;
 const MAX_PACKET: usize = 1 << 20;
 
 #[derive(Default)]
 struct Trigger {
-    high: u16,
-    low: u16,
-    rise: u16,
-    fall: u16,
-    edge: u16,
+    high: u32,
+    low: u32,
+    rise: u32,
+    fall: u32,
+    edge: u32,
 }
 
 impl Trigger {
-    fn new(conditions: &[(ChannelIndex, TriggerCondition)], enabled: u16) -> Self {
+    fn new(conditions: &[(ChannelIndex, TriggerCondition)], enabled: u32) -> Self {
         let mut trigger = Self::default();
         for &(channel, condition) in conditions {
-            if channel >= 16 || enabled & (1 << channel) == 0 {
+            if channel >= 32 || enabled & (1 << channel) == 0 {
                 continue;
             }
             let mask = 1 << channel;
@@ -48,7 +48,7 @@ impl Trigger {
         self.high | self.low | self.rise | self.fall | self.edge == 0
     }
 
-    fn matches(&self, previous: Option<u16>, sample: u16) -> bool {
+    fn matches(&self, previous: Option<u32>, sample: u32) -> bool {
         if sample & self.high != self.high || sample & self.low != 0 {
             return false;
         }
@@ -76,24 +76,29 @@ fn transpose(mut word: u64) -> u64 {
 
 struct CrossPacker {
     channels: Vec<ChannelIndex>,
-    pending: [u16; 64],
+    /// Byte planes of a sample up to the highest enabled channel.
+    planes: usize,
+    pending: [u32; 64],
     used: usize,
     output: Vec<u8>,
 }
 
 impl CrossPacker {
-    fn new(enabled: u16) -> Self {
+    fn new(enabled: u32) -> Self {
         Self {
-            channels: (0..16)
+            channels: (0..32)
                 .filter(|channel| enabled & (1 << channel) != 0)
                 .collect(),
+            planes: enabled
+                .checked_ilog2()
+                .map_or(0, |highest| highest as usize / 8 + 1),
             pending: [0; 64],
             used: 0,
             output: Vec::new(),
         }
     }
 
-    fn push(&mut self, samples: &[u16], packets: &mut Vec<Packet>) {
+    fn push(&mut self, samples: &[u32], packets: &mut Vec<Packet>) {
         let mut rest = samples;
         while !rest.is_empty() {
             let take = rest.len().min(64 - self.used);
@@ -103,19 +108,17 @@ impl CrossPacker {
             if self.used != 64 {
                 continue;
             }
-            let mut words = [0u64; 16];
+            let mut words = [0u64; 32];
             for (group, samples) in self.pending.as_chunks::<8>().0.iter().enumerate() {
-                let mut low = 0u64;
-                let mut high = 0u64;
-                for (i, &sample) in samples.iter().enumerate() {
-                    low |= u64::from(sample & 0xff) << (i * 8);
-                    high |= u64::from(sample >> 8) << (i * 8);
+                let mut planes = [0u64; 4];
+                for (index, plane) in planes[..self.planes].iter_mut().enumerate() {
+                    for (i, &sample) in samples.iter().enumerate() {
+                        *plane |= u64::from((sample >> (index * 8)) as u8) << (i * 8);
+                    }
+                    *plane = transpose(*plane);
                 }
-                let low = transpose(low);
-                let high = transpose(high);
                 for &channel in &self.channels {
-                    let plane = if channel < 8 { low } else { high };
-                    let bits = (plane >> ((channel % 8) * 8)) & 0xff;
+                    let bits = (planes[usize::from(channel / 8)] >> ((channel % 8) * 8)) & 0xff;
                     words[usize::from(channel)] |= bits << (group * 8);
                 }
             }
@@ -139,9 +142,9 @@ impl CrossPacker {
 
 pub(crate) struct Stream {
     trigger: Trigger,
-    previous: Option<u16>,
+    previous: Option<u32>,
     waiting: bool,
-    pre: VecDeque<u16>,
+    pre: VecDeque<u32>,
     pre_limit: usize,
     remaining: Option<u64>,
     packer: CrossPacker,
@@ -179,7 +182,7 @@ impl Stream {
         self.remaining == Some(0)
     }
 
-    fn emit(&mut self, samples: &[u16], packets: &mut Vec<Packet>) {
+    fn emit(&mut self, samples: &[u32], packets: &mut Vec<Packet>) {
         let count = self.remaining.map_or(samples.len(), |left| {
             samples
                 .len()
@@ -191,7 +194,7 @@ impl Stream {
         }
     }
 
-    pub(crate) fn push(&mut self, samples: &[u16]) -> Vec<Packet> {
+    pub(crate) fn push(&mut self, samples: &[u32]) -> Vec<Packet> {
         let mut packets = Vec::new();
         let mut offset = 0;
         if self.waiting {
@@ -233,10 +236,10 @@ impl Stream {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::UsbSpeed;
+    use crate::{SLOGIC32U3, UsbSpeed};
 
-    fn settings(enabled: u16, limit: u64) -> Settings {
-        let mut settings = Settings::defaults(UsbSpeed::Super);
+    fn settings(enabled: u32, limit: u64) -> Settings {
+        let mut settings = Settings::defaults(&SLOGIC32U3, UsbSpeed::SuperPlus);
         settings.enabled = enabled;
         settings.limit_samples = limit;
         settings
@@ -252,7 +255,7 @@ mod tests {
             .collect()
     }
 
-    fn expected(samples: &[u16], channels: &[u16]) -> Vec<u8> {
+    fn expected(samples: &[u32], channels: &[u16]) -> Vec<u8> {
         let mut out = Vec::new();
         for group in samples.as_chunks::<64>().0.iter() {
             for &channel in channels {
@@ -267,9 +270,20 @@ mod tests {
 
     #[test]
     fn cross_format_matches_naive_at_all_transfer_boundaries() {
-        let samples: Vec<_> = (0u16..320).map(|n| n.wrapping_mul(7919)).collect();
-        for enabled in [0xffff, 0x8001, 0xf, 0x100, 0x55aa] {
-            let channels: Vec<_> = (0..16).filter(|c| enabled & (1 << c) != 0).collect();
+        let samples: Vec<_> = (0u32..320).map(|n| n.wrapping_mul(0x9e37_79b9)).collect();
+        for enabled in [
+            0xffff,
+            0x8001,
+            0xf,
+            0x100,
+            0x55aa,
+            u32::MAX,
+            0x8000_0001,
+            0x00ff_0000,
+            0x5555_aaaa,
+            1 << 31,
+        ] {
+            let channels: Vec<_> = (0..32).filter(|c| enabled & (1 << c) != 0).collect();
             let want = expected(&samples[..256], &channels);
             for cut in 1..=129 {
                 let mut stream = Stream::new(&settings(enabled, 256), &CapturePlan::default());
@@ -328,6 +342,20 @@ mod tests {
         assert!(trigger.matches(Some(1), 0));
         assert!(!trigger.matches(Some(1), 2));
         assert!(!trigger.matches(Some(0), 0));
+    }
+
+    #[test]
+    fn triggers_on_the_upper_inputs_of_a_32_channel_sample() {
+        let trigger = Trigger::new(
+            &[(31, TriggerCondition::Rise), (16, TriggerCondition::Low)],
+            u32::MAX,
+        );
+        assert!(trigger.matches(Some(0), 1 << 31));
+        assert!(!trigger.matches(Some(0), 1 << 31 | 1 << 16));
+        assert!(!trigger.matches(Some(1 << 31), 1 << 31));
+        // Conditions on disabled or missing inputs are ignored.
+        assert!(Trigger::new(&[(31, TriggerCondition::High)], 0xffff).empty());
+        assert!(Trigger::new(&[(32, TriggerCondition::High)], u32::MAX).empty());
     }
 
     #[test]

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Captures through the public driver surface against an emulated SLogic16U3.
+//! Captures through the public driver surface against emulated SLogic U3 analyzers.
 
 mod common;
 
@@ -14,22 +14,31 @@ use hsync_driver::mock::MockTransport;
 use hsync_driver::usb::UsbError;
 use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionValue, Packet};
 use hsync_slogic::protocol::Link;
-use hsync_slogic::{SlogicDevice, UsbSpeed};
+use hsync_slogic::{Model, SLOGIC16U3, SLOGIC32U3, SlogicDevice, UsbSpeed};
 use nusb::transfer::TransferError;
 
 const WAIT: Duration = Duration::from_secs(5);
 
-fn open() -> (MockTransport<AuxDevice>, SlogicDevice) {
+fn open_model(model: &'static Model, speed: UsbSpeed) -> (MockTransport<AuxDevice>, SlogicDevice) {
     let transport = MockTransport::new(AuxDevice::new());
     let link = Link::new(Arc::new(transport.clone()));
-    let device = SlogicDevice::open(link, UsbSpeed::Super, "test".to_owned()).expect("open");
+    let device = SlogicDevice::open(link, model, speed, "test".to_owned()).expect("open");
     transport.clear_calls();
     transport.device().events.clear();
     (transport, device)
 }
 
-fn configure(device: &mut SlogicDevice, enabled: u16, limit: u64) {
-    for channel in 0..16 {
+fn open() -> (MockTransport<AuxDevice>, SlogicDevice) {
+    open_model(&SLOGIC16U3, UsbSpeed::Super)
+}
+
+/// Packs SLogic16U3 samples, whose firmware sends a four-byte head first.
+fn sample_bytes16(channels: u8, samples: &[u32]) -> Vec<u8> {
+    sample_bytes(&SLOGIC16U3, channels, samples)
+}
+
+fn configure(device: &mut SlogicDevice, enabled: u32, limit: u64) {
+    for channel in 0..device.channel_count() {
         device
             .set_channel_enabled(channel, enabled & (1 << channel) != 0)
             .expect("channel selection");
@@ -62,8 +71,8 @@ fn run(device: &mut SlogicDevice, plan: CapturePlan) -> Vec<Packet> {
     all
 }
 
-fn assert_capture(packets: &[Packet], enabled: u16, expected: &[u16]) {
-    let channels: Vec<_> = (0..16)
+fn assert_capture(packets: &[Packet], enabled: u32, expected: &[u32]) {
+    let channels: Vec<_> = (0..32)
         .filter(|channel| enabled & (1 << channel) != 0)
         .collect();
     assert_eq!(
@@ -119,12 +128,20 @@ fn assert_stopped_before_cancelling(events: &[Event]) {
 
 #[test]
 fn captures_all_wire_modes_and_preserves_sparse_physical_channels() {
-    let samples: Vec<_> = (0u16..320).map(|n| n.wrapping_mul(7919)).collect();
-    for (channels, enabled) in [(4, 0xf), (8, 0x81), (16, 0x8001)] {
-        let (transport, mut device) = open();
+    let samples: Vec<_> = (0u32..320).map(|n| n.wrapping_mul(0x9e37_79b9)).collect();
+    for (model, channels, enabled) in [
+        (&SLOGIC16U3, 4, 0xf),
+        (&SLOGIC16U3, 8, 0x81),
+        (&SLOGIC16U3, 16, 0x8001),
+        (&SLOGIC32U3, 4, 0x9),
+        (&SLOGIC32U3, 8, 0x81),
+        (&SLOGIC32U3, 16, 0x8001),
+        (&SLOGIC32U3, 32, 0x8001_0001),
+    ] {
+        let (transport, mut device) = open_model(model, UsbSpeed::SuperPlus);
         configure(&mut device, enabled, 256);
         assert_eq!(device.settings().channels(), channels);
-        let raw = sample_bytes(channels, &samples);
+        let raw = sample_bytes(model, channels, &samples);
         // Exercise first-head removal and wire words spanning USB completions.
         transport
             .device()
@@ -134,29 +151,37 @@ fn captures_all_wire_modes_and_preserves_sparse_physical_channels() {
         assert_capture(&packets, enabled, &samples[..256]);
         assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
         assert_stopped_before_cancelling(&transport.device().events);
+        assert_eq!(
+            transport.device().channel_mask,
+            u32::MAX >> (32 - channels),
+            "{} {channels}-channel mode",
+            model.name
+        );
     }
 }
 
 #[test]
 fn consecutive_captures_discard_their_own_partial_head() {
-    let (transport, mut device) = open();
-    configure(&mut device, 0xffff, 128);
-    for seed in [1u16, 507] {
-        let samples: Vec<_> = (0u16..128)
-            .map(|n| seed.wrapping_add(n.wrapping_mul(47)))
-            .collect();
-        transport.device().samples.clear();
-        transport
-            .device()
-            .samples
-            .push_back(Ok(sample_bytes(16, &samples)));
-        transport.device().events.clear();
-        let packets = run(&mut device, CapturePlan::default());
-        assert_capture(&packets, 0xffff, &samples);
-        assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
-        assert_stopped_before_cancelling(&transport.device().events);
+    for (model, enabled) in [(&SLOGIC16U3, 0xffff), (&SLOGIC32U3, u32::MAX)] {
+        let (transport, mut device) = open_model(model, UsbSpeed::SuperPlus);
+        configure(&mut device, enabled, 128);
+        for seed in [1u32, 0x8000_0507] {
+            let samples: Vec<_> = (0u32..128)
+                .map(|n| seed.wrapping_add(n.wrapping_mul(0x0101_0047)) & enabled)
+                .collect();
+            transport.device().samples.clear();
+            transport
+                .device()
+                .samples
+                .push_back(Ok(sample_bytes(model, model.channels, &samples)));
+            transport.device().events.clear();
+            let packets = run(&mut device, CapturePlan::default());
+            assert_capture(&packets, enabled, &samples);
+            assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+            assert_stopped_before_cancelling(&transport.device().events);
+        }
+        assert_eq!(transport.device().starts, 2);
     }
-    assert_eq!(transport.device().starts, 2);
 }
 
 #[test]
@@ -167,7 +192,7 @@ fn simple_software_trigger_keeps_history_and_ignores_disabled_conditions() {
         .map(|tick| if tick >= 173 { 0x81 } else { 0x80 })
         .collect();
     transport.device().samples.extend(
-        sample_bytes(8, &samples)
+        sample_bytes16(8, &samples)
             .chunks(41)
             .map(|part| Ok(part.to_vec())),
     );
@@ -189,13 +214,40 @@ fn simple_software_trigger_keeps_history_and_ignores_disabled_conditions() {
 }
 
 #[test]
+fn software_trigger_watches_the_upper_inputs_of_the_32_channel_mode() {
+    let (transport, mut device) = open_model(&SLOGIC32U3, UsbSpeed::SuperPlus);
+    let enabled = 1 << 31 | 1;
+    configure(&mut device, enabled, 128);
+    assert_eq!(device.settings().channels(), 32);
+    let samples: Vec<_> = (0..320)
+        .map(|tick| if tick >= 173 { enabled } else { 1 })
+        .collect();
+    transport.device().samples.extend(
+        sample_bytes(&SLOGIC32U3, 32, &samples)
+            .chunks(41)
+            .map(|part| Ok(part.to_vec())),
+    );
+    let packets = run(
+        &mut device,
+        CapturePlan {
+            triggers: vec![(31, TriggerCondition::Rise), (0, TriggerCondition::High)],
+            trigger_position: 25,
+            ..CapturePlan::default()
+        },
+    );
+    assert!(packets.contains(&Packet::Trigger { sample: 32 }));
+    assert_capture(&packets, enabled, &samples[141..269]);
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+}
+
+#[test]
 fn looping_runs_past_the_finite_limit_then_stops_the_gate_before_cancellation() {
     let (transport, mut device) = open();
     configure(&mut device, 0xf, 64);
     transport
         .device()
         .samples
-        .push_back(Ok(sample_bytes(4, &[0xf; 256])));
+        .push_back(Ok(sample_bytes16(4, &[0xf; 256])));
     let (sink, receiver) = unbounded();
     let acquisition = device
         .start(
@@ -280,12 +332,12 @@ fn unplug_reports_detached_and_does_not_send_stop_to_the_missing_device() {
 fn retries_a_swallowed_first_run_and_discards_the_new_partial_head() {
     let (transport, mut device) = open();
     configure(&mut device, 0xffff, 128);
-    let samples: Vec<_> = (0u16..128).map(|n| n.wrapping_mul(7919)).collect();
+    let samples: Vec<_> = (0u32..128).map(|n| n.wrapping_mul(7919) & 0xffff).collect();
     transport.device().swallow_runs = 1;
     transport
         .device()
         .samples
-        .push_back(Ok(sample_bytes(16, &samples)));
+        .push_back(Ok(sample_bytes16(16, &samples)));
     let packets = run(&mut device, CapturePlan::default());
     assert_capture(&packets, 0xffff, &samples);
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
@@ -345,7 +397,7 @@ fn never_rearms_after_samples_have_arrived() {
     transport
         .device()
         .samples
-        .push_back(Ok(sample_bytes(16, &[0xabcd; 64])));
+        .push_back(Ok(sample_bytes16(16, &[0xabcd; 64])));
     let packets = run(&mut device, CapturePlan::default());
     assert_capture(&packets, 0xffff, &[0xabcd; 64]);
     assert!(matches!(
@@ -363,7 +415,7 @@ fn user_stop_interrupts_a_worker_with_a_bounded_receiver() {
     transport
         .device()
         .samples
-        .push_back(Ok(sample_bytes(16, &[0xabcd; 128])));
+        .push_back(Ok(sample_bytes16(16, &[0xabcd; 128])));
     let (sink, receiver) = bounded(0);
     let acquisition = device
         .start(

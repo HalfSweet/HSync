@@ -15,6 +15,7 @@ use hsync_driver::{Acquisition, CapturePlan, DriverError, EndReason, Packet};
 
 use crate::Settings;
 use crate::assemble::WireDecoder;
+use crate::model::Model;
 use crate::protocol::{CaptureSettings, EP_IN, Link, TransferPlan};
 use crate::stream::Stream;
 
@@ -24,6 +25,7 @@ const CANCEL_GRACE: Duration = Duration::from_secs(2);
 
 pub(crate) fn start(
     link: Link,
+    model: &Model,
     settings: &Settings,
     plan: CapturePlan,
     running: Arc<AtomicBool>,
@@ -44,7 +46,9 @@ pub(crate) fn start(
         transfer_size: transfers.size,
         transfer_count: transfers.count,
         configuration,
-        decoder: WireDecoder::new(settings.channels()),
+        head_bytes: model.head_bytes,
+        decoder: WireDecoder::new(settings.channels(), model.head_bytes),
+        samples: Vec::new(),
         stream: Stream::new(settings, &plan),
         stop: Arc::clone(&stop),
         running,
@@ -57,7 +61,7 @@ pub(crate) fn start(
     // even when RUN, thread creation, or the first packet fails.
     worker.link.run()?;
     worker.running.store(true, Ordering::Release);
-    let channels = (0..16)
+    let channels = (0..model.channels.into())
         .filter(|c| settings.enabled & (1 << c) != 0)
         .collect();
     let samplerate = settings.samplerate;
@@ -117,7 +121,10 @@ struct Worker {
     transfer_size: usize,
     transfer_count: usize,
     configuration: CaptureSettings,
+    head_bytes: usize,
     decoder: WireDecoder,
+    /// Reused for each transfer's decoded samples.
+    samples: Vec<u32>,
     stream: Stream,
     stop: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
@@ -163,8 +170,9 @@ impl Worker {
                     let size = self.transfer_size;
                     // Requeue before conversion so USB can keep filling the ring.
                     self.bulk().submit(size);
-                    let samples = self.decoder.push(&bytes);
-                    for packet in self.stream.push(&samples) {
+                    self.samples.clear();
+                    self.decoder.push(&bytes, &mut self.samples);
+                    for packet in self.stream.push(&self.samples) {
                         if let Err(reason) = self.send(packet) {
                             return reason;
                         }
@@ -222,7 +230,7 @@ impl Worker {
             let size = self.transfer_size;
             self.bulk().submit(size);
         }
-        self.decoder = WireDecoder::new(self.configuration.channels);
+        self.decoder = WireDecoder::new(self.configuration.channels, self.head_bytes);
         self.link.run()
     }
 
@@ -252,7 +260,7 @@ impl Worker {
         drop(bulk);
         if !matches!(reason, EndReason::Detached) {
             // Discard bytes from the old RUN before another capture drops its
-            // own four-byte head. Bound the reference's drain on both axes.
+            // own head. Bound the reference's drain on both axes.
             for attempt in 0..32 {
                 match self
                     .link

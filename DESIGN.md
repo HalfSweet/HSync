@@ -166,7 +166,7 @@ When the system asks for reduced motion, all four durations are 0. Tailwind's bu
 
 **Acquisition settings**: durations step down the 1-2-5 sequence from the longest available value until fewer than 1024 samples remain; durations beyond the device memory are marked "RLE", and choosing one turns on RLE compression. On opening, both lists scroll to the current values. When the chosen capture would take more than half of this machine's memory, the popover states below the sample count, in the alert colour, how much it needs; the capture is not blocked. The device's other options (operation mode, channel mode, threshold, filter, RLE, clock and so on) form a column generated from what the device provides (switches, drop-downs, numbers): to the right of the lists in windows at least 1024 px wide (the popover grows to 640 px), below them under a rule in narrower ones, where the popover scrolls. During a capture everything is read-only, with an explanation at the top.
 
-The SLogic16U3 uses the same capability-driven controls: Stream mode and a 0–6 V threshold (1.7 V initially). Its sample-rate list follows the highest enabled channel: D0–D3, D0–D7 or D0–D15, with respective USB 3.0 limits of 800, 400 or 200 MHz (80, 40 or 20 MHz on USB 2.0). Changing the channel selection updates the available rates. It supports Loop and simple software triggers; unsupported trigger types remain disabled.
+The SLogic16U3 and SLogic32U3 use the same capability-driven controls: Stream mode and a 0–6 V threshold (1.7 V initially). Their sample-rate lists follow the highest enabled channel and the USB link: on the SLogic16U3, D0–D3, D0–D7 or D0–D15, with respective USB 3.0 limits of 800, 400 or 200 MHz (80, 40 or 20 MHz on USB 2.0); on the SLogic32U3 also D0–D31, with 10 Gbps limits of 1400, 800, 400 or 200 MHz (800, 400, 200 or 100 MHz at 5 Gbps). Changing the channel selection updates the available rates. They support Loop and simple software triggers; unsupported trigger types remain disabled.
 
 **Capture modes**:
 
@@ -262,7 +262,7 @@ The top bar's "Trigger" button opens a 480 px wide panel:
 
 - **Type**: Simple / Stages / Serial. Stages and Serial are selectable only when the device supports them; otherwise they are greyed out, and a `title` gives the reason.
 - **Position**: a slider from 1% to the maximum the device allows; a maximum below 90% is noted, and when only 1% is possible the slider is disabled with an explanation.
-- SLogic16U3 software triggers allow up to 90%, with at most 64 MiB of pre-trigger history; the capture's trigger marker always uses the actual retained history.
+- SLogic software triggers allow up to 90%, with at most 64 MiB of pre-trigger history; the capture's trigger marker always uses the actual retained history.
 - **Simple**: the note "Set conditions in each channel row; all must hold at once", the list of conditions set, and "Clear all conditions".
 - **Stages**: a stage count of 1–16 and stage tabs; each stage has two patterns, A and B, each a row of channel cells plus "Invert"; the combination "A and B / A or B"; a count (≥ 1) and "In a row".
 - **Serial**: three rows of cells for Start, Stop and Clock; the data channel; a bit count of 1–16 (default 8); the data value (high bit on the left, 0 / 1 / X) with its hex conversion.

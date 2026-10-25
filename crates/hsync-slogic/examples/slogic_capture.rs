@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Lists SLogic16U3 devices, or performs a short capture when explicitly requested.
+//! Lists SLogic16U3 and SLogic32U3 devices, or performs a short capture when explicitly
+//! requested.
 //!
 //! ```sh
 //! cargo run -p hsync-slogic --example slogic_capture
@@ -7,7 +8,7 @@
 //! cargo run -p hsync-slogic --example slogic_capture -- --capture --channels 4 --rate 800000000 --repeat 3
 //! ```
 //!
-//! Captures default to 16 channels, 5 MHz, 65,536 samples and a 1.7 V threshold.
+//! Captures default to every channel, 5 MHz, 65,536 samples and a 1.7 V threshold.
 //! Each stops after five seconds. The device stays open between repeats;
 //! the example never flashes firmware and writes no files.
 
@@ -42,7 +43,7 @@ impl log::Log for StderrLog {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut capture_requested = false;
-    let mut channels = 16u16;
+    let mut channels = None;
     let mut samplerate = 5_000_000u64;
     let mut repeat = 1u8;
     let mut args = std::env::args().skip(1);
@@ -50,13 +51,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         match arg.as_str() {
             "--capture" => capture_requested = true,
             "--channels" => {
-                channels = args
+                let count: u16 = args
                     .next()
-                    .ok_or("--channels requires 4, 8 or 16")?
+                    .ok_or("--channels requires 4, 8, 16 or 32")?
                     .parse()?;
-                if !matches!(channels, 4 | 8 | 16) {
-                    return Err("--channels must be 4, 8 or 16".into());
+                if !matches!(count, 4 | 8 | 16 | 32) {
+                    return Err("--channels must be 4, 8, 16 or 32".into());
                 }
+                channels = Some(count);
             }
             "--rate" => {
                 samplerate = args
@@ -77,10 +79,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             "--help" | "-h" => {
-                println!("slogic_capture [--capture] [--channels 4|8|16] [--rate HZ] [--repeat N]");
+                println!(
+                    "slogic_capture [--capture] [--channels 4|8|16|32] [--rate HZ] [--repeat N]"
+                );
                 println!("Default: list devices without opening them or starting a capture.");
                 println!("--capture       Required to open the device and acquire samples.");
-                println!("--channels N    Enable D0 through D(N-1); default 16.");
+                println!("--channels N    Enable D0 through D(N-1); default every channel.");
                 println!("--rate HZ       Supported integer sample rate in Hz; default 5000000.");
                 println!(
                     "--repeat N      Capture 1 to 10 times on the same open device; default 1."
@@ -106,7 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     if candidates.is_empty() {
-        println!("No SLogic16U3 found (expected USB ID 359f:3031).");
+        println!("No SLogic found (expected USB ID 359f:3031 or 359f:3032).");
     }
     if !capture_requested {
         return Ok(());
@@ -114,10 +118,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let candidate = candidates
         .iter()
         .find(|candidate| candidate.status == CandidateStatus::Ready)
-        .ok_or("no ready SLogic16U3 found")?;
+        .ok_or("no ready SLogic found")?;
     println!("opening {}", candidate.id);
     let mut device = manager.open(candidate)?;
     println!("device: {:?}", device.info());
+    let channels = channels.unwrap_or(device.channel_count());
+    if channels > device.channel_count() {
+        return Err(format!("this model has {} channels", device.channel_count()).into());
+    }
     for channel in 0..device.channel_count() {
         device.set_channel_enabled(channel, channel < channels)?;
     }

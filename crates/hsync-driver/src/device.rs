@@ -75,7 +75,7 @@ pub struct DeviceInfo {
     pub model: String,
     /// Firmware version, e.g. `2.0`.
     pub firmware: Option<String>,
-    /// USB link speed: `high` or `super`.
+    /// USB link speed: `high`, `super` or `superPlus` (10 Gbps).
     pub usb_speed: Option<String>,
     /// A USB 3.0 device on a USB 2.0 port, where it streams far slower; DSView warns about it.
     pub slow_port: bool,

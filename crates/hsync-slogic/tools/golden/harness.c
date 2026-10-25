@@ -77,13 +77,15 @@ static int read_control(void *ctx, uint8_t req, uint16_t addr, uint16_t index,
     return len;
 }
 
-static void capture(const char *name, int channels, uint64_t rate, double threshold,
-                    unsigned payload_len, unsigned busy, uint16_t first, uint16_t second)
+static void capture(uint16_t pid, const char *name, int channels, uint64_t rate,
+                    double threshold, unsigned payload_len, unsigned busy, uint16_t first,
+                    uint16_t second)
 {
     struct device d = { .payload_len = payload_len, .busy = busy, .clocks = {first, second} };
     slogic_transport t = {.ctx = &d, .control_write = write_control, .control_read = read_control};
     slogic_config c = {.channel_count = channels, .samplerate_hz = rate, .threshold_v = threshold};
-    const slogic_model *m = slogic_model_for_pid(SLOGIC_PID_16U3);
+    const slogic_model *m = slogic_model_for_pid(pid);
+    assert(m && slogic_max_rate(m, channels) >= rate);
     printf("CASE %s %d %" PRIu64 " %.3f\n", name, channels, rate, threshold);
     assert(slogic_reset(m, &t) == SLOGIC_OK);
     assert(slogic_configure(m, &t, &c) == SLOGIC_OK);
@@ -95,12 +97,19 @@ static void capture(const char *name, int channels, uint64_t rate, double thresh
 int main(void)
 {
     puts("# sipeed/libsigrok 0d728b3e1226a61738c99c3333ad16d5c2814728");
-    capture("four_fastest", 4, 800000000, 0.0, 0, 0, 800, 0);
-    capture("eight_fastest", 8, 400000000, 1.8, 0, 0, 800, 0);
-    capture("sixteen_fastest", 16, 200000000, 3.3, 0, 0, 800, 0);
-    capture("slowest_max_threshold", 4, 5000000, 6.0, 0, 0, 800, 0);
-    capture("clock_walk", 16, 200000000, 1.0, 0, 0, 1400, 800);
-    capture("clock_fallback", 16, 200000000, 2.5, 0, 0, 1400, 0);
-    capture("busy_extended_payload", 8, 100000000, 0.3, 16, 2, 800, 0);
+    capture(SLOGIC_PID_16U3, "four_fastest", 4, 800000000, 0.0, 0, 0, 800, 0);
+    capture(SLOGIC_PID_16U3, "eight_fastest", 8, 400000000, 1.8, 0, 0, 800, 0);
+    capture(SLOGIC_PID_16U3, "sixteen_fastest", 16, 200000000, 3.3, 0, 0, 800, 0);
+    capture(SLOGIC_PID_16U3, "slowest_max_threshold", 4, 5000000, 6.0, 0, 0, 800, 0);
+    capture(SLOGIC_PID_16U3, "clock_walk", 16, 200000000, 1.0, 0, 0, 1400, 800);
+    capture(SLOGIC_PID_16U3, "clock_fallback", 16, 200000000, 2.5, 0, 0, 1400, 0);
+    capture(SLOGIC_PID_16U3, "busy_extended_payload", 8, 100000000, 0.3, 16, 2, 800, 0);
+    /* SLogic32U3 reports a 1400 MHz clock in slot 0 and 800 MHz in slot 1. */
+    capture(SLOGIC_PID_32U3, "u32_four_fastest", 4, 1400000000, 1.7, 0, 0, 1400, 800);
+    capture(SLOGIC_PID_32U3, "u32_eight_fastest", 8, 800000000, 1.2, 0, 0, 1400, 800);
+    capture(SLOGIC_PID_32U3, "u32_sixteen_fastest", 16, 400000000, 0.9, 0, 0, 1400, 800);
+    capture(SLOGIC_PID_32U3, "u32_thirty_two_fastest", 32, 200000000, 3.3, 0, 0, 1400, 800);
+    capture(SLOGIC_PID_32U3, "u32_thirty_two_5g", 32, 100000000, 2.5, 0, 0, 1400, 800);
+    capture(SLOGIC_PID_32U3, "u32_slowest", 32, 5000000, 0.6, 0, 0, 1400, 800);
     return 0;
 }
