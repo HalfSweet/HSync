@@ -28,9 +28,18 @@ Capture, trigger, decode and measure, with one app for logic analyzers from seve
 
 HSync is a desktop app for logic analyzers that isn't tied to any one maker. It drives DreamSourceLab's DSLogic, ALIENTEK's ATK-Logic, PXLogic's PX-Logic and Sipeed's SLogic analyzers ([full list](#supported-devices)), and gives them all the same tools. Plug one in and press **Capture**: decoded I²C, UART, SPI and CAN traffic appears right above the waveforms it came from, while the capture is still running, and dozens of protocol decoders are a search away. HSync saves captures in its own `.hsync` format, opens and exports DSView's `.dsl` files and imports VCD, FST and GHW waveforms, so your captures come along, and everything it needs is in the package: the device firmware and the decoders.
 
-The SLogic analyzers are officially sponsored by [Sipeed](https://sipeed.com/).
-
 No hardware at hand? HSync opens its built-in **Demo device**, which plays back a recording of four buses, so you can try everything straight away.
+
+## Supporters
+
+Sipeed has given strong support to HSync's work on its SLogic analyzers.
+
+<a href="https://sipeed.com/">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/supporters/sipeed-dark.svg">
+    <img src="assets/supporters/sipeed.svg" height="36" alt="Sipeed">
+  </picture>
+</a>
 
 ## Features
 
