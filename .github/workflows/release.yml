@@ -138,6 +138,11 @@ jobs:
     needs: tag
     permissions:
       contents: write
+    # A merged pull request runs in main's cache scope, which pull_request runs may only read by
+    # default, so the installers would build without a Rust cache every time. Writing is safe here:
+    # only merged release/v* branches of this repository get past the tag job, and the installers
+    # are built from the merge commit on main.
+    cache-mode: write
     uses: ./.github/workflows/bundle.yml
     with:
       ref: ${{ needs.tag.outputs.sha }}
