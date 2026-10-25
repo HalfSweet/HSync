@@ -10,6 +10,8 @@ const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 /** The fewest samples a capture takes. */
 export const MIN_SAMPLES = 1024
+/** Share of this machine's memory a capture may fill before the menu warns about it. */
+export const MEMORY_SHARE = 0.5
 
 /** Durations in seconds, longest first. */
 export function durationChoices(samplerate: number, maxSamples: number): number[] {
@@ -38,6 +40,17 @@ export function durationChoices(samplerate: number, maxSamples: number): number[
 export function samplesFor(seconds: number, samplerate: number): number {
   const samples = Math.ceil(seconds * samplerate)
   return Math.max(MIN_SAMPLES, Math.ceil(samples / 1024) * 1024)
+}
+
+/**
+ * Samples per channel a Stream capture of `channels` channels may take: as many as fit, bit
+ * packed, in {@link MEMORY_SHARE} of this machine's `memory`, in whole kilo-samples, and no more
+ * than the device's own `deviceMax`.
+ */
+export function memoryLimit(memory: number | null, channels: number, deviceMax: number): number {
+  if (memory === null || !(channels > 0)) return deviceMax
+  const samples = Math.floor((memory * MEMORY_SHARE * 8) / channels / 1024) * 1024
+  return Math.min(deviceMax, Math.max(MIN_SAMPLES, samples))
 }
 
 /** The choice closest to `seconds`, so a rate change keeps the capture about as long. */

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { closestDuration, durationChoices, samplesFor } from './durations'
+import { closestDuration, durationChoices, memoryLimit, samplesFor } from './durations'
 
 describe('durationChoices', () => {
   it('steps down a 1-2-5 sequence from the longest capture', () => {
@@ -43,5 +43,19 @@ describe('closestDuration', () => {
     expect(closestDuration([1, 0.5, 0.2, 0.1], 0.3)).toBe(0.2)
     expect(closestDuration([1, 0.5, 0.2, 0.1], 0.4)).toBe(0.5)
     expect(closestDuration([], 1)).toBeUndefined()
+  })
+})
+
+describe('memoryLimit', () => {
+  it('fits a Stream capture into half of this machine’s memory', () => {
+    // 16 GiB: 8 GiB hold 4 Gi samples of 16 channels.
+    expect(memoryLimit(2 ** 34, 16, 2 ** 40)).toBe(2 ** 32)
+    expect(memoryLimit(2 ** 34, 3, 2 ** 40)).toBe(Math.floor(2 ** 36 / 3 / 1024) * 1024)
+  })
+
+  it('stays within the device', () => {
+    expect(memoryLimit(2 ** 34, 1, 16 * 2 ** 30)).toBe(16 * 2 ** 30)
+    expect(memoryLimit(null, 16, 2 ** 30)).toBe(2 ** 30)
+    expect(memoryLimit(2 ** 34, 0, 2 ** 30)).toBe(2 ** 30)
   })
 })
