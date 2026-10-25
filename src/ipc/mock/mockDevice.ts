@@ -99,6 +99,8 @@ export class MockDemoDevice {
       trigger: { maxPosition: 90, advanced: ADVANCED_TRIGGERS, advancedOtherMode: false },
       canLoop: true,
       hardwareDepth: null,
+      rateTiers: [],
+      rateTier: null,
     }
   }
 
