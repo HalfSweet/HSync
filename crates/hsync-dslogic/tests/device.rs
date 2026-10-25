@@ -11,7 +11,7 @@ use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
 use hsync_driver::{
     AdvancedTrigger, CapturePlan, Device, DriverError, EndReason, OptionKey, OptionKind,
-    OptionValue, Packet, TriggerCaps, TriggerStageSpec,
+    OptionValue, Packet, RateTier, TriggerCaps, TriggerStageSpec,
 };
 use hsync_dslogic::profiles::{CHANNEL_MODES, UsbSpeed, VENDOR_ID, find_profile};
 use hsync_dslogic::protocol::{
@@ -144,6 +144,14 @@ fn open(fake: FakeDslogic, firmware: FirmwareDir) -> (MockTransport<FakeDslogic>
     let profile = find_profile(VENDOR_ID, 0x0020, UsbSpeed::High).expect("DSLogic Plus");
     let device = DslogicDevice::open(ctl, profile, firmware, "test".into()).expect("open");
     (transport, device)
+}
+
+/// A DSLogic U3Pro16 on a USB 3.0 port.
+fn open_u3pro16() -> DslogicDevice {
+    let transport = MockTransport::new(configured());
+    let ctl = Control::new(Arc::new(transport)).without_read_delay();
+    let profile = find_profile(VENDOR_ID, 0x002A, UsbSpeed::Super).expect("U3Pro16 on USB 3");
+    DslogicDevice::open(ctl, profile, firmware_dir(&[]), "test".into()).expect("open")
 }
 
 fn configured() -> FakeDslogic {
@@ -279,6 +287,108 @@ fn limits_channels_to_the_mode() {
         .set_channel_enabled(12, true)
         .expect("enable another");
     assert_eq!(device.enabled_channels().len(), 12);
+}
+
+/// `max_samplerate` and `channels`, `leading`, `span` of each tier.
+fn tier_shapes(tiers: &[RateTier]) -> Vec<(u16, bool, u16, u64)> {
+    tiers
+        .iter()
+        .map(|tier| {
+            assert_eq!(tier.samplerates.last(), Some(&tier.max_samplerate));
+            (tier.channels, tier.leading, tier.span, tier.max_samplerate)
+        })
+        .collect()
+}
+
+#[test]
+fn offers_channel_modes_as_rate_tiers() {
+    let mut device = open_u3pro16();
+    assert_eq!(
+        tier_shapes(&device.rate_tiers()),
+        [
+            (3, false, 8, 1_000_000_000),
+            (6, false, 16, 500_000_000),
+            (12, false, 16, 250_000_000),
+            (16, true, 16, 125_000_000),
+        ]
+    );
+    assert_eq!(device.rate_tiers()[3].samplerates.first(), Some(&1_000_000));
+    assert_eq!(device.rate_tier(), Some(3));
+
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    assert_eq!(
+        tier_shapes(&device.rate_tiers()),
+        [(8, true, 8, 1_000_000_000), (16, true, 16, 500_000_000)]
+    );
+    assert_eq!(device.rate_tier(), Some(1));
+}
+
+#[test]
+fn selects_a_rate_tier_with_its_channels() {
+    let mut device = open_u3pro16();
+    device
+        .set_option(OptionKey::Samplerate, &OptionValue::Integer(100_000_000))
+        .expect("100 MHz");
+    device
+        .select_rate_tier(0, &[1, 5, 7])
+        .expect("3 of D0–D7 at up to 1 GHz");
+    assert_eq!(device.rate_tier(), Some(0));
+    assert_eq!(device.channel_count(), 8);
+    assert_eq!(device.enabled_channels(), [1, 5, 7]);
+    assert_eq!(device.settings().samplerate, 100_000_000);
+
+    device
+        .set_option(OptionKey::Samplerate, &OptionValue::Integer(1_000_000_000))
+        .expect("1 GHz");
+    device
+        .select_rate_tier(3, &(0..16).collect::<Vec<_>>())
+        .expect("all 16 channels");
+    assert_eq!(device.enabled_channels().len(), 16);
+    assert_eq!(device.settings().samplerate, 125_000_000);
+}
+
+#[test]
+fn refuses_channels_that_do_not_fit_a_tier() {
+    let mut device = open_u3pro16();
+    device.select_rate_tier(1, &[0, 9]).expect("6-channel tier");
+    let enabled = device.enabled_channels();
+    for (index, channels) in [
+        (0, vec![1, 9]),
+        (1, (0..7).collect::<Vec<_>>()),
+        (1, vec![16]),
+        (4, vec![0]),
+    ] {
+        assert!(matches!(
+            device.select_rate_tier(index, &channels),
+            Err(DriverError::InvalidRequest(_))
+        ));
+        assert_eq!(device.rate_tier(), Some(1));
+        assert_eq!(device.enabled_channels(), enabled);
+    }
+}
+
+#[test]
+fn sets_all_enabled_channels_within_the_mode() {
+    let mut device = open_u3pro16();
+    device
+        .set_option(OptionKey::ChannelMode, &OptionValue::Choice("17".into()))
+        .expect("12 channels at 250 MHz");
+    device.set_enabled_channels(&[0, 15]).expect("two channels");
+    assert_eq!(device.enabled_channels(), [0, 15]);
+    assert!(
+        device
+            .set_enabled_channels(&(0..13).collect::<Vec<_>>())
+            .is_err()
+    );
+    assert!(device.set_enabled_channels(&[16]).is_err());
+    assert_eq!(device.enabled_channels(), [0, 15]);
+    device.set_enabled_channels(&[]).expect("none");
+    assert!(device.enabled_channels().is_empty());
 }
 
 #[test]

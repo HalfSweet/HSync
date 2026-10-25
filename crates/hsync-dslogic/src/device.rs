@@ -8,7 +8,7 @@ use crossbeam_channel::Sender;
 use hsync_core::ChannelIndex;
 use hsync_driver::{
     Acquisition, CapturePlan, Choice, Device, DeviceInfo, DriverError, FirmwareDir, Label,
-    OptionKey, OptionKind, OptionState, OptionValue, Packet, TriggerCaps,
+    OptionKey, OptionKind, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
 };
 
 use crate::acquisition::{self, AcquisitionParams};
@@ -284,6 +284,33 @@ impl DslogicDevice {
         boot::configure_fpga(&self.ctl, &bitstream)?;
         self.settings.threshold = threshold;
         Ok(())
+    }
+
+    /// The channel modes of the operation mode as rate tiers, fewest channels first.
+    fn tier_modes(&self) -> Vec<&'static ChannelMode> {
+        let mut modes: Vec<_> = self.profile.channel_modes(self.settings.stream).collect();
+        modes.sort_by_key(|mode| mode.valid_channels);
+        modes
+    }
+
+    /// The channel mask of `channels` if `mode` can capture them all at once.
+    fn mask_for(mode: &ChannelMode, channels: &[ChannelIndex]) -> Result<u32, DriverError> {
+        let mut mask = 0u32;
+        for &channel in channels {
+            if channel >= mode.channels {
+                return Err(DriverError::InvalidRequest(format!(
+                    "channel {channel} does not exist in this mode"
+                )));
+            }
+            mask |= 1 << channel;
+        }
+        if mask.count_ones() > u32::from(mode.valid_channels) {
+            return Err(DriverError::InvalidRequest(format!(
+                "this channel mode captures at most {} channels",
+                mode.valid_channels
+            )));
+        }
+        Ok(mask)
     }
 
     fn channel_mode_choices(&self) -> Vec<Choice> {
@@ -617,6 +644,48 @@ impl Device for DslogicDevice {
         } else {
             self.settings.enabled &= !bit;
         }
+        Ok(())
+    }
+
+    fn set_enabled_channels(&mut self, channels: &[ChannelIndex]) -> Result<(), DriverError> {
+        self.ensure_idle()?;
+        self.settings.enabled = Self::mask_for(self.settings.channel_mode, channels)?;
+        Ok(())
+    }
+
+    /// The channel modes of the operation mode, as DSView lists them in its channel mode menu.
+    fn rate_tiers(&self) -> Vec<RateTier> {
+        self.tier_modes()
+            .into_iter()
+            .map(|mode| RateTier {
+                channels: mode.valid_channels,
+                leading: mode.valid_channels == mode.channels,
+                span: mode.channels,
+                max_samplerate: mode.max_samplerate,
+                samplerates: self.profile.samplerates_for(mode),
+            })
+            .collect()
+    }
+
+    fn rate_tier(&self) -> Option<usize> {
+        self.tier_modes()
+            .iter()
+            .position(|mode| mode.id == self.settings.channel_mode.id)
+    }
+
+    fn select_rate_tier(
+        &mut self,
+        index: usize,
+        channels: &[ChannelIndex],
+    ) -> Result<(), DriverError> {
+        self.ensure_idle()?;
+        let mode = *self
+            .tier_modes()
+            .get(index)
+            .ok_or_else(|| DriverError::InvalidRequest(format!("no rate tier {index}")))?;
+        let mask = Self::mask_for(mode, channels)?;
+        self.select_channel_mode(mode);
+        self.settings.enabled = mask;
         Ok(())
     }
 
