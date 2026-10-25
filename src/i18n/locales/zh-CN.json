@@ -1919,22 +1919,22 @@
       "detached": "设备已断开",
       "lost": "与设备的连接中断",
       "slogic": {
-        "captureRunning": "SLogic16U3 正在采集，请停止后再修改设置",
+        "captureRunning": "SLogic 正在采集，请停止后再修改设置",
         "samplerate": "当前启用的通道和 USB 连接不支持此采样率",
         "sampleLimit": "采样数须在 {min} 至 {max} 之间，步进为 {step}",
-        "threshold": "SLogic16U3 的阈值须在 0 至 6 V 之间",
-        "option": "SLogic16U3 不支持这项设置",
-        "channel": "SLogic16U3 没有通道 {channel}",
+        "threshold": "SLogic 的阈值须在 0 至 6 V 之间",
+        "option": "SLogic 不支持这项设置",
+        "channel": "SLogic 没有通道 {channel}",
         "noChannels": "请至少启用一个通道再采集",
-        "triggerType": "SLogic16U3 仅支持简单的边沿和电平触发",
-        "triggerChannel": "SLogic16U3 没有触发通道 {channel}",
-        "auxReady": "SLogic16U3 未确认配置命令",
-        "sampleClock": "SLogic16U3 无法为所选采样率提供时钟",
-        "captureSettings": "SLogic16U3 的采集设置无效",
-        "captureData": "SLogic16U3 未继续发送采样数据，请检查 USB 连接后重试",
-        "cancelTransfers": "SLogic16U3 的 USB 传输未能及时停止，请重新连接设备",
-        "workerStart": "无法启动 SLogic16U3 的采集线程",
-        "drain": "SLogic16U3 中仍有上一次采集的数据，请重新连接设备"
+        "triggerType": "SLogic 仅支持简单的边沿和电平触发",
+        "triggerChannel": "SLogic 没有触发通道 {channel}",
+        "auxReady": "SLogic 未确认配置命令",
+        "sampleClock": "SLogic 无法为所选采样率提供时钟",
+        "captureSettings": "SLogic 的采集设置无效",
+        "captureData": "SLogic 未继续发送采样数据，请检查 USB 连接后重试",
+        "cancelTransfers": "SLogic 的 USB 传输未能及时停止，请重新连接设备",
+        "workerStart": "无法启动 SLogic 的采集线程",
+        "drain": "SLogic 中仍有上一次采集的数据，请重新连接设备"
       }
     },
     "file": {
@@ -1980,7 +1980,7 @@
       "restarting": "正在重启…"
     },
     "license": "HSync 是自由软件：以 Apache-2.0 或 GPL-3.0-or-later 许可提供，任选其一。",
-    "credits": "DSLogic 驱动移植自 DreamSourceLab 的 DSView（libsigrok4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL），PXLogic 驱动移植自 PXView（GPL），其固件与 FPGA 位流也取自 PXView；SLogic16U3 驱动移植自矽速 PulseView 所用的 libsigrok（GPL-3.0-or-later）；DSLogic 固件与 FPGA 位流以 MIT 许可随附；解码引擎 uiharu 以 Apache-2.0 许可；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
+    "credits": "DSLogic 驱动移植自 DreamSourceLab 的 DSView（libsigrok4DSL，GPL），ATK-Logic 驱动移植自正点原子的 ATK-Logic（GPL），PXLogic 驱动移植自 PXView（GPL），其固件与 FPGA 位流也取自 PXView；SLogic 驱动移植自矽速 PulseView 所用的 libsigrok（GPL-3.0-or-later）；DSLogic 固件与 FPGA 位流以 MIT 许可随附；解码引擎 uiharu 以 Apache-2.0 许可；界面字体 IBM Plex 以 SIL OFL 1.1 许可；图标 Lucide 以 ISC 许可。"
   },
   "shortcuts": {
     "space": "空格"
