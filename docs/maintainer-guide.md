@@ -27,7 +27,7 @@ Commit TypeScript sources, not generated IR or Rust. `pnpm dsl:check` regenerate
 
 When the bindings check fails, run `pnpm bindings` and commit the result.
 
-With a warm cache the Rust job takes about 4 minutes; after `Cargo.lock` changes, or on a cold cache, it can take 15–30. Jobs stop after 10–60 minutes.
+With a warm cache the Rust job takes about 4 minutes; after `Cargo.lock` changes, or on a cold cache, it can take 15–30. Jobs stop after 10–60 minutes. Only pushes to `main` save the Rust job's cache; pull requests restore main's and save nothing, so they don't fill the repository's 10 GB of caches.
 
 Pull requests opened by the Release workflow come from `github-actions[bot]`, so GitHub holds their CI until someone approves it ("Approve and run"). Approving is optional: those pull requests only change version numbers and the changelog.
 
@@ -112,6 +112,8 @@ On each runner it:
 
 1. Generates decoder IR and Rust with `pnpm dsl:generate`, then builds with tauri-action. When the `TAURI_SIGNING_PRIVATE_KEY` secret exists, it also passes `--config src-tauri/tauri.updater.conf.json`, which produces the signed update artifacts.
 
+Each runner keeps its own Rust cache (`Swatinem/rust-cache`). A merged pull request runs in main's cache scope, which `pull_request` runs may only read by default, so the Release workflow's Installers job declares `cache-mode: write` to let releases save it. GitHub drops caches unused for 7 days, so the first release after a quiet week builds from scratch.
+
 The Release workflow calls it with a draft release to fill. You can also run it by hand (**Actions → Bundle → Run workflow**) to check packaging without releasing. The installers then stay with the run as artifacts. Artifact zips drop hidden files and file modes: to try a macOS build, use the `.dmg` artifact rather than the zipped `.app`.
 
 To build the installers for your own machine the same way (without update signatures):
@@ -167,4 +169,5 @@ On macOS this is the universal build, which needs both Rust targets: `rustup tar
 - **A macOS build stops at launch with "unknown path".** It was started through a symlinked path; on macOS `/tmp` is a link to `/private/tmp`. Tauri refuses executables reached through symlinks. Start it from its real location (Applications, or `/private/tmp/…`).
 - **A zipped `.app` from a Bundle run fails `codesign --verify`.** The artifact zip dropped hidden files. The `.dmg` artifact and the release assets are complete.
 - **The Release workflow shows skipped runs.** It is triggered by every merged pull request, but works only for `release/v*` branches. Skipped runs are expected.
+- **A release's installers log "Cache save skipped: the effective cache-mode 'read' does not permit writes".** The `cache-mode: write` on the Installers job of `release.yml` is missing or was overridden. Without it every release compiles from scratch.
 - **CI on a release pull request says "action required".** See [Continuous integration](#continuous-integration). Approving is optional.
