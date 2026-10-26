@@ -242,9 +242,9 @@ The SLogic16U3 and SLogic32U3 use the same capability-driven controls: Stream mo
 
 ### 6.6 Segment
 
-- Drag on the ruler to mark a segment: its ends carry two 14 px flags, A and B (`--ink` fill), with an arrowed horizontal line between them labelled with the duration; `--veil` covers the whole segment on every row. The duration, here and in the status bar, reads in whole nanoseconds below a microsecond ("20 ns"), in microseconds with one decimal below a millisecond ("540.0 µs") and in milliseconds with four decimals above ("1.0460 ms").
+- Drag on the ruler to mark a segment: its ends carry two 14 px flags, A and B (`--ink` fill), with an arrowed horizontal line between them labelled with the duration; `--veil` covers the whole segment on every row. The duration, here and in the status bar, reads like the edge measurement's (§6.5), exact to one sample with at most 3 decimals ("20 ns", "2.5 ns" at 400 MHz, "540.00 µs", "1.046 ms").
 - The flags sit outside the segment and turn inwards near the viewport edges; when the segment is narrower than 9% of the viewport, the duration sits beside B (beside A when B is near the right edge); when one end of the segment lies outside the viewport, the duration reads "Extends beyond view".
-- A drag shorter than 2 µs counts as a click; a click on the ruler cancels the segment.
+- A segment can be as short as one sample, whatever the zoom. As on the tracks, a press that moves the pointer no more than 3 px is a click, and the segment follows the pointer only once it moves further; a click on the ruler, or a drag that covers no sample, cancels the segment.
 - While a segment exists, the status bar shows its duration; clicking it lists each channel's rising edges, falling edges and edge count within the segment.
 
 ## 7. Trigger
