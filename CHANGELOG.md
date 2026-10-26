@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.6 (2026-10-26)
+
+### Features
+
+- Add analog channels and read the SLogic32U3's ADC module (#61) ([5df677f](https://github.com/HalfSweet/HSync/commit/5df677ff95f91f5363d013064fbe949427a8c62f))
+
+### Bug Fixes
+
+- **fileio:** Escape channel names in CSV exports (#63) ([c3097ad](https://github.com/HalfSweet/HSync/commit/c3097ade6bd48721b98684ac4738bec723dc55ed))
+- **timeline:** Keep waveforms still at zoom limits (#65) ([cb2e985](https://github.com/HalfSweet/HSync/commit/cb2e985cec11d77612afbd514ab3424accfc69ed))
+- **ui:** Suppress browser actions in desktop windows (#66) ([6b08b3c](https://github.com/HalfSweet/HSync/commit/6b08b3c248c77c025bb1f7f70312c821b6f85124))
+- **timeline:** Keep short segments and read their length to one sample (#67) ([6112411](https://github.com/HalfSweet/HSync/commit/61124115e11e1c2d1dc01a211eb772343720fca0))
+- **timeline:** Keep ruler labels from running into each other (#68) ([a584f1a](https://github.com/HalfSweet/HSync/commit/a584f1aa4981e94199f899b879af36d6c88388c8))
+
 ## 0.2.5 (2026-10-25)
 
 ### Features
