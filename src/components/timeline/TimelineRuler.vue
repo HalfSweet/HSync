@@ -7,6 +7,7 @@ import { useCaptureStore } from '@/stores/capture'
 import { useDecodeStore } from '@/stores/decode'
 import { useViewStore } from '@/stores/view'
 import { segmentGeometry } from '@/timeline/segment'
+import { labelWidth } from '@/timeline/ticks'
 import { xToSample } from '@/timeline/viewport'
 import { formatSampled } from '@/utils/units'
 
@@ -17,10 +18,15 @@ const view = useViewStore()
 const track = useTemplateRef<HTMLElement>('track')
 
 const ticks = computed(() => view.ruler.ticks)
-/** Labels too close to the left edge would run into the unit label there; their marks stay. */
-const UNIT_LABEL_CLEARANCE = 32
+/**
+ * Where a label's text may begin, clear of the unit label 6 px into the track and at most 15 px
+ * wide ("ms"). Labels that would start sooner run into it, so only their marks stay.
+ */
+const UNIT_LABEL_CLEARANCE = 28
 const majors = computed(() =>
-  ticks.value.filter((tick) => tick.major && tick.x >= UNIT_LABEL_CLEARANCE),
+  ticks.value.filter(
+    (tick) => tick.major && tick.x - labelWidth(tick.label) / 2 >= UNIT_LABEL_CLEARANCE,
+  ),
 )
 
 /** Tick marks as one SVG path: 4 px minor and 8 px major marks along the bottom edge. */
