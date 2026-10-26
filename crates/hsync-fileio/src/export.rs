@@ -225,7 +225,14 @@ fn write_csv<W: Write>(
     let names: Vec<String> = request
         .channels
         .iter()
-        .map(|(_, name)| format!(" {name}"))
+        .map(|(_, name)| {
+            let field = format!(" {name}");
+            if field.contains([',', '"', '\r', '\n']) {
+                format!("\"{}\"", field.replace('"', "\"\""))
+            } else {
+                field
+            }
+        })
         .collect();
     writeln!(out, "{}", names.join(","))?;
 
