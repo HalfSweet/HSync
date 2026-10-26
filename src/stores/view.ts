@@ -13,7 +13,6 @@ import {
   panViewport,
   rangeViewport,
   viewportEnd,
-  xToSample,
   zoomViewport,
   type Viewport,
 } from '@/timeline/viewport'
@@ -148,11 +147,16 @@ export const useViewStore = defineStore('view', () => {
    */
   function glideZoom(factor: number, anchorX = viewport.value.width / 2): void {
     const target = glide?.to ?? viewport.value
-    const samplesPerPixel = target.samplesPerPixel / factor
-    const anchor = xToSample(viewport.value, anchorX)
+    const zoomed = zoomViewport(target, factor, anchorX, capture.extent)
+    // At a zoom limit, let the existing glide finish without moving its target or restarting it.
+    if (zoomed.samplesPerPixel === target.samplesPerPixel) return
+    const current = viewport.value
     glideTo(
       clampViewport(
-        { start: anchor - anchorX * samplesPerPixel, samplesPerPixel, width: target.width },
+        {
+          ...zoomed,
+          start: current.start + anchorX * (current.samplesPerPixel - zoomed.samplesPerPixel),
+        },
         capture.extent,
       ),
     )
