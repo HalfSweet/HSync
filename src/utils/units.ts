@@ -52,7 +52,7 @@ export function formatTimeShort(seconds: number): string {
 }
 
 /**
- * Formats a span the way the segment label and hover read-outs do: below a microsecond in
+ * Formats a span the way the data stream's event details do: below a microsecond in
  * whole ns, below a millisecond in µs with one decimal, otherwise in ms with four (`20 ns`,
  * `540.0 µs`, `1.0460 ms`). A span that rounds to 1000 ns reads in µs.
  */
