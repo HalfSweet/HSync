@@ -1,5 +1,5 @@
-# Checks every change on Linux: what the Git hooks check, plus the build, the commit messages and
-# the generated bindings.
+# Runs full validation on Linux: formatting, lint, type checks, tests, the build, commit messages
+# and generated bindings.
 name: CI
 
 on:

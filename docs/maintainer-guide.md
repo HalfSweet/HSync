@@ -15,6 +15,8 @@ How HSync is checked, released and packaged: continuous integration, the release
 
 `ci.yml` runs on every pull request and every push to `main`, and can be run by hand. It runs on Linux only, to save the Actions minutes of a private repository; macOS and Windows problems show up when the installers are built (see [Installers](#installers)).
 
+Local Git hooks format and lint staged files before a commit and validate the commit message. There is no pre-push hook: pushing does not run local checks. CI runs the full validation listed below.
+
 | Job             | What it checks                                                                                                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Commit messages | commitlint over the new commits: base..head of a pull request, before..after of a push; only the last commit when there is nothing to compare with (new branch, force push)    |
