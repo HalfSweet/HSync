@@ -53,10 +53,16 @@ export function zoomViewport(
   anchorX: number,
   sampleCount: number,
 ): Viewport {
-  const anchor = xToSample(view, anchorX)
-  const samplesPerPixel = view.samplesPerPixel / factor
+  // Clamp the scale before moving the anchor, so zooming past a limit cannot pan the view.
+  const zoomed = clampViewport(
+    { ...view, samplesPerPixel: view.samplesPerPixel / factor },
+    sampleCount,
+  )
   return clampViewport(
-    { start: anchor - anchorX * samplesPerPixel, samplesPerPixel, width: view.width },
+    {
+      ...zoomed,
+      start: view.start + anchorX * (view.samplesPerPixel - zoomed.samplesPerPixel),
+    },
     sampleCount,
   )
 }
