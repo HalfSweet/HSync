@@ -142,6 +142,8 @@ Opening menus and panels, switching options, and adding or removing list items a
 
 These are the defaults; change them in **Settings › Shortcuts**. Shortcuts without ⌘ or Ctrl do nothing while you type in a text field.
 
+In the desktop app, F5 and Ctrl/⌘+R do not refresh the interface. Browser actions such as saving a web page, printing, browser find, history navigation and whole-page zoom are disabled in both the main window and the separate data stream window, even when an application shortcut is cleared or unavailable. Ctrl/⌘+S saves the capture when its default binding is in use. You can assign browser key combinations to application actions in the shortcut settings. Right-click opens application menus where available; text fields keep their normal editing menu and copy/paste shortcuts.
+
 | Key                           | Action                                                   |
 | ----------------------------- | -------------------------------------------------------- |
 | `/`                           | Focus the search box                                     |
