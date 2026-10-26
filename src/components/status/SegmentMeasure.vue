@@ -7,7 +7,7 @@ import { getBackend } from '@/ipc/backend'
 import type { ChannelEdges } from '@/ipc/bindings/ChannelEdges'
 import { useCaptureStore } from '@/stores/capture'
 import { useViewStore } from '@/stores/view'
-import { formatCount, formatSpan } from '@/utils/units'
+import { formatCount, formatSampled } from '@/utils/units'
 
 /**
  * The marked segment in the status bar (DESIGN.md §6.6): its duration, and on click the rising
@@ -31,7 +31,7 @@ const span = computed<[number, number] | null>(() => {
 const duration = computed(() => {
   const range = span.value
   if (!range || capture.samplerate <= 0) return ''
-  return formatSpan((range[1] - range[0]) / capture.samplerate)
+  return formatSampled((range[1] - range[0]) / capture.samplerate, capture.samplerate)
 })
 
 /** Channels in timeline order with their labels. */

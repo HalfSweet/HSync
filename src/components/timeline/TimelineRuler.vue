@@ -8,7 +8,7 @@ import { useDecodeStore } from '@/stores/decode'
 import { useViewStore } from '@/stores/view'
 import { segmentGeometry } from '@/timeline/segment'
 import { xToSample } from '@/timeline/viewport'
-import { formatSpan } from '@/utils/units'
+import { formatSampled } from '@/utils/units'
 
 const { t } = useI18n()
 const capture = useCaptureStore()
@@ -38,7 +38,9 @@ const segment = computed(() => {
   if (!current) return null
   const geometry = segmentGeometry(current.from, current.to, view.viewport)
   const seconds = capture.samplerate > 0 ? (current.to - current.from) / capture.samplerate : 0
-  const text = geometry.open ? t('ruler.outsideViewport') : formatSpan(seconds)
+  const text = geometry.open
+    ? t('ruler.outsideViewport')
+    : formatSampled(seconds, capture.samplerate)
   return { ...geometry, text }
 })
 

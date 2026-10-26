@@ -74,6 +74,18 @@ describe('timeline ruler', () => {
     expect(wrapper.text()).toContain('500 ns')
   })
 
+  it('reads the length to one sample', async () => {
+    const fast = await ruler(400_000_000)
+    fast.view.setSegment({ from: 100, to: 101 })
+    await nextTick()
+    expect(fast.wrapper.text()).toContain('2.5 ns')
+
+    const slow = await ruler()
+    slow.view.setSegment({ from: 100, to: 361 })
+    await nextTick()
+    expect(slow.wrapper.text()).toContain('2.61 µs')
+  })
+
   it('marks a segment either way along the ruler', async () => {
     const { view, track } = await ruler()
     await drag(track, 400, 380, 300)
