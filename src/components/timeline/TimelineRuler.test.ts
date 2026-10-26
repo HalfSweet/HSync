@@ -86,6 +86,17 @@ describe('timeline ruler', () => {
     expect(slow.wrapper.text()).toContain('2.61 µs')
   })
 
+  it('leaves out a label that would run into the unit', async () => {
+    const { wrapper, view } = await ruler()
+    // 90 ms in at 71 px a sample: a major every sample, 90.00000 at 40 px, 90.00001 at 111 px.
+    const from = 9_000_000 - 40 / 71
+    view.showRange(from, from + 1000 / 71)
+    await nextTick()
+    expect(view.ruler.unit).toBe('ms')
+    expect(wrapper.text()).not.toContain('90.00000')
+    expect(wrapper.text()).toContain('90.00001')
+  })
+
   it('marks a segment either way along the ruler', async () => {
     const { view, track } = await ruler()
     await drag(track, 400, 380, 300)
