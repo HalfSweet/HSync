@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { overviewTicks, rulerTicks } from './ticks'
+import { LABEL_GAP, labelWidth, overviewTicks, rulerTicks } from './ticks'
 import { rangeViewport } from './viewport'
 
 const base = { samplerate: 25_000_000, triggerSample: 0 }
@@ -27,6 +27,30 @@ describe('rulerTicks', () => {
     expect(zero?.x).toBeCloseTo(500)
     expect(ruler.ticks.some((tick) => tick.time < 0)).toBe(true)
     expect(zero?.label).toBe('0')
+  })
+
+  it('keeps long labels apart deep into a long capture', () => {
+    // Around 10.8 s at 100 MHz, 0.14 ns a pixel: 10 ns would be 71 px, too close for
+    // labels such as 10.80115195.
+    const fast = { samplerate: 100_000_000, triggerSample: 0 }
+    const view = { start: 1_080_115_195, samplesPerPixel: 1 / 71, width: 1185 }
+    const ruler = rulerTicks(view, fast)
+    expect(ruler.unit).toBe('s')
+    expect(ruler.step * 1e9).toBeCloseTo(20)
+    const majors = ruler.ticks.filter((tick) => tick.major)
+    expect(majors[0]?.label).toBe('10.80115196')
+    for (const [index, tick] of majors.entries()) {
+      const next = majors[index + 1]
+      if (!next) break
+      const room = (labelWidth(tick.label) + labelWidth(next.label)) / 2 + LABEL_GAP
+      expect(next.x - tick.x).toBeGreaterThanOrEqual(room)
+    }
+  })
+
+  it('measures labels in the ruler font', () => {
+    // 11 px IBM Plex Sans: figures 6.6 px, the point 3 px.
+    expect(labelWidth('10.80115195')).toBeCloseTo(69)
+    expect(labelWidth('-1.25')).toBeCloseTo(27.2, 0)
   })
 
   it('returns nothing without a width or samplerate', () => {

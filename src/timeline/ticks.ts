@@ -28,8 +28,21 @@ export interface TimeBase {
   triggerSample: number
 }
 
-/** Minimum distance between major ticks, so labels never touch. */
+/** Minimum distance between major ticks; long labels push them further apart. */
 export const MIN_MAJOR_SPACING = 70
+
+/** Room between the text of neighbouring labels, their 3 px padding included. */
+export const LABEL_GAP = 12
+
+/**
+ * Width of a label's text in CSS pixels, set as tick labels are: 11 px (`--text-caption`) IBM
+ * Plex Sans, whose figures are all 0.6 em wide.
+ */
+export function labelWidth(text: string): number {
+  let width = 0
+  for (const char of text) width += char === '.' ? 3 : char === '-' ? 4.4 : 6.6
+  return width
+}
 
 function label(time: number, unit: TimeUnit, digits: number): string {
   const text = inUnit(time, unit).toFixed(digits)
@@ -45,12 +58,24 @@ function minorDivisions(step: number): number {
 export function rulerTicks(view: Viewport, base: TimeBase, minSpacing = MIN_MAJOR_SPACING): Ruler {
   if (view.width <= 0 || base.samplerate <= 0) return { step: 0, unit: 's', ticks: [] }
   const secondsPerPixel = view.samplesPerPixel / base.samplerate
-  const step = niceStep(secondsPerPixel * minSpacing)
-  const minor = step / minorDivisions(step)
   const t0 = (view.start - base.triggerSample) / base.samplerate
   const t1 = t0 + view.width * secondsPerPixel
-  const unit = timeUnitFor(Math.max(Math.abs(t0), Math.abs(t1), step))
-  const digits = digitsFor(inUnit(step, unit))
+  // Labels lengthen with the time and with the decimals a fine step needs, such as 10.80115195
+  // deep into a long capture: take larger steps until the widest, at an end of the view, fits.
+  let step = niceStep(secondsPerPixel * minSpacing)
+  let unit: TimeUnit
+  let digits: number
+  for (;;) {
+    unit = timeUnitFor(Math.max(Math.abs(t0), Math.abs(t1), step))
+    digits = digitsFor(inUnit(step, unit))
+    const widest = Math.max(
+      labelWidth(label(t0, unit, digits)),
+      labelWidth(label(t1, unit, digits)),
+    )
+    if (step / secondsPerPixel >= widest + LABEL_GAP) break
+    step = niceStep(step * 1.5)
+  }
+  const minor = step / minorDivisions(step)
   const toX = (time: number) => (time - t0) / secondsPerPixel
 
   const ticks: Tick[] = []
