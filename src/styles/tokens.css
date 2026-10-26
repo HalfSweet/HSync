@@ -105,6 +105,7 @@
   --h-lane: 26px;
   --h-tr: 30px;
   --h-trc: 18px;
+  --h-an: 90px;
   --gap: 8px;
   --h-bar: 32px;
   --h-overview: 58px;
@@ -203,6 +204,7 @@
   --h-lane: 22px;
   --h-tr: 24px;
   --h-trc: 14px;
+  --h-an: 72px;
   --gap: 4px;
 }
 

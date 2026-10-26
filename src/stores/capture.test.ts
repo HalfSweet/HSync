@@ -21,11 +21,13 @@ const summary: CaptureSummary = {
     triggerSample: null,
     triggerTimeMs: null,
     channels: [0, 1],
+    analog: [],
   },
   channels: [
     { index: 0, name: '0' },
     { index: 1, name: '1' },
   ],
+  analog: [],
   decoders: null,
   session: null,
 }
@@ -79,6 +81,7 @@ function deviceState(canLoop: boolean): DeviceState {
     hardwareDepth: null,
     rateTiers: [],
     rateTier: null,
+    analogInputs: [],
   }
 }
 

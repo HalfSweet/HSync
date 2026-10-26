@@ -72,6 +72,19 @@ pub async fn device_set_channels(
     .await
 }
 
+/// Reads an analog input of the open device in place of its logic inputs, or not.
+#[tauri::command]
+pub async fn device_set_analog(
+    app: AppHandle,
+    index: ChannelIndex,
+    enabled: bool,
+) -> CommandResult<DeviceState> {
+    blocking(app, move |state| {
+        state.instrument.lock().set_analog_enabled(index, enabled)
+    })
+    .await
+}
+
 /// Moves the open device to a rate tier with exactly these channels enabled.
 #[tauri::command]
 pub async fn device_select_rate_tier(

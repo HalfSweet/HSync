@@ -8,6 +8,7 @@ import {
   shallowRef,
   useTemplateRef,
   watch,
+  type ShallowRef,
 } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -15,8 +16,17 @@ import { useControlHeld } from '@/composables/useControlHeld'
 import { useDecoderCopy } from '@/composables/useDecoderCopy'
 import { useRowMetrics } from '@/composables/useRowMetrics'
 import { useShortcuts } from '@/composables/useShortcuts'
-import { getBackend } from '@/ipc/backend'
-import { binStart, type BinsResult } from '@/ipc/bins'
+import {
+  DIVISIONS,
+  fitScale,
+  moveScale,
+  stepScale,
+  yOfVolts,
+  type VerticalScale,
+} from '@/analog/scale'
+import { getBackend, type Backend } from '@/ipc/backend'
+import { binStart } from '@/ipc/bins'
+import type { BinsRequest } from '@/ipc/bindings/BinsRequest'
 import type { PulseInfo } from '@/ipc/bindings/PulseInfo'
 import type { StreamView } from '@/ipc/bindings/StreamView'
 import type { TriggerCondition } from '@/ipc/bindings/TriggerCondition'
@@ -25,7 +35,7 @@ import { Canvas2DRenderer } from '@/render/canvas2d'
 import type { WaveformRenderer } from '@/render/types'
 import { WebGpuRenderer } from '@/render/webgpu'
 import { readRenderTokens } from '@/render/tokens'
-import type { FrameDescriptor, RenderTokens, TraceDraw } from '@/render/types'
+import type { AnalogDraw, FrameDescriptor, RenderTokens, TraceDraw } from '@/render/types'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { useDecodeStore } from '@/stores/decode'
@@ -58,8 +68,8 @@ import {
 import { pulseMode, readPulse } from '@/timeline/pulse'
 import { segmentGeometry } from '@/timeline/segment'
 import { sampleToX, viewportEnd, xToSample } from '@/timeline/viewport'
-import { wheelAction } from '@/timeline/wheel'
-import { formatCount, formatFrequency, formatSampled, formatTime } from '@/utils/units'
+import { wheelAction, wheelNotches } from '@/timeline/wheel'
+import { formatCount, formatFrequency, formatSampled, formatTime, formatVolts } from '@/utils/units'
 
 import ChannelLabel from './ChannelLabel.vue'
 import DecodeLane from './DecodeLane.vue'
@@ -102,7 +112,7 @@ const pinned = shallowRef<PinnedRow | null>(null)
 
 const layout = computed(() => {
   const rows = layoutRows(
-    capture.groups,
+    capture.timelineGroups,
     metrics.value,
     (group) => channels.isCollapsed(group.key, collapsedByDefault(group)),
     (group) => Math.max(1, decode.statusOf(group.decoder)?.streams.length ?? 0),
@@ -115,9 +125,12 @@ const layout = computed(() => {
 })
 
 const isTrace = (row: Row) => row.kind === 'trace' || row.kind === 'trace-narrow'
+const isAnalog = (row: Row) => row.kind === 'analog'
 
 /** Channel rows, whose bottom edge in the label column can be dragged (DESIGN.md §6.1). */
-const resizable = computed(() => layout.value.rows.filter((row) => isTrace(row) && row.channel))
+const resizable = computed(() =>
+  layout.value.rows.filter((row) => (isTrace(row) || isAnalog(row)) && row.channel),
+)
 
 function resizeRow(row: Row, height: number | null): void {
   if (!row.channel) return
@@ -258,90 +271,119 @@ const traceChannels = computed(() => [
     layout.value.rows.filter(isTrace).flatMap((row) => (row.channel ? [row.channel.index] : [])),
   ),
 ])
+const analogChannels = computed(() => [
+  ...new Set(
+    layout.value.rows.filter(isAnalog).flatMap((row) => (row.channel ? [row.channel.index] : [])),
+  ),
+])
 
-/** What the waveform needs: the visible samples at a column per device pixel. */
-const binsWanted = computed(() => {
-  const summary = capture.summary
-  const viewport = view.viewport
-  if (!summary || viewport.width <= 0 || traceChannels.value.length === 0) return null
-  return {
-    // Asks again as a running capture grows or, looping, moves on; columns past its samples
-    // come back empty.
-    key: `${summary.id}:${traceChannels.value.join(',')}:${capture.extent}:${capture.sampleCount + capture.dropped}`,
-    captureId: summary.id,
-    channels: traceChannels.value,
-    extent: capture.extent,
-    window: {
-      start: viewport.start,
-      end: viewportEnd(viewport),
-      samplesPerPixel: viewport.samplesPerPixel / pixelRatio.value,
-    },
-  }
-})
+/**
+ * Columns of `channels` over the visible samples, a column per device pixel, as `fetch` answers
+ * them. Columns are fetched a view's width beyond each side, so panning draws from what is at
+ * hand; one request at a time, the latest wanted once it returns.
+ */
+function viewColumns<T>(
+  channels: () => number[],
+  fetch: (backend: Backend, request: BinsRequest) => Promise<T>,
+): ShallowRef<T | null> {
+  const wanted = computed(() => {
+    const summary = capture.summary
+    const viewport = view.viewport
+    const indices = channels()
+    if (!summary || viewport.width <= 0 || indices.length === 0) return null
+    return {
+      // Asks again as a running capture grows or, looping, moves on; columns past its samples
+      // come back empty.
+      key: `${summary.id}:${indices.join(',')}:${capture.extent}:${capture.sampleCount + capture.dropped}`,
+      captureId: summary.id,
+      channels: indices,
+      extent: capture.extent,
+      window: {
+        start: viewport.start,
+        end: viewportEnd(viewport),
+        samplesPerPixel: viewport.samplesPerPixel / pixelRatio.value,
+      },
+    }
+  })
+  const result = shallowRef<T | null>(null)
+  let fetched: { key: string; window: SampleWindow } | null = null
+  let loading = false
+  let again = false
 
-// Columns are fetched a view's width beyond each side, so panning draws from what is at hand;
-// one request at a time, the latest wanted once it returns.
-const bins = shallowRef<BinsResult | null>(null)
-let binsFetched: { key: string; window: SampleWindow } | null = null
-let binsLoading = false
-let binsAgain = false
-
-async function loadBins(): Promise<void> {
-  const wanted = binsWanted.value
-  if (!wanted) {
-    bins.value = null
-    binsFetched = null
-    return
-  }
-  if (binsFetched?.key === wanted.key && covers(binsFetched.window, wanted.window, wanted.extent)) {
-    return
-  }
-  if (binsLoading) {
-    binsAgain = true
-    return
-  }
-  binsLoading = true
-  try {
-    const window = overscan(wanted.window, wanted.extent)
-    const count = Math.max(
-      1,
-      Math.min(
-        Math.round((window.end - window.start) / window.samplesPerPixel),
-        window.end - window.start,
-      ),
-    )
-    if (window.end <= window.start) {
-      bins.value = null
-      binsFetched = null
+  async function load(): Promise<void> {
+    const want = wanted.value
+    if (!want) {
+      result.value = null
+      fetched = null
       return
     }
-    const result = await (
-      await getBackend()
-    ).bins({
-      captureId: wanted.captureId,
-      channels: wanted.channels,
-      start: window.start,
-      end: window.end,
-      bins: count,
-    })
-    // A capture replaced meanwhile has other samples.
-    if (binsWanted.value?.captureId !== wanted.captureId) return
-    bins.value = result
-    binsFetched = {
-      key: wanted.key,
-      window: { ...window, samplesPerPixel: (window.end - window.start) / count },
+    if (fetched?.key === want.key && covers(fetched.window, want.window, want.extent)) return
+    if (loading) {
+      again = true
+      return
     }
-  } catch (error) {
-    console.error('bins request failed', error)
-  } finally {
-    binsLoading = false
-    if (binsAgain) {
-      binsAgain = false
-      void loadBins()
+    loading = true
+    try {
+      const window = overscan(want.window, want.extent)
+      const count = Math.max(
+        1,
+        Math.min(
+          Math.round((window.end - window.start) / window.samplesPerPixel),
+          window.end - window.start,
+        ),
+      )
+      if (window.end <= window.start) {
+        result.value = null
+        fetched = null
+        return
+      }
+      const answer = await fetch(await getBackend(), {
+        captureId: want.captureId,
+        channels: want.channels,
+        start: window.start,
+        end: window.end,
+        bins: count,
+      })
+      // A capture replaced meanwhile has other samples.
+      if (wanted.value?.captureId !== want.captureId) return
+      result.value = answer
+      fetched = {
+        key: want.key,
+        window: { ...window, samplesPerPixel: (window.end - window.start) / count },
+      }
+    } catch (error) {
+      console.error('bins request failed', error)
+    } finally {
+      loading = false
+      if (again) {
+        again = false
+        void load()
+      }
     }
   }
+  watch(wanted, () => void load(), { immediate: true })
+  return result
 }
-watch(binsWanted, () => void loadBins(), { immediate: true })
+
+const bins = viewColumns(
+  () => traceChannels.value,
+  (backend, request) => backend.bins(request),
+)
+const analogBins = viewColumns(
+  () => analogChannels.value,
+  (backend, request) => backend.analogBins(request),
+)
+
+/** Each analog channel's scale: the one the user set, or one that fits its samples (§6.2). */
+const analogScales = computed(() => {
+  const scales = new Map<number, VerticalScale>()
+  for (const index of analogChannels.value) {
+    const data = analogBins.value?.channels.get(index)
+    scales.set(index, channels.scales[index] ?? fitScale(data?.low ?? NaN, data?.high ?? NaN))
+  }
+  return scales
+})
+const scaleOf = (index: number) => analogScales.value.get(index) ?? fitScale(NaN, NaN)
 
 // Canvas layer: WebGPU where it works and is wanted, else Canvas2D. A canvas holds one kind of
 // context, so changing the preference or losing the GPU makes a new canvas.
@@ -417,6 +459,20 @@ const frame = computed<FrameDescriptor>(() => {
       wash: busy < BUSY_WIDTH,
     })
   }
+  const analogResult = analogBins.value
+  const analog: AnalogDraw[] = []
+  for (const row of layout.value.rows) {
+    if (!isAnalog(row) || !row.channel) continue
+    const y = ruler + row.top - top
+    if (y + row.height <= ruler || y >= height) continue
+    analog.push({
+      top: y,
+      height: row.height,
+      wire: row.channel.wire,
+      columns: analogResult?.channels.get(row.channel.index)?.columns ?? null,
+      scale: scaleOf(row.channel.index),
+    })
+  }
   return {
     width,
     height,
@@ -427,6 +483,8 @@ const frame = computed<FrameDescriptor>(() => {
     grid: view.ruler.ticks.filter((tick) => tick.major).map((tick) => tick.x),
     bins: result,
     traces,
+    analogBins: analogResult,
+    analog,
   }
 })
 
@@ -517,6 +575,8 @@ const pointer = shallowRef<{ row: Row; x: number } | null>(null)
 let drag: { x: number; moves: PointerSample[] } | null = null
 /** Where the button went down: released within a few pixels, it is a click. */
 let press: { x: number; y: number; row: Row } | null = null
+/** Alt + drag on an analog row moves its trace up and down (DESIGN.md §6.2). */
+let shift: { row: Row; index: number; y: number; from: VerticalScale } | null = null
 const CLICK_SLOP = 3
 /** The fling under way; starting another or stopping replaces it. */
 let fling: object | null = null
@@ -568,6 +628,11 @@ async function resolveHover(): Promise<void> {
 }
 
 function onTrackPointerMove(row: Row, event: PointerEvent): void {
+  if (shift) {
+    const dy = event.clientY - shift.y
+    channels.setScale(shift.index, moveScale(shift.from, dy, shift.row.height))
+    return
+  }
   if (drag) {
     view.pan(drag.x - event.clientX)
     drag.x = event.clientX
@@ -599,6 +664,13 @@ function onTrackPointerLeave(): void {
 function onTrackPointerDown(row: Row, event: PointerEvent): void {
   stopFling()
   if (event.button !== 0 || (event.target as Element).closest('button')) return
+  if (event.altKey && isAnalog(row) && row.channel) {
+    const index = row.channel.index
+    shift = { row, index, y: event.clientY, from: scaleOf(index) }
+    ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
+    onTrackPointerLeave()
+    return
+  }
   drag = { x: event.clientX, moves: [{ x: event.clientX, t: event.timeStamp }] }
   press = { x: event.clientX, y: event.clientY, row }
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
@@ -606,6 +678,10 @@ function onTrackPointerDown(row: Row, event: PointerEvent): void {
 }
 
 function onTrackPointerUp(event: PointerEvent): void {
+  if (shift) {
+    shift = null
+    return
+  }
   const clicked =
     event.type === 'pointerup' &&
     press !== null &&
@@ -707,7 +783,51 @@ const target = computed(() => {
   return { x: sampleToX(view.viewport, edge.sample), y: box.top + box.height / 2 }
 })
 
-const readout = computed(() => {
+/** The column of `result` that holds `sample`. */
+function columnAt(result: { start: number; end: number; bins: number }, sample: number): number {
+  let column = Math.floor(((sample - result.start) * result.bins) / (result.end - result.start))
+  column = Math.min(result.bins - 1, Math.max(0, column))
+  while (column + 1 < result.bins && binStart(result, column + 1) <= sample) column += 1
+  while (column > 0 && binStart(result, column) > sample) column -= 1
+  return column
+}
+
+/** An analog row's volts under the pointer: a sample's, or the range of the samples a pixel
+ * holds when zoomed out (DESIGN.md §6.4). */
+const analogReadout = computed(() => {
+  const at = pointer.value
+  const channel = at?.row.channel
+  const result = analogBins.value
+  if (!at || !channel || !isAnalog(at.row) || !result || view.measure?.phase === 'measuring') {
+    return null
+  }
+  const data = result.channels.get(channel.index)
+  const sample = Math.floor(xToSample(view.viewport, at.x))
+  if (!data || sample < result.start || sample >= result.end) return null
+  const column = columnAt(result, sample)
+  const low = data.columns[2 * column] ?? Number.NaN
+  const high = data.columns[2 * column + 1] ?? Number.NaN
+  if (Number.isNaN(low) || Number.isNaN(high)) return null
+  const scale = scaleOf(channel.index)
+  // Within a pixel of the row's height, the curve reads as one value.
+  const one = high - low < (scale.perDiv * DIVISIONS) / at.row.height
+  const volts = (low + high) / 2
+  const y = yOfVolts(scale, volts, at.row.height)
+  return {
+    rowKey: at.row.key,
+    channel,
+    left: at.x,
+    width: 0,
+    band: false,
+    dot: one && y >= 0 && y <= at.row.height ? { x: at.x, y } : null,
+    primary: one
+      ? formatVolts(volts)
+      : t('hover.analogRange', { low: formatVolts(low), high: formatVolts(high) }),
+    secondary: one ? null : t('hover.analogZoom'),
+  }
+})
+
+const pulseReadout = computed(() => {
   const current = hover.value
   const channel = current?.row.channel
   // While measuring, the measurement's read-out takes its place.
@@ -736,10 +856,15 @@ const readout = computed(() => {
     channel,
     left: reading.left,
     width: reading.width,
+    band: true,
+    dot: null,
     primary: t(reading.complete ? 'hover.pulse' : 'hover.pulseOpen', { level, width }),
     secondary,
   }
 })
+
+/** What the pointer reads: an analog row's volts or a trace's pulse. */
+const readout = computed(() => analogReadout.value ?? pulseReadout.value)
 
 /** The settings float the read-outs over the rows instead of the status bar (DESIGN.md §11). */
 const floating = computed(() => preferences.readoutPlace === 'float')
@@ -860,8 +985,38 @@ const controlHeld = useControlHeld()
 
 // The wheel zooms around the pointer or pans (DESIGN.md §10); what it leaves alone scrolls the
 // rows. A wheel's notches glide (§13); a trackpad follows the fingers.
+/** Alt + wheel over an analog row steps its volts per division in the 1-2-5 sequence, keeping
+ * the volts under the pointer where they are (DESIGN.md §6.2); a trackpad steps every 40 px. */
+let scaleWheel = 0
+
+/** Steps an analog row's volts per division, keeping its middle line's volts. */
+function stepScaleOf(row: Row, steps: number): void {
+  if (!row.channel) return
+  const index = row.channel.index
+  channels.setScale(index, stepScale(scaleOf(index), steps, row.height / 2, row.height))
+}
+
+function stepAnalogScale(event: WheelEvent): boolean {
+  const element = (event.target as Element | null)?.closest<HTMLElement>('[data-row]')
+  const row = element && layout.value.rows.find((one) => one.key === element.dataset.row)
+  if (!element || !row || !isAnalog(row) || !row.channel) return false
+  event.preventDefault()
+  let steps = wheelNotches(event)
+  if (steps === null) {
+    scaleWheel += event.deltaY
+    steps = Math.trunc(scaleWheel / 40)
+    scaleWheel -= steps * 40
+  }
+  if (steps === 0) return true
+  const y = event.clientY - element.getBoundingClientRect().top
+  const index = row.channel.index
+  channels.setScale(index, stepScale(scaleOf(index), steps, y, row.height))
+  return true
+}
+
 function onWheel(event: WheelEvent): void {
   stopFling()
+  if (event.altKey && stepAnalogScale(event)) return
   const visible = scroller.value?.getBoundingClientRect()
   const anchor = anchorOf(event.clientX)
   if (!visible || anchor === null) return
@@ -946,6 +1101,7 @@ useEventListener(scroller, 'gesturechange', (event: Event) => {
         <div
           v-for="row in layout.rows"
           :key="row.key"
+          :data-row="row.key"
           class="flex flex-none"
           :class="row.separator && 'border-t border-line'"
           :style="{ height: `${row.height}px` }"
@@ -967,8 +1123,12 @@ useEventListener(scroller, 'gesturechange', (event: Event) => {
               :channel="row.channel"
               :condition="channels.triggerOf(row.channel.index)"
               :menu-open="menu?.channel.index === row.channel.index"
+              :scale="row.channel.analog ? scaleOf(row.channel.index) : null"
+              :manual="row.channel.analog && channels.scales[row.channel.index] !== undefined"
               @trigger="(slot) => row.channel && toggleMenu(row.channel, slot)"
               @menu="(at) => row.channel && (channelMenu = { channel: row.channel, ...at })"
+              @step="(steps) => row.channel && stepScaleOf(row, steps)"
+              @fit="row.channel && channels.setScale(row.channel.index, null)"
             />
           </div>
           <div
@@ -998,9 +1158,16 @@ useEventListener(scroller, 'gesturechange', (event: Event) => {
               "
             />
             <i
-              v-if="readout && readout.rowKey === row.key"
+              v-if="readout?.band && readout.rowKey === row.key"
               class="pointer-events-none absolute top-[3px] bottom-[3px] rounded-2 bg-[color-mix(in_srgb,var(--ink)_13%,transparent)]"
               :style="{ left: `${readout.left}px`, width: `${Math.max(readout.width, 1)}px` }"
+              aria-hidden="true"
+            />
+            <i
+              v-if="readout?.dot && readout.rowKey === row.key"
+              class="pointer-events-none absolute -mt-[3.5px] -ml-[3.5px] size-[7px] rounded-full bg-wire shadow-[0_0_0_1.5px_var(--canvas)]"
+              :class="`wire-${readout.channel.wire}`"
+              :style="{ left: `${readout.dot.x}px`, top: `${readout.dot.y}px` }"
               aria-hidden="true"
             />
           </div>

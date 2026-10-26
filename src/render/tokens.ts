@@ -33,6 +33,7 @@ export function readRenderTokens(root: Element = document.documentElement): Rend
   const blockScale = Number.isFinite(strength) ? strength : 2.6
   return {
     grid: get('--grid'),
+    axis: get('--line-2'),
     wires,
     washes: wires.map((wire, index) => withOpacity(wire, get(`--a${index}`))),
     blocks: wires.map((wire, index) =>

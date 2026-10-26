@@ -83,6 +83,7 @@ function stateOf(driver: string): DeviceState {
     hardwareDepth: null,
     rateTiers: [],
     rateTier: null,
+    analogInputs: [],
   }
 }
 
@@ -93,6 +94,7 @@ function session(patch: Partial<Session>): Session {
     device: null,
     options: [],
     enabledChannels: null,
+    analogInputs: null,
     channelNames: {},
     colours: {},
     heights: {},
@@ -117,8 +119,10 @@ function captured(source: CaptureSummary['source'], names: string[], decoders: u
       triggerSample: null,
       triggerTimeMs: null,
       channels: names.map((_, index) => index),
+      analog: [],
     },
     channels: names.map((name, index) => ({ index, name })),
+    analog: [],
     decoders,
     session: null,
   } satisfies CaptureSummary

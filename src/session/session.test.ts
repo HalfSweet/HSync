@@ -15,6 +15,7 @@ describe('sessions', () => {
           ['filter', { type: 'bool', value: 'yes' }],
         ],
         enabledChannels: [0, 1],
+        analogInputs: [0x8001, 'A2'],
         channelNames: { 0: 'SDA' },
         colours: { 0: 5 },
         heights: { 0: 64, 1: 'tall' },
@@ -28,12 +29,13 @@ describe('sessions', () => {
     expect(session?.triggers).toEqual({ 1: 'fall' })
     expect(session?.channelNames).toEqual({ 0: 'SDA' })
     expect(session?.heights).toEqual({ 0: 64 })
+    expect(session?.analogInputs).toEqual([0x8001])
     expect(session?.decoders).toEqual([{ id: '1:i2c' }])
     expect(session?.view).toBeNull()
-    // Sessions from before row heights have none.
-    expect(parseSession(JSON.stringify({ format: 'hsync-session', version: 1 }))?.heights).toEqual(
-      {},
-    )
+    // Sessions from before row heights and analog inputs have none.
+    const old = parseSession(JSON.stringify({ format: 'hsync-session', version: 1 }))
+    expect(old?.heights).toEqual({})
+    expect(old?.analogInputs).toBeNull()
   })
 
   it('read the view stored with an .hsync capture', () => {

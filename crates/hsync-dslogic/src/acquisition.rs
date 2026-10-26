@@ -153,6 +153,7 @@ pub(crate) fn start(
     let _ = sink.send(Packet::Start {
         channels: params.channels(),
         samplerate: params.samplerate,
+        analog: Vec::new(),
     });
     let stop = Arc::new(AtomicBool::new(false));
     let worker = Worker {

@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use crossbeam_channel::Receiver;
 use hsync_capture::LogicCapture;
-use hsync_core::TriggerCondition;
+use hsync_core::{ANALOG_BASE, TriggerCondition};
 use hsync_demo::DemoDriver;
 use hsync_driver::{CapturePlan, Device, Driver, EndReason, OptionKey, OptionValue, Packet};
 
@@ -38,8 +38,9 @@ fn capture(packets: &Receiver<Packet>) -> (LogicCapture, Option<u64>, EndReason)
             Packet::Start {
                 channels,
                 samplerate,
+                analog,
             } => {
-                let new = LogicCapture::new(samplerate, channels);
+                let new = LogicCapture::new(samplerate, channels).with_analog(analog);
                 deinterleaver = Some(new.deinterleaver());
                 capture = Some(new);
             }
@@ -47,6 +48,9 @@ fn capture(packets: &Receiver<Packet>) -> (LogicCapture, Option<u64>, EndReason)
             Packet::Logic(bytes) => {
                 let capture = capture.as_mut().expect("start first");
                 capture.append_cross(deinterleaver.as_mut().expect("start first"), &bytes);
+            }
+            Packet::Analog(codes) => {
+                capture.as_mut().expect("start first").append_analog(&codes);
             }
             Packet::Progress { .. } | Packet::Overflow => {}
             Packet::End(reason) => return (capture.expect("start first"), trigger, reason),
@@ -83,6 +87,13 @@ fn counter_capture_completes() {
     for sample in 0..200 {
         assert_eq!(channel.sample(sample), (sample >> 3) & 1 == 1);
     }
+    // Two sines alongside: at 100 MHz, A0's 1 kHz one starts at 1.65 V and peaks 25,000
+    // samples later.
+    assert_eq!(capture.info().analog, [ANALOG_BASE, ANALOG_BASE + 1]);
+    let a0 = capture.analog_channel(ANALOG_BASE).expect("A0");
+    assert_eq!(a0.len(), 65_536);
+    assert!((a0.volts(0) - 1.65).abs() < 0.01);
+    assert!((a0.volts(25_000) - 3.3).abs() < 0.01);
 }
 
 #[test]

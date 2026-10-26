@@ -40,6 +40,8 @@ export interface Session {
   /** Device options in the order they were set. */
   options: [OptionKey, OptionValue][]
   enabledChannels: number[] | null
+  /** Analog inputs read in place of their logic inputs; absent in files from before them. */
+  analogInputs: number[] | null
   channelNames: Record<string, string>
   colours: Record<string, number>
   /** Row heights in CSS pixels the user gave channels; absent in files from before them. */
@@ -159,6 +161,9 @@ function readHsync(data: Record<string, unknown>): Session {
     options,
     enabledChannels: Array.isArray(data.enabledChannels)
       ? data.enabledChannels.filter((one): one is number => typeof one === 'number')
+      : null,
+    analogInputs: Array.isArray(data.analogInputs)
+      ? data.analogInputs.filter((one): one is number => typeof one === 'number')
       : null,
     channelNames: strings(data.channelNames),
     colours: numbers(data.colours),
@@ -297,6 +302,7 @@ function readDsview(data: Record<string, unknown>): Session {
     device: typeof data.Device === 'string' ? { driver: data.Device, model: '' } : null,
     options,
     enabledChannels: channels.length > 0 ? enabledChannels : null,
+    analogInputs: null,
     channelNames,
     colours: {},
     heights: {},

@@ -5,7 +5,7 @@
 import type { ChannelGroup, ChannelRef } from './groups'
 import { typeOf } from '@/decode/catalog'
 
-export type RowKind = 'gap' | 'header' | 'lane' | 'trace' | 'trace-narrow'
+export type RowKind = 'gap' | 'header' | 'lane' | 'trace' | 'trace-narrow' | 'analog'
 
 export interface Row {
   key: string
@@ -26,15 +26,22 @@ export interface Row {
   separator: boolean
 }
 
-/** Row heights from the density tokens (`--h-lane`, `--h-tr`, `--h-trc`, `--gap`). */
+/** Row heights from the density tokens (`--h-lane`, `--h-tr`, `--h-trc`, `--h-an`, `--gap`). */
 export interface RowMetrics {
   lane: number
   trace: number
   traceNarrow: number
+  analog: number
   gap: number
 }
 
-export const COMFORTABLE_METRICS: RowMetrics = { lane: 26, trace: 30, traceNarrow: 18, gap: 8 }
+export const COMFORTABLE_METRICS: RowMetrics = {
+  lane: 26,
+  trace: 30,
+  traceNarrow: 18,
+  analog: 90,
+  gap: 8,
+}
 
 /** The CAN group keeps a fixed 28 px header and 6 px gaps in the design. */
 const CAN_HEADER = 28
@@ -112,13 +119,14 @@ export function layoutRows(
       }
       for (const channel of group.channels) {
         const wide = group.kind === 'i2c' || group.kind === 'uart'
+        const kind = group.analog ? 'analog' : wide ? 'trace' : 'trace-narrow'
         const own = heightOf(channel)
         push({
           key: `${group.key}:trace:${channel.index}`,
-          kind: wide ? 'trace' : 'trace-narrow',
+          kind,
           height:
             own === undefined
-              ? metrics[wide ? 'trace' : 'traceNarrow']
+              ? metrics[kind === 'trace-narrow' ? 'traceNarrow' : kind]
               : clampTraceHeight(own, metrics),
           group,
           channel,
@@ -141,7 +149,8 @@ export interface PinnedRow {
 }
 
 const isChannelRow = (row: Row) =>
-  (row.kind === 'trace' || row.kind === 'trace-narrow') && row.channel !== undefined
+  (row.kind === 'trace' || row.kind === 'trace-narrow' || row.kind === 'analog') &&
+  row.channel !== undefined
 
 /**
  * Fits the channel rows of `layout` into `room` pixels of height (DESIGN.md §6.1): every channel

@@ -15,8 +15,8 @@ mod trigger;
 pub mod usb;
 
 pub use device::{
-    Acquisition, Candidate, CandidateStatus, CapturePlan, CapturePreset, Device, DeviceInfo,
-    DeviceSummary, Driver, RateTier,
+    Acquisition, AnalogInput, Candidate, CandidateStatus, CapturePlan, CapturePreset, Device,
+    DeviceInfo, DeviceSummary, Driver, RateTier,
 };
 pub use error::DriverError;
 pub use firmware::FirmwareDir;

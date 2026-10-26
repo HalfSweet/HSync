@@ -9,15 +9,15 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use crossbeam_channel::{SendTimeoutError, Sender};
-use hsync_core::UiError;
+use hsync_core::{ANALOG_BASE, ChannelIndex, UiError};
 use hsync_driver::usb::{BulkIn, UsbError};
 use hsync_driver::{Acquisition, CapturePlan, DriverError, EndReason, Packet};
 
-use crate::Settings;
 use crate::assemble::WireDecoder;
 use crate::model::Model;
 use crate::protocol::{CaptureSettings, EP_IN, Link, TransferPlan};
 use crate::stream::Stream;
+use crate::{Settings, adc};
 
 const POLL: Duration = Duration::from_millis(20);
 const STALL: Duration = Duration::from_secs(2);
@@ -35,6 +35,7 @@ pub(crate) fn start(
         channels: settings.channels(),
         samplerate: settings.samplerate,
         threshold: settings.vth,
+        clock_mhz: (settings.analog != 0).then_some(adc::CLOCK_MHZ),
     };
     link.prepare(&configuration)?;
     let transfers = TransferPlan::new(settings.channels(), settings.samplerate);
@@ -61,8 +62,14 @@ pub(crate) fn start(
     // even when RUN, thread creation, or the first packet fails.
     worker.link.run()?;
     worker.running.store(true, Ordering::Release);
+    let logic = settings.logic();
     let channels = (0..model.channels.into())
-        .filter(|c| settings.enabled & (1 << c) != 0)
+        .filter(|c| logic & (1 << c) != 0)
+        .collect();
+    let analog = settings
+        .analog_groups()
+        .into_iter()
+        .map(|group| (ANALOG_BASE + ChannelIndex::from(group), adc::SCALE))
         .collect();
     let samplerate = settings.samplerate;
     let thread = std::thread::Builder::new()
@@ -71,6 +78,7 @@ pub(crate) fn start(
             let reason = match worker.send(Packet::Start {
                 channels,
                 samplerate,
+                analog,
             }) {
                 Ok(()) => worker.receive(),
                 Err(reason) => reason,

@@ -38,6 +38,7 @@ export const useDeviceStore = defineStore('device', () => {
   const samplerate = computed(() => integer(option('samplerate')) ?? 0)
   const sampleLimit = computed(() => integer(option('sampleLimit')) ?? 0)
   const enabledChannels = computed(() => state.value?.enabledChannels ?? [])
+  const analogInputs = computed(() => state.value?.analogInputs ?? [])
   const isDemo = computed(() => state.value?.info.driver === DEMO_DRIVER)
   /** Devices whose slow-port warning was dismissed in this run. */
   const portNoticed = shallowRef<ReadonlySet<string>>(new Set())
@@ -90,6 +91,11 @@ export const useDeviceStore = defineStore('device', () => {
   /** Enables exactly `channels`. */
   function setChannels(channels: number[]): Promise<boolean> {
     return attempt(async () => (await getBackend()).deviceSetChannels(channels))
+  }
+
+  /** Reads analog input `index` in place of its logic inputs, or those as logic again. */
+  function setAnalog(index: number, enabled: boolean): Promise<boolean> {
+    return attempt(async () => (await getBackend()).deviceSetAnalog(index, enabled))
   }
 
   /** Moves to rate tier `index` (DESIGN.md §4) with exactly `channels` enabled. */
@@ -184,6 +190,7 @@ export const useDeviceStore = defineStore('device', () => {
     samplerate,
     sampleLimit,
     enabledChannels,
+    analogInputs,
     isDemo,
     slowPort,
     dismissSlowPort,
@@ -193,6 +200,7 @@ export const useDeviceStore = defineStore('device', () => {
     setOption,
     setChannel,
     setChannels,
+    setAnalog,
     selectRateTier,
     acceptArrival,
     dismissArrival,

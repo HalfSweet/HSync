@@ -27,6 +27,7 @@ import type { RolePart } from './bindings/RolePart'
 import type { SearchResult } from './bindings/SearchResult'
 import type { StreamPage } from './bindings/StreamPage'
 import type { WaveformSummary } from './bindings/WaveformSummary'
+import { decodeAnalogBins, type AnalogBinsResult } from './analogBins'
 import { decodeBins, type BinsResult } from './bins'
 import type { UiError } from './errors'
 import type { LogLevel } from './logLevels'
@@ -108,6 +109,8 @@ export interface Backend {
   /** Reads a small text file, such as a session. */
   readText(path: string): Promise<string>
   bins(request: BinsRequest): Promise<BinsResult>
+  /** The lowest and highest volts of each column of analog channels. */
+  analogBins(request: BinsRequest): Promise<AnalogBinsResult>
   pulse(captureId: number, channel: number, sample: number): Promise<PulseInfo | null>
   edge(
     captureId: number,
@@ -143,6 +146,8 @@ export interface Backend {
   deviceSetChannel(channel: number, enabled: boolean): Promise<DeviceState>
   /** Enables exactly `channels`. */
   deviceSetChannels(channels: number[]): Promise<DeviceState>
+  /** Reads analog input `index` of the open device in place of its logic inputs, or not. */
+  deviceSetAnalog(index: number, enabled: boolean): Promise<DeviceState>
   /** Moves to rate tier `index` of the open device with exactly `channels` enabled. */
   deviceSelectRateTier(index: number, channels: number[]): Promise<DeviceState>
   /** Starts a capture on the open device; the returned capture fills as it runs. */
@@ -302,6 +307,10 @@ class TauriBackend implements Backend {
     return decodeBins(await invoke<ArrayBuffer>('capture_bins', { request }))
   }
 
+  async analogBins(request: BinsRequest) {
+    return decodeAnalogBins(await invoke<ArrayBuffer>('capture_analog_bins', { request }))
+  }
+
   pulse(captureId: number, channel: number, sample: number) {
     return invoke<PulseInfo | null>('capture_pulse', { captureId, channel, sample })
   }
@@ -348,6 +357,10 @@ class TauriBackend implements Backend {
 
   deviceSetChannels(channels: number[]) {
     return invoke<DeviceState>('device_set_channels', { channels })
+  }
+
+  deviceSetAnalog(index: number, enabled: boolean) {
+    return invoke<DeviceState>('device_set_analog', { index, enabled })
   }
 
   deviceSelectRateTier(index: number, channels: number[]) {

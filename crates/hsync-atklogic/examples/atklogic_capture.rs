@@ -199,6 +199,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             Packet::Start {
                 channels,
                 samplerate,
+                ..
             } => {
                 println!("start: {} channels at {samplerate} Hz", channels.len());
                 let new = LogicCapture::new(samplerate, channels);
@@ -235,6 +236,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("progress: triggered {triggered}, {captured} samples in the device");
             }
             Packet::Overflow => println!("overflow!"),
+            Packet::Analog(_) => {}
             Packet::End(reason) => break reason,
         }
     };

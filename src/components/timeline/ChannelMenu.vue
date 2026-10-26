@@ -3,6 +3,7 @@ import { onClickOutside, onKeyStroke } from '@vueuse/core'
 import { computed, onBeforeUnmount, onMounted, shallowRef, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { analogNumber } from '@/analog/channels'
 import { useCaptureStore } from '@/stores/capture'
 import { useChannelsStore } from '@/stores/channels'
 import { wireOf, type ChannelRef } from '@/timeline/groups'
@@ -37,8 +38,12 @@ onBeforeUnmount(() => {
   if (!cancelled) void rename()
 })
 
+/** The channel's number on the timeline, `D2` or `A0`. */
+const number = props.channel.analog ? analogNumber(props.channel.index) : `D${props.channel.index}`
+/** The name of a channel nobody named: its number, `2` as DSView names it, or `A0`. */
+const unnamed = props.channel.analog ? number : String(props.channel.index)
 const current = computed(() => capture.channelNames.get(props.channel.index) ?? '')
-const name = shallowRef(current.value === String(props.channel.index) ? '' : current.value)
+const name = shallowRef(current.value === unnamed ? '' : current.value)
 const custom = computed(() => channels.colours[props.channel.index] !== undefined)
 /** The colour in force, which changes while the menu is open. */
 const wire = computed(() => channels.colours[props.channel.index] ?? wireOf(props.channel.index))
@@ -52,7 +57,7 @@ const position = computed(() => ({
 /** Gives the channel the name typed, if it changed; an empty name goes back to its number. */
 async function rename(): Promise<void> {
   const wanted = name.value.trim()
-  const shown = current.value === String(props.channel.index) ? '' : current.value
+  const shown = current.value === unnamed ? '' : current.value
   if (wanted !== shown) await capture.renameChannel(props.channel.index, wanted)
 }
 </script>
@@ -61,7 +66,7 @@ async function rename(): Promise<void> {
   <div
     ref="root"
     role="dialog"
-    :aria-label="t('channelMenu.title', { channel: `D${channel.index}` })"
+    :aria-label="t('channelMenu.title', { channel: number })"
     class="fixed z-30 flex w-60 origin-top-left flex-col gap-2.5 rounded-6 bg-menu p-3 text-small"
     :style="position"
   >
@@ -70,7 +75,7 @@ async function rename(): Promise<void> {
       <span class="truncate font-medium">{{ channel.label }}</span>
       <span class="flex flex-none gap-1 font-mono text-caption text-ink-3">
         <span v-if="channel.roleLabel">{{ channel.roleLabel }}</span>
-        <span>D{{ channel.index }}</span>
+        <span>{{ number }}</span>
       </span>
     </div>
     <label class="flex flex-col gap-1">
@@ -79,7 +84,7 @@ async function rename(): Promise<void> {
         ref="input"
         v-model="name"
         class="h-7 rounded-6 bg-control px-2 text-ink"
-        :placeholder="`D${channel.index}`"
+        :placeholder="number"
         spellcheck="false"
         @keydown.enter.prevent="emit('close')"
       />

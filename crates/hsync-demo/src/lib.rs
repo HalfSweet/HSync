@@ -1,10 +1,11 @@
 //! The demo device of HSync: replays the bundled protocol capture or
-//! synthesises random and counter signals, in real time, through the same driver traits and
-//! packets as hardware.
+//! synthesises random and counter signals, with two sine waves on analog channels, in real
+//! time, through the same driver traits and packets as hardware.
 
 #![forbid(unsafe_code)]
 
 mod acquisition;
+mod analog;
 mod device;
 mod pattern;
 

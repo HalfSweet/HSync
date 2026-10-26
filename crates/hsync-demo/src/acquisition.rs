@@ -1,5 +1,6 @@
 //! A demo capture in real time: waiting for the trigger like a device in stream mode, then
-//! the samples from before the trigger at once and the rest at the sample rate.
+//! the samples from before the trigger at once and the rest at the sample rate, the analog
+//! channels' sines alongside.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -10,6 +11,7 @@ use crossbeam_channel::Sender;
 use hsync_core::{ChannelIndex, TriggerCondition};
 use hsync_driver::{Acquisition, EndReason, Packet};
 
+use crate::analog;
 use crate::pattern::Pattern;
 
 /// How often the acquisition wakes up.
@@ -64,6 +66,7 @@ pub(crate) fn start(
     let _ = sink.send(Packet::Start {
         channels: params.channels.clone(),
         samplerate: params.samplerate,
+        analog: analog::channels(),
     });
     let thread = std::thread::Builder::new()
         .name("demo-acquisition".into())
@@ -104,12 +107,15 @@ fn run(params: DemoParams, sink: &Sender<Packet>, stop: &AtomicBool) -> EndReaso
     let mut capture = params.pattern.clone();
     let mut words = vec![0u64; channels];
     let mut backlog = 0;
+    // The signal's word the capture starts at, which places the sines' phase.
+    let mut first_word = 0;
 
     if !params.triggers.is_empty() {
         match wait_for_trigger(&params, &mut capture, sink, stop) {
-            Some(trigger) => {
+            Some((trigger, first)) => {
                 let _ = sink.send(Packet::Trigger { sample: trigger });
                 backlog = trigger / 64 + 1;
+                first_word = first;
             }
             None => return EndReason::Stopped,
         }
@@ -128,15 +134,26 @@ fn run(params: DemoParams, sink: &Sender<Packet>, stop: &AtomicBool) -> EndReaso
         }
         let due = (backlog + words_due(begin, params.samplerate)).min(total);
         let mut bytes = Vec::new();
-        while emitted < due && bytes.len() < MAX_PACKET {
+        let mut codes = Vec::new();
+        let from = emitted;
+        while emitted < due && bytes.len().max(codes.len() * 2) < MAX_PACKET {
             capture.next_words(&params.channels, &mut words);
             for word in &words {
                 bytes.extend_from_slice(&word.to_le_bytes());
             }
+            analog::fill(
+                (first_word + emitted) * 64,
+                64,
+                params.samplerate,
+                &mut codes,
+            );
             emitted += 1;
         }
-        if !bytes.is_empty() {
-            let _ = sink.send(Packet::Logic(bytes));
+        if emitted > from {
+            if !bytes.is_empty() {
+                let _ = sink.send(Packet::Logic(bytes));
+            }
+            let _ = sink.send(Packet::Analog(codes));
         }
         if emitted >= total {
             return EndReason::Completed;
@@ -149,13 +166,13 @@ fn run(params: DemoParams, sink: &Sender<Packet>, stop: &AtomicBool) -> EndReaso
 
 /// Runs the signal in real time until the trigger conditions hold past the pre-trigger
 /// samples. Leaves `capture` at the first word to emit and returns the trigger's sample within
-/// the capture; `None` if stopped first.
+/// the capture with the signal's word the capture starts at; `None` if stopped first.
 fn wait_for_trigger(
     params: &DemoParams,
     capture: &mut Pattern,
     sink: &Sender<Packet>,
     stop: &AtomicBool,
-) -> Option<u64> {
+) -> Option<(u64, u64)> {
     let mut scan = params.pattern.clone();
     let channels = params.channels.len();
     let mut words = vec![0u64; channels];
@@ -186,7 +203,8 @@ fn wait_for_trigger(
                 *last = word >> 63 != 0;
             }
             if matches != 0 {
-                return Some(base + u64::from(matches.trailing_zeros()) - start * 64);
+                let trigger = base + u64::from(matches.trailing_zeros()) - start * 64;
+                return Some((trigger, start));
             }
             scanned += 1;
             while start + pre_words < scanned {

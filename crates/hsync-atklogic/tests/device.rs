@@ -327,6 +327,7 @@ fn capture(packets: &[Packet]) -> LogicCapture {
     let Some(Packet::Start {
         channels,
         samplerate,
+        ..
     }) = packets.first()
     else {
         panic!("the capture starts with Start");

@@ -37,6 +37,9 @@
       "spanHint": "Channel {channel} is on, so the device sends all of channels 0–{last}, up to {rate}; within 0–{fit}, up to {fitRate}",
       "needAny": "≤{count} ch",
       "needLeading": "0–{last} only",
+      "analog": "Analog",
+      "analogTip": "Read channels {first}–{last} as the ADC module’s analog channel {channel}",
+      "analogRow": "{channel} · analog {range}",
       "needTip": "Too many channels now; picking it switches to: {tier}",
       "noDevice": "Select a device first",
       "rle": "RLE",
@@ -237,7 +240,8 @@
     "showStream": "Show all {name} results in the data stream",
     "showStreamTip": "Show all decoded results in the data stream",
     "unnamed": "Other channels",
-    "measuredClock": "Measured {value}"
+    "measuredClock": "Measured {value}",
+    "analog": "Analog channels"
   },
   "trigger": {
     "menuTitle": "Trigger on {channel}",
@@ -271,6 +275,13 @@
       "7": "Violet"
     },
     "tip": "Click the dot or double-click the name to rename or recolour; right-click works too"
+  },
+  "analog": {
+    "scaleTip": "{key} + wheel changes the scale, {key} + drag moves the trace",
+    "fit": "Fit",
+    "fitTip": "Fit the scale to the samples again",
+    "finer": "Zoom {channel} in vertically",
+    "coarser": "Zoom {channel} out vertically"
   },
   "channelRow": {
     "resize": "Drag to resize the waveform of {channel}",
@@ -338,7 +349,9 @@
     "pulseOpen": "{level} ≥ {width}",
     "period": "Period {period}, {frequency}, duty {duty}",
     "bits": "≈ {count} bits",
-    "outsideViewport": "Extends beyond view"
+    "outsideViewport": "Extends beyond view",
+    "analogRange": "{low} to {high}",
+    "analogZoom": "Zoom in to read single samples"
   },
   "edgeMeasure": {
     "delta": "Δt {time}",

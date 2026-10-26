@@ -32,6 +32,10 @@ pub struct CaptureSettings {
     pub samplerate: u64,
     /// Input threshold in volts, from 0 through 6.
     pub threshold: f64,
+    /// The only PLL, in MHz, the sample clock may come from; any that divides the rate when
+    /// `None`. Reading the SLogic32U3's ADC module needs its 800 MHz PLL (`clock_base_mhz` of
+    /// Sipeed's libslogic, see [`crate::adc`]).
+    pub clock_mhz: Option<u16>,
 }
 
 /// The bounded queue of sample transfers.
@@ -173,20 +177,26 @@ impl Link {
         self.aux_confirm(payload)
     }
 
-    fn samplerate(&self, want: u64) -> Result<(), DriverError> {
+    fn samplerate(&self, want: u64, required: Option<u16>) -> Result<(), DriverError> {
+        let clock_error =
+            || DriverError::Localized(UiError::new("error.device.slogic.sampleClock"));
+        if required.is_some_and(|mhz| !(u64::from(mhz) * 1_000_000).is_multiple_of(want)) {
+            return Err(clock_error());
+        }
         let mut payload = self.aux_begin(2)?;
         payload.len = payload.len.max(8);
-        let mut prefer_800 = 800_000_000_u64.is_multiple_of(want);
+        let mut prefer = required.or(800_000_000_u64.is_multiple_of(want).then_some(800));
         // The reference searches twice: prefer 800 MHz, then accept any
         // available clock that divides the requested rate. Empty slots wrap.
+        // A required clock is the only one either lap accepts (libslogic).
         for attempt in 0..16 {
-            if attempt == 8 {
-                prefer_800 = false;
+            if attempt == 8 && required.is_none() {
+                prefer = None;
             }
             let index = u16::from_le_bytes([payload.bytes[0], payload.bytes[1]]);
             let mhz = u16::from_le_bytes([payload.bytes[2], payload.bytes[3]]);
             let base = u64::from(mhz) * 1_000_000;
-            if base != 0 && base.is_multiple_of(want) && (!prefer_800 || mhz == 800) {
+            if base != 0 && base.is_multiple_of(want) && prefer.is_none_or(|clock| mhz == clock) {
                 let divider = (base / want - 1) as u32;
                 payload.bytes[4..8].copy_from_slice(&divider.to_le_bytes());
                 return self.aux_confirm(payload);
@@ -196,9 +206,7 @@ impl Link {
             self.write(PAYLOAD, &payload.bytes[..4])?;
             self.read(PAYLOAD, &mut payload.bytes[..payload.len])?;
         }
-        Err(DriverError::Localized(UiError::new(
-            "error.device.slogic.sampleClock",
-        )))
+        Err(clock_error())
     }
 
     /// Stops a previous capture, drains stale samples, and resets the device.
@@ -252,7 +260,7 @@ impl Link {
         }
         self.stop()?;
         self.aux_word(1, u32::MAX >> (32 - settings.channels))?;
-        self.samplerate(settings.samplerate)?;
+        self.samplerate(settings.samplerate, settings.clock_mhz)?;
         self.aux_word(3, threshold_dac(settings.threshold))?;
         self.aux_word(5, 0)
     }

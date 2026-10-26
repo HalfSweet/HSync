@@ -6,7 +6,7 @@ use std::sync::Arc;
 use hsync_core::{ChannelIndex, UiError};
 use hsync_session::{
     BinsRequest, CaptureRequest, CaptureSummary, ChannelEdges, Direction, EventSink,
-    PatternCondition, PulseInfo, SessionEvent, encode_bins,
+    PatternCondition, PulseInfo, SessionEvent, encode_analog_bins, encode_bins,
 };
 use tauri::ipc::Response;
 use tauri::{AppHandle, Emitter, State};
@@ -103,6 +103,30 @@ pub async fn capture_bins(
     let bytes = encode_bins(&capture.read(), &request).map_err(|error| UiError::from(&error))?;
     log::debug!(
         "bins: {} channels, samples {}..{} in {} columns",
+        request.channels.len(),
+        request.start,
+        request.end,
+        request.bins
+    );
+    Ok(Response::new(bytes))
+}
+
+/// Summarises analog channels over a sample range in the binary layout of analog viewport
+/// queries (`hsync_session::encode_analog_bins`).
+#[tauri::command]
+pub async fn capture_analog_bins(
+    state: State<'_, AppState>,
+    request: BinsRequest,
+) -> CommandResult<Response> {
+    let capture = state
+        .workspace
+        .lock()
+        .capture(request.capture_id)
+        .map_err(|error| UiError::from(&error))?;
+    let bytes =
+        encode_analog_bins(&capture.read(), &request).map_err(|error| UiError::from(&error))?;
+    log::debug!(
+        "analog bins: {} channels, samples {}..{} in {} columns",
         request.channels.len(),
         request.start,
         request.end,

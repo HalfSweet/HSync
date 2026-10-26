@@ -37,6 +37,9 @@
       "spanHint": "启用了通道 {channel}，设备要传输 0–{last} 全部通道，最高 {rate}；只用 0–{fit} 最高 {fitRate}",
       "needAny": "≤{count} 通道",
       "needLeading": "仅 0–{last}",
+      "analog": "模拟",
+      "analogTip": "把通道 {first}–{last} 读成 ADC 模块的模拟通道 {channel}",
+      "analogRow": "{channel} · 模拟 {range}",
       "needTip": "当前通道过多，选它会改为：{tier}",
       "noDevice": "先选择设备",
       "rle": "RLE",
@@ -237,7 +240,8 @@
     "showStream": "在数据流里看 {name} 的全部解码结果",
     "showStreamTip": "在数据流里看全部解码结果",
     "unnamed": "未命名通道",
-    "measuredClock": "实测 {value}"
+    "measuredClock": "实测 {value}",
+    "analog": "模拟通道"
   },
   "trigger": {
     "menuTitle": "{channel} 的触发条件",
@@ -271,6 +275,13 @@
       "7": "紫"
     },
     "tip": "点色点或双击名称可改名称和颜色，也可以右键"
+  },
+  "analog": {
+    "scaleTip": "{key} + 滚轮调整量程，{key} + 拖动上下移动波形",
+    "fit": "适配",
+    "fitTip": "重新按采样数据适配量程",
+    "finer": "纵向放大 {channel}",
+    "coarser": "纵向缩小 {channel}"
   },
   "channelRow": {
     "resize": "拖动调整 {channel} 的波形高度",
@@ -338,7 +349,9 @@
     "pulseOpen": "{level} ≥ {width}",
     "period": "周期 {period}，{frequency}，占空比 {duty}",
     "bits": "约 {count} 位",
-    "outsideViewport": "延伸到画面外"
+    "outsideViewport": "延伸到画面外",
+    "analogRange": "{low} 至 {high}",
+    "analogZoom": "放大后可读取单个采样值"
   },
   "edgeMeasure": {
     "delta": "Δt {time}",

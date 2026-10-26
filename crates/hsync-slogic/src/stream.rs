@@ -8,7 +8,7 @@ use std::collections::VecDeque;
 use hsync_core::{ChannelIndex, TriggerCondition};
 use hsync_driver::{CapturePlan, Packet};
 
-use crate::Settings;
+use crate::{Settings, adc};
 
 // Unlike the reference's 1 GiB allocation, reserve at most 64 MiB for history in
 // the desktop application. The marker reports the actual retained history.
@@ -74,17 +74,22 @@ fn transpose(mut word: u64) -> u64 {
     word ^ swap ^ (swap << 28)
 }
 
+/// Packs whole blocks of 64 samples: the logic inputs in the cross format, and alongside
+/// them each analog group's codes, so that both always hold the same samples.
 struct CrossPacker {
     channels: Vec<ChannelIndex>,
     /// Byte planes of a sample up to the highest enabled channel.
     planes: usize,
+    /// The analog groups, whose bytes of each sample are read as codes.
+    groups: Vec<u8>,
     pending: [u32; 64],
     used: usize,
     output: Vec<u8>,
+    codes: Vec<u16>,
 }
 
 impl CrossPacker {
-    fn new(enabled: u32) -> Self {
+    fn new(enabled: u32, groups: Vec<u8>) -> Self {
         Self {
             channels: (0..32)
                 .filter(|channel| enabled & (1 << channel) != 0)
@@ -92,9 +97,11 @@ impl CrossPacker {
             planes: enabled
                 .checked_ilog2()
                 .map_or(0, |highest| highest as usize / 8 + 1),
+            groups,
             pending: [0; 64],
             used: 0,
             output: Vec::new(),
+            codes: Vec::new(),
         }
     }
 
@@ -126,8 +133,16 @@ impl CrossPacker {
                 self.output
                     .extend_from_slice(&words[usize::from(channel)].to_le_bytes());
             }
+            if !self.groups.is_empty() {
+                for &sample in &self.pending {
+                    for &group in &self.groups {
+                        self.codes
+                            .push(adc::code((sample >> (u32::from(group) * 8)) as u8));
+                    }
+                }
+            }
             self.used = 0;
-            if self.output.len() >= MAX_PACKET {
+            if self.output.len().max(self.codes.len() * 2) >= MAX_PACKET {
                 self.flush(packets);
             }
         }
@@ -136,6 +151,9 @@ impl CrossPacker {
     fn flush(&mut self, packets: &mut Vec<Packet>) {
         if !self.output.is_empty() {
             packets.push(Packet::Logic(std::mem::take(&mut self.output)));
+        }
+        if !self.codes.is_empty() {
+            packets.push(Packet::Analog(std::mem::take(&mut self.codes)));
         }
     }
 }
@@ -154,7 +172,7 @@ impl Stream {
     pub(crate) fn new(settings: &Settings, plan: &CapturePlan) -> Self {
         let trigger = Trigger::new(
             if plan.instant { &[] } else { &plan.triggers },
-            settings.enabled,
+            settings.logic(),
         );
         let waiting = !trigger.empty();
         let pre_limit = if waiting {
@@ -174,7 +192,7 @@ impl Stream {
             pre: VecDeque::new(),
             pre_limit,
             remaining: (!plan.looping).then_some(settings.limit_samples),
-            packer: CrossPacker::new(settings.enabled),
+            packer: CrossPacker::new(settings.logic(), settings.analog_groups()),
         }
     }
 
@@ -255,6 +273,16 @@ mod tests {
             .collect()
     }
 
+    fn analog(packets: &[Packet]) -> Vec<u16> {
+        packets
+            .iter()
+            .flat_map(|packet| match packet {
+                Packet::Analog(codes) => codes.clone(),
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
     fn expected(samples: &[u32], channels: &[u16]) -> Vec<u8> {
         let mut out = Vec::new();
         for group in samples.as_chunks::<64>().0.iter() {
@@ -295,6 +323,40 @@ mod tests {
                 assert!(stream.done());
             }
         }
+    }
+
+    #[test]
+    fn reads_analog_groups_as_codes_beside_the_logic_inputs() {
+        // Inputs 0–7 carry a code MSB first, inputs 16–23 another; 8–15 stay logic.
+        let samples: Vec<u32> = (0u32..256)
+            .map(|n| {
+                u32::from((n as u8).reverse_bits())
+                    | u32::from((255 - n as u8).reverse_bits()) << 16
+                    | (n & 3) << 8
+            })
+            .collect();
+        let mut settings = settings(0xff_ffff, 128);
+        settings.analog = 0b101;
+        let codes: Vec<u16> = (0..128).flat_map(|n| [n, 255 - n]).collect();
+        for cut in [1, 63, 64, 100, 256] {
+            let mut stream = Stream::new(&settings, &CapturePlan::default());
+            let mut packets = Vec::new();
+            for part in samples.chunks(cut) {
+                packets.extend(stream.push(part));
+            }
+            assert_eq!(analog(&packets), codes, "cut {cut}");
+            let logic_inputs: Vec<_> = (8..16).collect();
+            assert_eq!(logic(&packets), expected(&samples[..128], &logic_inputs));
+            // Each block's logic comes before its codes.
+            assert!(matches!(packets.first(), Some(Packet::Logic(_))));
+            assert!(stream.done());
+        }
+        // Analog channels alone.
+        settings.enabled = 0;
+        let mut stream = Stream::new(&settings, &CapturePlan::default());
+        let packets = stream.push(&samples);
+        assert!(logic(&packets).is_empty());
+        assert_eq!(analog(&packets), codes);
     }
 
     #[test]

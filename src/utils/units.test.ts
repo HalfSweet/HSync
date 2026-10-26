@@ -11,6 +11,8 @@ import {
   formatSpan,
   formatTime,
   formatTimeShort,
+  formatVolts,
+  formatVoltsPerDiv,
   niceStep,
   parseFrequency,
   timeUnitFor,
@@ -121,5 +123,21 @@ describe('parseFrequency', () => {
     expect(parseFrequency('0 Hz')).toBeNull()
     expect(parseFrequency('-5 MHz')).toBeNull()
     expect(parseFrequency('5 THz')).toBeNull()
+  })
+})
+
+describe('voltage formatting', () => {
+  it('keeps three significant digits in the best unit', () => {
+    expect(formatVolts(1.65)).toBe('1.65 V')
+    expect(formatVolts(-2.5)).toBe('-2.5 V')
+    expect(formatVolts(0.25)).toBe('250 mV')
+    expect(formatVolts(0.00042)).toBe('420 µV')
+    expect(formatVolts(0)).toBe('0 V')
+    expect(formatVolts(-0.0001)).toBe('-100 µV')
+  })
+
+  it('names the scale per division', () => {
+    expect(formatVoltsPerDiv(0.5)).toBe('500 mV/div')
+    expect(formatVoltsPerDiv(2)).toBe('2 V/div')
   })
 })

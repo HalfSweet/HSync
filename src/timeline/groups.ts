@@ -1,7 +1,8 @@
 /**
  * Channel groups of the timeline (DESIGN.md §6.1): one group per decoder with the channels it
- * reads, then the channels no decoder uses under "unnamed channels".
+ * reads, then the channels no decoder uses under "unnamed channels", then the analog channels.
  */
+import { analogNumber } from '@/analog/channels'
 import { DEFAULT_CATALOG, entryChannels, entryKinds, isEntry, nodeConfig } from '@/decode/catalog'
 import type { CatalogEntry } from '@/ipc/bindings/CatalogEntry'
 import type { ChannelSummary } from '@/ipc/bindings/ChannelSummary'
@@ -21,6 +22,8 @@ export interface ChannelRef {
   role?: string
   /** The role as shown, e.g. `SDA`, when the label is the channel's own name instead. */
   roleLabel?: string
+  /** An analog channel, labelled `A<n>` and drawn on a scale of volts. */
+  analog?: true
 }
 
 export interface ChannelGroup {
@@ -38,9 +41,12 @@ export interface ChannelGroup {
   options: Record<string, unknown>
   /** Position of the decoder in the capture's decoder list, which names its results. */
   decoder: number | null
+  /** The analog channels' group. */
+  analog?: true
 }
 
 export const UNNAMED_GROUP = 'unnamed'
+export const ANALOG_GROUP = 'analog'
 
 /** Order of decoder roles on the timeline, by bus. */
 const ROLE_ORDER: Record<BusKind, string[]> = {
@@ -164,6 +170,35 @@ export function groupChannels(
     })
   }
   return groups
+}
+
+/** The analog channels' group, which no decoder reads; `null` without analog channels. */
+export function analogGroup(
+  channels: ChannelSummary[],
+  wires: Partial<Record<number, number>> = {},
+): ChannelGroup | null {
+  if (channels.length === 0) return null
+  return {
+    key: ANALOG_GROUP,
+    kind: 'other',
+    title: '',
+    type: null,
+    unnamed: false,
+    channels: channels.map((channel) => {
+      const number = analogNumber(channel.index)
+      const numeric = channel.name === number
+      return {
+        index: channel.index,
+        label: numeric ? number : channel.name,
+        numeric,
+        wire: wires[channel.index] ?? wireOf(channel.index),
+        analog: true,
+      }
+    }),
+    options: {},
+    decoder: null,
+    analog: true,
+  }
 }
 
 const PARITY_LETTERS: Record<string, string> = {

@@ -1,5 +1,5 @@
 /**
- * Number formatting for times, frequencies and counts. Units are the same in
+ * Number formatting for times, frequencies, voltages and counts. Units are the same in
  * every language; a value and its unit are separated by one space.
  */
 
@@ -152,4 +152,24 @@ function significant(value: number, digits: number): string {
 
 function trimNegativeZero(text: string): string {
   return /^-0(\.0*)?$/.test(text) ? text.slice(1) : text
+}
+
+export type VoltageUnit = 'µV' | 'mV' | 'V'
+
+function voltageUnit(volts: number): [VoltageUnit, number] {
+  const magnitude = Math.abs(volts)
+  if (magnitude >= 1) return ['V', 1]
+  if (magnitude >= 1e-3) return ['mV', 1e-3]
+  return magnitude === 0 ? ['V', 1] : ['µV', 1e-6]
+}
+
+/** Formats a voltage with three significant digits in the best unit, e.g. `1.65 V`, `-250 mV`. */
+export function formatVolts(volts: number): string {
+  const [unit, scale] = voltageUnit(volts)
+  return `${trimNegativeZero(significant(volts / scale, 3))} ${unit}`
+}
+
+/** Formats a scale of the 1-2-5 sequence per division, e.g. `500 mV/div`, `2 V/div`. */
+export function formatVoltsPerDiv(volts: number): string {
+  return `${formatVolts(volts)}/div`
 }

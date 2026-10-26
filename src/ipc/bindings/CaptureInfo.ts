@@ -23,4 +23,9 @@ triggerTimeMs: number | null,
 /**
  * Channels that hold data, in ascending order.
  */
-channels: Array<number>, };
+channels: Array<number>, 
+/**
+ * Analog channels that hold data, in ascending order (from
+ * [`hsync_core::ANALOG_BASE`]).
+ */
+analog: Array<number>, };

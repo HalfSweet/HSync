@@ -81,8 +81,10 @@ const summary: CaptureSummary = {
     triggerSample: null,
     triggerTimeMs: null,
     channels: [0],
+    analog: [],
   },
   channels: [{ index: 0, name: '0' }],
+  analog: [],
   decoders: null,
   session: null,
 }
