@@ -42,8 +42,10 @@ const segment = computed(() => {
   return { ...geometry, text }
 })
 
-// Drag along the ruler to mark a segment; a drag shorter than 2 µs is a click and clears it.
-let anchor: number | null = null
+// Drag along the ruler to mark a segment, however short. As on the tracks, a press that moves no
+// more than a few pixels is a click, which clears it; so does a drag that covers no samples.
+const CLICK_SLOP = 3
+let press: { x: number; sample: number; dragging: boolean } | null = null
 
 function sampleAtPointer(event: PointerEvent): number {
   const box = track.value?.getBoundingClientRect()
@@ -54,23 +56,24 @@ function sampleAtPointer(event: PointerEvent): number {
 
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0) return
-  anchor = sampleAtPointer(event)
+  press = { x: event.clientX, sample: sampleAtPointer(event), dragging: false }
   ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-  view.setSegment({ from: anchor, to: anchor })
 }
 
 function onPointerMove(event: PointerEvent): void {
-  if (anchor === null) return
+  if (!press) return
+  if (!press.dragging && Math.abs(event.clientX - press.x) <= CLICK_SLOP) return
+  press.dragging = true
   const at = sampleAtPointer(event)
-  view.setSegment({ from: Math.min(anchor, at), to: Math.max(anchor, at) })
+  view.setSegment({ from: Math.min(press.sample, at), to: Math.max(press.sample, at) })
 }
 
 function onPointerUp(): void {
-  if (anchor === null) return
-  anchor = null
+  if (!press) return
+  const dragged = press.dragging
+  press = null
   const current = view.segment
-  const minimum = capture.samplerate * 2e-6
-  if (!current || current.to - current.from < minimum) view.setSegment(null)
+  if (!dragged || !current || current.to === current.from) view.setSegment(null)
 }
 </script>
 
