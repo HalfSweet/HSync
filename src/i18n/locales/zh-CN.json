@@ -1935,6 +1935,7 @@
     },
     "device": {
       "usb": "USB 通信失败：{detail}",
+      "usbMemory": "USB 传输内存不足。Linux 上请调大 /sys/module/usbcore/parameters/usbfs_memory_mb",
       "firmwareMissing": "缺少固件文件 {file}",
       "firmwareIncompatible": "设备固件版本不兼容（{version}）",
       "restarting": "设备正在重启",

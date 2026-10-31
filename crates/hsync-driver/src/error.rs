@@ -66,6 +66,7 @@ impl From<&DriverError> for UiError {
     fn from(error: &DriverError) -> Self {
         match error {
             DriverError::Localized(error) => error.clone(),
+            DriverError::Usb(UsbError::NoMemory) => UiError::new("error.device.usbMemory"),
             DriverError::Usb(usb) => {
                 UiError::new("error.device.usb").with("detail", usb.to_string())
             }
@@ -105,5 +106,14 @@ mod tests {
         let message = UiError::new("error.device.slogic.channel").with("channel", 16);
         let error = DriverError::Localized(message.clone());
         assert_eq!(UiError::from(&error), message);
+    }
+
+    #[test]
+    fn points_out_the_usbfs_pool_when_transfers_run_out_of_memory() {
+        let error = DriverError::Usb(UsbError::NoMemory);
+        assert_eq!(
+            UiError::from(&error),
+            UiError::new("error.device.usbMemory")
+        );
     }
 }

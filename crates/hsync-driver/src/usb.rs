@@ -18,7 +18,11 @@ pub enum UsbError {
     Device(#[from] nusb::Error),
     /// A transfer failed.
     #[error("usb transfer: {0}")]
-    Transfer(#[from] TransferError),
+    Transfer(TransferError),
+    /// The system refused memory for a transfer, which never reached the device: Linux charges
+    /// the transfers of every program to one pool, usbcore's `usbfs_memory_mb`.
+    #[error("usb transfer: out of memory")]
+    NoMemory,
     /// A transfer moved fewer bytes than expected.
     #[error("usb transfer moved {actual} of {expected} bytes")]
     Short { expected: usize, actual: usize },
@@ -34,6 +38,20 @@ impl UsbError {
             Self::Device(error) => error.kind() == nusb::ErrorKind::Disconnected,
             Self::Transfer(error) => *error == TransferError::Disconnected,
             _ => false,
+        }
+    }
+}
+
+/// The `errno` usbfs answers when its pool cannot hold a transfer, which nusb passes on as
+/// [`TransferError::Unknown`].
+const ENOMEM: u32 = 12;
+
+impl From<TransferError> for UsbError {
+    fn from(error: TransferError) -> Self {
+        match error {
+            // Other systems report their own codes in `Unknown`, where 12 means something else.
+            TransferError::Unknown(ENOMEM) if cfg!(target_os = "linux") => Self::NoMemory,
+            error => Self::Transfer(error),
         }
     }
 }
@@ -313,5 +331,23 @@ impl BulkIn for NusbBulkIn {
 
     fn cancel_all(&mut self) {
         self.endpoint.cancel_all();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_usbfs_memory_exhaustion_on_linux_only() {
+        let error = UsbError::from(TransferError::Unknown(ENOMEM));
+        assert_eq!(
+            matches!(error, UsbError::NoMemory),
+            cfg!(target_os = "linux")
+        );
+        assert!(matches!(
+            UsbError::from(TransferError::Stall),
+            UsbError::Transfer(TransferError::Stall)
+        ));
     }
 }
