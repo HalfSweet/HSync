@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.7 (2026-10-31)
+
+### Features
+
+- **ui:** Name SLogic channel tiers 4 ch, 8 ch, 16 ch and 32 ch (#71) ([79efeec](https://github.com/HalfSweet/HSync/commit/79efeecc09d97c1c4190494646d1ecd7f55164a1))
+- **driver:** Support Sipeed SLogic Combo 8 (#72) ([35ed19b](https://github.com/HalfSweet/HSync/commit/35ed19bb8ffacc857e417966d5cc788a75f4ffef))
+
+### Bug Fixes
+
+- **driver:** Keep USB transfers within Linux's usbfs memory pool (#70) ([bc2887c](https://github.com/HalfSweet/HSync/commit/bc2887c65e5dd9b0dc16f03cec328d6246d2c833))
+
 ## 0.2.6 (2026-10-26)
 
 ### Features
