@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! SLogic U3 discovery, following Sipeed's libsigrok `slogic-dev` driver:
+//! SLogic discovery, following Sipeed's libsigrok `slogic-dev` driver:
 //! `api.c` and `slogic/slogic_usb.c`.
 
 use std::sync::Arc;
@@ -17,7 +17,7 @@ pub const VENDOR_ID: u16 = 0x359f;
 const USB_CONFIGURATION: u8 = 1;
 const USB_INTERFACE: u8 = 0;
 
-/// Sipeed SLogic16U3 and SLogic32U3 driver. Firmware runs on the device and is not
+/// Sipeed SLogic Combo 8, SLogic16U3 and SLogic32U3 driver. Firmware is not
 /// uploaded by the host.
 #[derive(Debug, Default)]
 pub struct SlogicDriver;
@@ -86,7 +86,7 @@ impl Driver for SlogicDriver {
         let transport = NusbTransport::open(usb, USB_CONFIGURATION, USB_INTERFACE)
             .map_err(DriverError::opening)?;
         Ok(Box::new(SlogicDevice::open(
-            Link::new(Arc::new(transport)),
+            Link::for_model(Arc::new(transport), model),
             model,
             speed,
             candidate.id.clone(),
@@ -99,13 +99,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn recognizes_only_the_u3_capture_ids() {
+    fn recognizes_only_the_capture_ids() {
         assert_eq!(recognized(0x359f, 0x3031), Some(&model::SLOGIC16U3));
         assert_eq!(recognized(0x359f, 0x3032), Some(&model::SLOGIC32U3));
-        for product in [0x3030, 0x0300, 0x30f1] {
+        assert_eq!(recognized(0x359f, 0x0300), Some(&model::SLOGIC_COMBO8));
+        assert_eq!(recognized(0x359f, 0x3000), Some(&model::SLOGIC_COMBO8));
+        for product in [0x3030, 0x30f1] {
             assert_eq!(recognized(0x359f, product), None, "{product:04x}");
         }
         assert_eq!(recognized(0x0000, 0x3031), None);
+        assert_eq!(recognized(0x0000, 0x0300), None);
+        assert_eq!(recognized(0x0000, 0x3000), None);
     }
 
     #[test]

@@ -122,7 +122,7 @@ fn replays_the_official_control_sequences() {
         let link = Link::new(Arc::new(transport.clone()));
         link.reset().expect("RESET");
         link.configure(&settings).expect("configure");
-        link.run().expect("RUN");
+        link.run(&settings).expect("RUN");
         link.stop().expect("STOP");
         assert!(
             transport.device().0.is_empty(),

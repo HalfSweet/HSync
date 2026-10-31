@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Lists SLogic16U3 and SLogic32U3 devices, or performs a short capture when explicitly
+//! Lists SLogic Combo 8, SLogic16U3 and SLogic32U3 devices, or performs a short capture when explicitly
 //! requested.
 //!
 //! ```sh
@@ -8,7 +8,7 @@
 //! cargo run -p hsync-slogic --example slogic_capture -- --capture --channels 4 --rate 800000000 --repeat 3
 //! ```
 //!
-//! Captures default to every channel, 5 MHz, 65,536 samples and a 1.7 V threshold.
+//! Captures default to every channel, 5 MHz, 65,536 samples and a 1.7 V threshold where adjustable.
 //! Each stops after five seconds. The device stays open between repeats;
 //! the example never flashes firmware and writes no files.
 
@@ -53,10 +53,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             "--channels" => {
                 let count: u16 = args
                     .next()
-                    .ok_or("--channels requires 4, 8, 16 or 32")?
+                    .ok_or("--channels requires 2, 4, 8, 16 or 32")?
                     .parse()?;
-                if !matches!(count, 4 | 8 | 16 | 32) {
-                    return Err("--channels must be 4, 8, 16 or 32".into());
+                if !matches!(count, 2 | 4 | 8 | 16 | 32) {
+                    return Err("--channels must be 2, 4, 8, 16 or 32".into());
                 }
                 channels = Some(count);
             }
@@ -80,7 +80,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--help" | "-h" => {
                 println!(
-                    "slogic_capture [--capture] [--channels 4|8|16|32] [--rate HZ] [--repeat N]"
+                    "slogic_capture [--capture] [--channels 2|4|8|16|32] [--rate HZ] [--repeat N]"
                 );
                 println!("Default: list devices without opening them or starting a capture.");
                 println!("--capture       Required to open the device and acquire samples.");
@@ -89,7 +89,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!(
                     "--repeat N      Capture 1 to 10 times on the same open device; default 1."
                 );
-                println!("Every capture uses 65,536 samples, 1.7 V and a 5 s timeout.");
+                println!(
+                    "Every capture uses 65,536 samples and a 5 s timeout; U3 thresholds are 1.7 V."
+                );
                 println!(
                     "No files are saved; unsupported sample rates are rejected by the driver."
                 );
@@ -110,7 +112,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     }
     if candidates.is_empty() {
-        println!("No SLogic found (expected USB ID 359f:3031 or 359f:3032).");
+        println!("No SLogic found (expected USB ID 359f:0300, 359f:3000, 359f:3031 or 359f:3032).");
     }
     if !capture_requested {
         return Ok(());
@@ -131,7 +133,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     device.set_option(OptionKey::Samplerate, &OptionValue::Integer(samplerate))?;
     device.set_option(OptionKey::SampleLimit, &OptionValue::Integer(SAMPLE_COUNT))?;
-    device.set_option(OptionKey::Vth, &OptionValue::Number(1.7))?;
+    if device
+        .options()
+        .iter()
+        .any(|option| option.key == OptionKey::Vth)
+    {
+        device.set_option(OptionKey::Vth, &OptionValue::Number(1.7))?;
+    }
     for index in 1..=repeat {
         capture_once(device.as_mut(), index, repeat)?;
     }

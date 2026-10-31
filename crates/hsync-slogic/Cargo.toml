@@ -1,6 +1,6 @@
 [package]
 name = "hsync-slogic"
-description = "Sipeed SLogic16U3 and SLogic32U3 driver for HSync, ported to Rust and nusb"
+description = "Sipeed SLogic Combo 8, SLogic16U3 and SLogic32U3 driver for HSync, ported to Rust and nusb"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
