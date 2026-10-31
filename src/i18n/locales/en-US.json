@@ -1935,6 +1935,7 @@
     },
     "device": {
       "usb": "USB communication failed: {detail}",
+      "usbMemory": "Not enough memory for USB transfers. On Linux, raise /sys/module/usbcore/parameters/usbfs_memory_mb",
       "firmwareMissing": "Firmware file {file} is missing",
       "firmwareIncompatible": "Incompatible device firmware ({version})",
       "restarting": "The device is restarting",

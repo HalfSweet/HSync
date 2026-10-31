@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
 use hsync_core::{ChannelIndex, UiError};
-use hsync_driver::usb::BulkIn;
+use hsync_driver::usb::{BulkIn, transfers_within};
 use hsync_driver::{Acquisition, DriverError, EndReason, Packet};
 
 use crate::profiles::UsbSpeed;
@@ -80,11 +80,16 @@ const POLL_INTERVAL: Duration = Duration::from_millis(20);
 const CANCEL_GRACE: Duration = Duration::from_secs(2);
 
 /// The size and number of the transfers that keep [`TRANSFERS`] blocks of `block` bytes in
-/// flight. Blocks are whole 4 KiB pages, so every transfer is whole packets.
-fn transfer_plan(block: u32) -> (usize, usize) {
+/// flight. Blocks are whole 4 KiB pages, so every transfer is whole packets. Unlike PXView, the
+/// transfers keep within the transport's `budget` ([`UsbTransport::transfer_budget`]): Linux
+/// fails what overflows its usbfs pool, which four 4 MiB blocks do by default.
+///
+/// [`UsbTransport::transfer_budget`]: hsync_driver::usb::UsbTransport::transfer_budget
+fn transfer_plan(block: u32, budget: Option<usize>) -> (usize, usize) {
     let block = block as usize;
     let size = block.min(MAX_TRANSFER);
-    (size, (TRANSFERS * block).div_ceil(size))
+    let count = (TRANSFERS * block).div_ceil(size);
+    (size, transfers_within(budget, size, count))
 }
 
 /// Writes the registers of a capture, in `start_transfers()`'s order. PXView goes on when a
@@ -152,7 +157,7 @@ pub(crate) fn start(
         params.speed,
     );
     set_up(&ctl, &params, block)?;
-    let (transfer, count) = transfer_plan(block);
+    let (transfer, count) = transfer_plan(block, ctl.usb().transfer_budget());
     let mut bulk = ctl.usb().bulk_in(EP_DATA)?;
     for _ in 0..count {
         bulk.submit(transfer);
@@ -323,11 +328,18 @@ mod tests {
     #[test]
     fn reads_blocks_in_transfers_of_at_most_1_mib() {
         // USB 3.0 at the fastest rates: 4 MiB blocks.
-        assert_eq!(transfer_plan(4 << 20), (1 << 20, 16));
+        assert_eq!(transfer_plan(4 << 20, None), (1 << 20, 16));
         // 13 channels: blocks of no whole number of MiB.
-        assert_eq!(transfer_plan(4_153_344), (1 << 20, 16));
+        assert_eq!(transfer_plan(4_153_344, None), (1 << 20, 16));
         // USB 2.0, and slow rates: blocks under 1 MiB are read whole.
-        assert_eq!(transfer_plan(602_112), (602_112, 4));
-        assert_eq!(transfer_plan(4096), (4096, 4));
+        assert_eq!(transfer_plan(602_112, None), (602_112, 4));
+        assert_eq!(transfer_plan(4096, None), (4096, 4));
+    }
+
+    #[test]
+    fn keeps_the_transfers_within_the_usbfs_budget() {
+        // Four 4 MiB blocks overflow Linux's default usbfs pool; its budget holds three.
+        assert_eq!(transfer_plan(4 << 20, Some(12 << 20)), (1 << 20, 12));
+        assert_eq!(transfer_plan(602_112, Some(12 << 20)), (602_112, 4));
     }
 }

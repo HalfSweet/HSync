@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Capture sequencing follows Sipeed libsigrok's `slogic/slogic_usb.c` at
-//! 0d728b3e1226a61738c99c3333ad16d5c2814728 (Copyright 2023–2025 Sipeed).
+//! 0d728b3e1226a61738c99c3333ad16d5c2814728, the transfer ring at
+//! ba92c5fe8728992574950b40810b2df43528ff5d (Copyright 2023–2025 Sipeed).
 //! Reads use nusb's ordered transfer queue; all waits and teardown are bounded.
 
 use std::sync::Arc;
@@ -15,7 +16,7 @@ use hsync_driver::{Acquisition, CapturePlan, DriverError, EndReason, Packet};
 
 use crate::assemble::WireDecoder;
 use crate::model::Model;
-use crate::protocol::{CaptureSettings, EP_IN, Link, TransferPlan};
+use crate::protocol::{CaptureSettings, EP_IN, Link, MIN_IN_FLIGHT, TransferPlan};
 use crate::stream::Stream;
 use crate::{Settings, adc};
 
@@ -38,7 +39,11 @@ pub(crate) fn start(
         clock_mhz: (settings.analog != 0).then_some(adc::CLOCK_MHZ),
     };
     link.prepare(&configuration)?;
-    let transfers = TransferPlan::new(settings.channels(), settings.samplerate);
+    let transfers = TransferPlan::new(
+        settings.channels(),
+        settings.samplerate,
+        link.usb().transfer_budget(),
+    );
     let bulk = link.usb().bulk_in(EP_IN)?;
     let stop = Arc::new(AtomicBool::new(false));
     let mut worker = Worker {
@@ -193,6 +198,9 @@ impl Worker {
                     let size = self.transfer_size;
                     self.bulk().submit(size);
                 }
+                Some(Err(UsbError::NoMemory)) if self.transfer_count > MIN_IN_FLIGHT => {
+                    self.drop_refused();
+                }
                 Some(Err(error)) => return failed(DriverError::Usb(error)),
                 None => {}
             }
@@ -216,6 +224,19 @@ impl Worker {
         }
     }
 
+    /// Leaves out of the ring a request the system refused memory for ([`UsbError::NoMemory`]).
+    /// It never reached the device, so no data is missing. The reference keeps the requests it
+    /// could submit as long as [`MIN_IN_FLIGHT`] remain; nusb reports the refusal in the
+    /// request's turn, so the ring shrinks then.
+    fn drop_refused(&mut self) {
+        self.transfer_count -= 1;
+        log::warn!(
+            "the system refused memory for a USB transfer; {} transfers of {} bytes stay in flight",
+            self.transfer_count,
+            self.transfer_size
+        );
+    }
+
     fn rearm(&mut self) -> Result<(), DriverError> {
         self.link.stop_retry(3)?;
         self.bulk().cancel_all();
@@ -226,8 +247,12 @@ impl Worker {
                     "error.device.slogic.cancelTransfers",
                 )));
             }
-            if let Some(Err(error)) = self.bulk().next(POLL) {
-                return Err(error.into());
+            match self.bulk().next(POLL) {
+                Some(Err(UsbError::NoMemory)) if self.transfer_count > MIN_IN_FLIGHT => {
+                    self.drop_refused();
+                }
+                Some(Err(error)) => return Err(error.into()),
+                _ => {}
             }
         }
         // Drop the endpoint claim before prepare clears its halt.

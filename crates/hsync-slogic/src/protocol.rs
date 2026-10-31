@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Ported from sipeed/libsigrok, slogic-dev, commit
 // 0d728b3e1226a61738c99c3333ad16d5c2814728:
-// src/hardware/sipeed-slogic-analyzer/slogic/{slogic.c,slogic_usb.c}.
+// src/hardware/sipeed-slogic-analyzer/slogic/{slogic.c,slogic_usb.c}; the transfer
+// sizing from commit ba92c5fe8728992574950b40810b2df43528ff5d.
 // Copyright (C) 2023-2025 Shenzhen Sipeed Technology Co., Ltd.
 //! The SLogic U3 register/AUX protocol over a claimed USB interface.
 
@@ -10,7 +11,7 @@ use std::time::Duration;
 
 use hsync_core::UiError;
 use hsync_driver::DriverError;
-use hsync_driver::usb::{UsbError, UsbTransport};
+use hsync_driver::usb::{UsbError, UsbTransport, transfers_within};
 
 /// The U3 models' sample endpoint.
 pub const EP_IN: u8 = 0x82;
@@ -51,25 +52,45 @@ pub struct TransferPlan {
     pub expected_rate_bytes: u64,
 }
 
+/// Request sizes are whole multiples of this, and no request is smaller (`ALIGN`, `XFER_MIN`).
+const TRANSFER_ALIGN: usize = 32 * 1024;
+/// Bytes in the longest request. The reference allows 2 MiB (`XFER_MAX`), less where WinUSB
+/// RAW_IO accepts less; nusb always reads with RAW_IO, whose pipe may accept at most 1 MiB per
+/// request, so every system keeps to that, as HSync's PXLogic driver does.
+const MAX_TRANSFER: usize = 1024 * 1024;
+/// Requests in a full ring (`SLOGIC_MAX_TRANSFERS`).
+const RING: usize = 16;
+/// Fewest requests in flight that keep the analyzer's FIFO from overflowing (`MIN_IN_FLIGHT`):
+/// with fewer, the bulk pipe idles between completions and the firmware drops data unreported.
+pub const MIN_IN_FLIGHT: usize = 4;
+
 impl TransferPlan {
-    /// Uses the reference's quarter of a 250 ms target and 16-transfer queue.
-    pub fn new(channels: u8, samplerate: u64) -> Self {
+    /// `pick_size()` and `start_ring()`: about 5 ms of data in each request, in a ring of 16.
+    /// Under a transfer budget ([`UsbTransport::transfer_budget`], the usbfs pool on Linux) the
+    /// ring holds what fits, and requests shrink until [`MIN_IN_FLIGHT`] of them fit. The
+    /// reference finds that limit by submitting until usbfs refuses, then halving; nusb reports a
+    /// refused request only in its turn, once data flows, so the ring is planned to fit instead.
+    pub fn new(channels: u8, samplerate: u64, budget: Option<usize>) -> Self {
         let expected_rate_bytes = samplerate.saturating_mul(u64::from(channels)) / 8;
-        // The reference probes and halves allocations that libusb/usbfs cannot
-        // submit. nusb uses WinUSB RAW_IO, whose pipe may accept at most 1 MiB
-        // per request. Bound each request instead of probing the host, as
-        // HSync's PXLogic driver does, and retain the 16-request queue.
-        let probe = (expected_rate_bytes / 1000)
-            .saturating_mul(250)
-            .min(4 * 1024 * 1024)
-            .next_multiple_of(32 * 1024);
-        let size = (probe / 4 / (32 * 1024) * (32 * 1024)).clamp(32 * 1024, 1024 * 1024) as usize;
+        let five_ms = usize::try_from(expected_rate_bytes / 200).unwrap_or(usize::MAX);
+        let mut size = five_ms
+            .min(MAX_TRANSFER)
+            .next_multiple_of(TRANSFER_ALIGN)
+            .max(TRANSFER_ALIGN);
+        if let Some(budget) = budget {
+            size = size
+                .min(budget / MIN_IN_FLIGHT / TRANSFER_ALIGN * TRANSFER_ALIGN)
+                .max(TRANSFER_ALIGN);
+        }
+        let count = transfers_within(budget, size, RING);
         let duration_ms = (size as u64 / (expected_rate_bytes / 1000).max(1)).max(1);
         Self {
             size,
-            count: 16,
-            // xfer_timeout(c, others), allowing all 15 earlier requests.
-            timeout: Duration::from_millis(((1.3 * duration_ms as f64 * 17.0) as u64).max(50)),
+            count,
+            // xfer_timeout(c, others), allowing every earlier request.
+            timeout: Duration::from_millis(
+                ((1.3 * duration_ms as f64 * (count + 1) as f64) as u64).max(50),
+            ),
             expected_rate_bytes,
         }
     }

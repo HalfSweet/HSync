@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 
 use crossbeam_channel::Sender;
 use hsync_core::{ChannelIndex, UiError};
-use hsync_driver::usb::BulkIn;
+use hsync_driver::usb::{BulkIn, transfers_within};
 use hsync_driver::{Acquisition, DriverError, EndReason, Packet};
 
 use crate::profiles::{ChannelMode, Profile, UsbSpeed, caps};
@@ -86,18 +86,29 @@ pub(crate) fn header_size(profile: &Profile) -> usize {
 
 /// `get_buffer_size()` and `get_number_of_transfers()`: the size and number of data transfers.
 /// DSView keeps a single transfer in flight in buffer mode except on Windows; HSync uses the
-/// Windows numbers everywhere for faster uploads.
-pub(crate) fn transfer_plan(params: &AcquisitionParams) -> (usize, usize) {
+/// Windows numbers everywhere for faster uploads. Unlike DSView, the transfers keep within the
+/// transport's `budget` ([`UsbTransport::transfer_budget`]): Linux fails what overflows its usbfs
+/// pool, which sixteen 1 MiB uploads do by default.
+///
+/// [`UsbTransport::transfer_budget`]: hsync_driver::usb::UsbTransport::transfer_budget
+pub(crate) fn transfer_plan(params: &AcquisitionParams, budget: Option<usize>) -> (usize, usize) {
     let superspeed = params.superspeed();
     let align = if superspeed { 1024 } else { 512 };
     if !params.mode.stream {
-        return (BUFFER_TRANSFER, if superspeed { 16 } else { 4 });
+        let count = if superspeed { 16 } else { 4 };
+        return (
+            BUFFER_TRANSFER,
+            transfers_within(budget, BUFFER_TRANSFER, count),
+        );
     }
     let per_ms = bytes_per_ms(params.samplerate, params.enabled.count_ones().max(1)) as usize;
     let (single_ms, total_ms) = if superspeed { (10, 40) } else { (20, 100) };
     let size = (single_ms * per_ms).div_ceil(align).max(1) * align;
     let count = ((total_ms * per_ms) as f64 / size as f64).ceil() as usize;
-    (size, count.clamp(1, MAX_TRANSFERS))
+    (
+        size,
+        transfers_within(budget, size, count.clamp(1, MAX_TRANSFERS)),
+    )
 }
 
 /// `dsl_fpga_arm()` minus building the settings: the control handshake around them.
@@ -134,7 +145,7 @@ pub(crate) fn start(
     arm(&ctl, &config)?;
 
     let header_size = header_size(params.profile);
-    let (transfer_size, transfers) = transfer_plan(&params);
+    let (transfer_size, transfers) = transfer_plan(&params, ctl.usb().transfer_budget());
     let mut bulk = ctl.usb().bulk_in(EP_DATA)?;
     bulk.submit(header_size);
     for _ in 0..transfers {
@@ -492,24 +503,25 @@ mod tests {
     #[test]
     fn plans_stream_transfers_by_bandwidth() {
         // 12 channels at 25 MHz: 37 500 bytes per ms, 20 ms per transfer on USB 2.
-        let plan = transfer_plan(&params(0x0020, UsbSpeed::High, 1, 25_000_000, 0x0fff));
+        let plan = transfer_plan(&params(0x0020, UsbSpeed::High, 1, 25_000_000, 0x0fff), None);
         assert_eq!(plan, (750_080, 5));
-        let slow = transfer_plan(&params(0x0020, UsbSpeed::High, 0, 10, 1));
+        let slow = transfer_plan(&params(0x0020, UsbSpeed::High, 0, 10, 1), None);
         assert_eq!(slow, (512, 1));
-        let fast = transfer_plan(&params(0x002A, UsbSpeed::Super, 16, 125_000_000, 0xffff));
-        assert_eq!(fast, (2_500_608, 4));
+        let fast = params(0x002A, UsbSpeed::Super, 16, 125_000_000, 0xffff);
+        assert_eq!(transfer_plan(&fast, None), (2_500_608, 4));
+        // Within a budget, fewer of the same transfers.
+        assert_eq!(transfer_plan(&fast, Some(5 << 20)), (2_500_608, 2));
     }
 
     #[test]
     fn plans_buffer_uploads() {
-        assert_eq!(
-            transfer_plan(&params(0x0020, UsbSpeed::High, 20, 100_000_000, 0xffff)),
-            (1 << 20, 4)
-        );
-        assert_eq!(
-            transfer_plan(&params(0x002C, UsbSpeed::Super, 23, 250_000_000, u32::MAX)),
-            (1 << 20, 16)
-        );
+        let usb2 = params(0x0020, UsbSpeed::High, 20, 100_000_000, 0xffff);
+        assert_eq!(transfer_plan(&usb2, None), (1 << 20, 4));
+        assert_eq!(transfer_plan(&usb2, Some(12 << 20)), (1 << 20, 4));
+        let usb3 = params(0x002C, UsbSpeed::Super, 23, 250_000_000, u32::MAX);
+        assert_eq!(transfer_plan(&usb3, None), (1 << 20, 16));
+        // Linux's default usbfs pool fails the sixteenth upload; its budget holds twelve.
+        assert_eq!(transfer_plan(&usb3, Some(12 << 20)), (1 << 20, 12));
     }
 
     #[test]

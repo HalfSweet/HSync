@@ -76,6 +76,11 @@ pub trait MockDevice: Send {
     fn clear_halt(&mut self, _endpoint: u8) -> Result<(), UsbError> {
         Ok(())
     }
+
+    /// The transport's [`UsbTransport::transfer_budget`]; no limit by default.
+    fn transfer_budget(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// A transport whose device is a [`MockDevice`].
@@ -197,6 +202,10 @@ impl<D: MockDevice + 'static> UsbTransport for MockTransport<D> {
             endpoint,
             queue: VecDeque::new(),
         }))
+    }
+
+    fn transfer_budget(&self) -> Option<usize> {
+        self.device().transfer_budget()
     }
 }
 
