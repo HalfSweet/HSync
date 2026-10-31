@@ -176,6 +176,8 @@ The device's other options (threshold, filter, RLE, clock and so on) form a colu
 
 The SLogic16U3 and SLogic32U3 use the same capability-driven controls: Stream mode only and a 0–6 V threshold (1.7 V initially). Their rate tiers follow the highest enabled channel and the USB link: on the SLogic16U3, D0–D3, D0–D7 or D0–D15, with respective USB 3.0 limits of 800, 400 or 200 MHz (80, 40 or 20 MHz on USB 2.0); on the SLogic32U3 also D0–D31, with 10 Gbps limits of 1400, 800, 400 or 200 MHz (800, 400, 200 or 100 MHz at 5 Gbps). They support Loop and simple software triggers; unsupported trigger types remain disabled. With the SLogic32U3's ADC module, each group of eight inputs can be read as an analog channel (A0–A3, ±15 V); while one is, the rates are those of the module's 800 MHz clock from 100 MHz up.
 
+The SLogic Combo 8 also uses Stream mode, Loop and simple software triggers. Its leading-channel tiers are D0–D1 at up to 160 MHz, D0–D3 at 80 MHz and D0–D7 at 40 MHz. Its threshold is fixed, so it offers no threshold control or analog toggle. USB 2.0 is its native link and shows no slow-port warning.
+
 **Capture modes**:
 
 - **Repeat**: interval 0.1–10 s in steps of 0.1 s, default 1 s, set in the drop-down menu; while waiting for the next capture, the status bar reads "Capturing again in N s". Every later capture runs in the background: the screen keeps the previous complete result, the status bar shows progress, and the new result replaces it whole when done; stopping midway discards that capture unless "Show the latest data when a repeat stops" is on.

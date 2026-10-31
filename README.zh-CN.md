@@ -45,7 +45,7 @@ SLogic 系列逻辑分析仪的适配得到了矽速科技（Sipeed）的大力�
 
 ### 采集
 
-- **支持多家厂商的逻辑分析仪**：全部 DreamSourceLab DSLogic 型号、正点原子 ATK-Logic DL16 与 DL16 Plus、PXLogic 的 PX-Logic 32、16 Pro、16 Plus 与 16 Base，以及矽速 SLogic16U3 与 SLogic32U3（[完整列表](#支持的设备)）。HSync 按各厂商自家软件的方式驱动设备，所需的固件与 FPGA 位流自动加载。
+- **支持多家厂商的逻辑分析仪**：全部 DreamSourceLab DSLogic 型号、正点原子 ATK-Logic DL16 与 DL16 Plus、PXLogic 的 PX-Logic 32、16 Pro、16 Plus 与 16 Base，以及矽速 SLogic Combo 8、SLogic16U3 与 SLogic32U3（[完整列表](#支持的设备)）。HSync 按各厂商自家软件的方式驱动设备，所需的固件与 FPGA 位流自动加载。
 - **Buffer 与 Stream 两种模式**：设备支持时，可启用 RLE 压缩让时长超出设备内存；所需内存超过本机一半时会提前提醒。
 - **单次、重复、循环、即时四种采集方式。** 重复采集时，屏幕保留上一次的完整结果，新的一次在后台采集；循环采集持续进行，只保留最新的一段。
 - **设备选项**：阈值电压、毛刺滤波、外部时钟、外部触发输入等，设置会被记住。
@@ -129,7 +129,7 @@ SLogic 系列逻辑分析仪的适配得到了矽速科技（Sipeed）的大力�
   EOF
   # 矽速 SLogic
   sudo tee /etc/udev/rules.d/60-sipeed-slogic.rules > /dev/null <<'EOF'
-  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="3031|3032", MODE="0666"
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="0300|3000|3031|3032", MODE="0666"
   EOF
   sudo udevadm control --reload-rules
   sudo udevadm trigger
@@ -169,13 +169,16 @@ HSync 每次启动时检查新版本（可在「设置 → 行为」里关闭）
 | PXLogic        | PX-Logic 16 Pro     | 16     | 3.0       |
 | PXLogic        | PX-Logic 16 Plus    | 16     | 3.0       |
 | PXLogic        | PX-Logic 16 Base    | 16     | 3.0       |
+| 矽速           | SLogic Combo 8      | 8      | 2.0       |
 | 矽速           | SLogic16U3          | 16     | 3.0       |
 | 矽速           | SLogic32U3          | 32     | 3.2 Gen 2 |
 | —              | 演示设备            | 16     | 内置      |
 
 HSync 与每台设备的通信方式都与其厂商的软件逐字节一致：DSLogic 同 DSView，ATK-Logic 同正点原子的 ATK-Logic 软件，PX-Logic 同 PXView。已在 DSLogic U2Pro16 上实测；如果你在用其他型号，欢迎[反馈使用情况](https://github.com/HalfSweet/HSync/issues/new)。DSCope 示波器、DSView 的示波器与数据采集模式、ATK-Logic 设备的 PWM 输出，以及 PX-Logic 设备的触发输出与 PWM 输出暂不支持。ATK-Logic 设备的固件请用正点原子的 ATK-Logic 软件更新。HSync 打开固件版本不同的 PX-Logic 设备时，会先把 PXView 1.6.5 的固件写入设备，与 PXView 对待自家固件的做法相同。
 
-SLogic16U3 与 SLogic32U3 的驱动使用 Rust 与 nusb，参照[矽速官方驱动](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer)移植。支持 Stream 采集、简单软件触发、循环采集和 0–6 V 阈值，用到的高位通道越少，采样率越高。SLogic16U3 在 USB 3.0 下 16 通道最高 200 MHz，仅用 D0–D7 时 400 MHz，仅用 D0–D3 时 800 MHz。SLogic32U3 接 10 Gbps USB 端口时 32 通道最高 200 MHz，仅用 D0–D15 时 400 MHz，仅用 D0–D7 时 800 MHz，仅用 D0–D3 时 1400 MHz；接 5 Gbps 端口时依次为 100、200、400 和 800 MHz。HSync 使用设备已安装的固件，不会刷写固件；SLogic32U3 需要 S/N 202610150528 或更新的固件（[升级方法](https://wiki.sipeed.com/hardware/zh/logic_analyzer/slogic32u3/Hardware_Specification.html#%E6%9B%B4%E6%96%B0%E5%9B%BA%E4%BB%B6)）。接上 SLogic32U3 的 ADC 模组后，每组 8 个输入（D0–D7 … D24–D31）都可以读成一路 ±15 V 的 8 位模拟通道，和数字通道一起显示为波形。SLogic Combo 8 及引导加载模式暂不支持。详见[连接与采集说明（英文）](docs/user-guide.md#sipeed-slogic)。
+SLogic16U3 与 SLogic32U3 的驱动使用 Rust 与 nusb，参照[矽速官方驱动](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer)移植。支持 Stream 采集、简单软件触发、循环采集和 0–6 V 阈值，用到的高位通道越少，采样率越高。SLogic16U3 在 USB 3.0 下 16 通道最高 200 MHz，仅用 D0–D7 时 400 MHz，仅用 D0–D3 时 800 MHz。SLogic32U3 接 10 Gbps USB 端口时 32 通道最高 200 MHz，仅用 D0–D15 时 400 MHz，仅用 D0–D7 时 800 MHz，仅用 D0–D3 时 1400 MHz；接 5 Gbps 端口时依次为 100、200、400 和 800 MHz。HSync 使用设备已安装的固件，不会刷写固件；SLogic32U3 需要 S/N 202610150528 或更新的固件（[升级方法](https://wiki.sipeed.com/hardware/zh/logic_analyzer/slogic32u3/Hardware_Specification.html#%E6%9B%B4%E6%96%B0%E5%9B%BA%E4%BB%B6)）。接上 SLogic32U3 的 ADC 模组后，每组 8 个输入（D0–D7 … D24–D31）都可以读成一路 ±15 V 的 8 位模拟通道，和数字通道一起显示为波形。引导加载模式暂不支持。详见[连接与采集说明（英文）](docs/user-guide.md#sipeed-slogic)。
+
+**SLogic Combo 8** 同样使用设备现有固件，支持 Stream 采集、简单软件触发和循环采集。连接前请切换到逻辑分析仪模式（蓝色指示灯）；支持 `359f:0300` 和较新固件的 `359f:3000` 两种 USB ID。阈值固定，不可调节。官方驱动提供 D0–D1 最高 160 MHz、D0–D3 最高 80 MHz、D0–D7 最高 40 MHz；HSync 沿用该采样率表，包括超出原始 80 MHz 产品规格的 160 MHz 模式。Combo 8 适配已覆盖参考命令记录和模拟采集，仍待实机验证；不支持调试器与串口模式。
 
 ## 常见问题
 
