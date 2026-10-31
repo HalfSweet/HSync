@@ -16,7 +16,7 @@ use hsync_driver::{Acquisition, CapturePlan, DriverError, EndReason, Packet};
 
 use crate::assemble::WireDecoder;
 use crate::model::Model;
-use crate::protocol::{CaptureSettings, EP_IN, Link, TransferPlan};
+use crate::protocol::{CaptureSettings, EP_IN, Link, MIN_IN_FLIGHT, TransferPlan};
 use crate::stream::Stream;
 use crate::{Settings, adc};
 
@@ -198,6 +198,9 @@ impl Worker {
                     let size = self.transfer_size;
                     self.bulk().submit(size);
                 }
+                Some(Err(UsbError::NoMemory)) if self.transfer_count > MIN_IN_FLIGHT => {
+                    self.drop_refused();
+                }
                 Some(Err(error)) => return failed(DriverError::Usb(error)),
                 None => {}
             }
@@ -221,6 +224,19 @@ impl Worker {
         }
     }
 
+    /// Leaves out of the ring a request the system refused memory for ([`UsbError::NoMemory`]).
+    /// It never reached the device, so no data is missing. The reference keeps the requests it
+    /// could submit as long as [`MIN_IN_FLIGHT`] remain; nusb reports the refusal in the
+    /// request's turn, so the ring shrinks then.
+    fn drop_refused(&mut self) {
+        self.transfer_count -= 1;
+        log::warn!(
+            "the system refused memory for a USB transfer; {} transfers of {} bytes stay in flight",
+            self.transfer_count,
+            self.transfer_size
+        );
+    }
+
     fn rearm(&mut self) -> Result<(), DriverError> {
         self.link.stop_retry(3)?;
         self.bulk().cancel_all();
@@ -231,8 +247,12 @@ impl Worker {
                     "error.device.slogic.cancelTransfers",
                 )));
             }
-            if let Some(Err(error)) = self.bulk().next(POLL) {
-                return Err(error.into());
+            match self.bulk().next(POLL) {
+                Some(Err(UsbError::NoMemory)) if self.transfer_count > MIN_IN_FLIGHT => {
+                    self.drop_refused();
+                }
+                Some(Err(error)) => return Err(error.into()),
+                _ => {}
             }
         }
         // Drop the endpoint claim before prepare clears its halt.

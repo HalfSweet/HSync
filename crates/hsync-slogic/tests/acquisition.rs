@@ -9,7 +9,7 @@ use std::time::Duration;
 use common::{AuxDevice, Event, sample_bytes};
 use crossbeam_channel::{Receiver, bounded, unbounded};
 use hsync_capture::LogicCapture;
-use hsync_core::{ANALOG_BASE, TriggerCondition};
+use hsync_core::{ANALOG_BASE, TriggerCondition, UiError};
 use hsync_driver::mock::{MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
 use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionValue, Packet};
@@ -424,6 +424,54 @@ fn queues_only_the_transfers_the_transport_budget_holds() {
         UsbCall::BulkInSubmit { length, .. } => *length == 64 * 1024,
         _ => true,
     }));
+}
+
+#[test]
+fn carries_on_without_transfers_the_system_refused_memory_for() {
+    let (transport, mut device) = open();
+    configure(&mut device, 0xffff, 128);
+    let samples: Vec<_> = (0u32..128).map(|n| n.wrapping_mul(7919) & 0xffff).collect();
+    let bytes = sample_bytes16(16, &samples);
+    let (first, rest) = bytes.split_at(100);
+    // Twelve of the sixteen requests never reached the device; four stay in flight.
+    let mut device_state = transport.device();
+    device_state.samples.push_back(Ok(first.to_vec()));
+    device_state
+        .samples
+        .extend((0..12).map(|_| Err(UsbError::NoMemory)));
+    device_state.samples.push_back(Ok(rest.to_vec()));
+    drop(device_state);
+    let packets = run(&mut device, CapturePlan::default());
+    assert_capture(&packets, 0xffff, &samples);
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+    // Refused requests are not queued again: sixteen, plus one for each completion with data.
+    assert_eq!(submitted(&transport), 18);
+    assert_stopped_before_cancelling(&transport.device().events);
+}
+
+#[test]
+fn fails_with_the_usbfs_hint_when_too_few_transfers_remain() {
+    let (transport, mut device) = open();
+    configure(&mut device, 0xffff, 128);
+    let mut device_state = transport.device();
+    device_state
+        .samples
+        .push_back(Ok(sample_bytes16(16, &[0xabcd; 32])));
+    device_state
+        .samples
+        .extend((0..13).map(|_| Err(UsbError::NoMemory)));
+    drop(device_state);
+    let packets = run(&mut device, CapturePlan::default());
+    assert_eq!(
+        packets.last(),
+        Some(&Packet::End(EndReason::Failed(UiError::new(
+            "error.device.usbMemory"
+        ))))
+    );
+    assert_stopped_before_cancelling(&transport.device().events);
+    device
+        .set_channel_enabled(0, false)
+        .expect("idle after the refused transfers");
 }
 
 #[test]
