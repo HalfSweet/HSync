@@ -104,6 +104,8 @@ export class MockDemoDevice {
       ([channels, leading, max]) => ({
         channels,
         leading,
+        // The Stream tiers go by their count, as an SLogic16U3 names them.
+        namedByCount: leading,
         span: leading ? channels : 16,
         maxSamplerate: max,
         samplerates: TIERED_RATES.filter((rate) => rate <= max),

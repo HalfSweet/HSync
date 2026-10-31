@@ -549,6 +549,7 @@ impl Device for PxlogicDevice {
             .map(|mode| RateTier {
                 channels: mode.channels,
                 leading: true,
+                named_by_count: false,
                 span: mode.channels,
                 max_samplerate: mode.max_samplerate,
                 samplerates: mode.samplerates(),

@@ -660,6 +660,7 @@ impl Device for DslogicDevice {
             .map(|mode| RateTier {
                 channels: mode.valid_channels,
                 leading: mode.valid_channels == mode.channels,
+                named_by_count: false,
                 span: mode.channels,
                 max_samplerate: mode.max_samplerate,
                 samplerates: self.profile.samplerates_for(mode),
