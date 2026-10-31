@@ -58,16 +58,20 @@ function limit(value: number, max: number): OptionState {
   }
 }
 
-/** The first 4, 8 or 16 channels, as an SLogic16U3 over USB 3.0. */
+/** The first 4, 8 or 16 channels, named by their ranges. */
 const TIERS: RateTier[] = [
   { channels: 4, leading: true, maxSamplerate: 800 * MHZ, samplerates: [200, 400, 800] },
   { channels: 8, leading: true, maxSamplerate: 400 * MHZ, samplerates: [200, 400] },
   { channels: 16, leading: true, maxSamplerate: 200 * MHZ, samplerates: [200] },
 ].map((tier) => ({
   ...tier,
+  namedByCount: false,
   span: tier.channels,
   samplerates: tier.samplerates.map((mhz) => mhz * MHZ),
 }))
+
+/** The same tiers as an SLogic16U3 over USB 3.0 names them: by their channel count. */
+const COUNTED: RateTier[] = TIERS.map((tier) => ({ ...tier, namedByCount: true }))
 
 const BUFFER: OptionState[] = [
   rates([1 * MHZ, 10 * MHZ], 1 * MHZ),
@@ -201,7 +205,7 @@ describe('acquisition menu', () => {
   })
 
   it('names a tier of the first channels by their range, and says what a high one costs', async () => {
-    // Four channels, but D14 makes an SLogic16U3 send all 16.
+    // Four channels, but D14 makes the device send all 16.
     const { wrapper } = await menu(state({ ...streaming(), enabledChannels: [0, 2, 3, 14] }))
     const shortcuts = wrapper.find('[aria-label="Choose by channel count"]').findAll('button')
     expect(shortcuts[2]?.attributes('aria-pressed')).toBe('true')
@@ -234,6 +238,27 @@ describe('acquisition menu', () => {
       ['selectRateTier', 0, [1]],
       ['setOption', 'samplerate', { type: 'integer', value: 800 * MHZ }],
     ])
+    wrapper.unmount()
+  })
+
+  it('names tiers by their channel count where the device does', async () => {
+    const { wrapper } = await menu(
+      state({ ...streaming(), rateTiers: COUNTED, enabledChannels: [1, 5, 9] }),
+    )
+    const shortcuts = wrapper.find('[aria-label="Choose by channel count"]').findAll('button')
+    expect(shortcuts.map((one) => one.text())).toEqual([
+      '4 ch≤800 MHz',
+      '8 ch≤400 MHz',
+      '16 ch≤200 MHz',
+    ])
+    // The tooltip still says which channels a tier takes.
+    expect(shortcuts[1]?.attributes('title')).toBe('Channels 0–7, up to 400 MHz')
+    // A faster rate needs the tier by its name, without "≤": any 8 channels would not do.
+    const rate = wrapper.findAll('[data-list]')[0]?.findAll('button') ?? []
+    expect(rate.map((one) => one.text())).toEqual(['200 MHz', '400 MHz8 ch', '800 MHz4 ch'])
+    expect(rate[2]?.attributes('title')).toBe(
+      'Too many channels now; picking it switches to: Channels 0–3, up to 800 MHz',
+    )
     wrapper.unmount()
   })
 

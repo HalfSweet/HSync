@@ -128,6 +128,7 @@ fn exposes_only_supported_capabilities_and_reconciles_sparse_channels() {
         .enumerate()
     {
         let tier = &tiers[index];
+        assert!(tier.named_by_count);
         assert_eq!(
             (tier.channels, tier.leading, tier.span, tier.max_samplerate),
             (channels, true, channels, maximum)
