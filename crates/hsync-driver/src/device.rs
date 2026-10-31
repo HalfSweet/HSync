@@ -92,6 +92,10 @@ pub struct RateTier {
     pub channels: u16,
     /// Whether they must be the first `channels` (D0 upwards) rather than any of the device's.
     pub leading: bool,
+    /// Whether the interface names a leading tier by its channel count ("8 ch"), as the device's
+    /// maker names its channel modes, rather than by its range of channels ("0–7"). A tier that
+    /// is not leading always goes by its count.
+    pub named_by_count: bool,
     /// Channels it offers, D0 upwards, of which `channels` may be enabled at once: `channels`
     /// itself when leading, else the device's channels or fewer (a DSLogic's 3-channel mode
     /// takes any 3 of D0–D7).
@@ -368,6 +372,7 @@ mod tests {
                 .map(|(channels, max_samplerate)| RateTier {
                     channels,
                     leading: false,
+                    named_by_count: false,
                     span: 8,
                     max_samplerate,
                     samplerates: vec![max_samplerate],
@@ -389,6 +394,7 @@ mod tests {
         let tier = RateTier {
             channels: 3,
             leading: false,
+            named_by_count: false,
             span: 8,
             max_samplerate: 1,
             samplerates: vec![1],

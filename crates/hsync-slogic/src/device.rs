@@ -360,6 +360,8 @@ impl Device for SlogicDevice {
                 RateTier {
                     channels: channels.into(),
                     leading: true,
+                    // Sipeed names the wire modes by their width: 4, 8, 16 and 32 ch.
+                    named_by_count: true,
                     span: channels.into(),
                     max_samplerate: samplerates.last().copied().unwrap_or(0),
                     samplerates,
@@ -565,6 +567,8 @@ mod tests {
             for tier in &tiers {
                 assert_eq!(tier.samplerates.first(), Some(&5_000_000));
                 assert_eq!(tier.samplerates.last(), Some(&tier.max_samplerate));
+                // Named "4 ch" and so on, not "0–3".
+                assert!(tier.named_by_count);
             }
             // Every input starts enabled, in the widest mode.
             assert_eq!(device.rate_tier(), Some(tiers.len() - 1));

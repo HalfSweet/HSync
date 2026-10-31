@@ -15,6 +15,12 @@ channels: number,
  */
 leading: boolean, 
 /**
+ * Whether the interface names a leading tier by its channel count ("8 ch"), as the device's
+ * maker names its channel modes, rather than by its range of channels ("0–7"). A tier that
+ * is not leading always goes by its count.
+ */
+namedByCount: boolean, 
+/**
  * Channels it offers, D0 upwards, of which `channels` may be enabled at once: `channels`
  * itself when leading, else the device's channels or fewer (a DSLogic's 3-channel mode
  * takes any 3 of D0–D7).

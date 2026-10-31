@@ -193,6 +193,24 @@ function tierTip(tier: RateTier): string {
     : t('header.acquisition.tierAny', { count: tier.channels, rate })
 }
 
+/**
+ * Whether a tier goes by its range of channels ("0–7"): a tier of the first channels does,
+ * unless the device names it by its count ("8 ch").
+ */
+const byRange = (tier: RateTier) => tier.leading && !tier.namedByCount
+
+/**
+ * What a rate the enabled channels do not allow needs: the range of a tier that goes by one,
+ * the name of one of the first channels that goes by its count ("≤" would let any channels in),
+ * or at most so many channels.
+ */
+function tierNeed(tier: RateTier): string {
+  if (byRange(tier)) return t('header.acquisition.needLeading', { last: tier.channels - 1 })
+  return tier.leading
+    ? t('header.acquisition.channels', { count: tier.channels })
+    : t('header.acquisition.needAny', { count: tier.channels })
+}
+
 /** The tier a rate the enabled channels do not allow needs. */
 function tierNeeded(value: number): RateTier | undefined {
   return allowed.value.includes(value) ? undefined : tiers.value[tierForRate(tiers.value, value)]
@@ -204,11 +222,7 @@ const rateRows = computed(() =>
     const tier = tierNeeded(value)
     return {
       value,
-      need: !tier
-        ? null
-        : tier.leading
-          ? t('header.acquisition.needLeading', { last: tier.channels - 1 })
-          : t('header.acquisition.needAny', { count: tier.channels }),
+      need: tier ? tierNeed(tier) : null,
       tip: tier ? t('header.acquisition.needTip', { tier: tierTip(tier) }) : undefined,
       usable: tier !== undefined || allowed.value.includes(value),
     }
@@ -227,7 +241,7 @@ const shortcuts = computed(() =>
     ? tiers.value.map((tier, index) => ({
         count: tier.channels,
         // A tier of the first channels is a range of them, not a count: D14 alone needs 0–15.
-        name: tier.leading
+        name: byRange(tier)
           ? t('header.acquisition.range', { last: tier.channels - 1 })
           : t('header.acquisition.channels', { count: tier.channels }),
         rate: tier.maxSamplerate,

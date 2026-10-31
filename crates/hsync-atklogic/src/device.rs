@@ -105,6 +105,7 @@ impl Settings {
                 _ => tiers.push(RateTier {
                     channels,
                     leading: false,
+                    named_by_count: false,
                     span: CHANNELS,
                     max_samplerate: samplerates.last().copied().unwrap_or(0),
                     samplerates,

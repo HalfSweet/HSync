@@ -19,6 +19,7 @@ function tier(channels: number, leading: boolean, rates: number[], span = 16): R
   return {
     channels,
     leading,
+    namedByCount: false,
     span: leading ? channels : span,
     maxSamplerate: samplerates.at(-1) ?? 0,
     samplerates,
