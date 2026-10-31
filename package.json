@@ -1,6 +1,6 @@
 {
   "name": "hsync",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "private": true,
   "description": "A modern, general-purpose logic analyzer app for DSLogic, ATK-Logic, PX-Logic and SLogic devices, built with Tauri, Vue and Rust.",
   "license": "(Apache-2.0 OR GPL-3.0-or-later)",
