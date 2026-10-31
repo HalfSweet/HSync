@@ -10,7 +10,7 @@ use common::{AuxDevice, Event, sample_bytes};
 use crossbeam_channel::{Receiver, bounded, unbounded};
 use hsync_capture::LogicCapture;
 use hsync_core::{ANALOG_BASE, TriggerCondition};
-use hsync_driver::mock::MockTransport;
+use hsync_driver::mock::{MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
 use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionValue, Packet};
 use hsync_slogic::protocol::Link;
@@ -394,6 +394,36 @@ fn unplug_reports_detached_and_does_not_send_stop_to_the_missing_device() {
     device
         .set_channel_enabled(0, false)
         .expect("worker is idle");
+}
+
+fn submitted(transport: &MockTransport<AuxDevice>) -> usize {
+    transport
+        .calls()
+        .iter()
+        .filter(|call| matches!(call, UsbCall::BulkInSubmit { .. }))
+        .count()
+}
+
+#[test]
+fn queues_only_the_transfers_the_transport_budget_holds() {
+    let (transport, mut device) = open();
+    // 16 channels at 5 MHz: 64 KiB transfers, four of which fit.
+    transport.device().transfer_budget = Some(256 * 1024);
+    configure(&mut device, 0xffff, 128);
+    let samples: Vec<_> = (0u32..128).map(|n| n.wrapping_mul(7919) & 0xffff).collect();
+    transport
+        .device()
+        .samples
+        .push_back(Ok(sample_bytes16(16, &samples)));
+    let packets = run(&mut device, CapturePlan::default());
+    assert_capture(&packets, 0xffff, &samples);
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+    // The four queued before RUN, and the one requeued after the data.
+    assert_eq!(submitted(&transport), 5);
+    assert!(transport.calls().iter().all(|call| match call {
+        UsbCall::BulkInSubmit { length, .. } => *length == 64 * 1024,
+        _ => true,
+    }));
 }
 
 #[test]

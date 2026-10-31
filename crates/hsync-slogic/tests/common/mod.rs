@@ -40,6 +40,8 @@ pub struct AuxDevice {
     pub channel_mask: u32,
     pub threshold_dac: u32,
     pub divider: u32,
+    /// The transport's transfer budget.
+    pub transfer_budget: Option<usize>,
     command: u32,
     payload: [u8; 16],
     polls: usize,
@@ -71,6 +73,7 @@ impl AuxDevice {
             channel_mask: 0,
             threshold_dac: 0,
             divider: 0,
+            transfer_budget: None,
             command: 0,
             payload: [0; 16],
             polls: 0,
@@ -195,6 +198,10 @@ impl MockDevice for AuxDevice {
             running: self.running,
         });
         Vec::new()
+    }
+
+    fn transfer_budget(&self) -> Option<usize> {
+        self.transfer_budget
     }
 }
 

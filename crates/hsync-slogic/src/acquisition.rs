@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Capture sequencing follows Sipeed libsigrok's `slogic/slogic_usb.c` at
-//! 0d728b3e1226a61738c99c3333ad16d5c2814728 (Copyright 2023–2025 Sipeed).
+//! 0d728b3e1226a61738c99c3333ad16d5c2814728, the transfer ring at
+//! ba92c5fe8728992574950b40810b2df43528ff5d (Copyright 2023–2025 Sipeed).
 //! Reads use nusb's ordered transfer queue; all waits and teardown are bounded.
 
 use std::sync::Arc;
@@ -38,7 +39,11 @@ pub(crate) fn start(
         clock_mhz: (settings.analog != 0).then_some(adc::CLOCK_MHZ),
     };
     link.prepare(&configuration)?;
-    let transfers = TransferPlan::new(settings.channels(), settings.samplerate);
+    let transfers = TransferPlan::new(
+        settings.channels(),
+        settings.samplerate,
+        link.usb().transfer_budget(),
+    );
     let bulk = link.usb().bulk_in(EP_IN)?;
     let stop = Arc::new(AtomicBool::new(false));
     let mut worker = Worker {

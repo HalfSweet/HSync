@@ -7,7 +7,7 @@ use hsync_driver::DriverError;
 use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
 use hsync_slogic::SLOGIC32U3;
-use hsync_slogic::protocol::{CaptureSettings, Link, TransferPlan, threshold_dac};
+use hsync_slogic::protocol::{CaptureSettings, Link, MIN_IN_FLIGHT, TransferPlan, threshold_dac};
 
 mod common;
 
@@ -408,9 +408,13 @@ fn rounds_and_clamps_thresholds_like_the_reference() {
 
 #[test]
 fn keeps_the_transfer_ring_bounded_and_aligned_for_every_mode() {
-    let slowest = TransferPlan::new(4, 5_000_000);
-    assert_eq!(slowest.size, 160 * 1024);
+    // About 5 ms of data per request: 12.5 kB at the slowest rate, raised to the 32 KiB minimum.
+    let slowest = TransferPlan::new(4, 5_000_000, None);
+    assert_eq!((slowest.size, slowest.count), (32 * 1024, 16));
     assert_eq!(slowest.expected_rate_bytes, 2_500_000);
+    // 200 kB on USB 2.0, rounded up to whole 32 KiB.
+    let usb2 = TransferPlan::new(16, 20_000_000, None);
+    assert_eq!((usb2.size, usb2.count), (224 * 1024, 16));
     for (channels, rate, bytes) in [
         (4, 800_000_000, 400_000_000),
         (8, 400_000_000, 400_000_000),
@@ -419,10 +423,24 @@ fn keeps_the_transfer_ring_bounded_and_aligned_for_every_mode() {
         (8, 800_000_000, 800_000_000),
         (32, 200_000_000, 800_000_000),
     ] {
-        let plan = TransferPlan::new(channels, rate);
+        let plan = TransferPlan::new(channels, rate, None);
         assert_eq!(plan.size, 1024 * 1024);
         assert_eq!(plan.count, 16);
         assert_eq!(plan.expected_rate_bytes, bytes);
         assert_eq!(plan.timeout.as_millis(), 50);
     }
+}
+
+#[test]
+fn keeps_the_transfer_ring_within_the_usbfs_budget() {
+    // The default 16 MiB usbfs pool leaves 12 MiB: twelve 1 MiB requests at full rate, where
+    // sixteen failed after 15 MiB.
+    let full = TransferPlan::new(16, 200_000_000, Some(12 << 20));
+    assert_eq!((full.size, full.count), (1 << 20, 12));
+    // Slower captures fit the whole ring.
+    let usb2 = TransferPlan::new(16, 20_000_000, Some(12 << 20));
+    assert_eq!((usb2.size, usb2.count), (224 * 1024, 16));
+    // In a pool too small for MIN_IN_FLIGHT requests of 1 MiB, the requests shrink instead.
+    let tight = TransferPlan::new(16, 200_000_000, Some(768 * 1024));
+    assert_eq!((tight.size, tight.count), (192 * 1024, MIN_IN_FLIGHT));
 }

@@ -56,6 +56,26 @@ impl From<TransferError> for UsbError {
     }
 }
 
+/// How many of `count` transfers of `size` bytes fit in `budget` (see
+/// [`UsbTransport::transfer_budget`]); always at least one.
+pub fn transfers_within(budget: Option<usize>, size: usize, count: usize) -> usize {
+    budget.map_or(count, |budget| count.min(budget / size.max(1)).max(1))
+}
+
+/// The pool of usbfs, in MiB.
+const USBFS_MEMORY_MB: &str = "/sys/module/usbcore/parameters/usbfs_memory_mb";
+
+/// [`UsbTransport::transfer_budget`] under usbfs, from what [`USBFS_MEMORY_MB`] holds (the
+/// kernel's default, 16, when it cannot be read): three quarters of the pool, leaving room for
+/// other programs and the kernel's bookkeeping of each transfer; no limit for a pool of 0, which
+/// usbfs leaves unlimited.
+fn usbfs_budget(limit: Option<&str>) -> Option<usize> {
+    let mib = limit
+        .and_then(|text| text.trim().parse::<usize>().ok())
+        .unwrap_or(16);
+    (mib > 0).then(|| mib.saturating_mul(1 << 20) / 4 * 3)
+}
+
 /// Vendor requests and bulk transfers on one claimed interface.
 pub trait UsbTransport: Send + Sync {
     /// Vendor-type OUT control request to the device.
@@ -98,6 +118,14 @@ pub trait UsbTransport: Send + Sync {
     /// `CLEAR_FEATURE(ENDPOINT_HALT)` and both sides restart the endpoint's data toggle. No
     /// transfers may be pending on it.
     fn clear_halt(&self, endpoint: u8) -> Result<(), UsbError>;
+
+    /// How many bytes the transfers queued on bulk IN endpoints may hold together, or `None`
+    /// without a limit. Linux charges the transfers of every program to one pool, usbcore's
+    /// `usbfs_memory_mb` (16 MiB by default), and fails a transfer that does not fit with
+    /// [`UsbError::NoMemory`]; other systems have no such pool.
+    fn transfer_budget(&self) -> Option<usize> {
+        None
+    }
 }
 
 /// A queue of bulk IN transfers that complete in submission order.
@@ -306,6 +334,13 @@ impl UsbTransport for NusbTransport {
         };
         Ok(Box::new(NusbBulkIn { endpoint }))
     }
+
+    fn transfer_budget(&self) -> Option<usize> {
+        if !cfg!(target_os = "linux") {
+            return None;
+        }
+        usbfs_budget(std::fs::read_to_string(USBFS_MEMORY_MB).ok().as_deref())
+    }
 }
 
 struct NusbBulkIn {
@@ -349,5 +384,23 @@ mod tests {
             UsbError::from(TransferError::Stall),
             UsbError::Transfer(TransferError::Stall)
         ));
+    }
+
+    #[test]
+    fn budgets_three_quarters_of_the_usbfs_pool() {
+        assert_eq!(usbfs_budget(Some("16\n")), Some(12 << 20));
+        assert_eq!(usbfs_budget(Some("256")), Some(192 << 20));
+        assert_eq!(usbfs_budget(Some("0\n")), None);
+        // An unreadable or garbled limit is taken as the kernel's default.
+        assert_eq!(usbfs_budget(None), Some(12 << 20));
+        assert_eq!(usbfs_budget(Some("lots")), Some(12 << 20));
+    }
+
+    #[test]
+    fn fits_transfers_in_the_budget() {
+        assert_eq!(transfers_within(None, 1 << 20, 16), 16);
+        assert_eq!(transfers_within(Some(12 << 20), 1 << 20, 16), 12);
+        assert_eq!(transfers_within(Some(12 << 20), 64 << 10, 16), 16);
+        assert_eq!(transfers_within(Some(1 << 20), 4 << 20, 4), 1);
     }
 }
