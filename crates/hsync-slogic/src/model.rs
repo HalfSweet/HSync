@@ -3,17 +3,28 @@
 // 0d728b3e1226a61738c99c3333ad16d5c2814728:
 // src/hardware/sipeed-slogic-analyzer/slogic/{slogic16u3.c,slogic32u3.c,slogic_data.c}.
 // Copyright (C) 2023-2025 Shenzhen Sipeed Technology Co., Ltd.
-//! The SLogic U3 models and their link-dependent sample-rate ceilings.
+//! SLogic models and their link-dependent sample-rate ceilings.
 
 const MHZ: u64 = 1_000_000;
 
-/// One analyzer of the U3 family, which shares the register/AUX protocol (`slogic_model`).
+/// The device's command protocol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Protocol {
+    /// Register/AUX commands and sample endpoint 0x82.
+    U3,
+    /// A four-byte START command and sample endpoint 0x81; no STOP command.
+    Combo8,
+}
+
+/// One analyzer in the official driver's model table (`slogic_model`).
 #[derive(Debug, PartialEq, Eq)]
 pub struct Model {
     /// Model name, as the reference reports it.
     pub name: &'static str,
     /// USB product id of the capture firmware (the bootloader uses another).
     pub product_id: u16,
+    /// Commands used by the installed firmware.
+    pub protocol: Protocol,
     /// Physical digital inputs, D0 upwards.
     pub channels: u8,
     /// Advertised discrete rates in ascending order.
@@ -33,6 +44,7 @@ pub struct Model {
 pub static SLOGIC16U3: Model = Model {
     name: "SLogic16U3",
     product_id: 0x3031,
+    protocol: Protocol::U3,
     channels: 16,
     samplerates: &[
         5 * MHZ,
@@ -61,6 +73,7 @@ pub static SLOGIC16U3: Model = Model {
 pub static SLOGIC32U3: Model = Model {
     name: "SLogic32U3",
     product_id: 0x3032,
+    protocol: Protocol::U3,
     channels: 32,
     samplerates: &[
         5 * MHZ,
@@ -91,11 +104,40 @@ pub static SLOGIC32U3: Model = Model {
     analog_groups: 4,
 };
 
+/// SLogic Combo 8, following `slogic8u2.c` at sipeed/libsigrok revision
+/// bf6b346e597d112f48102fe6a7b2318c6d7b49e2. Newer firmware uses PID 0x3000.
+pub static SLOGIC_COMBO8: Model = Model {
+    name: "SLogic Combo 8",
+    product_id: 0x0300,
+    protocol: Protocol::Combo8,
+    channels: 8,
+    samplerates: &[
+        MHZ,
+        2 * MHZ,
+        4 * MHZ,
+        5 * MHZ,
+        8 * MHZ,
+        10 * MHZ,
+        16 * MHZ,
+        20 * MHZ,
+        32 * MHZ,
+        40 * MHZ,
+        80 * MHZ,
+        160 * MHZ,
+    ],
+    wire_modes: &[(2, 160 * MHZ), (4, 80 * MHZ), (8, 40 * MHZ)],
+    head_bytes: 0,
+    analog_groups: 0,
+};
+
 /// Every supported model.
-pub static MODELS: [&Model; 2] = [&SLOGIC16U3, &SLOGIC32U3];
+pub static MODELS: [&Model; 3] = [&SLOGIC16U3, &SLOGIC32U3, &SLOGIC_COMBO8];
 
 /// The model whose capture firmware enumerates with this product id.
 pub fn find(product_id: u16) -> Option<&'static Model> {
+    if product_id == 0x3000 {
+        return Some(&SLOGIC_COMBO8);
+    }
     MODELS
         .into_iter()
         .find(|model| model.product_id == product_id)
@@ -172,11 +214,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn finds_only_the_capture_firmware_of_the_u3_models() {
+    fn finds_only_the_capture_firmware() {
         assert_eq!(find(0x3031), Some(&SLOGIC16U3));
         assert_eq!(find(0x3032), Some(&SLOGIC32U3));
-        // Combo 8 (another protocol) and the bootloader.
-        assert_eq!(find(0x0300), None);
+        assert_eq!(find(0x0300), Some(&SLOGIC_COMBO8));
+        assert_eq!(find(0x3000), Some(&SLOGIC_COMBO8));
+        // The bootloader is not a capture device.
         assert_eq!(find(0x30f1), None);
     }
 

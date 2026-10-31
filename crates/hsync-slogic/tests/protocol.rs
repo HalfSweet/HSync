@@ -6,8 +6,8 @@ use std::sync::Arc;
 use hsync_driver::DriverError;
 use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
-use hsync_slogic::SLOGIC32U3;
 use hsync_slogic::protocol::{CaptureSettings, Link, MIN_IN_FLIGHT, TransferPlan, threshold_dac};
+use hsync_slogic::{SLOGIC_COMBO8, SLOGIC32U3};
 
 mod common;
 
@@ -119,10 +119,14 @@ fn replays_the_official_control_sequences() {
             script.push_back((call, bytes));
         }
         let transport = MockTransport::new(Script(script));
-        let link = Link::new(Arc::new(transport.clone()));
+        let link = if fields[1].starts_with("combo8_") {
+            Link::for_model(Arc::new(transport.clone()), &SLOGIC_COMBO8)
+        } else {
+            Link::new(Arc::new(transport.clone()))
+        };
         link.reset().expect("RESET");
         link.configure(&settings).expect("configure");
-        link.run().expect("RUN");
+        link.run(&settings).expect("RUN");
         link.stop().expect("STOP");
         assert!(
             transport.device().0.is_empty(),
@@ -131,7 +135,7 @@ fn replays_the_official_control_sequences() {
         );
         cases += 1;
     }
-    assert_eq!(cases, 13);
+    assert_eq!(cases, 79);
 }
 
 fn settings() -> CaptureSettings {

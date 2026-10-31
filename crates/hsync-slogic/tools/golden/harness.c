@@ -39,8 +39,12 @@ static int write_control(void *ctx, uint8_t req, uint16_t addr, uint16_t index,
                          const uint8_t *data, uint16_t len, unsigned timeout)
 {
     struct device *d = ctx;
-    assert(req == 1 && index == 0 && len == 4 && timeout == 500);
+    assert((req == 1 || req == 0xb1) && index == 0 && len == 4 && timeout == 500);
     trace('W', req, addr, index, data, len);
+    if (req == 0xb1) {
+        assert(addr == 0);
+        return len;
+    }
     if (addr == 0xc) {
         d->command = word(data);
         d->polls = 0;
@@ -96,7 +100,7 @@ static void capture(uint16_t pid, const char *name, int channels, uint64_t rate,
 
 int main(void)
 {
-    puts("# sipeed/libsigrok 0d728b3e1226a61738c99c3333ad16d5c2814728");
+    puts("# sipeed/libsigrok bf6b346e597d112f48102fe6a7b2318c6d7b49e2");
     capture(SLOGIC_PID_16U3, "four_fastest", 4, 800000000, 0.0, 0, 0, 800, 0);
     capture(SLOGIC_PID_16U3, "eight_fastest", 8, 400000000, 1.8, 0, 0, 800, 0);
     capture(SLOGIC_PID_16U3, "sixteen_fastest", 16, 200000000, 3.3, 0, 0, 800, 0);
@@ -111,5 +115,20 @@ int main(void)
     capture(SLOGIC_PID_32U3, "u32_thirty_two_fastest", 32, 200000000, 3.3, 0, 0, 1400, 800);
     capture(SLOGIC_PID_32U3, "u32_thirty_two_5g", 32, 100000000, 2.5, 0, 0, 1400, 800);
     capture(SLOGIC_PID_32U3, "u32_slowest", 32, 5000000, 0.6, 0, 0, 1400, 800);
+    const uint16_t pids[] = {SLOGIC_PID_COMBO8, SLOGIC_PID_8U2};
+    for (unsigned p = 0; p < sizeof(pids) / sizeof(pids[0]); p++) {
+        const slogic_model *m = slogic_model_for_pid(pids[p]);
+        assert(m);
+        for (int channels = 2; channels <= 8; channels *= 2) {
+            for (size_t i = 0; i < m->rate_count; i++) {
+                uint64_t rate = m->rates[i];
+                if (rate > slogic_max_rate(m, channels))
+                    continue;
+                char name[80];
+                snprintf(name, sizeof(name), "combo8_%04x_%d_%" PRIu64, pids[p], channels, rate);
+                capture(pids[p], name, channels, rate, 0.0, 0, 0, 0, 0);
+            }
+        }
+    }
     return 0;
 }

@@ -4,7 +4,8 @@
 // src/hardware/sipeed-slogic-analyzer/slogic/{slogic.c,slogic_usb.c}; the transfer
 // sizing from commit ba92c5fe8728992574950b40810b2df43528ff5d.
 // Copyright (C) 2023-2025 Shenzhen Sipeed Technology Co., Ltd.
-//! The SLogic U3 register/AUX protocol over a claimed USB interface.
+//! SLogic commands over a claimed USB interface. Combo 8 follows `slogic.c` at
+//! sipeed/libsigrok bf6b346e597d112f48102fe6a7b2318c6d7b49e2.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -12,6 +13,8 @@ use std::time::Duration;
 use hsync_core::UiError;
 use hsync_driver::DriverError;
 use hsync_driver::usb::{UsbError, UsbTransport, transfers_within};
+
+use crate::model::{Model, Protocol, SLOGIC_COMBO8, UsbSpeed};
 
 /// The U3 models' sample endpoint.
 pub const EP_IN: u8 = 0x82;
@@ -24,10 +27,10 @@ const PAYLOAD: u16 = 0x0010;
 const CONTROL_TIMEOUT: Duration = Duration::from_millis(500);
 const AUX_POLLS: usize = 8;
 
-/// Settings carried by the U3 AUX commands.
+/// Settings carried by U3 AUX commands or the Combo 8 START command.
 #[derive(Debug, Clone, Copy)]
 pub struct CaptureSettings {
-    /// Physical channels in the wire format: 4, 8, 16 or 32, starting at D0.
+    /// Physical channels in the wire format: 2, 4, 8, 16 or 32, starting at D0.
     pub channels: u8,
     /// Requested samples per second.
     pub samplerate: u64,
@@ -105,6 +108,7 @@ pub fn threshold_dac(volts: f64) -> u32 {
 #[derive(Clone)]
 pub struct Link {
     usb: Arc<dyn UsbTransport>,
+    protocol: Protocol,
 }
 
 impl std::fmt::Debug for Link {
@@ -119,9 +123,28 @@ struct AuxPayload {
 }
 
 impl Link {
-    /// Uses the transport of an already claimed interface.
+    /// Uses the transport of an already claimed U3 interface.
     pub fn new(usb: Arc<dyn UsbTransport>) -> Self {
-        Self { usb }
+        Self {
+            usb,
+            protocol: Protocol::U3,
+        }
+    }
+
+    /// Selects the command protocol for the device's installed firmware.
+    pub fn for_model(usb: Arc<dyn UsbTransport>, model: &Model) -> Self {
+        Self {
+            usb,
+            protocol: model.protocol,
+        }
+    }
+
+    /// The sample endpoint of this protocol.
+    pub fn endpoint(&self) -> u8 {
+        match self.protocol {
+            Protocol::U3 => EP_IN,
+            Protocol::Combo8 => 0x81,
+        }
     }
 
     /// The transport used to queue sample reads.
@@ -235,16 +258,30 @@ impl Link {
         // Unlike the reference, fail if STOP never succeeds rather than open
         // a device that may still be capturing with another configuration.
         self.stop_retry(2)?;
-        let _ = self.usb.clear_halt(EP_IN);
+        if self.protocol == Protocol::U3 {
+            let _ = self.usb.clear_halt(self.endpoint());
+        }
+        self.drain()?;
+        self.reset()
+    }
+
+    /// Discards stale samples after cancelling and releasing the transfer queue.
+    pub fn drain(&self) -> Result<(), DriverError> {
         for _ in 0..32 {
             match self
                 .usb
-                .bulk_read(EP_IN, 64 * 1024, Duration::from_millis(50))
+                .bulk_read(self.endpoint(), 64 * 1024, Duration::from_millis(50))
             {
                 Ok(bytes) if !bytes.is_empty() => {}
-                Ok(_) | Err(UsbError::Timeout) => return self.reset(),
+                Ok(_) | Err(UsbError::Timeout) => return Ok(()),
                 Err(error) => return Err(error.into()),
             }
+        }
+        // Combo 8 has no reliable STOP. Its reference adapter treats this bounded
+        // drain as teardown even when every read returns bytes; the next START
+        // establishes the new capture. A stopped U3 must instead become silent.
+        if self.protocol == Protocol::Combo8 {
+            return Ok(());
         }
         // The reference proceeds after exhausting its drain budget. Refuse
         // to open with stale samples still arriving, so a later RUN cannot
@@ -256,6 +293,9 @@ impl Link {
 
     /// Pulses RESET and leaves the capture gate stopped.
     pub fn reset(&self) -> Result<(), DriverError> {
+        if self.protocol == Protocol::Combo8 {
+            return Ok(());
+        }
         self.write_word(CTRL, 2)?;
         self.stop()
     }
@@ -263,13 +303,26 @@ impl Link {
     /// Resets the device, clears its endpoint, and programs a stopped capture.
     pub fn prepare(&self, settings: &CaptureSettings) -> Result<(), DriverError> {
         self.reset()?;
-        let _ = self.usb.clear_halt(EP_IN);
+        let _ = self.usb.clear_halt(self.endpoint());
         self.configure(settings)
     }
 
     /// Programs channel mode, sample clock, threshold, then normal pattern mode.
     /// The caller queues bulk transfers before calling [`Self::run`].
     pub fn configure(&self, settings: &CaptureSettings) -> Result<(), DriverError> {
+        if self.protocol == Protocol::Combo8 {
+            // All settings travel with START; there is no threshold DAC or AUX map.
+            if !SLOGIC_COMBO8
+                .samplerates(settings.channels, UsbSpeed::High)
+                .contains(&settings.samplerate)
+                || settings.clock_mhz.is_some()
+            {
+                return Err(DriverError::Localized(UiError::new(
+                    "error.device.slogic.captureSettings",
+                )));
+            }
+            return Ok(());
+        }
         if !matches!(settings.channels, 4 | 8 | 16 | 32)
             || settings.samplerate == 0
             || !settings.threshold.is_finite()
@@ -287,13 +340,31 @@ impl Link {
     }
 
     /// Opens the capture gate, after sample transfers have been queued.
-    pub fn run(&self) -> Result<(), DriverError> {
+    pub fn run(&self, settings: &CaptureSettings) -> Result<(), DriverError> {
+        if self.protocol == Protocol::Combo8 {
+            self.configure(settings)?;
+            let mhz = (settings.samplerate / 1_000_000) as u16;
+            let [low, high] = mhz.to_le_bytes();
+            // Pattern 0 selects the physical inputs. Older firmware ignores byte 3.
+            self.usb.control_out(
+                0xb1,
+                0,
+                0,
+                &[low, high, settings.channels, 0],
+                CONTROL_TIMEOUT,
+            )?;
+            return Ok(());
+        }
         self.write_word(CTRL, 1)
     }
 
     /// Closes the capture gate. Send this BEFORE cancelling sample transfers:
     /// otherwise the reference warns that firmware may reset off the USB bus.
     pub fn stop(&self) -> Result<(), DriverError> {
+        // Combo 8 teardown cancels the ring, then drains endpoint 0x81 instead.
+        if self.protocol == Protocol::Combo8 {
+            return Ok(());
+        }
         self.write_word(CTRL, 0)
     }
 

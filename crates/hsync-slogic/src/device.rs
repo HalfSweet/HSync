@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! SLogic U3 configuration, following Sipeed's libsigrok `slogic-dev` driver:
+//! SLogic configuration, following Sipeed's libsigrok `slogic-dev` driver:
 //! `api.c`, `slogic/slogic16u3.c`, `slogic/slogic32u3.c` and `slogic/slogic_data.c`.
 
 use std::sync::Arc;
@@ -12,7 +12,7 @@ use hsync_driver::{
     OptionKey, OptionKind, OptionState, OptionValue, Packet, RateTier, TriggerCaps,
 };
 
-use crate::model::{Model, UsbSpeed};
+use crate::model::{Model, Protocol, UsbSpeed};
 use crate::protocol::Link;
 use crate::{acquisition, adc};
 
@@ -31,7 +31,7 @@ pub struct Settings {
     pub samplerate: u64,
     /// Samples retained per enabled channel for a finite capture.
     pub limit_samples: u64,
-    /// Adjustable threshold voltage, between 0 and 6 V.
+    /// Adjustable U3 threshold voltage, between 0 and 6 V; unused on Combo 8.
     pub vth: f64,
     /// Bit `n` selects physical channel `n` for HSync's capture.
     pub enabled: u32,
@@ -55,7 +55,7 @@ impl Settings {
         }
     }
 
-    /// The contiguous wire mode covering the highest enabled input: 4, 8, 16 or 32 channels.
+    /// The contiguous wire mode covering the highest enabled input: 2, 4, 8, 16 or 32 channels.
     pub fn channels(&self) -> u8 {
         self.channels
     }
@@ -110,7 +110,7 @@ impl Settings {
     }
 }
 
-/// An opened SLogic U3 analyzer, configured through a claimed nusb interface.
+/// An opened SLogic analyzer, configured through a claimed nusb interface.
 pub struct SlogicDevice {
     link: Link,
     info: DeviceInfo,
@@ -145,10 +145,10 @@ impl SlogicDevice {
                 driver: crate::DRIVER_NAME.to_owned(),
                 vendor: crate::VENDOR.to_owned(),
                 model: model.name.to_owned(),
-                // The U3 capture protocol provides no firmware-version query.
+                // These capture protocols provide no firmware-version query.
                 firmware: None,
                 usb_speed: Some(speed.id().to_owned()),
-                slow_port: speed == UsbSpeed::High,
+                slow_port: model.protocol == Protocol::U3 && speed == UsbSpeed::High,
             },
             model,
             speed,
@@ -184,7 +184,7 @@ impl Device for SlogicDevice {
     }
 
     fn options(&self) -> Vec<OptionState> {
-        vec![
+        let mut options = vec![
             OptionState {
                 key: OptionKey::OperationMode,
                 kind: OptionKind::Choice {
@@ -224,7 +224,11 @@ impl Device for SlogicDevice {
                 value: OptionValue::Number(self.settings.vth),
                 enabled: true,
             },
-        ]
+        ];
+        if self.model.protocol == Protocol::Combo8 {
+            options.retain(|option| option.key != OptionKey::Vth);
+        }
+        options
     }
 
     fn set_option(&mut self, key: OptionKey, value: &OptionValue) -> Result<(), DriverError> {
@@ -257,7 +261,7 @@ impl Device for SlogicDevice {
                     })?;
                 self.settings.limit_samples = limit;
             }
-            OptionKey::Vth => {
+            OptionKey::Vth if self.model.protocol == Protocol::U3 => {
                 self.settings.vth = value
                     .as_number()
                     .filter(|threshold| VTH_RANGE.contains(threshold))
@@ -360,7 +364,7 @@ impl Device for SlogicDevice {
                 RateTier {
                     channels: channels.into(),
                     leading: true,
-                    // Sipeed names the wire modes by their width: 4, 8, 16 and 32 ch.
+                    // Sipeed names the wire modes by their width: 2, 4, 8, 16 and 32 ch.
                     named_by_count: true,
                     span: channels.into(),
                     max_samplerate: samplerates.last().copied().unwrap_or(0),

@@ -5,7 +5,7 @@
 // Copyright (C) 2023-2025 Shenzhen Sipeed Technology Co., Ltd.
 //! Unpacks the physical-channel samples before software triggering and cross packing.
 
-/// Converts SLogic U3 transfer bytes into one physical-channel bit mask per sample.
+/// Converts SLogic transfer bytes into one physical-channel bit mask per sample.
 /// It keeps at most one partial sample and discards the model's firmware head.
 #[derive(Debug)]
 pub(crate) struct WireDecoder {
@@ -16,10 +16,10 @@ pub(crate) struct WireDecoder {
 }
 
 impl WireDecoder {
-    /// Decodes a 4-, 8-, 16- or 32-channel wire mode, all starting at channel D0, after
+    /// Decodes a 2-, 4-, 8-, 16- or 32-channel wire mode, all starting at channel D0, after
     /// dropping `head_bytes` once per RUN, even if USB splits them across reads.
     pub(crate) fn new(channels: u8, head_bytes: usize) -> Self {
-        assert!(matches!(channels, 4 | 8 | 16 | 32));
+        assert!(matches!(channels, 2 | 4 | 8 | 16 | 32));
         Self {
             channels,
             drop_left: head_bytes,
@@ -35,6 +35,15 @@ impl WireDecoder {
         let bytes = &bytes[skipped..];
         samples.reserve(bytes.len() * 8 / usize::from(self.channels) + 1);
         match self.channels {
+            2 => {
+                // Combo 8: four samples per byte, earliest in the low two bits
+                // (`slogic_unpack_range`, sipeed/libsigrok bf6b346e597d112f48102fe6a7b2318c6d7b49e2).
+                for &byte in bytes {
+                    for shift in [0, 2, 4, 6] {
+                        samples.push(u32::from((byte >> shift) & 3));
+                    }
+                }
+            }
             4 => {
                 for &byte in bytes {
                     // The earlier sample is the low nibble.
@@ -86,6 +95,10 @@ mod tests {
 
     #[test]
     fn follows_nibble_and_little_endian_sample_order() {
+        assert_eq!(
+            decode(&mut WireDecoder::new(2, 0), &[0xe4, 0x1b]),
+            [0, 1, 2, 3, 3, 2, 1, 0]
+        );
         assert!(decode(&mut WireDecoder::new(4, 4), &[0xff; 4]).is_empty());
         let mut decoder = WireDecoder::new(4, 4);
         assert_eq!(
@@ -108,13 +121,29 @@ mod tests {
 
     #[test]
     fn keeps_sample_order_across_every_transfer_boundary() {
-        for (channels, head) in [(4, 4), (8, 4), (16, 4), (4, 0), (8, 0), (16, 0), (32, 0)] {
+        for (channels, head) in [
+            (2, 0),
+            (4, 4),
+            (8, 4),
+            (16, 4),
+            (4, 0),
+            (8, 0),
+            (16, 0),
+            (32, 0),
+        ] {
             let mask = u32::MAX >> (32 - channels);
-            let samples: Vec<u32> = (0..510u32)
+            let samples: Vec<u32> = (0..512u32)
                 .map(|i| i.wrapping_mul(0x9e37_79b9) & mask)
                 .collect();
             let mut wire = vec![0xff; head];
             match channels {
+                2 => wire.extend(
+                    samples
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .map(|s| (s[0] | s[1] << 2 | s[2] << 4 | s[3] << 6) as u8),
+                ),
                 4 => wire.extend(
                     samples
                         .as_chunks::<2>()

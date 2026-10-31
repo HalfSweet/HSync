@@ -209,6 +209,14 @@ impl MockDevice for AuxDevice {
 pub fn sample_bytes(model: &Model, channels: u8, samples: &[u32]) -> Vec<u8> {
     let mut bytes = vec![0xff; model.head_bytes];
     match channels {
+        2 => {
+            assert!(samples.len().is_multiple_of(4));
+            bytes.extend(
+                samples.as_chunks::<4>().0.iter().map(|s| {
+                    ((s[0] & 3) | (s[1] & 3) << 2 | (s[2] & 3) << 4 | (s[3] & 3) << 6) as u8
+                }),
+            );
+        }
         4 => {
             assert!(samples.len().is_multiple_of(2));
             bytes.extend(
@@ -229,4 +237,66 @@ pub fn sample_bytes(model: &Model, channels: u8, samples: &[u32]) -> Vec<u8> {
         _ => panic!("invalid wire mode"),
     }
     bytes
+}
+
+/// Combo 8 has no registers, threshold command, firmware upload or STOP request.
+#[derive(Default)]
+pub struct ComboDevice {
+    pub samples: VecDeque<Result<Vec<u8>, UsbError>>,
+    pub drains: VecDeque<Result<Vec<u8>, UsbError>>,
+    pub commands: Vec<Vec<u8>>,
+    pub events: Vec<&'static str>,
+    pub start_failure: bool,
+    pub swallow_runs: usize,
+    running: bool,
+}
+
+impl MockDevice for ComboDevice {
+    fn control_out(
+        &mut self,
+        request: u8,
+        value: u16,
+        index: u16,
+        data: &[u8],
+    ) -> Result<(), UsbError> {
+        assert_eq!((request, value, index, data.len()), (0xb1, 0, 0, 4));
+        assert_eq!(data[3], 0);
+        self.commands.push(data.to_vec());
+        self.events.push("start");
+        if self.start_failure {
+            return Err(UsbError::Timeout);
+        }
+        self.running = self.swallow_runs == 0;
+        self.swallow_runs = self.swallow_runs.saturating_sub(1);
+        Ok(())
+    }
+
+    fn control_in(&mut self, _: u8, _: u16, _: u16, _: u16) -> Result<Vec<u8>, UsbError> {
+        panic!("Combo 8 must not receive register reads");
+    }
+
+    fn bulk_out(&mut self, _: u8, _: &[u8]) -> Result<(), UsbError> {
+        panic!("Combo 8 must not receive bulk commands");
+    }
+
+    fn bulk_in(&mut self, endpoint: u8, _: usize) -> Option<Result<Vec<u8>, UsbError>> {
+        assert_eq!(endpoint, 0x81);
+        if self.running {
+            self.samples.pop_front()
+        } else {
+            None
+        }
+    }
+
+    fn bulk_read(&mut self, endpoint: u8, length: usize) -> Result<Vec<u8>, UsbError> {
+        assert_eq!((endpoint, length), (0x81, 64 * 1024));
+        self.events.push("drain");
+        self.drains.pop_front().unwrap_or(Err(UsbError::Timeout))
+    }
+
+    fn cancel_in(&mut self, endpoint: u8, _: usize) -> Vec<u8> {
+        assert_eq!(endpoint, 0x81);
+        self.events.push("cancel");
+        Vec::new()
+    }
 }

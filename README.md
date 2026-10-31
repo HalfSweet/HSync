@@ -45,7 +45,7 @@ Sipeed has given strong support to HSync's work on its SLogic analyzers.
 
 ### Capture
 
-- **Logic analyzers from several makers**: every DreamSourceLab DSLogic, ALIENTEK's ATK-Logic DL16 and DL16 Plus, PXLogic's PX-Logic 32, 16 Pro, 16 Plus and 16 Base, and Sipeed's SLogic16U3 and SLogic32U3 ([full list](#supported-devices)). HSync drives each one the way its maker's own app does, and loads the firmware and FPGA bitstreams they need by itself.
+- **Logic analyzers from several makers**: every DreamSourceLab DSLogic, ALIENTEK's ATK-Logic DL16 and DL16 Plus, PXLogic's PX-Logic 32, 16 Pro, 16 Plus and 16 Base, and Sipeed's SLogic Combo 8, SLogic16U3 and SLogic32U3 ([full list](#supported-devices)). HSync drives each one the way its maker's own app does, and loads the firmware and FPGA bitstreams they need by itself.
 - **Buffer and Stream modes**, with RLE compression for captures longer than the device's memory where the device has it, and a warning when a capture would need more than half of your computer's memory.
 - **Single, Repeat, Loop and Instant capture.** Repeat keeps the last complete capture on screen while the next one records in the background; Loop keeps capturing and holds on to the most recent stretch.
 - **Device options** for the threshold voltage, glitch filter, external clock, external trigger input and more, remembered for next time.
@@ -129,7 +129,7 @@ The firmware and the protocol decoders are included; you don't need any maker's 
   EOF
   # Sipeed SLogic
   sudo tee /etc/udev/rules.d/60-sipeed-slogic.rules > /dev/null <<'EOF'
-  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="3031|3032", MODE="0666"
+  SUBSYSTEM=="usb", ATTRS{idVendor}=="359f", ATTRS{idProduct}=="0300|3000|3031|3032", MODE="0666"
   EOF
   sudo udevadm control --reload-rules
   sudo udevadm trigger
@@ -169,13 +169,16 @@ The [user guide](docs/user-guide.md) covers every feature and keyboard shortcut.
 | PXLogic        | PX-Logic 16 Pro     | 16       | 3.0       |
 | PXLogic        | PX-Logic 16 Plus    | 16       | 3.0       |
 | PXLogic        | PX-Logic 16 Base    | 16       | 3.0       |
+| Sipeed         | SLogic Combo 8      | 8        | 2.0       |
 | Sipeed         | SLogic16U3          | 16       | 3.0       |
 | Sipeed         | SLogic32U3          | 32       | 3.2 Gen 2 |
 | —              | Demo device         | 16       | built in  |
 
 HSync talks to each device the way its maker's app does, byte for byte: to DSLogic devices like DSView, to ATK-Logic devices like ALIENTEK's ATK-Logic app and to PX-Logic devices like PXView. It has been tested on a DSLogic U2Pro16; if you use another model, please [let us know how it went](https://github.com/HalfSweet/HSync/issues/new). DSCope oscilloscopes, DSView's oscilloscope and data acquisition modes, the PWM outputs of ATK-Logic devices, and the trigger and PWM outputs of PX-Logic devices aren't supported yet. To update the firmware of an ATK-Logic device, use ALIENTEK's ATK-Logic app. When HSync opens a PX-Logic device that runs another firmware version, it first writes the firmware of PXView 1.6.5 into the device, as PXView does with its own.
 
-The SLogic16U3 and SLogic32U3 follow [Sipeed's official driver](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer), ported to Rust and nusb. They capture in Stream mode, with simple software triggers, Loop capture and a 0–6 V threshold, and sample faster the fewer high channels are in use. Over USB 3.0 the SLogic16U3 reaches 200 MHz across 16 channels, 400 MHz on D0–D7 and 800 MHz on D0–D3. On a 10 Gbps USB port the SLogic32U3 reaches 200 MHz across 32 channels, 400 MHz on D0–D15, 800 MHz on D0–D7 and 1400 MHz on D0–D3; on a 5 Gbps port, 100, 200, 400 and 800 MHz. HSync uses the firmware installed on the analyzer and doesn't flash it; the SLogic32U3 needs firmware S/N 202610150528 or newer ([how to update it](https://wiki.sipeed.com/hardware/en/logic_analyzer/slogic32u3/Hardware_Specification.html#Firmware-Update)). With the SLogic32U3's optional ADC module, each group of eight inputs (D0–D7 … D24–D31) can be read as an 8-bit analog channel of ±15 V, drawn as a waveform beside the logic channels. The SLogic Combo 8 and bootloader mode aren't supported. See the [connection and capture notes](docs/user-guide.md#sipeed-slogic).
+The SLogic16U3 and SLogic32U3 follow [Sipeed's official driver](https://github.com/sipeed/libsigrok/tree/slogic-dev/src/hardware/sipeed-slogic-analyzer), ported to Rust and nusb. They capture in Stream mode, with simple software triggers, Loop capture and a 0–6 V threshold, and sample faster the fewer high channels are in use. Over USB 3.0 the SLogic16U3 reaches 200 MHz across 16 channels, 400 MHz on D0–D7 and 800 MHz on D0–D3. On a 10 Gbps USB port the SLogic32U3 reaches 200 MHz across 32 channels, 400 MHz on D0–D15, 800 MHz on D0–D7 and 1400 MHz on D0–D3; on a 5 Gbps port, 100, 200, 400 and 800 MHz. HSync uses the firmware installed on the analyzer and doesn't flash it; the SLogic32U3 needs firmware S/N 202610150528 or newer ([how to update it](https://wiki.sipeed.com/hardware/en/logic_analyzer/slogic32u3/Hardware_Specification.html#Firmware-Update)). With the SLogic32U3's optional ADC module, each group of eight inputs (D0–D7 … D24–D31) can be read as an 8-bit analog channel of ±15 V, drawn as a waveform beside the logic channels. Bootloader mode is not supported. See the [connection and capture notes](docs/user-guide.md#sipeed-slogic).
+
+The **SLogic Combo 8** also uses its installed firmware and supports Stream captures, simple software triggers and Loop. Switch it to logic-analyzer mode (blue indicator) before connecting; both `359f:0300` and newer `359f:3000` firmware are recognized. Its threshold is fixed. The official driver offers up to 160 MHz on D0–D1, 80 MHz on D0–D3 and 40 MHz on D0–D7; HSync follows that rate table, including the 160 MHz mode beyond the original 80 MHz product specification. Combo 8 support is covered by reference command traces and simulated captures; real-device validation remains pending. Its debugger and UART modes are not supported.
 
 ## Questions
 

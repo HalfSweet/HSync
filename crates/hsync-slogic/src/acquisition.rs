@@ -16,7 +16,7 @@ use hsync_driver::{Acquisition, CapturePlan, DriverError, EndReason, Packet};
 
 use crate::assemble::WireDecoder;
 use crate::model::Model;
-use crate::protocol::{CaptureSettings, EP_IN, Link, MIN_IN_FLIGHT, TransferPlan};
+use crate::protocol::{CaptureSettings, Link, MIN_IN_FLIGHT, TransferPlan};
 use crate::stream::Stream;
 use crate::{Settings, adc};
 
@@ -44,7 +44,7 @@ pub(crate) fn start(
         settings.samplerate,
         link.usb().transfer_budget(),
     );
-    let bulk = link.usb().bulk_in(EP_IN)?;
+    let bulk = link.usb().bulk_in(link.endpoint())?;
     let stop = Arc::new(AtomicBool::new(false));
     let mut worker = Worker {
         link,
@@ -65,7 +65,7 @@ pub(crate) fn start(
     }
     // Queue first, then open the gate. Worker::drop stops before cancellation
     // even when RUN, thread creation, or the first packet fails.
-    worker.link.run()?;
+    worker.link.run(&configuration)?;
     worker.running.store(true, Ordering::Release);
     let logic = settings.logic();
     let channels = (0..model.channels.into())
@@ -257,14 +257,15 @@ impl Worker {
         }
         // Drop the endpoint claim before prepare clears its halt.
         self.bulk.take();
+        self.link.drain()?;
         self.link.prepare(&self.configuration)?;
-        self.bulk = Some(self.link.usb().bulk_in(EP_IN)?);
+        self.bulk = Some(self.link.usb().bulk_in(self.link.endpoint())?);
         for _ in 0..self.transfer_count {
             let size = self.transfer_size;
             self.bulk().submit(size);
         }
         self.decoder = WireDecoder::new(self.configuration.channels, self.head_bytes);
-        self.link.run()
+        self.link.run(&self.configuration)
     }
 
     fn finish(&mut self, mut reason: EndReason) -> EndReason {
@@ -291,32 +292,13 @@ impl Worker {
             )));
         }
         drop(bulk);
-        if !matches!(reason, EndReason::Detached) {
-            // Discard bytes from the old RUN before another capture drops its
-            // own head. Bound the reference's drain on both axes.
-            for attempt in 0..32 {
-                match self
-                    .link
-                    .usb()
-                    .bulk_read(EP_IN, 64 * 1024, Duration::from_millis(50))
-                {
-                    Ok(bytes) if !bytes.is_empty() && attempt == 31 => {
-                        if matches!(reason, EndReason::Completed | EndReason::Stopped) {
-                            reason = failed(DriverError::Localized(UiError::new(
-                                "error.device.slogic.drain",
-                            )));
-                        }
-                    }
-                    Ok(bytes) if !bytes.is_empty() => {}
-                    Ok(_) | Err(UsbError::Timeout) => break,
-                    Err(error) => {
-                        if matches!(reason, EndReason::Completed | EndReason::Stopped) {
-                            reason = failed(error.into());
-                        }
-                        break;
-                    }
-                }
-            }
+        // Combo 8 has no STOP command: after cancelling the queue its bounded
+        // endpoint drain is the entire teardown, as in Sipeed's slogic_usb.c.
+        if !matches!(reason, EndReason::Detached)
+            && let Err(error) = self.link.drain()
+            && matches!(reason, EndReason::Completed | EndReason::Stopped)
+        {
+            reason = failed(error);
         }
         self.running.store(false, Ordering::Release);
         reason
