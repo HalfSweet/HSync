@@ -59,6 +59,15 @@ function capture(command, args, cwd = root) {
   return execFileSync(command, args, { cwd, encoding: 'utf8' }).trim()
 }
 
+/** Cargo regards explicitly included, ignored generated files as dirty. Check the
+ * authored tree separately before allowing those generated files into an archive.
+ */
+function requireCleanSource() {
+  if (capture('git', ['status', '--porcelain', '--untracked-files=normal'])) {
+    throw new Error('Commit authored changes before packaging or publishing a release')
+  }
+}
+
 /** Read and validate the release family from Cargo's resolved metadata. */
 function metadata() {
   const result =
@@ -260,7 +269,14 @@ function main(args) {
       'Usage: pnpm uiharu:{version|release} <version> | pnpm uiharu:{package|smoke|publish|verify}',
     )
   }
+  const releaseCommand = command === 'package' || command === 'publish'
+  const review = command === 'package' && args.slice(1).includes('--allow-dirty')
+  if (releaseCommand && !review) requireCleanSource()
+  if (command === 'package' && args.slice(1).some((flag) => flag !== '--allow-dirty')) {
+    throw new Error('Usage: pnpm uiharu:package [--allow-dirty]')
+  }
   if (command !== 'smoke') run('pnpm', ['dsl:generate'])
+  if (releaseCommand && !review) requireCleanSource()
   const release = metadata()
   if (command === 'verify') {
     if (argument && argument !== release.version && argument !== `uiharu-v${release.version}`) {
@@ -272,9 +288,9 @@ function main(args) {
   if (command === 'smoke') return smoke(release, argument)
   if (command === 'publish') {
     // Keep Cargo's archive rebuild verification and dependency ordering enabled.
-    return run('cargo', ['publish', '--locked', ...selection, '--all-features'])
+    return run('cargo', ['publish', '--locked', '--allow-dirty', ...selection, '--all-features'])
   }
-  run('cargo', ['package', '--locked', ...selection, '--all-features', ...args.slice(1)])
+  run('cargo', ['package', '--locked', '--allow-dirty', ...selection, '--all-features'])
   for (const crate of release.crates) {
     const archive = path.join(release.target, 'package', `${crate.name}-${crate.version}.crate`)
     const checksum = createHash('sha256').update(readFileSync(archive)).digest('hex')
