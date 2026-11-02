@@ -38,7 +38,7 @@ The Combo 8 rate tiers are **2 ch** (D0–D1) up to 160 MHz, **4 ch** (D0–D3) 
 
 For a first capture, connect the analyzer's ground and one channel to a known low-frequency digital signal, select 5 MHz and a short duration, leave the trigger unset and press **Capture**.
 
-An SLogic captures in Stream mode, including Single, Repeat, Loop and Instant. The highest enabled channel determines the sampling limit, even if only one channel is enabled, and so does the USB link:
+An SLogic captures in Stream mode, including Single, Repeat, Loop and Instant. The selected duration is the requested sample count divided by the sample rate; elapsed time also includes capture setup and completion. At high rates, USB and host processing throughput determine whether samples can be received in real time. For example, four channels at 1400 MHz require 700 MB/s of sample data. The highest enabled channel determines the sampling limit, even if only one channel is enabled, and so does the USB link:
 
 | Enabled channels | SLogic16U3 on USB 3.0 | SLogic32U3 at 10 Gbps | SLogic32U3 at 5 Gbps |
 | ---------------- | --------------------- | --------------------- | -------------------- |
