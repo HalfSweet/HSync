@@ -6,7 +6,9 @@ use std::sync::Arc;
 use hsync_driver::DriverError;
 use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
-use hsync_slogic::protocol::{CaptureSettings, Link, MIN_IN_FLIGHT, TransferPlan, threshold_dac};
+use hsync_slogic::protocol::{
+    CaptureSettings, Link, MIN_IN_FLIGHT, Pattern, TransferPlan, threshold_dac,
+};
 use hsync_slogic::{SLOGIC_COMBO8, SLOGIC32U3};
 
 mod common;
@@ -86,6 +88,7 @@ fn replays_the_official_control_sequences() {
             samplerate: fields[3].parse().expect("sample rate"),
             threshold: fields[4].parse().expect("threshold"),
             clock_mhz: None,
+            pattern: Pattern::Normal,
         };
         let mut script = VecDeque::new();
         for line in lines.by_ref() {
@@ -144,6 +147,7 @@ fn settings() -> CaptureSettings {
         samplerate: 200_000_000,
         threshold: 3.3,
         clock_mhz: None,
+        pattern: Pattern::Normal,
     }
 }
 
@@ -283,6 +287,20 @@ fn rejects_short_register_reads_and_invalid_settings() {
 }
 
 #[test]
+fn selects_the_pattern_last() {
+    for (pattern, word) in [(Pattern::Normal, 0), (Pattern::Emulation, 2)] {
+        let transport = MockTransport::new(AuxDevice::new());
+        let link = Link::new(Arc::new(transport.clone()));
+        link.configure(&CaptureSettings {
+            pattern,
+            ..settings()
+        })
+        .expect("supported settings");
+        assert_eq!(transport.device().pattern, word, "{pattern:?}");
+    }
+}
+
+#[test]
 fn encodes_every_advertised_rate_on_the_800_mhz_clock() {
     for mhz in [
         5, 8, 10, 16, 20, 25, 32, 40, 50, 80, 100, 160, 200, 400, 800,
@@ -339,6 +357,7 @@ fn a_required_clock_is_the_only_one_taken() {
             channels: 32,
             samplerate: rate,
             clock_mhz: Some(800),
+            pattern: Pattern::Normal,
             ..settings()
         });
         match slot {
@@ -362,6 +381,7 @@ fn a_required_clock_is_the_only_one_taken() {
         link.configure(&CaptureSettings {
             samplerate: 200_000_000,
             clock_mhz: Some(800),
+            pattern: Pattern::Normal,
             ..settings()
         })
         .expect_err("no 800 MHz clock"),

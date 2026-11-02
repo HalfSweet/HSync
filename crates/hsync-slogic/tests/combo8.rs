@@ -13,7 +13,7 @@ use hsync_core::TriggerCondition;
 use hsync_driver::mock::{MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
 use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionValue, Packet};
-use hsync_slogic::protocol::{CaptureSettings, Link};
+use hsync_slogic::protocol::{CaptureSettings, Link, Pattern};
 use hsync_slogic::{SLOGIC_COMBO8, SlogicDevice, UsbSpeed};
 use nusb::transfer::TransferError;
 
@@ -152,6 +152,21 @@ fn exposes_only_supported_capabilities_and_reconciles_sparse_channels() {
     device.set_channel_enabled(7, true).expect("D7");
     assert_eq!(device.settings().samplerate, 40_000_000);
     assert!(device.set_channel_enabled(8, true).is_err());
+}
+
+#[test]
+fn sends_the_selected_pattern_with_start() {
+    let (transport, mut device) = open();
+    configure(&mut device, &[0, 1]);
+    device
+        .set_pattern(Pattern::Emulation)
+        .expect("an idle device");
+    transport
+        .device()
+        .samples
+        .extend([Ok(sample_bytes(&SLOGIC_COMBO8, 2, &[0; 128]))]);
+    run(&mut device, CapturePlan::default());
+    assert_eq!(transport.device().commands, vec![vec![5, 0, 2, 2]]);
 }
 
 #[test]
@@ -320,6 +335,7 @@ fn drain_is_bounded_and_invalid_start_never_reaches_usb() {
             samplerate,
             threshold: 1.7,
             clock_mhz: None,
+            pattern: Pattern::Normal,
         };
         assert!(link.run(&settings).is_err());
         assert!(transport.calls().is_empty());

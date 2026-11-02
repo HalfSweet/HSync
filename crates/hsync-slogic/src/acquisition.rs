@@ -46,6 +46,7 @@ pub(crate) fn start(
         samplerate: settings.samplerate,
         threshold: settings.vth,
         clock_mhz: (settings.analog != 0).then_some(adc::CLOCK_MHZ),
+        pattern: settings.pattern,
     };
     link.prepare(&configuration)?;
     let transfers = TransferPlan::new(

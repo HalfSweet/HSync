@@ -40,6 +40,8 @@ pub struct AuxDevice {
     pub channel_mask: u32,
     pub threshold_dac: u32,
     pub divider: u32,
+    /// The pattern AUX command 5 selected.
+    pub pattern: u32,
     /// The transport's transfer budget.
     pub transfer_budget: Option<usize>,
     command: u32,
@@ -73,6 +75,7 @@ impl AuxDevice {
             channel_mask: 0,
             threshold_dac: 0,
             divider: 0,
+            pattern: 0,
             transfer_budget: None,
             command: 0,
             payload: [0; 16],
@@ -140,6 +143,7 @@ impl MockDevice for AuxDevice {
                     (2, 0x10) => self.select_clock(word as u16),
                     (2, 0x14) => self.divider = word,
                     (3, 0x10) => self.threshold_dac = word,
+                    (5, 0x10) => self.pattern = word,
                     _ => {}
                 }
             }
@@ -260,7 +264,6 @@ impl MockDevice for ComboDevice {
         data: &[u8],
     ) -> Result<(), UsbError> {
         assert_eq!((request, value, index, data.len()), (0xb1, 0, 0, 4));
-        assert_eq!(data[3], 0);
         self.commands.push(data.to_vec());
         self.events.push("start");
         if self.start_failure {

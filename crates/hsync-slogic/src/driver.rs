@@ -27,6 +27,23 @@ impl SlogicDriver {
     pub fn new() -> Self {
         Self
     }
+
+    /// Opens a candidate as an [`SlogicDevice`], for the settings [`Device`] does not carry.
+    pub fn open_device(&self, candidate: &Candidate) -> Result<SlogicDevice, DriverError> {
+        let usb = candidate.usb.as_ref().ok_or(DriverError::Unsupported)?;
+        let model = recognized(usb.vendor_id(), usb.product_id())
+            .filter(|_| candidate.status == CandidateStatus::Ready)
+            .ok_or(DriverError::Unsupported)?;
+        let speed = link_speed(usb.speed()).ok_or(DriverError::Unsupported)?;
+        let transport = NusbTransport::open(usb, USB_CONFIGURATION, USB_INTERFACE)
+            .map_err(DriverError::opening)?;
+        SlogicDevice::open(
+            Link::for_model(Arc::new(transport), model),
+            model,
+            speed,
+            candidate.id.clone(),
+        )
+    }
 }
 
 fn recognized(vendor_id: u16, product_id: u16) -> Option<&'static Model> {
@@ -78,19 +95,7 @@ impl Driver for SlogicDriver {
     }
 
     fn open(&self, candidate: &Candidate) -> Result<Box<dyn Device>, DriverError> {
-        let usb = candidate.usb.as_ref().ok_or(DriverError::Unsupported)?;
-        let model = recognized(usb.vendor_id(), usb.product_id())
-            .filter(|_| candidate.status == CandidateStatus::Ready)
-            .ok_or(DriverError::Unsupported)?;
-        let speed = link_speed(usb.speed()).ok_or(DriverError::Unsupported)?;
-        let transport = NusbTransport::open(usb, USB_CONFIGURATION, USB_INTERFACE)
-            .map_err(DriverError::opening)?;
-        Ok(Box::new(SlogicDevice::open(
-            Link::for_model(Arc::new(transport), model),
-            model,
-            speed,
-            candidate.id.clone(),
-        )?))
+        Ok(Box::new(self.open_device(candidate)?))
     }
 }
 
