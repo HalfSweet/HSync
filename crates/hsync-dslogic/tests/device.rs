@@ -3,7 +3,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossbeam_channel::Receiver;
 use hsync_core::TriggerCondition;
@@ -174,6 +174,49 @@ fn wrote(transport: &MockTransport<FakeDslogic>, target: u8, offset: u16, value:
         matches!(call, UsbCall::ControlOut { request: CMD_CTL_WR, data, .. }
             if data[0] == target && u16::from_le_bytes([data[1], data[2]]) == offset && &data[4..] == value)
     })
+}
+
+fn wait_for_force_stop(transport: &MockTransport<FakeDslogic>) {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !wrote(transport, dest::I2C_REG, reg::CTR0, &[ctr0::FORCE_STOP]) {
+        assert!(Instant::now() < deadline, "the first stop starts uploading");
+        std::thread::sleep(Duration::from_millis(1));
+    }
+}
+
+fn assert_buffer_abort_sequence(transport: &MockTransport<FakeDslogic>) {
+    let commands: Vec<_> = transport
+        .calls()
+        .iter()
+        .filter_map(|call| match call {
+            UsbCall::ControlOut {
+                request: CMD_CTL_WR,
+                data,
+                ..
+            } if data[0] == dest::STOP => Some((dest::STOP, Vec::new())),
+            UsbCall::ControlOut {
+                request: CMD_CTL_WR,
+                data,
+                ..
+            } if data[0] == dest::I2C_REG
+                && u16::from_le_bytes([data[1], data[2]]) == reg::CTR0
+                && matches!(data[4], ctr0::FORCE_STOP | ctr0::FORCE_RDY) =>
+            {
+                Some((dest::I2C_REG, data[4..].to_vec()))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        commands,
+        vec![
+            (dest::STOP, Vec::new()),
+            (dest::I2C_REG, vec![ctr0::FORCE_STOP]),
+            (dest::I2C_REG, vec![ctr0::FORCE_RDY]),
+            (dest::STOP, Vec::new()),
+        ],
+        "STOP before arming, FORCE_STOP to upload, FORCE_RDY then STOP to abort"
+    );
 }
 
 fn collect(packets: &Receiver<Packet>) -> Vec<Packet> {
@@ -606,6 +649,101 @@ fn stopping_a_buffer_capture_uploads_what_it_holds() {
         reg::CTR0,
         &[ctr0::FORCE_STOP]
     ));
+}
+
+#[test]
+fn stopping_a_buffer_upload_again_aborts_before_or_after_the_header() {
+    for speed in [UsbSpeed::High, UsbSpeed::Super] {
+        for partial_upload in [false, true] {
+            let limit = 1 << 20;
+            let received = vec![0x5a; 1024];
+            let mut fake = configured();
+            if partial_upload {
+                let mut trigger_header = header(None, limit - 2048);
+                trigger_header.resize(1024, 0);
+                // The header promises 4096 bytes, but the device stalls after 1024.
+                fake.on_force_stop = vec![trigger_header, received.clone()];
+            }
+            let (transport, mut device) = open_u3pro16_with(fake, speed);
+            device
+                .set_option(
+                    OptionKey::OperationMode,
+                    &OptionValue::Choice("buffer".into()),
+                )
+                .expect("buffer mode");
+            device
+                .set_option(OptionKey::SampleLimit, &OptionValue::Integer(limit))
+                .expect("limit");
+            let (sink, packets) = crossbeam_channel::unbounded();
+            let acquisition = device.start(CapturePlan::default(), sink).expect("start");
+            acquisition.stop();
+            wait_for_force_stop(&transport);
+            if partial_upload {
+                loop {
+                    match packets
+                        .recv_timeout(Duration::from_secs(5))
+                        .expect("partial upload")
+                    {
+                        Packet::Logic(data) => {
+                            assert_eq!(data, received);
+                            break;
+                        }
+                        Packet::Start { .. } | Packet::Progress { .. } => {}
+                        other => panic!("unexpected {other:?}"),
+                    }
+                }
+            }
+            acquisition.stop();
+            let rest = collect(&packets);
+            acquisition.wait();
+            assert_eq!(rest.last(), Some(&Packet::End(EndReason::Stopped)));
+            assert_eq!(logic_bytes(&rest), 0);
+            assert_buffer_abort_sequence(&transport);
+            device
+                .set_option(OptionKey::Filter, &OptionValue::Bool(true))
+                .expect("options unlock after aborting the upload");
+        }
+    }
+}
+
+#[test]
+fn repeated_stop_requests_do_not_get_lost_or_restart_buffer_uploads() {
+    let (transport, mut device) = open(configured(), firmware_dir(&[]));
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let acquisition = device.start(CapturePlan::default(), sink).expect("start");
+    // Back-to-back requests can arrive before the worker has handled the first one.
+    for _ in 0..300 {
+        acquisition.stop();
+    }
+    let rest = collect(&packets);
+    acquisition.wait();
+    assert_eq!(rest.last(), Some(&Packet::End(EndReason::Stopped)));
+    assert_buffer_abort_sequence(&transport);
+}
+
+#[test]
+fn dropping_an_acquisition_aborts_a_stalled_buffer_upload() {
+    let (transport, mut device) = open(configured(), firmware_dir(&[]));
+    device
+        .set_option(
+            OptionKey::OperationMode,
+            &OptionValue::Choice("buffer".into()),
+        )
+        .expect("buffer mode");
+    let (sink, packets) = crossbeam_channel::unbounded();
+    let acquisition = device.start(CapturePlan::default(), sink).expect("start");
+    acquisition.stop();
+    wait_for_force_stop(&transport);
+    drop(acquisition);
+    let rest = collect(&packets);
+    assert_eq!(rest.last(), Some(&Packet::End(EndReason::Stopped)));
+    assert_buffer_abort_sequence(&transport);
 }
 
 #[test]
