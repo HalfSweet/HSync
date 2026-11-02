@@ -45,11 +45,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut capture_requested = false;
     let mut channels = None;
     let mut samplerate = 5_000_000u64;
+    let mut sample_count = SAMPLE_COUNT;
+    let mut model = None;
     let mut repeat = 1u8;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--capture" => capture_requested = true,
+            "--model" => {
+                model = Some(args.next().ok_or("--model requires an exact model name")?);
+            }
+            "--samples" => {
+                sample_count = args
+                    .next()
+                    .ok_or("--samples requires an integer")?
+                    .parse()?;
+                if sample_count == 0 || !sample_count.is_multiple_of(64) {
+                    return Err("--samples must be a positive multiple of 64".into());
+                }
+            }
             "--channels" => {
                 let count: u16 = args
                     .next()
@@ -80,18 +94,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             "--help" | "-h" => {
                 println!(
-                    "slogic_capture [--capture] [--channels 2|4|8|16|32] [--rate HZ] [--repeat N]"
+                    "slogic_capture [--capture] [--model NAME] [--channels 2|4|8|16|32] [--rate HZ] [--samples N] [--repeat N]"
                 );
                 println!("Default: list devices without opening them or starting a capture.");
                 println!("--capture       Required to open the device and acquire samples.");
+                println!("--model NAME    Select an exact model name when several are connected.");
                 println!("--channels N    Enable D0 through D(N-1); default every channel.");
                 println!("--rate HZ       Supported integer sample rate in Hz; default 5000000.");
+                println!("--samples N     Positive multiple of 64; default 65536.");
                 println!(
                     "--repeat N      Capture 1 to 10 times on the same open device; default 1."
                 );
-                println!(
-                    "Every capture uses 65,536 samples and a 5 s timeout; U3 thresholds are 1.7 V."
-                );
+                println!("Every capture has a 5 s timeout; U3 thresholds are 1.7 V.");
                 println!(
                     "No files are saved; unsupported sample rates are rejected by the driver."
                 );
@@ -119,7 +133,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let candidate = candidates
         .iter()
-        .find(|candidate| candidate.status == CandidateStatus::Ready)
+        .find(|candidate| {
+            candidate.status == CandidateStatus::Ready
+                && model.as_ref().is_none_or(|name| *name == candidate.model)
+        })
         .ok_or("no ready SLogic found")?;
     println!("opening {}", candidate.id);
     let mut device = manager.open(candidate)?;
@@ -132,7 +149,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         device.set_channel_enabled(channel, channel < channels)?;
     }
     device.set_option(OptionKey::Samplerate, &OptionValue::Integer(samplerate))?;
-    device.set_option(OptionKey::SampleLimit, &OptionValue::Integer(SAMPLE_COUNT))?;
+    device.set_option(OptionKey::SampleLimit, &OptionValue::Integer(sample_count))?;
     if device
         .options()
         .iter()
@@ -141,7 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         device.set_option(OptionKey::Vth, &OptionValue::Number(1.7))?;
     }
     for index in 1..=repeat {
-        capture_once(device.as_mut(), index, repeat)?;
+        capture_once(device.as_mut(), index, repeat, sample_count)?;
     }
     Ok(())
 }
@@ -150,6 +167,7 @@ fn capture_once(
     device: &mut dyn Device,
     index: u8,
     repeat: u8,
+    sample_count: u64,
 ) -> Result<(), Box<dyn std::error::Error>> {
     println!("capture {index}/{repeat}");
     let (sink, packets) = crossbeam_channel::unbounded();
@@ -214,7 +232,7 @@ fn capture_once(
             edges.rising, edges.falling
         );
     }
-    if reason != EndReason::Completed || overflow || capture.len() != SAMPLE_COUNT {
+    if reason != EndReason::Completed || overflow || capture.len() != sample_count {
         return Err("capture did not complete with the expected sample count".into());
     }
     Ok(())
