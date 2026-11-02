@@ -180,6 +180,7 @@ The SLogic Combo 8 also uses Stream mode, Loop and simple software triggers. Its
 
 **Capture modes**:
 
+- **Stop during a DSLogic Buffer capture**: with **When stopped** set to **Upload captured data**, the first stop uploads the partially filled buffer. The button remains **Stop** until the capture ends; clicking it again cancels the upload and retains only data already received, subject to Repeat's replacement setting below.
 - **Repeat**: interval 0.1–10 s in steps of 0.1 s, default 1 s, set in the drop-down menu; while waiting for the next capture, the status bar reads "Capturing again in N s". Every later capture runs in the background: the screen keeps the previous complete result, the status bar shows progress, and the new result replaces it whole when done; stopping midway discards that capture unless "Show the latest data when a repeat stops" is on.
 - **Loop**: selectable only when the device supports it; otherwise greyed out, with the reason given.
 - The next capture on the same device keeps the zoom and position; opening a file or Demo zooms to fit.

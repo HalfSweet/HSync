@@ -66,6 +66,7 @@ Click the sample rate │ duration │ channels button in the top bar. The pop-u
 ## Capturing
 
 - Click **Capture** to start, and click it again (it now reads **Stop**) to end. The status bar shows the progress, such as "Waiting for trigger" and the percentage captured.
+- On a DSLogic in Buffer mode with **When stopped** set to **Upload captured data**, stopping before the buffer fills uploads the samples already captured. Click **Stop** again to cancel that upload; only data already received by the computer is retained, subject to the Repeat behaviour below.
 - Use the arrow to the right of **Capture** to choose how to capture:
   - **Single**: capture once.
   - **Repeat**: capture again a set time after each capture completes. With **Repeat** selected, set the interval under **Repeat every** in the same menu (0.1–10 s, default 1 s). From the second capture on, the screen keeps the previous complete result while the new one is captured in the background, and the new one replaces it in one go once complete. By default, stopping midway discards the new capture and keeps the previous one; to show the latest data instead, turn on **Show the latest data when a repeat stops** in the settings.
