@@ -190,7 +190,7 @@ function smoke(release, toolchain) {
     for (const example of ['spi', 'registry']) {
       writeFileSync(
         path.join(consumer, 'Cargo.toml'),
-        manifest(example === 'registry' ? ', features = ["registry"]' : ''),
+        manifest(example === 'registry' ? ', features = ["registry", "testing"]' : ''),
       )
       writeFileSync(
         path.join(consumer, 'src/main.rs'),
@@ -198,6 +198,19 @@ function smoke(release, toolchain) {
       )
       run('cargo', [...cargo, 'run', '--config', config], consumer)
     }
+    // The generator is not a runtime dependency, so check its own archive as well.
+    run(
+      'cargo',
+      [
+        ...cargo,
+        'check',
+        '--manifest-path',
+        path.join(temporary, `uiharu-codegen-${release.version}`, 'Cargo.toml'),
+        '--config',
+        config,
+      ],
+      consumer,
+    )
     run(
       'cargo',
       [
