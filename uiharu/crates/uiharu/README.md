@@ -41,6 +41,9 @@ pipeline.run();
 while let Some(item) = events.next() {
     // Typed SPI events, gaps, progress and end-of-stream notifications.
     println!("{item:?}");
+    if matches!(item, uiharu::Item::End(_)) {
+        break;
+    }
 }
 # Ok(())
 # }

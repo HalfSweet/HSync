@@ -34,7 +34,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     while let Some(item) = events.next() {
         println!("{item:?}");
         count += usize::from(matches!(item, Item::Event(_)));
-        ended |= matches!(item, Item::End(_));
+        if matches!(item, Item::End(_)) {
+            ended = true;
+            break;
+        }
     }
     // Begin, two words and end, followed by end-of-stream.
     assert_eq!(count, 4);
