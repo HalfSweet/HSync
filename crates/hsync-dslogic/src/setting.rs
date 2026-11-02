@@ -43,7 +43,6 @@ mod mode_bit {
     pub const QUARTER: u16 = 1 << 6;
     pub const LOOP: u16 = 1 << 7;
     pub const FILTER: u16 = 1 << 8;
-    pub const INSTANT: u16 = 1 << 9;
     pub const SLOW_ACQ: u16 = 1 << 10;
     pub const SERIAL_TRIGGER: u16 = 1 << 11;
     pub const STREAM: u16 = 1 << 12;
@@ -218,7 +217,6 @@ pub struct ArmConfig<'a> {
     pub external_clock: bool,
     pub clock_falling_edge: bool,
     pub rle: bool,
-    pub instant: bool,
     /// Stream without end, keeping the latest samples.
     pub looping: bool,
     pub trigger: &'a TriggerSetup,
@@ -273,7 +271,8 @@ impl ArmConfig<'_> {
         );
         set(mode_bit::LOOP, self.looping);
         set(mode_bit::FILTER, self.filter);
-        set(mode_bit::INSTANT, self.instant);
+        // DSView's SR_CONF_INSTANT only sets FPGA bit 9 in DSO mode. Instant logic
+        // captures reset TriggerSetup instead (TriggerDock::try_commit_trigger).
         set(mode_bit::SLOW_ACQ, self.bytes_per_ms() < 1024);
         set(
             mode_bit::SERIAL_TRIGGER,
@@ -622,7 +621,6 @@ mod tests {
             external_clock: false,
             clock_falling_edge: false,
             rle: false,
-            instant: false,
             looping: false,
             trigger: &trigger,
         };

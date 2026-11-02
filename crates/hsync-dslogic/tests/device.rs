@@ -437,7 +437,6 @@ fn captures_in_stream_mode() {
         external_clock: false,
         clock_falling_edge: false,
         rle: false,
-        instant: false,
         looping: false,
         trigger: &trigger,
     });
@@ -585,7 +584,6 @@ fn loops_past_the_limit_in_stream_mode() {
         external_clock: false,
         clock_falling_edge: false,
         rle: false,
-        instant: false,
         looping: true,
         trigger: &trigger,
     });
@@ -723,7 +721,6 @@ fn arms_multi_stage_triggers_in_buffer_mode() {
         external_clock: false,
         clock_falling_edge: false,
         rle: false,
-        instant: false,
         looping: false,
         trigger: &trigger,
     });

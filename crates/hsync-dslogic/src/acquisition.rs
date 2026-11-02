@@ -30,7 +30,6 @@ pub(crate) struct AcquisitionParams {
     pub external_clock: bool,
     pub clock_falling_edge: bool,
     pub rle: bool,
-    pub instant: bool,
     pub looping: bool,
     pub buffer_upload: bool,
     pub trigger: TriggerSetup,
@@ -48,7 +47,6 @@ impl AcquisitionParams {
             external_clock: self.external_clock,
             clock_falling_edge: self.clock_falling_edge,
             rle: self.rle,
-            instant: self.instant,
             looping: self.looping,
             trigger: &self.trigger,
         }
@@ -493,7 +491,6 @@ mod tests {
             external_clock: false,
             clock_falling_edge: false,
             rle: false,
-            instant: false,
             looping: false,
             buffer_upload: true,
             trigger: TriggerSetup::default(),

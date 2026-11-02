@@ -121,7 +121,6 @@ fn settings_match_dsview() {
             external_clock: clock,
             clock_falling_edge: edge,
             rle,
-            instant,
             looping: false,
             trigger: &trigger,
         };
