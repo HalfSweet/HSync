@@ -30,6 +30,10 @@ HSync 是不绑定任何厂商的逻辑分析仪桌面上位机。它支持 Drea
 
 手边没有硬件？HSync 会打开内置的「演示设备」，回放一段包含四种总线的采集数据，所有功能都可以马上试用。
 
+uiharu 也作为独立的 Apache-2.0 Rust 库提供：`cargo add uiharu`。
+命令行工具可通过 `cargo install uiharu-cli --locked` 安装。发布包已包含解码器实现，
+无需安装 Node/pnpm。参见[引擎指南](uiharu/)与 [API 文档](https://docs.rs/uiharu)。
+
 ## 支持者
 
 SLogic 系列逻辑分析仪的适配得到了矽速科技（Sipeed）的大力支持。

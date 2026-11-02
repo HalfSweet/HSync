@@ -30,6 +30,11 @@ HSync is a desktop app for logic analyzers that isn't tied to any one maker. It 
 
 No hardware at hand? HSync opens its built-in **Demo device**, which plays back a recording of four buses, so you can try everything straight away.
 
+uiharu is also available as an independent Apache-2.0 Rust library: `cargo add uiharu`.
+Use `cargo install uiharu-cli --locked` for its command line. Published packages
+include the decoder implementations and need no Node/pnpm installation. See the
+[engine guide](uiharu/) and [API documentation](https://docs.rs/uiharu).
+
 ## Supporters
 
 Sipeed has given strong support to HSync's work on its SLogic analyzers.

@@ -173,3 +173,14 @@ On macOS this is the universal build, which needs both Rust targets: `rustup tar
 - **The Release workflow shows skipped runs.** It is triggered by every merged pull request, but works only for `release/v*` branches. Skipped runs are expected.
 - **A release's installers log "Cache save skipped: the effective cache-mode 'read' does not permit writes".** The `cache-mode: write` on the Installers job of `release.yml` is missing or was overridden. Without it every release compiles from scratch.
 - **CI on a release pull request says "action required".** See [Continuous integration](#continuous-integration). Approving is optional.
+
+## Independent uiharu crates
+
+The decode engine has its own crates.io releases, versioned independently of the
+desktop app. Use `pnpm uiharu:release <version>` to request its release pull
+request. Merging validates the archives and Rust 1.90 MSRV, then publishes through
+OIDC using `uiharu-release.yml` and the `uiharu-release` GitHub environment.
+The engine's tags start with `uiharu-v`; its GitHub releases never become the
+repository's latest app release. See [the uiharu release guide](../uiharu/docs/releasing.md)
+for the initial local Cargo publish, per-crate Trusted Publishing settings, package
+verification and recovery after a partial publish.
