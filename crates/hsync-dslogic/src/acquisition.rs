@@ -198,11 +198,14 @@ struct DslAcquisition {
 impl Acquisition for DslAcquisition {
     fn stop(&self) {
         // Keep both requests even when the worker has not processed the first one yet.
-        let _ = self
+        if self
             .stop_requests
-            .fetch_update(Ordering::Release, Ordering::Relaxed, |requests| {
-                Some(requests.saturating_add(1))
-            });
+            .compare_exchange(0, 1, Ordering::Release, Ordering::Relaxed)
+            .is_err()
+        {
+            // Once stopping has begun, every later request means abort the upload.
+            self.stop_requests.store(2, Ordering::Release);
+        }
     }
 
     fn wait(mut self: Box<Self>) {
