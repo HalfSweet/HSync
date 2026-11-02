@@ -1,6 +1,6 @@
 # SLogic driver
 
-This crate connects Sipeed's SLogic Combo 8, SLogic16U3 and SLogic32U3 to HSync using Rust and `nusb`. The two U3 models share Sipeed's U3 register/AUX protocol; mocked USB transactions, golden control traces and synthetic sample streams exercise the implementation for each. A real SLogic16U3 has passed repeated USB 3.0 smoke captures across all three channel modes, including short captures configured at the advertised maximum rates. SLogic32U3 host throughput has been measured on four channels at 1400 MHz over a 10 Gbps link; see [Validation status](#validation-status). Channel mapping, signal timing and USB 2.0 remain unverified on both.
+This crate connects Sipeed's SLogic Combo 8, SLogic16U3 and SLogic32U3 to HSync using Rust and `nusb`. The two U3 models share Sipeed's U3 register/AUX protocol; mocked USB transactions, golden control traces and synthetic sample streams exercise the implementation for each. A real SLogic16U3 has passed repeated USB 3.0 smoke captures across all three channel modes, including short captures configured at the advertised maximum rates. The SLogic32U3 has also passed repeated hardware smoke captures. Channel mapping, signal timing and USB 2.0 remain unverified on both.
 
 ## Official sources
 
@@ -15,11 +15,11 @@ The source reference is GPL-3.0-or-later, and this port carries the same license
 
 The capture firmware's identities `359f:3031` (SLogic16U3) and `359f:3032` (SLogic32U3) are recognized. The driver claims USB interface 0 and reads bulk endpoint `0x82`. The device's installed firmware is used without uploading firmware or FPGA bitstreams. Bootloader mode (`359f:30f1`) is not handled. Combo 8 uses the separate command protocol described below. Sipeed requires SLogic32U3 firmware S/N 202610150528 or newer, which gates its stream on whole sample words; the driver does not check the version.
 
-Captures stream into HSync; Single, Repeat, Loop and Instant use the existing application controls. There is no Buffer mode, RLE, external clock or external trigger, and the SLogic32U3 alone supports its optional ADC module (four 8-bit analog channels read through the digital inputs). On U3 models the shared threshold ranges from 0 to 6 V, initially 1.7 V. Software triggers support the existing edge and level conditions, combined across enabled channels. Their pre-trigger history retains at most 16,777,216 samples, using at most 64 MiB and less in narrower wire modes; the emitted trigger offset reflects the history actually retained.
+Captures stream into HSync; Single, Repeat, Loop and Instant use the existing application controls. There is no Buffer mode, RLE, external clock or external trigger, and the SLogic32U3 alone supports its optional ADC module (four 8-bit analog channels read through the digital inputs). On U3 models the shared threshold ranges from 0 to 6 V, initially 1.7 V. Software triggers support the existing edge and level conditions, combined across enabled channels. Their pre-trigger history retains at most 16,777,216 samples, using at most 64 MiB; the emitted trigger offset reflects the history actually retained.
 
 Each USB request holds about 5 ms of samples, from 32 KiB up to 1 MiB, and up to 16 are in flight. The reference allows 2 MiB outside Windows; nusb always reads with WinUSB RAW_IO, which accepts at most 1 MiB, so every system keeps to that. On Linux the transfers of every program share usbcore's `usbfs_memory_mb` pool (16 MiB by default), and the ring keeps to three quarters of it: twelve 1 MiB requests by default, with smaller requests when the pool is too small for four. If the system still refuses a request, the capture goes on with those in flight while at least four remain, as the reference does, and otherwise fails with a hint to raise `/sys/module/usbcore/parameters/usbfs_memory_mb`.
 
-The highest enabled physical channel selects the wire width and the device's native rate limit, which the negotiated link may lower (`slogic_link_max_rate()`): a 5 Gbps link carries about 400 MB/s and USB 2.0 about 40 MB/s of samples. Host-throughput measurements and their limits are recorded under [Validation status](#validation-status).
+The highest enabled physical channel selects the wire width and the device's native rate limit, which the negotiated link may lower (`slogic_link_max_rate()`): a 5 Gbps link carries about 400 MB/s and USB 2.0 about 40 MB/s of samples.
 
 | Model      | Highest enabled channel | Wire channels | 10 Gbps  | 5 Gbps  | USB 2.0 |
 | ---------- | ----------------------- | ------------- | -------- | ------- | ------- |
@@ -98,36 +98,6 @@ cargo run -p hsync-slogic --example slogic_capture -- --capture --channels 4 --r
 
 It prints the USB link, completion reason, sample count and per-channel edge counts, and writes no files. A successful completion checks sample delivery; checking edge counts against the source signal is still necessary to establish channel mapping and sample timing. Further real-device validation should cover Stop, unplugging during capture, sparse channel selections, simple triggers, Loop and USB 2.0 on both models, and on the SLogic32U3 every wire mode at its 10 Gbps and 5 Gbps limits, including 1400 MHz.
 
-## Host sample processing
-
-The acquisition worker selects a generic implementation once from the physical wire mode.
-Two- and four-channel samples stay packed in bytes; eight-, sixteen- and thirty-two-channel
-samples use `u8`, `u16` and `u32` accessors and history words, respectively. Complete USB
-words are borrowed from the transfer. Only an incomplete wire word or output block is
-staged, so there is no transfer-sized `Vec<u32>` expansion.
-
-Whole blocks of 64 samples transpose directly into the existing cross-format packets.
-Software trigger comparisons widen only the current sample to a `u32` mask. History uses
-native-width words, with several samples per byte for two/four channels, while retaining
-the existing sample-count cap. Trigger positions inside packed bytes, sparse physical
-channels, firmware heads, packet limits and mixed analog/logic alignment are tested
-against a scalar sample-by-sample oracle. USB control commands and transfer-ring sizes
-are unchanged.
-
-Measure conversion alone on synthetic data, without USB or capture storage, or measure
-one second of real SLogic32U3 input through the driver and storage (Release build):
-
-```sh
-pnpm dsl:generate
-cargo run --release -p hsync-slogic --example stream_bench -- 700000000
-cargo run --release -p hsync-slogic --example slogic_capture -- --capture --model SLogic32U3 --channels 4 --rate 1400000000 --samples 1400000000 --repeat 3
-```
-
-The CPU benchmark reports packed MB/s for every wire width. It measures conversion
-capacity, not USB throughput or timing accuracy. The hardware example's elapsed time
-includes configuration, receiving samples, storage and teardown, but excludes device
-opening and the subsequent edge-count queries.
-
 ## Validation status
 
 A real SLogic16U3 was discovered through nusb and opened on a SuperSpeed link. With a 1.7 V threshold, the following captures each delivered exactly 65,536 samples and ended with `Completed`:
@@ -147,27 +117,6 @@ The SLogic32U3 path is covered by the golden control traces of the reference's 3
 (all four wire modes, the 1400 MHz clock, the 800 MHz clock walk and the 32-channel mask)
 and by mocked captures of every wire mode.
 
-On 2026-11-02, an Apple M4 Pro with a real SLogic32U3 on a `superPlus` link captured
-D0–D3 at 1.4 GHz, with no trigger or protocol decoding. Each Release-mode capture requested
-1,400,000,000 samples (700 MB of packed data), using the same 16 × 1 MiB transfer ring:
-
-| Processing path                                                  | Three captures, setup through teardown |
-| ---------------------------------------------------------------- | -------------------------------------- |
-| v0.2.7 (`37488f5`), driver and capture storage, no frontend      | 1.409–1.427 s                          |
-| Native-width conversion, driver and capture storage, no frontend | 1.060 s, 1.061 s, 1.059 s              |
-| Raw USB reception without conversion or storage                  | 1.056–1.061 s                          |
-
-Every stored capture ended with `Completed`, the requested sample count and no reported
-overflow. The captured inputs were static (zero edges), so these measurements establish
-host throughput and repeated completion only, not signal timing or loss-free sampling.
-The wire format has no sequence number or overflow counter. Known-signal continuity,
-other wire modes and other operating systems remain to be validated.
-
-Three further captures of 4,200,000,000 samples each (3 seconds, 2.1 GB packed) completed
-in 3.060, 3.061 and 3.057 seconds. The same static-input run peaked at about 139 MiB RSS;
-uniform storage chunks compress, so this does not represent memory use for busy signals.
-Longer sustained runs still need validation.
-
-The CPU-only `stream_bench` processed 700 MB of synthetic four-channel data in about
-0.197 s (3.55 GB/s packed), compared with about 1.35 s for the previous unpack/repack
-stages. This excludes USB and storage; timing varies by machine and workload.
+SLogic32U3 hardware smoke tests have also completed repeated captures on D0–D3 at
+1400 MHz. The inputs were static, so signal timing and continuity still need validation
+against a known signal.
