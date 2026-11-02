@@ -10,7 +10,8 @@ lib="$DSVIEW/libsigrok4DSL"
 cc -std=gnu11 -O1 -w -o "$out/golden" \
   -I"$lib" -I"$DSVIEW/common" \
   -I"$(pkg-config --variable=includedir libusb-1.0)" $(pkg-config --cflags glib-2.0 libusb-1.0) \
-  "$here/harness.c" "$lib/hardware/DSL/dsl.c" "$lib/hardware/DSL/command.c" "$lib/trigger.c" \
+  "$here/harness.c" "$lib/hardware/DSL/dslogic.c" "$lib/hardware/DSL/dsl.c" \
+  "$lib/hardware/DSL/command.c" "$lib/trigger.c" \
   $(pkg-config --libs glib-2.0 libusb-1.0) -lm -Wl,-undefined,dynamic_lookup
 "$out/golden" < "$here/cases.txt" > "$here/../../tests/fixtures/settings.txt"
 echo "wrote tests/fixtures/settings.txt"

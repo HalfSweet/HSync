@@ -46,7 +46,7 @@ fn cases() -> Vec<Case> {
 #[test]
 fn settings_match_dsview() {
     let cases = cases();
-    assert!(cases.len() >= 30, "fixture has {} cases", cases.len());
+    assert!(cases.len() >= 48, "fixture has {} cases", cases.len());
     for case in cases {
         let mut pid = 0;
         let mut speed = UsbSpeed::High;
@@ -101,7 +101,9 @@ fn settings_match_dsview() {
                 _ => panic!("unknown key {key}"),
             }
         }
-        if !instant {
+        if instant {
+            trigger = TriggerSetup::default();
+        } else {
             trigger.position = position;
             if trigger.mode != TriggerMode::Simple {
                 trigger.enabled = true;
