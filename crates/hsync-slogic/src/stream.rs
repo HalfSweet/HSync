@@ -4,14 +4,16 @@
 //! The cross-format conversion is HSync's own; the device sends packed samples.
 
 use std::collections::VecDeque;
+use std::marker::PhantomData;
 
 use hsync_core::{ChannelIndex, TriggerCondition};
 use hsync_driver::{CapturePlan, Packet};
 
+use crate::assemble::{SampleWord, Samples, WireFormat};
 use crate::{Settings, adc};
 
-// Unlike the reference's 1 GiB allocation, reserve at most 64 MiB for history in
-// the desktop application. The marker reports the actual retained history.
+// Keep the existing history duration cap: at most 16,777,216 samples. Native-width
+// storage needs at most 64 MiB, and proportionally less for narrower wire formats.
 const MAX_PRE_SAMPLES: u64 = (64 << 20) / size_of::<u32>() as u64;
 const MAX_PACKET: usize = 1 << 20;
 
@@ -74,77 +76,216 @@ fn transpose(mut word: u64) -> u64 {
     word ^ swap ^ (swap << 28)
 }
 
-/// Packs whole blocks of 64 samples: the logic inputs in the cross format, and alongside
-/// them each analog group's codes, so that both always hold the same samples.
-struct CrossPacker {
+/// Pre-trigger samples in native words; 2/4-bit samples share each u8, including at the head.
+struct History<F: WireFormat> {
+    words: VecDeque<F::Word>,
+    head: usize,
+    len: usize,
+}
+
+impl<F: WireFormat> Default for History<F> {
+    fn default() -> Self {
+        Self {
+            words: VecDeque::new(),
+            head: 0,
+            len: 0,
+        }
+    }
+}
+
+impl<F: WireFormat> History<F> {
+    fn push(&mut self, sample: F::Word) {
+        let offset = (self.head + self.len) % F::PER_WORD;
+        if offset == 0 {
+            self.words.push_back(sample);
+        } else {
+            let last = self.words.back_mut().expect("partly filled history word");
+            *last = F::Word::from_u32((*last).into() | (sample.into() << (offset * F::BITS)));
+        }
+        self.len += 1;
+    }
+
+    fn pop(&mut self) -> Option<F::Word> {
+        if self.len == 0 {
+            return None;
+        }
+        let word = *self.words.front().expect("history contains its samples");
+        let sample = if F::PER_WORD == 1 {
+            word
+        } else {
+            F::Word::from_u32((word.into() >> (self.head * F::BITS)) & ((1 << F::BITS) - 1))
+        };
+        self.len -= 1;
+        self.head += 1;
+        if self.head == F::PER_WORD {
+            self.words.pop_front();
+            self.head = 0;
+        }
+        Some(sample)
+    }
+}
+
+/// Extract one channel from a packed 64-bit word, compacting the selected bits in time order.
+/// These masks are a bit transpose, not a per-sample unpack into a wider integer array.
+fn packed_channel<const BITS: usize>(mut word: u64) -> u64 {
+    if BITS == 2 {
+        word &= 0x5555_5555_5555_5555;
+        word = (word | word >> 1) & 0x3333_3333_3333_3333;
+        word = (word | word >> 2) & 0x0f0f_0f0f_0f0f_0f0f;
+        word = (word | word >> 4) & 0x00ff_00ff_00ff_00ff;
+        word = (word | word >> 8) & 0x0000_ffff_0000_ffff;
+        (word | word >> 16) & 0xffff_ffff
+    } else {
+        word &= 0x1111_1111_1111_1111;
+        word = (word | word >> 3) & 0x0303_0303_0303_0303;
+        word = (word | word >> 6) & 0x000f_000f_000f_000f;
+        word = (word | word >> 12) & 0x0000_00ff_0000_00ff;
+        (word | word >> 24) & 0xffff
+    }
+}
+
+/// Convert 64 samples in their wire representation to the existing capture packet format.
+fn pack_block<F: WireFormat>(
+    bytes: &[u8],
+    channels: &[ChannelIndex],
+    groups: &[u8],
+    output: &mut Vec<u8>,
+    codes: &mut Vec<u16>,
+) {
+    if F::BITS < 8 {
+        for &channel in channels {
+            let mut word = 0u64;
+            for (part, raw) in bytes.as_chunks::<8>().0.iter().enumerate() {
+                let raw = u64::from_le_bytes(*raw) >> channel;
+                let bits = if F::BITS == 2 {
+                    packed_channel::<2>(raw)
+                } else {
+                    packed_channel::<4>(raw)
+                };
+                word |= bits << (part * (64 / F::BITS));
+            }
+            output.extend_from_slice(&word.to_le_bytes());
+        }
+    } else if let Some(&last) = channels.last() {
+        let mut words = [0u64; 32];
+        for group in 0..8 {
+            let mut planes = [0u64; 4];
+            for (plane_index, plane) in planes[..usize::from(last / 8) + 1].iter_mut().enumerate() {
+                for sample in 0..8 {
+                    *plane |= u64::from(bytes[(group * 8 + sample) * F::Word::BYTES + plane_index])
+                        << (sample * 8);
+                }
+                *plane = transpose(*plane);
+            }
+            for &channel in channels {
+                let bits = (planes[usize::from(channel / 8)] >> ((channel % 8) * 8)) & 0xff;
+                words[usize::from(channel)] |= bits << (group * 8);
+            }
+        }
+        for &channel in channels {
+            output.extend_from_slice(&words[usize::from(channel)].to_le_bytes());
+        }
+    }
+    // ADC groups are whole bytes of each native sample; no full-sample expansion is needed.
+    if !groups.is_empty() {
+        for sample in 0..64 {
+            for &group in groups {
+                codes.push(adc::code(
+                    bytes[sample * F::Word::BYTES + usize::from(group)],
+                ));
+            }
+        }
+    }
+}
+
+/// Complete blocks transpose directly from the transfer. Only a partial or bit-offset block
+/// uses the bounded staging array, which also keeps logic and analog output aligned.
+struct CrossPacker<F: WireFormat> {
     channels: Vec<ChannelIndex>,
-    /// Byte planes of a sample up to the highest enabled channel.
-    planes: usize,
-    /// The analog groups, whose bytes of each sample are read as codes.
     groups: Vec<u8>,
-    pending: [u32; 64],
+    pending: [u8; 256],
     used: usize,
     output: Vec<u8>,
     codes: Vec<u16>,
+    format: PhantomData<F>,
 }
 
-impl CrossPacker {
+impl<F: WireFormat> CrossPacker<F> {
     fn new(enabled: u32, groups: Vec<u8>) -> Self {
         Self {
             channels: (0..32)
                 .filter(|channel| enabled & (1 << channel) != 0)
                 .collect(),
-            planes: enabled
-                .checked_ilog2()
-                .map_or(0, |highest| highest as usize / 8 + 1),
             groups,
-            pending: [0; 64],
+            pending: [0; 256],
             used: 0,
             output: Vec::new(),
             codes: Vec::new(),
+            format: PhantomData,
         }
     }
 
-    fn push(&mut self, samples: &[u32], packets: &mut Vec<Packet>) {
-        let mut rest = samples;
-        while !rest.is_empty() {
-            let take = rest.len().min(64 - self.used);
-            self.pending[self.used..self.used + take].copy_from_slice(&rest[..take]);
-            self.used += take;
-            rest = &rest[take..];
-            if self.used != 64 {
-                continue;
-            }
-            let mut words = [0u64; 32];
-            for (group, samples) in self.pending.as_chunks::<8>().0.iter().enumerate() {
-                let mut planes = [0u64; 4];
-                for (index, plane) in planes[..self.planes].iter_mut().enumerate() {
-                    for (i, &sample) in samples.iter().enumerate() {
-                        *plane |= u64::from((sample >> (index * 8)) as u8) << (i * 8);
-                    }
-                    *plane = transpose(*plane);
-                }
-                for &channel in &self.channels {
-                    let bits = (planes[usize::from(channel / 8)] >> ((channel % 8) * 8)) & 0xff;
-                    words[usize::from(channel)] |= bits << (group * 8);
-                }
-            }
-            for &channel in &self.channels {
-                self.output
-                    .extend_from_slice(&words[usize::from(channel)].to_le_bytes());
-            }
-            if !self.groups.is_empty() {
-                for &sample in &self.pending {
-                    for &group in &self.groups {
-                        self.codes
-                            .push(adc::code((sample >> (u32::from(group) * 8)) as u8));
-                    }
-                }
-            }
+    fn sample(&mut self, sample: F::Word, packets: &mut Vec<Packet>) {
+        let index = self.used / F::PER_WORD * F::Word::BYTES;
+        let offset = self.used % F::PER_WORD;
+        if offset == 0 {
+            sample.write(&mut self.pending[index..index + F::Word::BYTES]);
+        } else {
+            self.pending[index] |= (sample.into() << (offset * F::BITS)) as u8;
+        }
+        self.used += 1;
+        if self.used == 64 {
+            pack_block::<F>(
+                &self.pending[..8 * F::BITS],
+                &self.channels,
+                &self.groups,
+                &mut self.output,
+                &mut self.codes,
+            );
             self.used = 0;
-            if self.output.len().max(self.codes.len() * 2) >= MAX_PACKET {
-                self.flush(packets);
+            self.flush_full(packets);
+        }
+    }
+
+    fn push(&mut self, mut samples: Samples<'_, F>, packets: &mut Vec<Packet>) {
+        let blocks = (samples.len() + self.used) / 64;
+        self.output
+            .reserve((blocks * self.channels.len() * 8).min(MAX_PACKET));
+        self.codes
+            .reserve((blocks * self.groups.len() * 64).min(MAX_PACKET / 2));
+        if self.used > 0 {
+            let take = samples.len().min(64 - self.used);
+            for index in 0..take {
+                self.sample(samples.at(index), packets);
             }
+            samples = samples.slice(take, samples.len());
+        }
+        while samples.len() >= 64 {
+            let block = if let Some(block) = samples.block() {
+                block
+            } else {
+                samples.copy_block(&mut self.pending[..8 * F::BITS]);
+                &self.pending[..8 * F::BITS]
+            };
+            pack_block::<F>(
+                block,
+                &self.channels,
+                &self.groups,
+                &mut self.output,
+                &mut self.codes,
+            );
+            self.flush_full(packets);
+            samples = samples.slice(64, samples.len());
+        }
+        // Only the tail needs individual samples; trigger-offset blocks above stay packed.
+        for index in 0..samples.len() {
+            self.sample(samples.at(index), packets);
+        }
+    }
+
+    fn flush_full(&mut self, packets: &mut Vec<Packet>) {
+        if self.output.len().max(self.codes.len() * 2) >= MAX_PACKET {
+            self.flush(packets);
         }
     }
 
@@ -158,17 +299,17 @@ impl CrossPacker {
     }
 }
 
-pub(crate) struct Stream {
+pub(crate) struct Stream<F: WireFormat> {
     trigger: Trigger,
     previous: Option<u32>,
     waiting: bool,
-    pre: VecDeque<u32>,
+    pre: History<F>,
     pre_limit: usize,
     remaining: Option<u64>,
-    packer: CrossPacker,
+    packer: CrossPacker<F>,
 }
 
-impl Stream {
+impl<F: WireFormat> Stream<F> {
     pub(crate) fn new(settings: &Settings, plan: &CapturePlan) -> Self {
         let trigger = Trigger::new(
             if plan.instant { &[] } else { &plan.triggers },
@@ -188,8 +329,7 @@ impl Stream {
             trigger,
             previous: None,
             waiting,
-            // Grow only as samples arrive, even when a long history was requested.
-            pre: VecDeque::new(),
+            pre: History::default(),
             pre_limit,
             remaining: (!plan.looping).then_some(settings.limit_samples),
             packer: CrossPacker::new(settings.logic(), settings.analog_groups()),
@@ -200,257 +340,56 @@ impl Stream {
         self.remaining == Some(0)
     }
 
-    fn emit(&mut self, samples: &[u32], packets: &mut Vec<Packet>) {
-        let count = self.remaining.map_or(samples.len(), |left| {
-            samples
-                .len()
-                .min(usize::try_from(left).unwrap_or(usize::MAX))
-        });
-        self.packer.push(&samples[..count], packets);
-        if let Some(remaining) = &mut self.remaining {
-            *remaining -= count as u64;
-        }
-    }
-
-    pub(crate) fn push(&mut self, samples: &[u32]) -> Vec<Packet> {
-        let mut packets = Vec::new();
+    pub(crate) fn push(&mut self, samples: Samples<'_, F>, packets: &mut Vec<Packet>) {
         let mut offset = 0;
         if self.waiting {
             while offset < samples.len() {
-                let sample = samples[offset];
-                // Fill the requested history before arming, including the preceding
-                // sample when an edge lands exactly at the end of the history.
-                let matched =
-                    self.pre.len() == self.pre_limit && self.trigger.matches(self.previous, sample);
-                self.previous = Some(sample);
+                let sample = samples.at(offset);
+                // Widen only the current sample for mask comparisons, never the transfer or
+                // its history. Fill the requested history before arming, as before.
+                let matched = self.pre.len == self.pre_limit
+                    && self.trigger.matches(self.previous, sample.into());
+                self.previous = Some(sample.into());
                 if matched {
                     self.waiting = false;
                     packets.push(Packet::Trigger {
-                        sample: self.pre.len() as u64,
+                        sample: self.pre.len as u64,
                     });
-                    let pre = std::mem::take(&mut self.pre);
-                    let (first, second) = pre.as_slices();
-                    self.emit(first, &mut packets);
-                    self.emit(second, &mut packets);
+                    let mut pre = std::mem::take(&mut self.pre);
+                    while let Some(sample) = pre.pop() {
+                        if self.done() {
+                            break;
+                        }
+                        self.packer.sample(sample, packets);
+                        if let Some(remaining) = &mut self.remaining {
+                            *remaining -= 1;
+                        }
+                    }
                     break;
                 }
                 if self.pre_limit != 0 {
-                    if self.pre.len() == self.pre_limit {
-                        self.pre.pop_front();
+                    if self.pre.len == self.pre_limit {
+                        self.pre.pop();
                     }
-                    self.pre.push_back(sample);
+                    self.pre.push(sample);
                 }
                 offset += 1;
             }
         }
         if !self.waiting {
-            self.emit(&samples[offset..], &mut packets);
+            let count = self.remaining.map_or(samples.len() - offset, |left| {
+                (samples.len() - offset).min(usize::try_from(left).unwrap_or(usize::MAX))
+            });
+            self.packer
+                .push(samples.slice(offset, offset + count), packets);
+            if let Some(remaining) = &mut self.remaining {
+                *remaining -= count as u64;
+            }
         }
-        self.packer.flush(&mut packets);
-        packets
+        self.packer.flush(packets);
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{SLOGIC32U3, UsbSpeed};
-
-    fn settings(enabled: u32, limit: u64) -> Settings {
-        let mut settings = Settings::defaults(&SLOGIC32U3, UsbSpeed::SuperPlus);
-        settings.enabled = enabled;
-        settings.limit_samples = limit;
-        settings
-    }
-
-    fn logic(packets: &[Packet]) -> Vec<u8> {
-        packets
-            .iter()
-            .flat_map(|packet| match packet {
-                Packet::Logic(data) => data.clone(),
-                _ => Vec::new(),
-            })
-            .collect()
-    }
-
-    fn analog(packets: &[Packet]) -> Vec<u16> {
-        packets
-            .iter()
-            .flat_map(|packet| match packet {
-                Packet::Analog(codes) => codes.clone(),
-                _ => Vec::new(),
-            })
-            .collect()
-    }
-
-    fn expected(samples: &[u32], channels: &[u16]) -> Vec<u8> {
-        let mut out = Vec::new();
-        for group in samples.as_chunks::<64>().0.iter() {
-            for &channel in channels {
-                let word = group.iter().enumerate().fold(0u64, |word, (tick, sample)| {
-                    word | (u64::from((sample >> channel) & 1) << tick)
-                });
-                out.extend_from_slice(&word.to_le_bytes());
-            }
-        }
-        out
-    }
-
-    #[test]
-    fn cross_format_matches_naive_at_all_transfer_boundaries() {
-        let samples: Vec<_> = (0u32..320).map(|n| n.wrapping_mul(0x9e37_79b9)).collect();
-        for enabled in [
-            0xffff,
-            0x8001,
-            0xf,
-            0x100,
-            0x55aa,
-            u32::MAX,
-            0x8000_0001,
-            0x00ff_0000,
-            0x5555_aaaa,
-            1 << 31,
-        ] {
-            let channels: Vec<_> = (0..32).filter(|c| enabled & (1 << c) != 0).collect();
-            let want = expected(&samples[..256], &channels);
-            for cut in 1..=129 {
-                let mut stream = Stream::new(&settings(enabled, 256), &CapturePlan::default());
-                let mut got = Vec::new();
-                for part in samples.chunks(cut) {
-                    got.extend(logic(&stream.push(part)));
-                }
-                assert_eq!(got, want, "mask {enabled:x}, cut {cut}");
-                assert!(stream.done());
-            }
-        }
-    }
-
-    #[test]
-    fn reads_analog_groups_as_codes_beside_the_logic_inputs() {
-        // Inputs 0–7 carry a code MSB first, inputs 16–23 another; 8–15 stay logic.
-        let samples: Vec<u32> = (0u32..256)
-            .map(|n| {
-                u32::from((n as u8).reverse_bits())
-                    | u32::from((255 - n as u8).reverse_bits()) << 16
-                    | (n & 3) << 8
-            })
-            .collect();
-        let mut settings = settings(0xff_ffff, 128);
-        settings.analog = 0b101;
-        let codes: Vec<u16> = (0..128).flat_map(|n| [n, 255 - n]).collect();
-        for cut in [1, 63, 64, 100, 256] {
-            let mut stream = Stream::new(&settings, &CapturePlan::default());
-            let mut packets = Vec::new();
-            for part in samples.chunks(cut) {
-                packets.extend(stream.push(part));
-            }
-            assert_eq!(analog(&packets), codes, "cut {cut}");
-            let logic_inputs: Vec<_> = (8..16).collect();
-            assert_eq!(logic(&packets), expected(&samples[..128], &logic_inputs));
-            // Each block's logic comes before its codes.
-            assert!(matches!(packets.first(), Some(Packet::Logic(_))));
-            assert!(stream.done());
-        }
-        // Analog channels alone.
-        settings.enabled = 0;
-        let mut stream = Stream::new(&settings, &CapturePlan::default());
-        let packets = stream.push(&samples);
-        assert!(logic(&packets).is_empty());
-        assert_eq!(analog(&packets), codes);
-    }
-
-    #[test]
-    fn trigger_history_and_edge_are_independent_of_blocks() {
-        let samples: Vec<_> = (0..300).map(|n| if n >= 173 { 3 } else { 2 }).collect();
-        let plan = CapturePlan {
-            triggers: vec![(0, TriggerCondition::Rise), (1, TriggerCondition::High)],
-            trigger_position: 25,
-            ..Default::default()
-        };
-        for cut in 1..=180 {
-            let mut stream = Stream::new(&settings(3, 128), &plan);
-            let mut packets = Vec::new();
-            for part in samples.chunks(cut) {
-                packets.extend(stream.push(part));
-            }
-            assert_eq!(
-                packets
-                    .iter()
-                    .filter(|p| matches!(p, Packet::Trigger { .. }))
-                    .count(),
-                1
-            );
-            assert!(packets.contains(&Packet::Trigger { sample: 32 }));
-            assert_eq!(logic(&packets), expected(&samples[141..269], &[0, 1]));
-            assert!(stream.done());
-        }
-    }
-
-    #[test]
-    fn first_sample_cannot_make_an_edge_and_conditions_are_conjunctive() {
-        for condition in [
-            TriggerCondition::Rise,
-            TriggerCondition::Fall,
-            TriggerCondition::Both,
-        ] {
-            let trigger = Trigger::new(&[(0, condition)], 1);
-            assert!(!trigger.matches(None, 0));
-            assert!(!trigger.matches(None, 1));
-        }
-        let trigger = Trigger::new(
-            &[(0, TriggerCondition::Fall), (1, TriggerCondition::Low)],
-            3,
-        );
-        assert!(trigger.matches(Some(1), 0));
-        assert!(!trigger.matches(Some(1), 2));
-        assert!(!trigger.matches(Some(0), 0));
-    }
-
-    #[test]
-    fn triggers_on_the_upper_inputs_of_a_32_channel_sample() {
-        let trigger = Trigger::new(
-            &[(31, TriggerCondition::Rise), (16, TriggerCondition::Low)],
-            u32::MAX,
-        );
-        assert!(trigger.matches(Some(0), 1 << 31));
-        assert!(!trigger.matches(Some(0), 1 << 31 | 1 << 16));
-        assert!(!trigger.matches(Some(1 << 31), 1 << 31));
-        // Conditions on disabled or missing inputs are ignored.
-        assert!(Trigger::new(&[(31, TriggerCondition::High)], 0xffff).empty());
-        assert!(Trigger::new(&[(32, TriggerCondition::High)], u32::MAX).empty());
-    }
-
-    #[test]
-    fn instant_and_looping_bypass_limit_and_trigger_as_requested() {
-        let plan = CapturePlan {
-            triggers: vec![(0, TriggerCondition::Rise)],
-            instant: true,
-            looping: true,
-            ..Default::default()
-        };
-        let mut stream = Stream::new(&settings(1, 64), &plan);
-        let packets = stream.push(&[1; 192]);
-        assert_eq!(logic(&packets), vec![255; 24]);
-        assert!(!stream.done());
-        assert!(!packets.iter().any(|p| matches!(p, Packet::Trigger { .. })));
-    }
-
-    #[test]
-    fn history_is_bounded_and_does_not_arm_early() {
-        let plan = CapturePlan {
-            triggers: vec![(0, TriggerCondition::High)],
-            trigger_position: 90,
-            ..Default::default()
-        };
-        let stream = Stream::new(&settings(1, 1 << 34), &plan);
-        assert_eq!(stream.pre_limit, MAX_PRE_SAMPLES as usize);
-        assert_eq!(stream.pre.capacity(), 0);
-        let mut stream = Stream::new(&settings(1, 128), &plan);
-        assert!(stream.push(&[1; 115]).is_empty());
-        assert!(
-            stream
-                .push(&[1; 128])
-                .contains(&Packet::Trigger { sample: 115 })
-        );
-    }
-}
+#[path = "stream/tests.rs"]
+mod tests;
