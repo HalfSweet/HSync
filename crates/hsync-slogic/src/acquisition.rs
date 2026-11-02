@@ -52,6 +52,7 @@ pub(crate) fn start(
         transfer_count: transfers.count,
         configuration,
         stream: Stream::new(settings, &plan, settings.channels(), model.head_bytes),
+        report: Report::new(model.name, settings),
         stop: Arc::clone(&stop),
         running,
         sink,
@@ -62,6 +63,7 @@ pub(crate) fn start(
     // Queue first, then open the gate. Worker::drop stops before cancellation
     // even when RUN, thread creation, or the first packet fails.
     worker.link.run(&configuration)?;
+    worker.report.run = Instant::now();
     worker.running.store(true, Ordering::Release);
     let logic = settings.logic();
     let channels = (0..model.channels.into())
@@ -85,6 +87,7 @@ pub(crate) fn start(
                 Err(reason) => reason,
             };
             let reason = worker.finish(reason);
+            worker.report.log(&reason);
             let _ = worker.sink.send_timeout(Packet::End(reason), CANCEL_GRACE);
         })
         .map_err(|_| DriverError::Localized(UiError::new("error.device.slogic.workerStart")))?;
@@ -124,6 +127,84 @@ fn failed(error: DriverError) -> EndReason {
     }
 }
 
+/// What a capture moved, logged once it ends, after the `slogic-report` line of Sipeed's
+/// applications: whether the USB stream kept pace, and how much of its time the conversion
+/// took.
+struct Report {
+    model: &'static str,
+    channels: u8,
+    samplerate: u64,
+    /// When RUN was sent, and when the first and last data arrived.
+    run: Instant,
+    first: Option<Instant>,
+    last: Instant,
+    bytes: u64,
+    transfers: u64,
+    refused: u64,
+    /// Time spent queueing transfers again, and converting and sending their samples.
+    submit: Duration,
+    busy: Duration,
+}
+
+impl Report {
+    fn new(model: &'static str, settings: &Settings) -> Self {
+        let now = Instant::now();
+        Self {
+            model,
+            channels: settings.channels(),
+            samplerate: settings.samplerate,
+            run: now,
+            first: None,
+            last: now,
+            bytes: 0,
+            transfers: 0,
+            refused: 0,
+            submit: Duration::ZERO,
+            busy: Duration::ZERO,
+        }
+    }
+
+    fn data(&mut self, bytes: usize) {
+        let now = Instant::now();
+        self.first.get_or_insert(now);
+        self.last = now;
+        self.bytes += bytes as u64;
+        self.transfers += 1;
+    }
+
+    /// Bytes per second the analyzer sends.
+    fn expected(&self) -> f64 {
+        self.samplerate as f64 * f64::from(self.channels) / 8.0
+    }
+
+    fn log(&self, reason: &EndReason) {
+        let ms = |duration: Duration| duration.as_secs_f64() * 1000.0;
+        let span = self.first.map_or(Duration::ZERO, |first| self.last - first);
+        log::info!(
+            "slogic-report model={} ch={} rate_mhz={} end={reason:?} bytes={} transfers={} \
+             refused={} cold_ms={:.1} span_ms={:.1} mbps={:.1} exp_mbps={:.1} wall_ms={:.1} \
+             submit_ms={:.1} busy_ms={:.1}",
+            self.model,
+            self.channels,
+            self.samplerate / 1_000_000,
+            self.bytes,
+            self.transfers,
+            self.refused,
+            self.first.map_or(f64::NAN, |first| ms(first - self.run)),
+            ms(span),
+            if span.is_zero() {
+                f64::NAN
+            } else {
+                self.bytes as f64 / span.as_secs_f64() / 1e6
+            },
+            self.expected() / 1e6,
+            ms(self.run.elapsed()),
+            ms(self.submit),
+            ms(self.busy),
+        );
+    }
+}
+
 struct Worker {
     link: Link,
     bulk: Option<Box<dyn BulkIn>>,
@@ -131,6 +212,7 @@ struct Worker {
     transfer_count: usize,
     configuration: CaptureSettings,
     stream: Stream,
+    report: Report,
     stop: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     sink: Sender<Packet>,
@@ -172,14 +254,18 @@ impl Worker {
                 Some(Ok(bytes)) if !bytes.is_empty() => {
                     last_data = Instant::now();
                     received = true;
+                    self.report.data(bytes.len());
                     let size = self.transfer_size;
                     // Requeue before conversion so USB can keep filling the ring.
+                    let started = Instant::now();
                     self.bulk().submit(size);
+                    self.report.submit += started.elapsed();
                     for packet in self.stream.push(&bytes) {
                         if let Err(reason) = self.send(packet) {
                             return reason;
                         }
                     }
+                    self.report.busy += started.elapsed();
                     if self.stream.done() {
                         return EndReason::Completed;
                     }
@@ -220,6 +306,7 @@ impl Worker {
     /// request's turn, so the ring shrinks then.
     fn drop_refused(&mut self) {
         self.transfer_count -= 1;
+        self.report.refused += 1;
         log::warn!(
             "the system refused memory for a USB transfer; {} transfers of {} bytes stay in flight",
             self.transfer_count,
