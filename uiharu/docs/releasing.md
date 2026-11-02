@@ -71,9 +71,12 @@ with core-only, default-protocol and registry/testing configurations, and checks
 the separate code generator. Finally it installs
 the CLI from the archives and decodes a synthetic capture. Local path patches in
 this temporary consumer point only at the unpacked archives. `uiharu:smoke` repeats
-that consumer verification with an optional Rust toolchain argument. The source
-tree must be committed for a release; `uiharu:package --allow-dirty` is available
-for reviewing an unfinished change.
+that consumer verification with an optional Rust toolchain argument. The script
+requires a committed authored source tree before and after generation. Cargo itself
+uses `--allow-dirty` because the ignored generated Rust is intentionally included;
+the archive's VCS dirty marker therefore also covers generated files. This never
+permits uncommitted authored changes in a release. `uiharu:package --allow-dirty`
+explicitly bypasses the authored-tree guard for reviewing an unfinished change.
 
 ## First release
 
