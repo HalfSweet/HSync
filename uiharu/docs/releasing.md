@@ -67,7 +67,8 @@ pnpm uiharu:smoke 1.90.0
 nine crates together. Cargo verifies their builds and resolves the unpublished
 family through its temporary packaging registry. The script then unpacks the
 archives outside the repository, checks required files and runs a new consumer
-with core-only, default-protocol and registry configurations. Finally it installs
+with core-only, default-protocol and registry/testing configurations, and checks
+the separate code generator. Finally it installs
 the CLI from the archives and decodes a synthetic capture. Local path patches in
 this temporary consumer point only at the unpacked archives. `uiharu:smoke` repeats
 that consumer verification with an optional Rust toolchain argument. The source
