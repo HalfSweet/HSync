@@ -5,6 +5,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
+use hsync_core::TriggerCondition;
 use hsync_driver::CapturePlan;
 use hsync_slogic::{SLOGIC32U3, Settings, UsbSpeed};
 
@@ -16,46 +17,97 @@ mod assemble;
 #[path = "../src/stream.rs"]
 mod stream;
 
-/// What a case converts: the wire mode and the logic channels.
+/// What a case converts: the wire mode, the logic channels, the analog groups, and whether
+/// the capture waits all along for a trigger that never fires.
 struct Case {
     name: &'static str,
     wire: u8,
     enabled: u32,
+    analog: u8,
+    waits: bool,
 }
 
-const CASES: [Case; 5] = [
+const CASES: [Case; 9] = [
     Case {
         name: "2 channels",
         wire: 2,
         enabled: 0b11,
+        analog: 0,
+        waits: false,
     },
     Case {
         name: "4 channels",
         wire: 4,
         enabled: 0xf,
+        analog: 0,
+        waits: false,
     },
     Case {
         name: "8 channels",
         wire: 8,
         enabled: 0xff,
+        analog: 0,
+        waits: false,
     },
     Case {
         name: "16 channels",
         wire: 16,
         enabled: 0xffff,
+        analog: 0,
+        waits: false,
     },
     Case {
         name: "32 channels",
         wire: 32,
         enabled: u32::MAX,
+        analog: 0,
+        waits: false,
+    },
+    Case {
+        name: "4 channels, waiting",
+        wire: 4,
+        enabled: 0xf,
+        analog: 0,
+        waits: true,
+    },
+    Case {
+        name: "8 channels, waiting",
+        wire: 8,
+        enabled: 0xff,
+        analog: 0,
+        waits: true,
+    },
+    Case {
+        name: "16 channels, waiting",
+        wire: 16,
+        enabled: 0xffff,
+        analog: 0,
+        waits: true,
+    },
+    Case {
+        name: "A0 A1 + D16-D31",
+        wire: 32,
+        enabled: u32::MAX,
+        analog: 0b11,
+        waits: false,
     },
 ];
 
 fn measure(case: &Case, input: &[u8], bytes: usize) {
     let mut settings = Settings::defaults(&SLOGIC32U3, UsbSpeed::SuperPlus);
     settings.enabled = case.enabled;
+    settings.analog = case.analog;
     settings.limit_samples = u64::MAX / 2;
-    let plan = CapturePlan::default();
+    let plan = CapturePlan {
+        // D0 high and low at once: never.
+        triggers: if case.waits {
+            vec![(0, TriggerCondition::High), (0, TriggerCondition::Low)]
+        } else {
+            Vec::new()
+        },
+        trigger_position: 10,
+        ..CapturePlan::default()
+    };
     let mut stream = stream::Stream::new(&settings, &plan, case.wire, 0);
     let started = Instant::now();
     let mut remaining = bytes;
