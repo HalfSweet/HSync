@@ -11,6 +11,8 @@ mod device;
 mod driver;
 pub mod model;
 pub mod protocol;
+#[cfg(test)]
+mod reference;
 mod stream;
 
 pub use device::{Settings, SlogicDevice};

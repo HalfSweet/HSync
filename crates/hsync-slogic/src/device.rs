@@ -55,6 +55,13 @@ impl Settings {
         }
     }
 
+    /// These settings on another wire mode, whatever the inputs.
+    #[cfg(test)]
+    pub(crate) fn with_wire(mut self, channels: u8) -> Self {
+        self.channels = channels;
+        self
+    }
+
     /// The contiguous wire mode covering the highest enabled input: 2, 4, 8, 16 or 32 channels.
     pub fn channels(&self) -> u8 {
         self.channels

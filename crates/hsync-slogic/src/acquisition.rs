@@ -14,7 +14,6 @@ use hsync_core::{ANALOG_BASE, ChannelIndex, UiError};
 use hsync_driver::usb::{BulkIn, UsbError};
 use hsync_driver::{Acquisition, CapturePlan, DriverError, EndReason, Packet};
 
-use crate::assemble::{Packed, WireDecoder, WireFormat};
 use crate::model::Model;
 use crate::protocol::{CaptureSettings, Link, MIN_IN_FLIGHT, TransferPlan};
 use crate::stream::Stream;
@@ -25,26 +24,6 @@ const STALL: Duration = Duration::from_secs(2);
 const CANCEL_GRACE: Duration = Duration::from_secs(2);
 
 pub(crate) fn start(
-    link: Link,
-    model: &Model,
-    settings: &Settings,
-    plan: CapturePlan,
-    running: Arc<AtomicBool>,
-    sink: Sender<Packet>,
-) -> Result<Box<dyn Acquisition>, DriverError> {
-    // Monomorphize the whole receive/trigger/packing path for the wire mode once.
-    let start = match settings.channels() {
-        2 => start_with::<Packed<2>>,
-        4 => start_with::<Packed<4>>,
-        8 => start_with::<u8>,
-        16 => start_with::<u16>,
-        32 => start_with::<u32>,
-        _ => unreachable!("validated SLogic wire mode"),
-    };
-    start(link, model, settings, plan, running, sink)
-}
-
-fn start_with<F: WireFormat>(
     link: Link,
     model: &Model,
     settings: &Settings,
@@ -66,15 +45,13 @@ fn start_with<F: WireFormat>(
     );
     let bulk = link.usb().bulk_in(link.endpoint())?;
     let stop = Arc::new(AtomicBool::new(false));
-    let mut worker = Worker::<F> {
+    let mut worker = Worker {
         link,
         bulk: Some(bulk),
         transfer_size: transfers.size,
         transfer_count: transfers.count,
         configuration,
-        head_bytes: model.head_bytes,
-        decoder: WireDecoder::new(model.head_bytes),
-        stream: Stream::new(settings, &plan),
+        stream: Stream::new(settings, &plan, settings.channels(), model.head_bytes),
         stop: Arc::clone(&stop),
         running,
         sink,
@@ -147,21 +124,19 @@ fn failed(error: DriverError) -> EndReason {
     }
 }
 
-struct Worker<F: WireFormat> {
+struct Worker {
     link: Link,
     bulk: Option<Box<dyn BulkIn>>,
     transfer_size: usize,
     transfer_count: usize,
     configuration: CaptureSettings,
-    head_bytes: usize,
-    decoder: WireDecoder<F>,
-    stream: Stream<F>,
+    stream: Stream,
     stop: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     sink: Sender<Packet>,
 }
 
-impl<F: WireFormat> Worker<F> {
+impl Worker {
     fn bulk(&mut self) -> &mut dyn BulkIn {
         self.bulk
             .as_deref_mut()
@@ -200,10 +175,7 @@ impl<F: WireFormat> Worker<F> {
                     let size = self.transfer_size;
                     // Requeue before conversion so USB can keep filling the ring.
                     self.bulk().submit(size);
-                    let mut packets = Vec::new();
-                    self.decoder
-                        .push(&bytes, |samples| self.stream.push(samples, &mut packets));
-                    for packet in packets {
+                    for packet in self.stream.push(&bytes) {
                         if let Err(reason) = self.send(packet) {
                             return reason;
                         }
@@ -282,7 +254,7 @@ impl<F: WireFormat> Worker<F> {
             let size = self.transfer_size;
             self.bulk().submit(size);
         }
-        self.decoder = WireDecoder::new(self.head_bytes);
+        // Nothing arrived before, so the stream still waits for the first head.
         self.link.run(&self.configuration)
     }
 
@@ -323,7 +295,7 @@ impl<F: WireFormat> Worker<F> {
     }
 }
 
-impl<F: WireFormat> Drop for Worker<F> {
+impl Drop for Worker {
     fn drop(&mut self) {
         let _ = self.finish(EndReason::Stopped);
     }
