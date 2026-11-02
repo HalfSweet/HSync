@@ -1,0 +1,44 @@
+[package]
+name = "uiharu"
+description = "A streaming protocol decode engine with bounded memory, typed decode graphs and composable decoders"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.90"
+license = "Apache-2.0"
+authors.workspace = true
+repository = "https://github.com/HalfSweet/HSync"
+homepage = "https://github.com/HalfSweet/HSync/tree/main/uiharu"
+documentation = "https://docs.rs/uiharu"
+readme = "README.md"
+keywords = ["logic-analyzer", "protocol", "decoder", "streaming", "embedded"]
+categories = ["encoding", "science"]
+include = ["/LICENSE", "/src/**", "/examples/**", "/README.md"]
+publish = ["crates-io"]
+
+[features]
+default = ["protocols"]
+protocols = ["dep:uiharu-protocols"]
+registry = ["protocols", "dep:uiharu-registry"]
+testing = ["uiharu-core/testing"]
+
+[dependencies]
+uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
+uiharu-protocols = { path = "../uiharu-protocols", version = "0.1.0", optional = true }
+uiharu-registry = { path = "../uiharu-registry", version = "0.1.0", optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[[example]]
+name = "spi"
+required-features = ["protocols"]
+
+[[example]]
+name = "registry"
+required-features = ["registry"]
+
+[package.metadata.docs.rs]
+all-features = true
+
+[lints]
+workspace = true

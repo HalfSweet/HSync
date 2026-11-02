@@ -6,7 +6,31 @@ uiharu decodes digital captures while they are being taken: decoders run as resu
 
 It replaces the sigrok decoders in [HSync](../README.md) and is meant to be embedded in logic analyzer software, automated test tools and waveform analysis tools. The architecture is described in [docs/design.md](docs/design.md); [docs/writing-decoders.md](docs/writing-decoders.md) says how a decoder is written, and `docs/protocols/` has one page per protocol.
 
-Decoder TypeScript sources are tracked; generated IR and Rust are ignored, disposable output. Run `pnpm dsl:generate` before direct workspace Cargo commands, CLI tools or examples. Generation requires Node/pnpm dependencies, Rust and rustfmt. The `pnpm tauri` wrapper, `pnpm bundle` and `pnpm bindings` generate automatically; `pnpm test` and `pnpm test:watch` prepare only IR. See [the DSL workflow](docs/dsl.md) for output paths and checks.
+## Install
+
+```sh
+cargo add uiharu
+# For applications that configure decoders by name or load custom IR modules:
+cargo add uiharu --features registry
+# Optional command line:
+cargo install uiharu-cli --locked
+```
+
+Published packages require Rust 1.90 or newer and include the generated decoder
+implementations. The default facade exposes the runtime and `uiharu::protocols`;
+the optional `registry` feature exposes `uiharu::registry`. With
+`default-features = false`, only the core runtime is included. The smaller
+`uiharu-*` crates remain available for direct use. See the
+[facade quick start](crates/uiharu/README.md), [API docs](https://docs.rs/uiharu) and
+[independent release and compatibility policy](docs/releasing.md).
+
+For source development, decoder TypeScript sources are tracked; generated IR and
+Rust are ignored, disposable output. Run `pnpm dsl:generate` from the repository
+root before direct workspace Cargo commands, CLI tools or examples. Generation
+requires Node/pnpm dependencies, Rust and rustfmt. The `pnpm tauri` wrapper,
+`pnpm bundle` and `pnpm bindings` generate automatically; `pnpm test` and
+`pnpm test:watch` prepare only IR. See [the DSL workflow](docs/dsl.md) for output
+paths and checks.
 
 ## Status
 
@@ -14,6 +38,7 @@ The runtime, the protocol decoders and the acceptance tests of the design's prop
 
 | Crate                         | Contents                                                                                                                                                                                                                                                          |
 | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/uiharu`               | The public facade: core runtime, default built-in protocols and an optional registry feature                                                                                                                                                                      |
 | `crates/uiharu-core`          | The runtime: ticks and time bases, bit-packed sample blocks and the signal cursor, the event envelope and bounded broadcast streams, typed decode graphs and the executor                                                                                         |
 | `crates/uiharu-protocols`     | The protocol decoders, each with its contract, synthesizer and tests: see [Protocols](#protocols)                                                                                                                                                                 |
 | `crates/uiharu-registry`      | The node types by name: build a decoder from its JSON configuration, its manifest for a user interface, the pipeline description and its builder, outputs read as JSON items                                                                                      |
@@ -26,7 +51,9 @@ The runtime, the protocol decoders and the acceptance tests of the design's prop
 | `crates/uiharu-interp`        | The interpreter of the IR: runs a decoder module loaded at run time as the Rust generated from it would run, bridged to the compiled decoders on either side                                                                                                      |
 | `docs/`                       | The architecture (`design.md`), the DSL and its IR (`dsl.md`), how to write a decoder (`writing-decoders.md`), one page per protocol (`protocols/`) and the performance study with the comparison against the sigrok decoders (`performance.md`)                  |
 
-The crates are members of the repository's Cargo workspace but depend on nothing outside `uiharu/` except `serde`, `serde_json` and `thiserror`.
+The crates are members of the repository's Cargo workspace. Production dependencies
+outside `uiharu/` are `serde`, `serde_json`, `thiserror` and `indexmap`; `proptest`
+is used by development tests. None of the engine crates depends on HSync.
 
 The DSL also supports exact native event shapes: fixed arrays (1–32 items),
 hexadecimal `u64` fields, numeric enums, and enums combining unit values and a
@@ -171,7 +198,12 @@ let operations = pipeline.exposed(operations).expect("exposed once");
 // As blocks of samples arrive (a `LogicBlock`, bit-packed per channel):
 pipeline.push(logic.id, SignalItem::Data(Arc::new(block)))?; // `Err(Full)` hands the block back
 pipeline.run();                                              // until every decoder waits
-while let Some(item) = operations.next() { /* events, gaps, progress, the end */ }
+while let Some(item) = operations.next() {
+    // Handle events, gaps, progress and the end.
+    if matches!(item, uiharu_core::Item::End(_)) {
+        break;
+    }
+}
 ```
 
 A source that cannot hold its samples back announces what it lost with `SignalItem::Gap`; the engine never drops samples itself. `pipeline.stats()` reports every queue's size and high-water mark.

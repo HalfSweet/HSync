@@ -10,7 +10,7 @@ pub fn instruction(wave: &mut JtagWaveform, value: u8) {
 pub fn data_register(wave: &mut JtagWaveform, tdi: u64, tdo: u64) {
     wave.scan(Register::Dr, &tdi.to_le_bytes(), &tdo.to_le_bytes(), 35);
 }
-/// Pack one ADIv5 access's shifted-in request; address is A[3:2] in byte positions.
+/// Pack one ADIv5 access's shifted-in request; address is `A[3:2]` in byte positions.
 pub fn request(read: bool, addr: u8, data: u32) -> u64 {
     (u64::from(data) << 3) | (u64::from((addr >> 2) & 3) << 1) | u64::from(read)
 }

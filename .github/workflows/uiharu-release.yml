@@ -1,0 +1,149 @@
+name: Release uiharu
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: uiharu version, such as 0.1.1
+        required: true
+        type: string
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  prepare:
+    name: Release pull request
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    concurrency:
+      group: uiharu-release-prepare
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm uiharu:version "$VERSION"
+      - name: Generate independent changelog and preview notes
+        run: |
+          pnpm exec git-cliff --config uiharu/cliff.toml --include-path 'uiharu/**' \
+            --tag "uiharu-v$VERSION" --output uiharu/CHANGELOG.md
+          pnpm exec prettier --write uiharu/CHANGELOG.md
+          pnpm exec git-cliff --config uiharu/cliff.toml --include-path 'uiharu/**' \
+            --unreleased --tag "uiharu-v$VERSION" --strip all --output "$RUNNER_TEMP/notes.md"
+      - name: Open the release pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="release/uiharu-v$VERSION"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch --create "$branch"
+          git add uiharu/crates/*/Cargo.toml Cargo.lock uiharu/CHANGELOG.md
+          git commit --message "chore(uiharu): release $VERSION"
+          git push --force origin "$branch"
+          {
+            echo "Merging this pull request validates the packaged crates, tags uiharu-v$VERSION,"
+            echo "and publishes the uiharu crates through crates.io Trusted Publishing (OIDC)."
+            echo "HSync's application version and installers are released independently."
+            echo
+            cat "$RUNNER_TEMP/notes.md"
+          } > "$RUNNER_TEMP/body.md"
+          if [ "$(gh pr view "$branch" --json state --jq .state 2>/dev/null)" = OPEN ]; then
+            gh pr edit "$branch" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base main --head "$branch" --title "chore(uiharu): release $VERSION" \
+              --body-file "$RUNNER_TEMP/body.md"
+          fi
+
+  check:
+    name: Validate the release archives
+    if: >-
+      github.event_name == 'pull_request' && github.event.pull_request.merged &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'release/uiharu-v')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/uiharu-check.yml
+    with:
+      ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+  publish:
+    name: Publish through OIDC
+    needs: check
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: uiharu-release
+    concurrency:
+      group: uiharu-release-publish
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      BRANCH: ${{ github.event.pull_request.head.ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check the requested release version
+        id: version
+        run: |
+          version="${BRANCH#release/uiharu-v}"
+          pnpm uiharu:verify "$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Tag the validated source
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          tag="uiharu-v$VERSION"
+          if git rev-parse --verify "$tag" >/dev/null 2>&1; then
+            test "$(git rev-parse "$tag^{commit}")" = "$(git rev-parse HEAD)"
+          else
+            git tag "$tag"
+            git push origin "$tag"
+          fi
+      # No long-lived Cargo token is stored in GitHub. Authenticate after validation
+      # so that the short-lived token is used only for publishing.
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+      - name: Publish the crate family
+        run: pnpm uiharu:publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+      - name: Publish independent release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          pnpm exec git-cliff --config uiharu/cliff.toml --include-path 'uiharu/**' \
+            --latest --strip all --output "$RUNNER_TEMP/uiharu-notes.md"
+          prerelease=false
+          case "$VERSION" in *-*) prerelease=true ;; esac
+          gh release create "uiharu-v$VERSION" --verify-tag --title "uiharu $VERSION" \
+            --notes-file "$RUNNER_TEMP/uiharu-notes.md" --latest=false --prerelease="$prerelease"

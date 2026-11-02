@@ -5001,6 +5001,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "uiharu"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "uiharu-core",
+ "uiharu-protocols",
+ "uiharu-registry",
+]
+
+[[package]]
 name = "uiharu-cli"
 version = "0.1.0"
 dependencies = [

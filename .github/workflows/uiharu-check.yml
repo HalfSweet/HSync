@@ -1,0 +1,47 @@
+name: uiharu package checks
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: Commit to validate
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  packages:
+    name: Rust library, archives and MSRV
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: pnpm/action-setup@v6.1.0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm dsl:generate
+      - run: cargo fmt --all --check
+      - run: cargo clippy --locked -p 'uiharu*' --all-targets --all-features -- -D warnings
+      - run: cargo test --locked -p 'uiharu*' --all-features
+      - run: cargo doc --locked -p 'uiharu*' --all-features --no-deps --lib
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Build and exercise the publishable archives outside the repository
+        run: pnpm uiharu:package
+      - name: Install the minimum supported Rust toolchain
+        run: rustup toolchain install 1.90.0 --profile minimal
+      - name: Exercise the same archives with the minimum supported Rust version
+        run: pnpm uiharu:smoke 1.90.0

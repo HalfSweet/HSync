@@ -167,6 +167,19 @@ The owner decides when to release and which version it is; the version does not 
 
 `pnpm bundle` builds the installers on this machine the same way (without update signatures); the Bundle workflow can also be run by hand, keeping the installers as artifacts of that run. Releasing needs the repository secrets `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (the update signatures; the public key is in `src-tauri/tauri.conf.json`). The [maintainer guide](docs/maintainer-guide.md) goes into the details: CI, failed releases, the installers, updates and signing.
 
+### Independent uiharu releases
+
+The `uiharu` facade and eight `uiharu-*` packages share an explicit version separate
+from HSync. Use `pnpm uiharu:release <version>` to open the engine release pull
+request; merging it validates the archives and MSRV, tags `uiharu-v<version>`, and
+publishes with crates.io OIDC through `uiharu-release.yml` and the
+`uiharu-release` environment. The initial publish uses the owner's local Cargo login.
+Use `pnpm uiharu:version <version>` to set engine versions and git-cliff with
+`uiharu/cliff.toml` to generate its changelog; never edit either by hand.
+`pnpm uiharu:package` verifies packages outside the source tree; published packages
+include generated Rust and require no Node/pnpm. See
+[the engine release guide](uiharu/docs/releasing.md).
+
 ## Testing
 
 - New features come with tests; a bug fix starts with a test that reproduces the bug.

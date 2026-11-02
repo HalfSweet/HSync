@@ -102,3 +102,7 @@ jobs:
             echo "::error::src/ipc/bindings is out of date: run pnpm bindings and commit the result"
             exit 1
           fi
+
+  uiharu:
+    name: Publishable uiharu crates
+    uses: ./.github/workflows/uiharu-check.yml
