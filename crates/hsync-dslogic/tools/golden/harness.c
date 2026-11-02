@@ -21,8 +21,11 @@
 #include <string.h>
 
 extern struct ds_trigger *trigger;
+extern struct sr_dev_driver DSLogic_driver_info;
 
 /* What libsigrok4DSL's other files would provide. */
+/* Referenced by the unused scan callback; fail if this harness ever scans USB. */
+void sr_usb_dev_inst_free(struct sr_usb_dev_inst *usb) { (void)usb; abort(); }
 char DS_RES_PATH[500];
 xlog_writer *sr_log;
 int xlog_err(xlog_writer *wr, const char *format, ...) { (void)wr; (void)format; return 0; }
@@ -153,7 +156,10 @@ static int run(char *line)
         return -1;
 
     /* As TriggerDock::try_commit_trigger() and LogicSignal::commit_trig() leave it. */
-    if (!instant) {
+    if (instant) {
+        /* TriggerDock resets all stages before returning for an instant capture. */
+        ds_trigger_init();
+    } else {
         ds_trigger_set_pos(pos);
         ds_trigger_set_mode(tmode);
         if (tmode != SIMPLE_TRIGGER) {
@@ -186,7 +192,6 @@ static int run(char *line)
     devc.clock_type = clk;
     devc.clock_edge = edge;
     devc.rle_mode = rle;
-    devc.instant = instant;
     devc.filter = filter;
     devc.test_mode = SR_TEST_NONE;
     devc.cb_data = &sdi;
@@ -195,6 +200,7 @@ static int run(char *line)
     sdi.priv = &devc;
     sdi.conn = &usb;
     sdi.mode = LOGIC;
+    sdi.status = SR_ST_ACTIVE;
     sdi.channels = NULL;
     for (int ch = 0; ch < channel_modes[chmode].num; ch++) {
         channels[ch].index = ch;
@@ -202,12 +208,19 @@ static int run(char *line)
         sdi.channels = g_slist_append(sdi.channels, &channels[ch]);
     }
 
+    /* Use DSView's configuration entry point: INSTANT changes devc only in DSO mode. */
+    GVariant *value = g_variant_ref_sink(g_variant_new_boolean(instant));
+    int ret = DSLogic_driver_info.config_set(SR_CONF_INSTANT, value, &sdi, NULL, NULL);
+    g_variant_unref(value);
+    if (ret != SR_OK)
+        return -1;
+
     /* As dev_acquisition_start() sets them before arming. */
     devc.actual_samples = (devc.limit_samples + SAMPLES_ALIGN) & ~SAMPLES_ALIGN;
     devc.actual_bytes = devc.actual_samples / DSLOGIC_ATOMIC_SAMPLES * dsl_en_ch_num(&sdi) * DSLOGIC_ATOMIC_SIZE;
 
     bulk_count = 0;
-    int ret = dsl_fpga_arm(&sdi);
+    ret = dsl_fpga_arm(&sdi);
     g_slist_free(sdi.channels);
     if (ret != SR_OK || bulk_count < 1 || bulk_len[0] != (int)sizeof(struct DSL_setting))
         return -1;

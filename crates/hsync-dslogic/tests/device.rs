@@ -11,7 +11,7 @@ use hsync_driver::mock::{MockDevice, MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
 use hsync_driver::{
     AdvancedTrigger, CapturePlan, Device, DriverError, EndReason, OptionKey, OptionKind,
-    OptionValue, Packet, RateTier, TriggerCaps, TriggerStageSpec,
+    OptionValue, Packet, RateTier, SerialTriggerSpec, TriggerCaps, TriggerStageSpec,
 };
 use hsync_dslogic::profiles::{CHANNEL_MODES, UsbSpeed, VENDOR_ID, find_profile};
 use hsync_dslogic::protocol::{
@@ -22,7 +22,7 @@ use hsync_dslogic::{DslogicDevice, FirmwareDir};
 
 const HEADER_LEN: usize = 512;
 
-/// A DSLogic Plus as its firmware behaves on the control and bulk endpoints.
+/// A DSLogic as its firmware behaves on the control and bulk endpoints.
 #[derive(Default)]
 struct FakeDslogic {
     fpga_configured: bool,
@@ -148,10 +148,18 @@ fn open(fake: FakeDslogic, firmware: FirmwareDir) -> (MockTransport<FakeDslogic>
 
 /// A DSLogic U3Pro16 on a USB 3.0 port.
 fn open_u3pro16() -> DslogicDevice {
-    let transport = MockTransport::new(configured());
-    let ctl = Control::new(Arc::new(transport)).without_read_delay();
-    let profile = find_profile(VENDOR_ID, 0x002A, UsbSpeed::Super).expect("U3Pro16 on USB 3");
-    DslogicDevice::open(ctl, profile, firmware_dir(&[]), "test".into()).expect("open")
+    open_u3pro16_with(configured(), UsbSpeed::Super).1
+}
+
+fn open_u3pro16_with(
+    fake: FakeDslogic,
+    speed: UsbSpeed,
+) -> (MockTransport<FakeDslogic>, DslogicDevice) {
+    let transport = MockTransport::new(fake);
+    let ctl = Control::new(Arc::new(transport.clone())).without_read_delay();
+    let profile = find_profile(VENDOR_ID, 0x002A, speed).expect("U3Pro16");
+    let device = DslogicDevice::open(ctl, profile, firmware_dir(&[]), "test".into()).expect("open");
+    (transport, device)
 }
 
 fn configured() -> FakeDslogic {
@@ -449,6 +457,102 @@ fn captures_in_stream_mode() {
         &[ctr0::FORCE_RDY]
     ));
     assert!(wrote(&transport, dest::WORDWIDE, 0, &[1]));
+}
+
+#[test]
+fn instant_u3pro16_captures_ignore_triggers_without_the_dso_mode_bit() {
+    let serial = AdvancedTrigger::Serial(SerialTriggerSpec {
+        start: vec![(0, TriggerCondition::Rise)],
+        stop: vec![(0, TriggerCondition::Fall)],
+        clock: vec![(1, TriggerCondition::Rise)],
+        data_channel: 2,
+        bits: 8,
+        value: 0xa5,
+        mask: 0xff,
+    });
+    for speed in [UsbSpeed::High, UsbSpeed::Super] {
+        for (mode, rate, mode_bits) in [
+            (24, 500_000_000, 0x0020),
+            (25, 1_000_000_000, 0x0040),
+            (18, 500_000_000, 0x1020),
+            (19, 1_000_000_000, 0x1040),
+        ] {
+            let stream = CHANNEL_MODES[mode].stream;
+            if stream && speed == UsbSpeed::High {
+                continue;
+            }
+            let mut triggers = vec![None];
+            if !stream {
+                triggers.extend([
+                    Some(AdvancedTrigger::Stages {
+                        stages: vec![stage()],
+                    }),
+                    Some(serial.clone()),
+                ]);
+            }
+            for advanced in triggers {
+                let channels: Vec<_> = (0..if stream { 3 } else { 4 }).collect();
+                let limit = 1024;
+                let data_len = limit as usize / 8 * channels.len();
+                let mut trigger_header = header(None, 0);
+                trigger_header.resize(1024, 0);
+                let mut fake = configured();
+                fake.on_start = vec![trigger_header, vec![0xa5; data_len]];
+                let (transport, mut device) = open_u3pro16_with(fake, speed);
+                device
+                    .set_option(
+                        OptionKey::OperationMode,
+                        &OptionValue::Choice(if stream { "stream" } else { "buffer" }.into()),
+                    )
+                    .expect("operation mode");
+                device
+                    .set_option(
+                        OptionKey::ChannelMode,
+                        &OptionValue::Choice(mode.to_string()),
+                    )
+                    .expect("channel mode");
+                device.set_enabled_channels(&channels).expect("channels");
+                device
+                    .set_option(OptionKey::Samplerate, &OptionValue::Integer(rate))
+                    .expect("rate");
+                device
+                    .set_option(OptionKey::SampleLimit, &OptionValue::Integer(limit))
+                    .expect("limit");
+                let plan = CapturePlan {
+                    triggers: vec![(0, TriggerCondition::Rise)],
+                    trigger_position: 75,
+                    instant: true,
+                    advanced,
+                    looping: false,
+                };
+                let (sink, packets) = crossbeam_channel::unbounded();
+                let acquisition = device.start(plan, sink).expect("start");
+                let packets = collect(&packets);
+                acquisition.wait();
+                assert_eq!(logic_bytes(&packets), data_len);
+                assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
+
+                let expected = setting(&ArmConfig {
+                    profile: find_profile(VENDOR_ID, 0x002A, speed).expect("profile"),
+                    mode: &CHANNEL_MODES[mode],
+                    samplerate: rate,
+                    limit_samples: limit,
+                    enabled: (1 << channels.len()) - 1,
+                    filter: false,
+                    external_clock: false,
+                    clock_falling_edge: false,
+                    rle: false,
+                    looping: false,
+                    trigger: &TriggerSetup::default(),
+                });
+                let fake = transport.device();
+                let actual = &fake.settings[0];
+                // DSView keeps bit 9 clear in LOGIC mode, even for instant captures.
+                assert_eq!(u16::from_le_bytes([actual[6], actual[7]]), mode_bits);
+                assert_eq!(actual, &expected, "{speed:?}, channel mode {mode}");
+            }
+        }
+    }
 }
 
 #[test]
