@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.8 (2026-11-02)
+
+### Performance
+
+- **driver:** Process SLogic samples at native wire widths (#74) ([a72e8b3](https://github.com/HalfSweet/HSync/commit/a72e8b38a16bbd90d038ddfa5e17243e2df445bf))
+
 ## 0.2.7 (2026-10-31)
 
 ### Features
