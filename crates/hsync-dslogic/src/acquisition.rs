@@ -2,7 +2,7 @@
 //! and overflow polling, and the stop sequence.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -164,13 +164,13 @@ pub(crate) fn start(
         samplerate: params.samplerate,
         analog: Vec::new(),
     });
-    let stop = Arc::new(AtomicBool::new(false));
+    let stop_requests = Arc::new(AtomicU8::new(0));
     let worker = Worker {
         ctl,
         params,
         bulk,
         sink,
-        stop: Arc::clone(&stop),
+        stop_requests: Arc::clone(&stop_requests),
         header_size,
         transfer_size,
         actual_bytes,
@@ -185,19 +185,24 @@ pub(crate) fn start(
         })
         .map_err(|error| DriverError::Protocol(format!("starting the capture thread: {error}")))?;
     Ok(Box::new(DslAcquisition {
-        stop,
+        stop_requests,
         thread: Some(thread),
     }))
 }
 
 struct DslAcquisition {
-    stop: Arc<AtomicBool>,
+    stop_requests: Arc<AtomicU8>,
     thread: Option<JoinHandle<()>>,
 }
 
 impl Acquisition for DslAcquisition {
     fn stop(&self) {
-        self.stop.store(true, Ordering::Release);
+        // Keep both requests even when the worker has not processed the first one yet.
+        let _ = self
+            .stop_requests
+            .fetch_update(Ordering::Release, Ordering::Relaxed, |requests| {
+                Some(requests.saturating_add(1))
+            });
     }
 
     fn wait(mut self: Box<Self>) {
@@ -209,7 +214,8 @@ impl Acquisition for DslAcquisition {
 
 impl Drop for DslAcquisition {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
+        // No owner remains to request a second stop if a buffer upload stalls.
+        self.stop_requests.store(2, Ordering::Release);
     }
 }
 
@@ -247,7 +253,7 @@ struct Worker {
     params: AcquisitionParams,
     bulk: Box<dyn BulkIn>,
     sink: Sender<Packet>,
-    stop: Arc<AtomicBool>,
+    stop_requests: Arc<AtomicU8>,
     header_size: usize,
     transfer_size: usize,
     actual_bytes: u64,
@@ -293,7 +299,8 @@ impl Worker {
         let mut empty_polls = 0;
         let mut overflowed = false;
         loop {
-            if stopping == Stopping::No && (self.stop.load(Ordering::Acquire) || overflowed) {
+            let stop_requests = self.stop_requests.load(Ordering::Acquire);
+            if stopping == Stopping::No && (stop_requests > 0 || overflowed) {
                 if awaiting_header
                     && !self.params.mode.stream
                     && self.params.buffer_upload
@@ -310,6 +317,14 @@ impl Worker {
                         since: Instant::now(),
                     };
                 }
+            }
+            // DSView's SR_CONF_WAIT_UPLOAD accepts only the first stop. A second stop
+            // calls dsl_dev_acquisition_stop(), forcing any pending upload to finish.
+            if stopping == Stopping::Upload && stop_requests > 1 {
+                self.force_ready();
+                stopping = Stopping::Abort {
+                    since: Instant::now(),
+                };
             }
             let stopped = if overflowed {
                 EndReason::Failed(UiError::new("error.device.overflow"))
