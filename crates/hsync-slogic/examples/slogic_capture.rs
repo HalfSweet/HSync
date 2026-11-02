@@ -16,12 +16,14 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use hsync_capture::LogicCapture;
+use hsync_core::TriggerCondition;
 use hsync_driver::{
     CandidateStatus, CapturePlan, Device, DeviceManager, EndReason, OptionKey, OptionValue, Packet,
 };
 use hsync_slogic::SlogicDriver;
 
 const SAMPLE_COUNT: u64 = 65_536;
+/// The timeout of a capture that takes no time on the wire; longer ones get ten times theirs.
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Makes USB discovery and driver errors visible without an application logger.
@@ -45,24 +47,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut capture_requested = false;
     let mut channels = None;
     let mut samplerate = 5_000_000u64;
-    let mut sample_count = SAMPLE_COUNT;
-    let mut model = None;
     let mut repeat = 1u8;
+    let mut samples = SAMPLE_COUNT;
+    let mut triggers = Vec::new();
+    let mut model = None;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--capture" => capture_requested = true,
             "--model" => {
                 model = Some(args.next().ok_or("--model requires an exact model name")?);
-            }
-            "--samples" => {
-                sample_count = args
-                    .next()
-                    .ok_or("--samples requires an integer")?
-                    .parse()?;
-                if sample_count == 0 || !sample_count.is_multiple_of(64) {
-                    return Err("--samples must be a positive multiple of 64".into());
-                }
             }
             "--channels" => {
                 let count: u16 = args
@@ -92,20 +86,55 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Err("--repeat must be between 1 and 10".into());
                 }
             }
+            "--samples" => {
+                samples = args
+                    .next()
+                    .ok_or("--samples requires an integer")?
+                    .parse()?;
+                if samples == 0 || !samples.is_multiple_of(64) {
+                    return Err("--samples must be a positive multiple of 64".into());
+                }
+            }
+            "--trigger" => {
+                let spec = args
+                    .next()
+                    .ok_or("--trigger requires CHANNEL:high|low|rise|fall|edge")?;
+                let (channel, condition) = spec
+                    .split_once(':')
+                    .ok_or("--trigger requires CHANNEL:CONDITION")?;
+                let condition = match condition {
+                    "high" => TriggerCondition::High,
+                    "low" => TriggerCondition::Low,
+                    "rise" => TriggerCondition::Rise,
+                    "fall" => TriggerCondition::Fall,
+                    "edge" => TriggerCondition::Both,
+                    _ => return Err("trigger conditions are high, low, rise, fall or edge".into()),
+                };
+                triggers.push((channel.parse()?, condition));
+            }
             "--help" | "-h" => {
                 println!(
-                    "slogic_capture [--capture] [--model NAME] [--channels 2|4|8|16|32] [--rate HZ] [--samples N] [--repeat N]"
+                    "slogic_capture [--capture] [--model NAME] [--channels 2|4|8|16|32] [--rate HZ] [--samples N] \
+                     [--trigger CH:COND]... [--repeat N]"
                 );
                 println!("Default: list devices without opening them or starting a capture.");
                 println!("--capture       Required to open the device and acquire samples.");
                 println!("--model NAME    Select an exact model name when several are connected.");
                 println!("--channels N    Enable D0 through D(N-1); default every channel.");
                 println!("--rate HZ       Supported integer sample rate in Hz; default 5000000.");
-                println!("--samples N     Positive multiple of 64; default 65536.");
                 println!(
                     "--repeat N      Capture 1 to 10 times on the same open device; default 1."
                 );
-                println!("Every capture has a 5 s timeout; U3 thresholds are 1.7 V.");
+                println!(
+                    "--samples N     Samples per capture, a multiple of 64; default 65536. The \
+                     capture times out after 5 s plus ten times its duration."
+                );
+                println!(
+                    "--trigger C:X    Trigger on channel C: high, low, rise, fall or edge; may be \
+                     repeated, all must hold. A tenth of the samples come before it. Default: \
+                     capture at once."
+                );
+                println!("U3 thresholds are 1.7 V.");
                 println!(
                     "No files are saved; unsupported sample rates are rejected by the driver."
                 );
@@ -149,7 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         device.set_channel_enabled(channel, channel < channels)?;
     }
     device.set_option(OptionKey::Samplerate, &OptionValue::Integer(samplerate))?;
-    device.set_option(OptionKey::SampleLimit, &OptionValue::Integer(sample_count))?;
+    device.set_option(OptionKey::SampleLimit, &OptionValue::Integer(samples))?;
     if device
         .options()
         .iter()
@@ -158,7 +187,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         device.set_option(OptionKey::Vth, &OptionValue::Number(1.7))?;
     }
     for index in 1..=repeat {
-        capture_once(device.as_mut(), index, repeat, sample_count)?;
+        capture_once(
+            device.as_mut(),
+            index,
+            repeat,
+            samples,
+            samplerate,
+            &triggers,
+        )?;
     }
     Ok(())
 }
@@ -167,14 +203,21 @@ fn capture_once(
     device: &mut dyn Device,
     index: u8,
     repeat: u8,
-    sample_count: u64,
+    samples: u64,
+    samplerate: u64,
+    triggers: &[(u16, TriggerCondition)],
 ) -> Result<(), Box<dyn std::error::Error>> {
+    // How long the samples take to arrive when the host keeps pace.
+    let expected = Duration::from_secs_f64(samples as f64 / samplerate as f64);
+    let timeout = CAPTURE_TIMEOUT + expected * 10;
     println!("capture {index}/{repeat}");
     let (sink, packets) = crossbeam_channel::unbounded();
     let started = Instant::now();
     let acquisition = device.start(
         CapturePlan {
-            instant: true,
+            instant: triggers.is_empty(),
+            triggers: triggers.to_vec(),
+            trigger_position: 10,
             ..CapturePlan::default()
         },
         sink,
@@ -183,10 +226,10 @@ fn capture_once(
     let mut deinterleaver = None;
     let mut overflow = false;
     let result = loop {
-        let remaining = CAPTURE_TIMEOUT.saturating_sub(started.elapsed());
+        let remaining = timeout.saturating_sub(started.elapsed());
         if remaining.is_zero() {
             acquisition.stop();
-            break Err("capture timed out after five seconds".to_owned());
+            break Err(format!("capture timed out after {timeout:?}"));
         }
         match packets.recv_timeout(remaining.min(Duration::from_millis(100))) {
             Ok(Packet::Start {
@@ -221,9 +264,11 @@ fn capture_once(
     let reason = result?;
     let capture = capture.ok_or("no capture start packet received")?;
     println!(
-        "capture {index}/{repeat} end: {reason:?}; {} samples in {:.0} ms; overflow: {overflow}",
+        "capture {index}/{repeat} end: {reason:?}; {} samples in {:.0} ms (the analyzer takes \
+         {:.0} ms to sample them); overflow: {overflow}",
         capture.len(),
-        started.elapsed().as_secs_f64() * 1000.0
+        started.elapsed().as_secs_f64() * 1000.0,
+        expected.as_secs_f64() * 1000.0
     );
     for (channel, data) in capture.channels() {
         let edges = data.count_edges(0, capture.len());
@@ -232,7 +277,7 @@ fn capture_once(
             edges.rising, edges.falling
         );
     }
-    if reason != EndReason::Completed || overflow || capture.len() != sample_count {
+    if reason != EndReason::Completed || overflow || capture.len() != samples {
         return Err("capture did not complete with the expected sample count".into());
     }
     Ok(())
