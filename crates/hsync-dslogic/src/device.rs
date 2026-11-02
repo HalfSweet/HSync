@@ -741,7 +741,6 @@ impl Device for DslogicDevice {
             external_clock: self.settings.external_clock,
             clock_falling_edge: self.settings.clock_falling_edge,
             rle: !self.settings.stream && self.settings.rle && limit > depth,
-            instant: plan.instant,
             looping: plan.looping,
             buffer_upload: self.settings.buffer_upload,
             trigger,
