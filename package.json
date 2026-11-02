@@ -21,12 +21,18 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "pnpm dsl:compile && vitest run",
+    "test": "pnpm dsl:compile && node --test scripts/uiharu-release.test.mjs && vitest run",
     "test:watch": "pnpm dsl:compile && vitest",
     "bindings": "pnpm dsl:generate && cargo test --workspace export_bindings",
     "dsl:compile": "node --experimental-strip-types uiharu/compiler/src/main.ts",
     "dsl:generate": "pnpm dsl:compile && cargo run --locked -p uiharu-codegen -- uiharu/dsl/ir uiharu/crates/uiharu-dsl-protocols/src/generated && cargo run --locked -p uiharu-codegen -- uiharu/crates/uiharu-interp/tests/fixtures/backend/ir uiharu/crates/uiharu-interp/tests/fixtures/backend/generated",
-    "dsl:check": "pnpm dsl:generate && cargo check --locked -p uiharu-dsl-protocols -p uiharu-interp --all-targets"
+    "dsl:check": "pnpm dsl:generate && cargo check --locked -p uiharu-dsl-protocols -p uiharu-interp --all-targets",
+    "uiharu:version": "node scripts/uiharu-release.mjs version",
+    "uiharu:release": "node scripts/uiharu-release.mjs release",
+    "uiharu:package": "node scripts/uiharu-release.mjs package",
+    "uiharu:smoke": "node scripts/uiharu-release.mjs smoke",
+    "uiharu:publish": "node scripts/uiharu-release.mjs publish",
+    "uiharu:verify": "node scripts/uiharu-release.mjs verify"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",

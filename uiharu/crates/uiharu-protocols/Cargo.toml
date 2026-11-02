@@ -1,12 +1,19 @@
 [package]
 name = "uiharu-protocols"
-description = "Protocol decoders of the uiharu decode engine: SPI, SPI NOR, SD card SPI, APA102, AVR ISP, nRF24L01+, Microwire, 93Cxx EEPROM, I²C, 24xx EEPROM, UART, Modbus RTU, LIN, MIDI, DMX512, CAN, 1-Wire, DS18B20, USB, USB PD, I²S, PWM, timing, parallel, WS281x, JTAG, SWD, MDIO, PS/2, Wiegand, the AM2302/DHT22/DHT11 sensors and the NEC, RC-5, RC-6 and SIRC infrared remote controls, each with its contract, synthesizer and tests"
+description = "Composable protocol decoders for the uiharu streaming decode engine"
 version = "0.1.0"
-edition.workspace = true
-rust-version.workspace = true
+edition = "2024"
+rust-version = "1.90"
 license = "Apache-2.0"
 authors.workspace = true
-publish = false
+repository = "https://github.com/HalfSweet/HSync"
+homepage = "https://github.com/HalfSweet/HSync/tree/main/uiharu"
+documentation = "https://docs.rs/uiharu-protocols"
+readme = "README.md"
+keywords = ["logic-analyzer", "protocol", "decoder", "streaming"]
+categories = ["encoding", "science"]
+include = ["/LICENSE", "/src/**", "/README.md"]
+publish = ["crates-io"]
 
 [dependencies]
 serde.workspace = true
@@ -15,7 +22,8 @@ uiharu-core = { path = "../uiharu-core", version = "0.1.0" }
 uiharu-dsl-protocols = { path = "../uiharu-dsl-protocols", version = "0.1.0" }
 
 [dev-dependencies]
-uiharu-interp = { path = "../uiharu-interp", version = "0.1.0" }
+# Source-checkout equivalence tests only; omitted from the published manifest.
+uiharu-interp = { path = "../uiharu-interp" }
 proptest.workspace = true
 serde_json.workspace = true
 uiharu-core = { path = "../uiharu-core", version = "0.1.0", features = ["testing"] }

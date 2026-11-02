@@ -1,12 +1,19 @@
 [package]
 name = "uiharu-codegen"
-description = "The backend of the uiharu decoder DSL: emits Rust over uiharu-core's runtime from the decoder IR"
+description = "A Rust code generator for the uiharu decoder intermediate representation"
 version = "0.1.0"
-edition.workspace = true
-rust-version.workspace = true
+edition = "2024"
+rust-version = "1.90"
 license = "Apache-2.0"
 authors.workspace = true
-publish = false
+repository = "https://github.com/HalfSweet/HSync"
+homepage = "https://github.com/HalfSweet/HSync/tree/main/uiharu"
+documentation = "https://docs.rs/uiharu-codegen"
+readme = "README.md"
+keywords = ["logic-analyzer", "protocol", "decoder", "streaming"]
+categories = ["encoding", "science"]
+include = ["/LICENSE", "/src/**", "/README.md"]
+publish = ["crates-io"]
 
 [[bin]]
 name = "uiharu-codegen"

@@ -1,12 +1,19 @@
 [package]
 name = "uiharu-registry"
-description = "The node types of the uiharu decode engine as a registry: build a decoder from its name and configuration, describe it for a user interface, wire a pipeline from a description and read its outputs without knowing their event types"
+description = "Named protocol decoders, UI metadata and configurable pipelines for uiharu"
 version = "0.1.0"
-edition.workspace = true
-rust-version.workspace = true
+edition = "2024"
+rust-version = "1.90"
 license = "Apache-2.0"
 authors.workspace = true
-publish = false
+repository = "https://github.com/HalfSweet/HSync"
+homepage = "https://github.com/HalfSweet/HSync/tree/main/uiharu"
+documentation = "https://docs.rs/uiharu-registry"
+readme = "README.md"
+keywords = ["logic-analyzer", "protocol", "decoder", "streaming"]
+categories = ["encoding", "science"]
+include = ["/LICENSE", "/src/**", "/README.md", "/manifests/**"]
+publish = ["crates-io"]
 
 [dependencies]
 indexmap.workspace = true
