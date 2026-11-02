@@ -28,6 +28,10 @@ const CANCEL_GRACE: Duration = Duration::from_secs(2);
 /// Transfers' bytes the converter may fall behind by before the capture fails, rather than
 /// the analyzer's FIFO overflowing unnoticed (`max_queue_bytes`).
 const BACKLOG_BYTES: usize = 256 * 1024 * 1024;
+/// How long the stream must have run before its rate tells data loss.
+const RATE_WINDOW: Duration = Duration::from_millis(250);
+/// The share of the expected rate below which the analyzer cannot have kept all its samples.
+const RATE_FLOOR: f64 = 0.9;
 
 pub(crate) fn start(
     link: Link,
@@ -259,6 +263,12 @@ impl Report {
         self.transfers += 1;
     }
 
+    /// The rate since the first transfer, in bytes per second, once it has run long enough.
+    fn rate(&self) -> Option<f64> {
+        let span = self.last - self.first?;
+        (span >= RATE_WINDOW).then(|| self.bytes as f64 / span.as_secs_f64())
+    }
+
     /// Bytes per second the analyzer sends.
     fn expected(&self) -> f64 {
         self.samplerate as f64 * f64::from(self.channels) / 8.0
@@ -413,10 +423,30 @@ impl Worker {
         }
     }
 
+    /// Reports once that the stream runs slower than the analyzer samples: its FIFO then
+    /// overflows and drops samples, which the stream cannot show.
+    fn watch_rate(&mut self, warned: &mut bool) {
+        if *warned {
+            return;
+        }
+        if let Some(rate) = self.report.rate()
+            && rate < self.report.expected() * RATE_FLOOR
+        {
+            *warned = true;
+            log::warn!(
+                "the SLogic stream runs at {:.1} of {:.1} MB/s; samples were lost",
+                rate / 1e6,
+                self.report.expected() / 1e6
+            );
+            let _ = send(&self.sink, &self.stop, Packet::Overflow);
+        }
+    }
+
     fn receive(&mut self) -> EndReason {
         let mut last_data = Instant::now();
         let mut received = false;
         let mut retried = false;
+        let mut slow = false;
         loop {
             if self.stop.load(Ordering::Acquire) {
                 return EndReason::Stopped;
@@ -439,6 +469,7 @@ impl Worker {
                     if let Err(reason) = self.forward(bytes) {
                         return reason;
                     }
+                    self.watch_rate(&mut slow);
                 }
                 Some(Ok(_)) => self.resubmit(),
                 Some(Err(UsbError::NoMemory)) if self.transfer_count > MIN_IN_FLIGHT => {

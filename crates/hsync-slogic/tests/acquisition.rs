@@ -507,6 +507,29 @@ fn retries_a_swallowed_first_run_and_discards_the_new_partial_head() {
 }
 
 #[test]
+fn reports_lost_samples_when_the_stream_runs_slower_than_the_analyzer_samples() {
+    let (transport, mut device) = open();
+    configure(&mut device, 0xffff, 1 << 20);
+    let (sink, receiver) = unbounded();
+    let acquisition = device.start(CapturePlan::default(), sink).expect("RUN");
+    // 16 channels at 5 MHz should arrive at 10 MB/s; these trickle in far slower.
+    transport
+        .device()
+        .samples
+        .push_back(Ok(sample_bytes16(16, &[0; 64])));
+    for _ in 0..4 {
+        std::thread::sleep(Duration::from_millis(100));
+        transport.device().samples.push_back(Ok(vec![0; 128]));
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    acquisition.stop();
+    acquisition.wait();
+    let packets = collect(&receiver);
+    assert!(packets.contains(&Packet::Overflow));
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Stopped)));
+}
+
+#[test]
 fn fails_a_silent_capture_after_one_bounded_retry() {
     let (transport, mut device) = open();
     configure(&mut device, 0xffff, 64);
