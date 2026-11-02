@@ -93,15 +93,15 @@ fn assert_samples(packets: &[Packet], channels: &[u16], samples: &[u32]) {
     }
 }
 
+/// The endpoint is drained last. A capture that took only the transfers it needed leaves
+/// none to cancel; any it cancels, it cancels before the drain.
 fn assert_teardown(transport: &MockTransport<ComboDevice>) {
     let state = transport.device();
-    assert!(state.events.contains(&"cancel"));
     let drain = state
         .events
         .iter()
         .position(|&event| event == "drain")
         .expect("drain");
-    assert!(state.events[..drain].contains(&"cancel"));
     assert!(state.events[drain..].iter().all(|&event| event == "drain"));
 }
 
@@ -180,12 +180,13 @@ fn captures_every_wire_width_in_order_without_dropping_a_head() {
             .iter()
             .position(|c| matches!(c, UsbCall::ControlOut { .. }))
             .expect("START");
+        // Queued before START: the one transfer that 128 samples need, not the whole ring.
         assert_eq!(
             calls[..start]
                 .iter()
                 .filter(|c| matches!(c, UsbCall::BulkInSubmit { endpoint: 0x81, .. }))
                 .count(),
-            16
+            1
         );
     }
 }
@@ -251,6 +252,8 @@ fn loop_ignores_finite_depth_and_stop_cancels_before_draining() {
         &(0..256).map(|n| n % 4).collect::<Vec<_>>(),
     );
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Stopped)));
+    // A looping capture keeps transfers in flight until it stops, then cancels them.
+    assert!(transport.device().events.contains(&"cancel"));
     assert_teardown(&transport);
     device
         .set_channel_enabled(0, false)

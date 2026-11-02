@@ -225,6 +225,12 @@ impl Stream {
         self.remaining == Some(0)
     }
 
+    /// The samples still to send, if the capture keeps a known number from where it stands:
+    /// finite and no longer waiting for a trigger.
+    pub(crate) fn known_remaining(&self) -> Option<u64> {
+        self.remaining.filter(|_| self.trigger.is_none())
+    }
+
     /// Adds a transfer's bytes and returns the packets they complete.
     pub(crate) fn push(&mut self, bytes: &[u8]) -> Vec<Packet> {
         let mut packets = Vec::new();
