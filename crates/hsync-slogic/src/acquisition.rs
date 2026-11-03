@@ -56,7 +56,6 @@ pub(crate) fn start(
     );
     let bulk = link.usb().bulk_in(link.endpoint())?;
     let stop = Arc::new(AtomicBool::new(false));
-    let done = Arc::new(AtomicBool::new(false));
     let (raw, backlog) =
         crossbeam_channel::bounded((BACKLOG_BYTES / transfers.size).max(MIN_IN_FLIGHT * 2));
     let stream = Stream::new(settings, &plan, settings.channels(), model.head_bytes);
@@ -76,14 +75,12 @@ pub(crate) fn start(
         forwarded: 0,
         report: Report::new(model.name, settings),
         stop: Arc::clone(&stop),
-        done: Arc::clone(&done),
         running,
         sink: sink.clone(),
     };
     let converter = Converter {
         stream,
         stop: Arc::clone(&stop),
-        done,
         sink,
         busy: Duration::ZERO,
         cpu: Duration::ZERO,
@@ -127,7 +124,7 @@ pub(crate) fn start(
             });
             let (received, converted) = match converter {
                 Ok(converter) => {
-                    let received = worker.receive();
+                    let received = worker.receive(&converter);
                     let received = worker.finish(received);
                     // The converter ends once the queue is drained, or at once when stopped.
                     worker.raw.take();
@@ -316,8 +313,6 @@ fn thread_cpu() -> Option<Duration> {
 struct Converter {
     stream: Stream,
     stop: Arc<AtomicBool>,
-    /// Raised once every requested sample has been sent, so that the USB thread stops.
-    done: Arc<AtomicBool>,
     sink: Sender<Packet>,
     busy: Duration,
     cpu: Duration,
@@ -356,7 +351,6 @@ impl Converter {
             }
             self.busy += started.elapsed();
             if self.stream.done() {
-                self.done.store(true, Ordering::Release);
                 return EndReason::Completed;
             }
         }
@@ -376,7 +370,6 @@ struct Worker {
     forwarded: u64,
     report: Report,
     stop: Arc<AtomicBool>,
-    done: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     sink: Sender<Packet>,
 }
@@ -443,7 +436,7 @@ impl Worker {
         }
     }
 
-    fn receive(&mut self) -> EndReason {
+    fn receive(&mut self, converter: &JoinHandle<(EndReason, Duration, Duration)>) -> EndReason {
         let mut last_data = Instant::now();
         let mut received = false;
         let mut retried = false;
@@ -452,12 +445,14 @@ impl Worker {
             if self.stop.load(Ordering::Acquire) {
                 return EndReason::Stopped;
             }
-            if self.done.load(Ordering::Acquire) {
-                return EndReason::Completed;
+            // Once all input is queued, stop USB and let the converter drain it. Also
+            // observe every converter exit, including send failures and panics; waiting
+            // for another USB completion cannot reveal those once the ring is empty.
+            // The joined converter supplies the final result through outcome().
+            if self.has_enough() || converter.is_finished() {
+                return EndReason::Stopped;
             }
             match self.bulk().next(POLL) {
-                // Beyond what the capture needs: the converter is about to finish.
-                Some(Ok(_)) if self.has_enough() => {}
                 Some(Ok(bytes)) if !bytes.is_empty() => {
                     last_data = Instant::now();
                     received = true;
@@ -481,7 +476,7 @@ impl Worker {
             }
             // A software trigger can wait indefinitely as long as samples keep
             // arriving. A silent stream is a transport failure, never a trigger wait.
-            if last_data.elapsed() >= STALL && !self.has_enough() {
+            if last_data.elapsed() >= STALL {
                 if !received && !retried {
                     // Current firmware can swallow the first RUN. Like the
                     // reference, re-arm once, only before any data arrived.
@@ -589,7 +584,6 @@ impl Drop for Worker {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn a_failed_link_outranks_the_conversion_which_outranks_a_stop() {
         let failure = || EndReason::Failed(UiError::new("error.device.overflow"));
