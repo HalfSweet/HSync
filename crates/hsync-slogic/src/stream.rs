@@ -573,6 +573,91 @@ mod tests {
     }
 
     #[test]
+    fn every_trigger_offset_preserves_samples_across_transfer_boundaries() {
+        for wire in [2, 4, 8, 16, 32] {
+            let all = u32::MAX >> (32 - wire);
+            let mut settings = settings(wire, all, 128);
+            // Exercise the same shifts with interleaved analog codes and sparse logic.
+            if wire == 32 {
+                settings.analog = 0b101;
+            }
+            let channel = settings.logic().trailing_zeros() as ChannelIndex;
+            let bit = 1 << channel;
+            let plan = CapturePlan {
+                triggers: vec![(channel, TriggerCondition::Rise)],
+                trigger_position: 25,
+                ..Default::default()
+            };
+            for offset in 0..64 {
+                let samples: Vec<_> = (0u32..384)
+                    .map(|tick| {
+                        let value = tick.wrapping_mul(0x9e37_79b9) & all & !bit;
+                        value | if tick >= 96 + offset { bit } else { 0 }
+                    })
+                    .collect();
+                let bytes = reference::encode(wire, &samples);
+                let expected = reference::run(&settings, &plan, 0, &bytes);
+                for cuts in [&[1][..], &[3, 65, 17][..], &[bytes.len()][..]] {
+                    assert_eq!(
+                        capture(&settings, &plan, 0, &bytes, cuts),
+                        expected,
+                        "wire {wire}, offset {offset}, cuts {cuts:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn shifted_logic_and_analog_stay_bounded_at_the_sample_limit() {
+        let limit = (MAX_PACKET / 4 + BLOCK) as u64;
+        let mut settings = settings(32, u32::MAX, limit);
+        settings.analog = 0b11;
+        let plan = CapturePlan {
+            triggers: vec![(16, TriggerCondition::Rise)],
+            ..Default::default()
+        };
+        for offset in [1, 17, 63] {
+            let samples: Vec<_> = (0..limit + 128)
+                .map(|tick| {
+                    (tick as u32).wrapping_mul(0x9e37_79b9) & !(1 << 16)
+                        | u32::from(tick >= offset) << 16
+                })
+                .collect();
+            let bytes = reference::encode(32, &samples);
+            let mut stream = Stream::new(&settings, &plan, 32, 0);
+            let mut actual = Expected {
+                logic: Vec::new(),
+                codes: Vec::new(),
+                trigger: None,
+                done: false,
+            };
+            // One transfer crosses the 1 MiB analog packet boundary; its final byte is
+            // deliberately unaligned so the next transfer completes the last input block.
+            for part in bytes.chunks(bytes.len() - 3) {
+                for packet in stream.push(part) {
+                    match packet {
+                        Packet::Logic(data) => {
+                            assert!(data.len() <= MAX_PACKET);
+                            actual.logic.extend(data);
+                        }
+                        Packet::Analog(codes) => {
+                            assert!(codes.len() * size_of::<u16>() <= MAX_PACKET);
+                            actual.codes.extend(codes);
+                        }
+                        Packet::Trigger { sample } => actual.trigger = Some(sample),
+                        other => panic!("unexpected {other:?}"),
+                    }
+                }
+            }
+            actual.done = stream.done();
+            assert_eq!(actual, reference::run(&settings, &plan, 0, &bytes));
+            assert!(stream.done());
+            assert!(stream.push(&bytes).is_empty());
+        }
+    }
+
+    #[test]
     fn first_sample_cannot_make_an_edge_and_conditions_are_conjunctive() {
         let ones = reference::encode(8, &[1; 128]);
         for condition in [
