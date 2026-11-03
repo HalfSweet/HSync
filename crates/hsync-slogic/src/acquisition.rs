@@ -584,6 +584,62 @@ impl Drop for Worker {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{SLOGIC32U3, UsbSpeed};
+
+    #[test]
+    fn recent_rate_detects_a_slow_interval_after_a_long_healthy_stream() {
+        let mut settings = Settings::defaults(&SLOGIC32U3, UsbSpeed::SuperPlus);
+        settings.samplerate = 200_000_000;
+        let mut report = Report::new(SLOGIC32U3.name, &settings);
+        let start = report.run;
+        // A minute at 800 MB/s must not hide a later 300 ms interval at 400 MB/s.
+        for tick in 0..=2400 {
+            report.data(20_000_000, start + Duration::from_millis(tick * 25));
+        }
+        assert_eq!(report.rate(), Some(800_000_000.0));
+        for tick in 2401..=2412 {
+            report.data(10_000_000, start + Duration::from_millis(tick * 25));
+        }
+        assert_eq!(report.rate(), Some(400_000_000.0));
+        assert!(report.rate().expect("a full window") < report.expected() * RATE_FLOOR);
+    }
+
+    #[test]
+    fn rate_excludes_the_first_transfer_and_waits_for_a_full_window() {
+        let settings = Settings::defaults(&SLOGIC32U3, UsbSpeed::SuperPlus);
+        let mut report = Report::new(SLOGIC32U3.name, &settings);
+        let start = report.run + Duration::from_secs(2);
+        report.data(1 << 20, start);
+        report.data(124_000, start + Duration::from_millis(124));
+        assert_eq!(report.rate(), None);
+        report.data(126_000, start + RATE_WINDOW);
+        assert_eq!(report.rate(), Some(1_000_000.0));
+        assert_eq!(report.bytes, (1 << 20) + 250_000);
+    }
+
+    #[test]
+    fn rate_history_stays_bounded_with_frequent_transfers_and_a_stall() {
+        let mut window = RateWindow::default();
+        let start = Instant::now();
+        for tick in 0..=10_000 {
+            window.record(start + Duration::from_millis(tick), tick * 1000);
+            assert!(window.checkpoints.len() <= 12);
+        }
+        let resumed = start + Duration::from_secs(12);
+        window.record(resumed, 10_001_000);
+        assert!(window.rate(resumed, 10_001_000).expect("a full window") < 900_000.0);
+        for tick in 1..=300 {
+            window.record(
+                resumed + Duration::from_millis(tick),
+                10_001_000 + tick * 1000,
+            );
+        }
+        assert_eq!(
+            window.rate(resumed + Duration::from_millis(300), 10_301_000),
+            Some(1_000_000.0)
+        );
+    }
+
     #[test]
     fn a_failed_link_outranks_the_conversion_which_outranks_a_stop() {
         let failure = || EndReason::Failed(UiError::new("error.device.overflow"));
