@@ -332,6 +332,9 @@ impl Stream {
 
     /// Sends a block of the stream from the first sent sample on, shifted to start there.
     fn emit(&mut self, logic: &[u8], codes: &[u16], packets: &mut Vec<Packet>) {
+        if self.done() {
+            return;
+        }
         if self.shift == 0 {
             self.send(logic, codes, 1, packets);
             return;
@@ -341,22 +344,31 @@ impl Stream {
             return;
         };
         let (shift, groups) = (self.shift, self.block_codes / BLOCK);
-        let shifted: Vec<u8> = held_logic
-            .as_chunks::<8>()
+        if self.output.len() + self.block_bytes > MAX_PACKET
+            || (self.codes.len() + self.block_codes) * size_of::<u16>() > MAX_PACKET
+        {
+            self.flush(packets);
+        }
+        // Append shifted words directly to the packet and retain the next block in
+        // the same buffers, without temporary vectors for each group of 64 samples.
+        for (held, &next) in held_logic
+            .as_chunks_mut::<8>()
             .0
-            .iter()
+            .iter_mut()
             .zip(logic.as_chunks::<8>().0)
-            .flat_map(|(&held, &next)| {
-                (u64::from_le_bytes(held) >> shift | u64::from_le_bytes(next) << (BLOCK - shift))
-                    .to_le_bytes()
-            })
-            .collect();
-        let mut shifted_codes = held_codes[shift * groups..].to_vec();
-        shifted_codes.extend_from_slice(&codes[..shift * groups]);
-        self.send(&shifted, &shifted_codes, 1, packets);
-        held_logic.copy_from_slice(logic);
+        {
+            let word =
+                u64::from_le_bytes(*held) >> shift | u64::from_le_bytes(next) << (BLOCK - shift);
+            self.output.extend_from_slice(&word.to_le_bytes());
+            *held = next;
+        }
+        self.codes.extend_from_slice(&held_codes[shift * groups..]);
+        self.codes.extend_from_slice(&codes[..shift * groups]);
         held_codes.copy_from_slice(codes);
         self.held = Some((held_logic, held_codes));
+        if let Some(remaining) = &mut self.remaining {
+            *remaining -= BLOCK as u64;
+        }
     }
 
     /// Sends `blocks` whole blocks, as far as the limit allows, in packets of at most
@@ -569,6 +581,91 @@ mod tests {
             assert_eq!(got.logic, want, "cut {cut}");
             assert_eq!(got.logic[..8], (!0u64 << 32).to_le_bytes());
             assert!(got.done);
+        }
+    }
+
+    #[test]
+    fn every_trigger_offset_preserves_samples_across_transfer_boundaries() {
+        for wire in [2, 4, 8, 16, 32] {
+            let all = u32::MAX >> (32 - wire);
+            let mut settings = settings(wire, all, 128);
+            // Exercise the same shifts with interleaved analog codes and sparse logic.
+            if wire == 32 {
+                settings.analog = 0b101;
+            }
+            let channel = settings.logic().trailing_zeros() as ChannelIndex;
+            let bit = 1 << channel;
+            let plan = CapturePlan {
+                triggers: vec![(channel, TriggerCondition::Rise)],
+                trigger_position: 25,
+                ..Default::default()
+            };
+            for offset in 0..64 {
+                let samples: Vec<_> = (0u32..384)
+                    .map(|tick| {
+                        let value = tick.wrapping_mul(0x9e37_79b9) & all & !bit;
+                        value | if tick >= 96 + offset { bit } else { 0 }
+                    })
+                    .collect();
+                let bytes = reference::encode(wire, &samples);
+                let expected = reference::run(&settings, &plan, 0, &bytes);
+                for cuts in [&[1][..], &[3, 65, 17][..], &[bytes.len()][..]] {
+                    assert_eq!(
+                        capture(&settings, &plan, 0, &bytes, cuts),
+                        expected,
+                        "wire {wire}, offset {offset}, cuts {cuts:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn shifted_logic_and_analog_stay_bounded_at_the_sample_limit() {
+        let limit = (MAX_PACKET / 4 + BLOCK) as u64;
+        let mut settings = settings(32, u32::MAX, limit);
+        settings.analog = 0b11;
+        let plan = CapturePlan {
+            triggers: vec![(16, TriggerCondition::Rise)],
+            ..Default::default()
+        };
+        for offset in [1, 17, 63] {
+            let samples: Vec<_> = (0..limit + 128)
+                .map(|tick| {
+                    (tick as u32).wrapping_mul(0x9e37_79b9) & !(1 << 16)
+                        | u32::from(tick >= offset) << 16
+                })
+                .collect();
+            let bytes = reference::encode(32, &samples);
+            let mut stream = Stream::new(&settings, &plan, 32, 0);
+            let mut actual = Expected {
+                logic: Vec::new(),
+                codes: Vec::new(),
+                trigger: None,
+                done: false,
+            };
+            // One transfer crosses the 1 MiB analog packet boundary; its final byte is
+            // deliberately unaligned so the next transfer completes the last input block.
+            for part in bytes.chunks(bytes.len() - 3) {
+                for packet in stream.push(part) {
+                    match packet {
+                        Packet::Logic(data) => {
+                            assert!(data.len() <= MAX_PACKET);
+                            actual.logic.extend(data);
+                        }
+                        Packet::Analog(codes) => {
+                            assert!(codes.len() * size_of::<u16>() <= MAX_PACKET);
+                            actual.codes.extend(codes);
+                        }
+                        Packet::Trigger { sample } => actual.trigger = Some(sample),
+                        other => panic!("unexpected {other:?}"),
+                    }
+                }
+            }
+            actual.done = stream.done();
+            assert_eq!(actual, reference::run(&settings, &plan, 0, &bytes));
+            assert!(stream.done());
+            assert!(stream.push(&bytes).is_empty());
         }
     }
 

@@ -7,6 +7,7 @@
 //! and hands their bytes through a bounded queue to another, which unpacks, triggers and
 //! packs them. Reads use nusb's ordered transfer queue; all waits and teardown are bounded.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -28,8 +29,10 @@ const CANCEL_GRACE: Duration = Duration::from_secs(2);
 /// Transfers' bytes the converter may fall behind by before the capture fails, rather than
 /// the analyzer's FIFO overflowing unnoticed (`max_queue_bytes`).
 const BACKLOG_BYTES: usize = 256 * 1024 * 1024;
-/// How long the stream must have run before its rate tells data loss.
+/// How much recent streaming time a rate measurement covers at minimum.
 const RATE_WINDOW: Duration = Duration::from_millis(250);
+/// Keep rate checkpoints at most this often, independently of the USB transfer count.
+const RATE_CHECKPOINT: Duration = Duration::from_millis(25);
 /// The share of the expected rate below which the analyzer cannot have kept all its samples.
 const RATE_FLOOR: f64 = 0.9;
 
@@ -56,7 +59,6 @@ pub(crate) fn start(
     );
     let bulk = link.usb().bulk_in(link.endpoint())?;
     let stop = Arc::new(AtomicBool::new(false));
-    let done = Arc::new(AtomicBool::new(false));
     let (raw, backlog) =
         crossbeam_channel::bounded((BACKLOG_BYTES / transfers.size).max(MIN_IN_FLIGHT * 2));
     let stream = Stream::new(settings, &plan, settings.channels(), model.head_bytes);
@@ -76,14 +78,12 @@ pub(crate) fn start(
         forwarded: 0,
         report: Report::new(model.name, settings),
         stop: Arc::clone(&stop),
-        done: Arc::clone(&done),
         running,
         sink: sink.clone(),
     };
     let converter = Converter {
         stream,
         stop: Arc::clone(&stop),
-        done,
         sink,
         busy: Duration::ZERO,
         cpu: Duration::ZERO,
@@ -127,7 +127,7 @@ pub(crate) fn start(
             });
             let (received, converted) = match converter {
                 Ok(converter) => {
-                    let received = worker.receive();
+                    let received = worker.receive(&converter);
                     let received = worker.finish(received);
                     // The converter ends once the queue is drained, or at once when stopped.
                     worker.raw.take();
@@ -146,6 +146,7 @@ pub(crate) fn start(
             };
             let reason = outcome(received, converted);
             worker.report.log(&reason);
+            worker.running.store(false, Ordering::Release);
             let _ = worker.sink.send_timeout(Packet::End(reason), CANCEL_GRACE);
         })
         .map_err(|_| DriverError::Localized(UiError::new("error.device.slogic.workerStart")))?;
@@ -213,6 +214,39 @@ fn send(sink: &Sender<Packet>, stop: &AtomicBool, mut packet: Packet) -> Result<
     }
 }
 
+/// Recent cumulative byte counts, sampled at most every 25 ms. Retain the newest
+/// checkpoint at least 250 ms old and those after it: at most twelve checkpoints,
+/// even with tiny transfers. A normal stream is measured over 250–275 ms.
+#[derive(Default)]
+struct RateWindow {
+    checkpoints: VecDeque<(Instant, u64)>,
+}
+
+impl RateWindow {
+    fn record(&mut self, now: Instant, bytes: u64) {
+        while self
+            .checkpoints
+            .get(1)
+            .is_some_and(|&(at, _)| now.duration_since(at) >= RATE_WINDOW)
+        {
+            self.checkpoints.pop_front();
+        }
+        if self
+            .checkpoints
+            .back()
+            .is_none_or(|&(at, _)| now.duration_since(at) >= RATE_CHECKPOINT)
+        {
+            self.checkpoints.push_back((now, bytes));
+        }
+    }
+
+    fn rate(&self, now: Instant, bytes: u64) -> Option<f64> {
+        let &(at, before) = self.checkpoints.front()?;
+        let span = now.duration_since(at);
+        (span >= RATE_WINDOW).then(|| (bytes - before) as f64 / span.as_secs_f64())
+    }
+}
+
 /// What a capture moved, logged once it ends, after the `slogic-report` line of Sipeed's
 /// applications: whether the USB stream kept pace, and how far the conversion fell behind.
 struct Report {
@@ -224,6 +258,8 @@ struct Report {
     first: Option<Instant>,
     last: Instant,
     bytes: u64,
+    /// Recent throughput for loss detection; totals above still describe the whole capture.
+    recent: RateWindow,
     transfers: u64,
     refused: u64,
     /// The most transfers waiting for the converter at once.
@@ -247,6 +283,7 @@ impl Report {
             first: None,
             last: now,
             bytes: 0,
+            recent: RateWindow::default(),
             transfers: 0,
             refused: 0,
             backlog_peak: 0,
@@ -256,18 +293,17 @@ impl Report {
         }
     }
 
-    fn data(&mut self, bytes: usize) {
-        let now = Instant::now();
+    fn data(&mut self, bytes: usize, now: Instant) {
         self.first.get_or_insert(now);
         self.last = now;
         self.bytes += bytes as u64;
         self.transfers += 1;
+        self.recent.record(now, self.bytes);
     }
 
-    /// The rate since the first transfer, in bytes per second, once it has run long enough.
+    /// Recent bytes per second, excluding the first transfer's unknown sampling interval.
     fn rate(&self) -> Option<f64> {
-        let span = self.last - self.first?;
-        (span >= RATE_WINDOW).then(|| self.bytes as f64 / span.as_secs_f64())
+        self.recent.rate(self.last, self.bytes)
     }
 
     /// Bytes per second the analyzer sends.
@@ -316,8 +352,6 @@ fn thread_cpu() -> Option<Duration> {
 struct Converter {
     stream: Stream,
     stop: Arc<AtomicBool>,
-    /// Raised once every requested sample has been sent, so that the USB thread stops.
-    done: Arc<AtomicBool>,
     sink: Sender<Packet>,
     busy: Duration,
     cpu: Duration,
@@ -356,7 +390,6 @@ impl Converter {
             }
             self.busy += started.elapsed();
             if self.stream.done() {
-                self.done.store(true, Ordering::Release);
                 return EndReason::Completed;
             }
         }
@@ -376,7 +409,6 @@ struct Worker {
     forwarded: u64,
     report: Report,
     stop: Arc<AtomicBool>,
-    done: Arc<AtomicBool>,
     running: Arc<AtomicBool>,
     sink: Sender<Packet>,
 }
@@ -443,7 +475,7 @@ impl Worker {
         }
     }
 
-    fn receive(&mut self) -> EndReason {
+    fn receive(&mut self, converter: &JoinHandle<(EndReason, Duration, Duration)>) -> EndReason {
         let mut last_data = Instant::now();
         let mut received = false;
         let mut retried = false;
@@ -452,16 +484,18 @@ impl Worker {
             if self.stop.load(Ordering::Acquire) {
                 return EndReason::Stopped;
             }
-            if self.done.load(Ordering::Acquire) {
-                return EndReason::Completed;
+            // Once all input is queued, stop USB and let the converter drain it. Also
+            // observe every converter exit, including send failures and panics; waiting
+            // for another USB completion cannot reveal those once the ring is empty.
+            // The joined converter supplies the final result through outcome().
+            if self.has_enough() || converter.is_finished() {
+                return EndReason::Stopped;
             }
             match self.bulk().next(POLL) {
-                // Beyond what the capture needs: the converter is about to finish.
-                Some(Ok(_)) if self.has_enough() => {}
                 Some(Ok(bytes)) if !bytes.is_empty() => {
                     last_data = Instant::now();
                     received = true;
-                    self.report.data(bytes.len());
+                    self.report.data(bytes.len(), last_data);
                     self.forwarded += bytes.len() as u64;
                     // Requeue before anything else so USB can keep filling the ring.
                     let started = Instant::now();
@@ -481,7 +515,7 @@ impl Worker {
             }
             // A software trigger can wait indefinitely as long as samples keep
             // arriving. A silent stream is a transport failure, never a trigger wait.
-            if last_data.elapsed() >= STALL && !self.has_enough() {
+            if last_data.elapsed() >= STALL {
                 if !received && !retried {
                     // Current firmware can swallow the first RUN. Like the
                     // reference, re-arm once, only before any data arrived.
@@ -545,7 +579,6 @@ impl Worker {
 
     fn finish(&mut self, mut reason: EndReason) -> EndReason {
         let Some(mut bulk) = self.bulk.take() else {
-            self.running.store(false, Ordering::Release);
             return reason;
         };
         if !matches!(reason, EndReason::Detached)
@@ -575,7 +608,6 @@ impl Worker {
         {
             reason = failed(error);
         }
-        self.running.store(false, Ordering::Release);
         reason
     }
 }
@@ -583,12 +615,69 @@ impl Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         let _ = self.finish(EndReason::Stopped);
+        // Also covers startup failures before the receive/converter join path runs.
+        self.running.store(false, Ordering::Release);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{SLOGIC32U3, UsbSpeed};
+
+    #[test]
+    fn recent_rate_detects_a_slow_interval_after_a_long_healthy_stream() {
+        let mut settings = Settings::defaults(&SLOGIC32U3, UsbSpeed::SuperPlus);
+        settings.samplerate = 200_000_000;
+        let mut report = Report::new(SLOGIC32U3.name, &settings);
+        let start = report.run;
+        // A minute at 800 MB/s must not hide a later 300 ms interval at 400 MB/s.
+        for tick in 0..=2400 {
+            report.data(20_000_000, start + Duration::from_millis(tick * 25));
+        }
+        assert_eq!(report.rate(), Some(800_000_000.0));
+        for tick in 2401..=2412 {
+            report.data(10_000_000, start + Duration::from_millis(tick * 25));
+        }
+        assert_eq!(report.rate(), Some(400_000_000.0));
+        assert!(report.rate().expect("a full window") < report.expected() * RATE_FLOOR);
+    }
+
+    #[test]
+    fn rate_excludes_the_first_transfer_and_waits_for_a_full_window() {
+        let settings = Settings::defaults(&SLOGIC32U3, UsbSpeed::SuperPlus);
+        let mut report = Report::new(SLOGIC32U3.name, &settings);
+        let start = report.run + Duration::from_secs(2);
+        report.data(1 << 20, start);
+        report.data(124_000, start + Duration::from_millis(124));
+        assert_eq!(report.rate(), None);
+        report.data(126_000, start + RATE_WINDOW);
+        assert_eq!(report.rate(), Some(1_000_000.0));
+        assert_eq!(report.bytes, (1 << 20) + 250_000);
+    }
+
+    #[test]
+    fn rate_history_stays_bounded_with_frequent_transfers_and_a_stall() {
+        let mut window = RateWindow::default();
+        let start = Instant::now();
+        for tick in 0..=10_000 {
+            window.record(start + Duration::from_millis(tick), tick * 1000);
+            assert!(window.checkpoints.len() <= 12);
+        }
+        let resumed = start + Duration::from_secs(12);
+        window.record(resumed, 10_001_000);
+        assert!(window.rate(resumed, 10_001_000).expect("a full window") < 900_000.0);
+        for tick in 1..=300 {
+            window.record(
+                resumed + Duration::from_millis(tick),
+                10_001_000 + tick * 1000,
+            );
+        }
+        assert_eq!(
+            window.rate(resumed + Duration::from_millis(300), 10_301_000),
+            Some(1_000_000.0)
+        );
+    }
 
     #[test]
     fn a_failed_link_outranks_the_conversion_which_outranks_a_stop() {

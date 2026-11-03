@@ -19,7 +19,9 @@ Captures stream into HSync; Single, Repeat, Loop and Instant use the existing ap
 
 Each USB request holds about 5 ms of samples, from 32 KiB up to 1 MiB, and up to 16 are in flight. The reference allows 2 MiB outside Windows; nusb always reads with WinUSB RAW_IO, which accepts at most 1 MiB, so every system keeps to that. On Linux the transfers of every program share usbcore's `usbfs_memory_mb` pool (16 MiB by default), and the ring keeps to three quarters of it: twelve 1 MiB requests by default, with smaller requests when the pool is too small for four. If the system still refuses a request, the capture goes on with those in flight while at least four remain, as the reference does, and otherwise fails with a hint to raise `/sys/module/usbcore/parameters/usbfs_memory_mb`. A finite untriggered capture queues no request once those in flight carry every byte it needs.
 
-As in the capture engine of Sipeed's SLogic 2.3.3 ([`slogic/slogic_usb.c`](https://github.com/sipeed/SLogic/tree/af106af699ce41602fdda24e16a69f9d62e1387c/slogic)), one thread only takes completed requests, queues them again and hands their bytes to a second thread, which assembles them into blocks, applies the trigger and sends them to HSync. Between them a queue holds up to 256 MiB; a converter that falls further behind ends the capture with a USB bandwidth error rather than losing samples unnoticed. A stream that runs below 90% of the rate the analyzer sends for 250 ms has lost samples in the analyzer's FIFO, which the data cannot show, and is reported as data lost. The converter turns each block of 64 samples straight from the wire bytes into HSync's cross format, one word per kept channel: 8, 16 and 32 channels with two 8×8 transposes per byte plane, 2 and 4 channels with masks. It applies the trigger, its history and the limit to those blocks: a condition is a word operation over 64 samples, the history a ring of whole blocks, and a trigger whose history starts inside a block shifts the blocks sent. On one core of an i5-12400, on random data, it converts 2 to 32 wire channels at 1.55 to 1.65 GB/s, at 1.25 to 1.45 GB/s while waiting for a trigger and at about 1.05 GB/s with two analog groups; the fastest wire modes send 800 MB/s. `cargo run --release -p hsync-slogic --example stream_bench` measures it.
+As in the capture engine of Sipeed's SLogic 2.3.3 ([`slogic/slogic_usb.c`](https://github.com/sipeed/SLogic/tree/af106af699ce41602fdda24e16a69f9d62e1387c/slogic)), one thread only takes completed requests, queues them again and hands their bytes to a second thread, which assembles them into blocks, applies the trigger and sends them to HSync. Between them a queue holds up to 256 MiB; a converter that falls further behind ends the capture with a USB bandwidth error rather than losing samples unnoticed. Loss detection compares the recent stream rate with 90% of the rate the analyzer sends. It samples cumulative byte counts at most every 25 ms and measures at least the latest 250 ms (normally 250–275 ms), retaining at most twelve checkpoints. A healthy prefix therefore cannot hide a later slowdown. The first transfer anchors the window without contributing bytes from its unknown sampling interval; captures shorter than a full window are not checked by this heuristic. The converter turns each block of 64 samples straight from the wire bytes into HSync's cross format, one word per kept channel: 8, 16 and 32 channels with two 8×8 transposes per byte plane, 2 and 4 channels with masks. It applies the trigger, its history and the limit to those blocks: a condition is a word operation over 64 samples, the history a ring of whole blocks, and a trigger whose history starts inside a block shifts the blocks sent directly into the output packets, reusing the held block instead of allocating temporary vectors per block. On one core of an i5-12400, on random data, it converts 2 to 32 wire channels at 1.55 to 1.65 GB/s, at 1.25 to 1.45 GB/s while waiting for a trigger and at about 1.05 GB/s with two analog groups; the fastest wire modes send 800 MB/s. `cargo run --release -p hsync-slogic --example stream_bench` measures immediate captures, captures waiting for a trigger, and captures after a trigger at sample 1 for every wire width and mixed analog inputs.
+
+Once all bytes of a finite untriggered capture are queued, USB stops while the converter drains the queue. The device stays busy until conversion finishes. Converter failures, receiver disconnection and thread panics also terminate the acquisition; they do not depend on another USB completion to be noticed.
 
 Each capture ends with one `slogic-report` line in the log, at info level, in the spirit of Sipeed's: bytes and transfers received, requests refused, `cold_ms` to the first data, the stream's `span_ms` and `mbps` beside `exp_mbps`, the converter's `backlog_peak` in requests, `submit_ms` spent queueing requests, `busy_ms` spent converting, and `convert_cpu_ms`, the converter's CPU time on Linux; below `busy_ms`, it waited for a CPU.
 
@@ -163,3 +165,24 @@ trigger fired, and a trigger that never held timed out. Its Emulation pattern, w
 does not list, is a plain counter as well: each channel toggles on the previous one's falling
 edge, D0–D1 carry counter bits 1 and 2 and D0–D7 bits 0 to 7. Every sample of a second of
 each wire mode matched, and so did captures triggered on a rise of D1 (checked from counter 4) and of D3 (from counter 8).
+
+### Conversion after an unaligned trigger
+
+A CPU-only comparison on an Apple M4 Pro, with the same `stream_bench` cases and
+512 MiB of random wire data per case in release mode. The baseline is the merged
+#78 implementation (`2593a6c`); each shifted case fires at sample 1 before timing
+starts. These measurements exclude USB and capture storage and are not a hardware
+continuity test.
+
+| Shifted capture |       #78 | Reused buffers |
+| --------------- | --------: | -------------: |
+| 2 channels      |  541 MB/s |      1424 MB/s |
+| 4 channels      |  824 MB/s |      1655 MB/s |
+| 8 channels      | 1310 MB/s |      1902 MB/s |
+| 16 channels     | 1725 MB/s |      2022 MB/s |
+| 32 channels     | 1972 MB/s |      2102 MB/s |
+| A0 A1 + D16–D31 | 1121 MB/s |      1476 MB/s |
+
+The untriggered 4-channel case remained about 2.49 GB/s. Timings vary by host;
+the benchmark includes both paths so shifted captures stay visible in future
+performance work.

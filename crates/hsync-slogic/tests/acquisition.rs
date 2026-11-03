@@ -4,7 +4,7 @@
 mod common;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use common::{AuxDevice, Event, sample_bytes};
 use crossbeam_channel::{Receiver, bounded, unbounded};
@@ -622,4 +622,68 @@ fn user_stop_interrupts_a_worker_with_a_bounded_receiver() {
     device
         .set_channel_enabled(0, false)
         .expect("idle after user stop");
+}
+
+#[test]
+fn finite_capture_reports_a_converter_timeout_after_receiving_every_byte() {
+    let (transport, mut device) = open();
+    configure(&mut device, 0xffff, 128);
+    let (sink, receiver) = bounded(0);
+    let acquisition = device.start(CapturePlan::default(), sink).expect("start");
+    assert!(matches!(
+        receiver.recv_timeout(WAIT),
+        Ok(Packet::Start { .. })
+    ));
+    transport
+        .device()
+        .samples
+        .push_back(Ok(sample_bytes16(16, &[0xabcd; 128])));
+    // Let the converter's 100 ms send deadline expire without consuming Logic.
+    std::thread::sleep(Duration::from_millis(500));
+    let end = receiver.recv_timeout(WAIT);
+    // Clean up even if the regression leaves the USB worker waiting indefinitely.
+    acquisition.stop();
+    if !matches!(end, Ok(Packet::End(_))) {
+        let _ = receiver.recv_timeout(WAIT);
+    }
+    acquisition.wait();
+    assert_eq!(
+        end,
+        Ok(Packet::End(EndReason::Failed(UiError::new(
+            "error.device.overflow"
+        ))))
+    );
+    assert_stopped_before_cancelling(&transport.device().events);
+    device
+        .set_channel_enabled(0, false)
+        .expect("idle after converter failure");
+}
+
+#[test]
+fn losing_the_receiver_after_start_ends_a_finite_capture() {
+    let (transport, mut device) = open();
+    configure(&mut device, 0xffff, 128);
+    let (sink, receiver) = bounded(0);
+    let acquisition = device.start(CapturePlan::default(), sink).expect("start");
+    assert!(matches!(
+        receiver.recv_timeout(WAIT),
+        Ok(Packet::Start { .. })
+    ));
+    drop(receiver);
+    transport
+        .device()
+        .samples
+        .push_back(Ok(sample_bytes16(16, &[0xabcd; 128])));
+    let deadline = Instant::now() + WAIT;
+    while transport.device().running && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(1));
+    }
+    let stopped = !transport.device().running;
+    acquisition.stop();
+    acquisition.wait();
+    assert!(
+        stopped,
+        "receiver loss must stop the device without a user stop"
+    );
+    assert_stopped_before_cancelling(&transport.device().events);
 }
