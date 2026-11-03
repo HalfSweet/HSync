@@ -146,6 +146,7 @@ pub(crate) fn start(
             };
             let reason = outcome(received, converted);
             worker.report.log(&reason);
+            worker.running.store(false, Ordering::Release);
             let _ = worker.sink.send_timeout(Packet::End(reason), CANCEL_GRACE);
         })
         .map_err(|_| DriverError::Localized(UiError::new("error.device.slogic.workerStart")))?;
@@ -578,7 +579,6 @@ impl Worker {
 
     fn finish(&mut self, mut reason: EndReason) -> EndReason {
         let Some(mut bulk) = self.bulk.take() else {
-            self.running.store(false, Ordering::Release);
             return reason;
         };
         if !matches!(reason, EndReason::Detached)
@@ -608,7 +608,6 @@ impl Worker {
         {
             reason = failed(error);
         }
-        self.running.store(false, Ordering::Release);
         reason
     }
 }
@@ -616,6 +615,8 @@ impl Worker {
 impl Drop for Worker {
     fn drop(&mut self) {
         let _ = self.finish(EndReason::Stopped);
+        // Also covers startup failures before the receive/converter join path runs.
+        self.running.store(false, Ordering::Release);
     }
 }
 
