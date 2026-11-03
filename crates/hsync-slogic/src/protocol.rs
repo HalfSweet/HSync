@@ -27,6 +27,17 @@ const PAYLOAD: u16 = 0x0010;
 const CONTROL_TIMEOUT: Duration = Duration::from_millis(500);
 const AUX_POLLS: usize = 8;
 
+/// What the analyzer sends (`SLOGIC_PATTERN_*` of Sipeed's libslogic): AUX command 5 of the U3
+/// models, the last byte of the Combo 8's START.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Pattern {
+    /// The physical inputs.
+    #[default]
+    Normal = 0,
+    /// A counter of the samples, each channel one of its bits, to check the samples received.
+    Emulation = 2,
+}
+
 /// Settings carried by U3 AUX commands or the Combo 8 START command.
 #[derive(Debug, Clone, Copy)]
 pub struct CaptureSettings {
@@ -40,6 +51,8 @@ pub struct CaptureSettings {
     /// `None`. Reading the SLogic32U3's ADC module needs its 800 MHz PLL (`clock_base_mhz` of
     /// Sipeed's libslogic, see [`crate::adc`]).
     pub clock_mhz: Option<u16>,
+    /// The physical inputs or a test pattern.
+    pub pattern: Pattern,
 }
 
 /// The bounded queue of sample transfers.
@@ -307,7 +320,7 @@ impl Link {
         self.configure(settings)
     }
 
-    /// Programs channel mode, sample clock, threshold, then normal pattern mode.
+    /// Programs channel mode, sample clock, threshold, then pattern mode.
     /// The caller queues bulk transfers before calling [`Self::run`].
     pub fn configure(&self, settings: &CaptureSettings) -> Result<(), DriverError> {
         if self.protocol == Protocol::Combo8 {
@@ -336,7 +349,7 @@ impl Link {
         self.aux_word(1, u32::MAX >> (32 - settings.channels))?;
         self.samplerate(settings.samplerate, settings.clock_mhz)?;
         self.aux_word(3, threshold_dac(settings.threshold))?;
-        self.aux_word(5, 0)
+        self.aux_word(5, settings.pattern as u32)
     }
 
     /// Opens the capture gate, after sample transfers have been queued.
@@ -345,12 +358,12 @@ impl Link {
             self.configure(settings)?;
             let mhz = (settings.samplerate / 1_000_000) as u16;
             let [low, high] = mhz.to_le_bytes();
-            // Pattern 0 selects the physical inputs. Older firmware ignores byte 3.
+            // Byte 3 is the pattern; older firmware ignores it and sends its inputs.
             self.usb.control_out(
                 0xb1,
                 0,
                 0,
-                &[low, high, settings.channels, 0],
+                &[low, high, settings.channels, settings.pattern as u8],
                 CONTROL_TIMEOUT,
             )?;
             return Ok(());

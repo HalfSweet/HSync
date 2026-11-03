@@ -103,13 +103,10 @@ fn assert_capture(packets: &[Packet], enabled: u32, expected: &[u32]) {
     }
 }
 
+/// A capture that took only the transfers it needed leaves none to cancel; any it cancels,
+/// it cancels after STOP.
 fn assert_stopped_before_cancelling(events: &[Event]) {
     assert!(events.contains(&Event::Run));
-    assert!(
-        events
-            .iter()
-            .any(|event| matches!(event, Event::Cancel { .. }))
-    );
     let mut run_since_stop = false;
     for event in events {
         match event {
@@ -344,7 +341,14 @@ fn looping_runs_past_the_finite_limit_then_stops_the_gate_before_cancellation() 
     acquisition.wait();
     assert_capture(&packets, 0xf, &[0xf; 256]);
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Stopped)));
-    assert_stopped_before_cancelling(&transport.device().events);
+    let events = transport.device().events.clone();
+    // A looping capture keeps transfers in flight until it stops, then cancels them.
+    assert!(
+        events
+            .iter()
+            .any(|event| matches!(event, Event::Cancel { .. }))
+    );
+    assert_stopped_before_cancelling(&events);
 }
 
 #[test]
@@ -407,10 +411,13 @@ fn submitted(transport: &MockTransport<AuxDevice>) -> usize {
 #[test]
 fn queues_only_the_transfers_the_transport_budget_holds() {
     let (transport, mut device) = open();
-    // 16 channels at 5 MHz: 64 KiB transfers, four of which fit.
+    // 16 channels at 5 MHz: 64 KiB transfers, four of which fit, for a capture that needs
+    // more than the ring.
     transport.device().transfer_budget = Some(256 * 1024);
-    configure(&mut device, 0xffff, 128);
-    let samples: Vec<_> = (0u32..128).map(|n| n.wrapping_mul(7919) & 0xffff).collect();
+    configure(&mut device, 0xffff, 1 << 20);
+    let samples: Vec<_> = (0u32..1 << 20)
+        .map(|n| n.wrapping_mul(7919) & 0xffff)
+        .collect();
     transport
         .device()
         .samples
@@ -418,8 +425,8 @@ fn queues_only_the_transfers_the_transport_budget_holds() {
     let packets = run(&mut device, CapturePlan::default());
     assert_capture(&packets, 0xffff, &samples);
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
-    // The four queued before RUN, and the one requeued after the data.
-    assert_eq!(submitted(&transport), 5);
+    // The four queued before RUN; none after the data, which completes the capture.
+    assert_eq!(submitted(&transport), 4);
     assert!(transport.calls().iter().all(|call| match call {
         UsbCall::BulkInSubmit { length, .. } => *length == 64 * 1024,
         _ => true,
@@ -429,8 +436,11 @@ fn queues_only_the_transfers_the_transport_budget_holds() {
 #[test]
 fn carries_on_without_transfers_the_system_refused_memory_for() {
     let (transport, mut device) = open();
-    configure(&mut device, 0xffff, 128);
-    let samples: Vec<_> = (0u32..128).map(|n| n.wrapping_mul(7919) & 0xffff).collect();
+    // A capture that needs more than the whole ring.
+    configure(&mut device, 0xffff, 1 << 20);
+    let samples: Vec<_> = (0u32..1 << 20)
+        .map(|n| n.wrapping_mul(7919) & 0xffff)
+        .collect();
     let bytes = sample_bytes16(16, &samples);
     let (first, rest) = bytes.split_at(100);
     // Twelve of the sixteen requests never reached the device; four stay in flight.
@@ -444,15 +454,17 @@ fn carries_on_without_transfers_the_system_refused_memory_for() {
     let packets = run(&mut device, CapturePlan::default());
     assert_capture(&packets, 0xffff, &samples);
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Completed)));
-    // Refused requests are not queued again: sixteen, plus one for each completion with data.
-    assert_eq!(submitted(&transport), 18);
+    // Refused requests are not queued again: sixteen, plus one after the first data; none
+    // after the last, which completes the capture.
+    assert_eq!(submitted(&transport), 17);
     assert_stopped_before_cancelling(&transport.device().events);
 }
 
 #[test]
 fn fails_with_the_usbfs_hint_when_too_few_transfers_remain() {
     let (transport, mut device) = open();
-    configure(&mut device, 0xffff, 128);
+    // A capture that needs the whole ring.
+    configure(&mut device, 0xffff, 1 << 20);
     let mut device_state = transport.device();
     device_state
         .samples
@@ -492,6 +504,29 @@ fn retries_a_swallowed_first_run_and_discards_the_new_partial_head() {
     device
         .set_channel_enabled(0, false)
         .expect("idle after rearm");
+}
+
+#[test]
+fn reports_lost_samples_when_the_stream_runs_slower_than_the_analyzer_samples() {
+    let (transport, mut device) = open();
+    configure(&mut device, 0xffff, 1 << 20);
+    let (sink, receiver) = unbounded();
+    let acquisition = device.start(CapturePlan::default(), sink).expect("RUN");
+    // 16 channels at 5 MHz should arrive at 10 MB/s; these trickle in far slower.
+    transport
+        .device()
+        .samples
+        .push_back(Ok(sample_bytes16(16, &[0; 64])));
+    for _ in 0..4 {
+        std::thread::sleep(Duration::from_millis(100));
+        transport.device().samples.push_back(Ok(vec![0; 128]));
+    }
+    std::thread::sleep(Duration::from_millis(100));
+    acquisition.stop();
+    acquisition.wait();
+    let packets = collect(&receiver);
+    assert!(packets.contains(&Packet::Overflow));
+    assert_eq!(packets.last(), Some(&Packet::End(EndReason::Stopped)));
 }
 
 #[test]

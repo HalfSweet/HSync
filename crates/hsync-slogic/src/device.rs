@@ -13,7 +13,7 @@ use hsync_driver::{
 };
 
 use crate::model::{Model, Protocol, UsbSpeed};
-use crate::protocol::Link;
+use crate::protocol::{Link, Pattern};
 use crate::{acquisition, adc};
 
 /// HSync sends logic in blocks of 64 samples per enabled channel.
@@ -38,6 +38,9 @@ pub struct Settings {
     /// Bit `g` reads inputs `8g..8g + 8` as the ADC module's analog channel `g`; those
     /// inputs are not captured as logic meanwhile, whatever `enabled` says of them.
     pub analog: u8,
+    /// What the analyzer sends; a test pattern is selected from Rust alone, never offered
+    /// among the device's options.
+    pub pattern: Pattern,
     /// Contiguous low channels transferred by the device, including disabled inputs.
     channels: u8,
 }
@@ -51,8 +54,16 @@ impl Settings {
             vth: 1.7,
             enabled: model.all_channels(),
             analog: 0,
+            pattern: Pattern::Normal,
             channels: model.channels,
         }
+    }
+
+    /// These settings on another wire mode, whatever the inputs.
+    #[cfg(test)]
+    pub(crate) fn with_wire(mut self, channels: u8) -> Self {
+        self.channels = channels;
+        self
     }
 
     /// The contiguous wire mode covering the highest enabled input: 2, 4, 8, 16 or 32 channels.
@@ -160,6 +171,13 @@ impl SlogicDevice {
     /// The settings the next capture will use.
     pub fn settings(&self) -> &Settings {
         &self.settings
+    }
+
+    /// Makes the next captures send `pattern` instead of the inputs.
+    pub fn set_pattern(&mut self, pattern: Pattern) -> Result<(), DriverError> {
+        self.ensure_idle()?;
+        self.settings.pattern = pattern;
+        Ok(())
     }
 
     /// Rates the current wire mode offers on this link.

@@ -13,7 +13,7 @@ use hsync_core::TriggerCondition;
 use hsync_driver::mock::{MockTransport, UsbCall};
 use hsync_driver::usb::UsbError;
 use hsync_driver::{CapturePlan, Device, EndReason, OptionKey, OptionValue, Packet};
-use hsync_slogic::protocol::{CaptureSettings, Link};
+use hsync_slogic::protocol::{CaptureSettings, Link, Pattern};
 use hsync_slogic::{SLOGIC_COMBO8, SlogicDevice, UsbSpeed};
 use nusb::transfer::TransferError;
 
@@ -93,15 +93,15 @@ fn assert_samples(packets: &[Packet], channels: &[u16], samples: &[u32]) {
     }
 }
 
+/// The endpoint is drained last. A capture that took only the transfers it needed leaves
+/// none to cancel; any it cancels, it cancels before the drain.
 fn assert_teardown(transport: &MockTransport<ComboDevice>) {
     let state = transport.device();
-    assert!(state.events.contains(&"cancel"));
     let drain = state
         .events
         .iter()
         .position(|&event| event == "drain")
         .expect("drain");
-    assert!(state.events[..drain].contains(&"cancel"));
     assert!(state.events[drain..].iter().all(|&event| event == "drain"));
 }
 
@@ -155,6 +155,21 @@ fn exposes_only_supported_capabilities_and_reconciles_sparse_channels() {
 }
 
 #[test]
+fn sends_the_selected_pattern_with_start() {
+    let (transport, mut device) = open();
+    configure(&mut device, &[0, 1]);
+    device
+        .set_pattern(Pattern::Emulation)
+        .expect("an idle device");
+    transport
+        .device()
+        .samples
+        .extend([Ok(sample_bytes(&SLOGIC_COMBO8, 2, &[0; 128]))]);
+    run(&mut device, CapturePlan::default());
+    assert_eq!(transport.device().commands, vec![vec![5, 0, 2, 2]]);
+}
+
+#[test]
 fn captures_every_wire_width_in_order_without_dropping_a_head() {
     let samples: Vec<_> = (0u32..320).map(|n| n.wrapping_mul(7919)).collect();
     for (wire, channels) in [(2, &[1][..]), (4, &[0, 3]), (8, &[0, 7])] {
@@ -180,12 +195,13 @@ fn captures_every_wire_width_in_order_without_dropping_a_head() {
             .iter()
             .position(|c| matches!(c, UsbCall::ControlOut { .. }))
             .expect("START");
+        // Queued before START: the one transfer that 128 samples need, not the whole ring.
         assert_eq!(
             calls[..start]
                 .iter()
                 .filter(|c| matches!(c, UsbCall::BulkInSubmit { endpoint: 0x81, .. }))
                 .count(),
-            16
+            1
         );
     }
 }
@@ -251,6 +267,8 @@ fn loop_ignores_finite_depth_and_stop_cancels_before_draining() {
         &(0..256).map(|n| n % 4).collect::<Vec<_>>(),
     );
     assert_eq!(packets.last(), Some(&Packet::End(EndReason::Stopped)));
+    // A looping capture keeps transfers in flight until it stops, then cancels them.
+    assert!(transport.device().events.contains(&"cancel"));
     assert_teardown(&transport);
     device
         .set_channel_enabled(0, false)
@@ -317,6 +335,7 @@ fn drain_is_bounded_and_invalid_start_never_reaches_usb() {
             samplerate,
             threshold: 1.7,
             clock_mhz: None,
+            pattern: Pattern::Normal,
         };
         assert!(link.run(&settings).is_err());
         assert!(transport.calls().is_empty());
