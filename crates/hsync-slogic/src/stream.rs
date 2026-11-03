@@ -332,6 +332,9 @@ impl Stream {
 
     /// Sends a block of the stream from the first sent sample on, shifted to start there.
     fn emit(&mut self, logic: &[u8], codes: &[u16], packets: &mut Vec<Packet>) {
+        if self.done() {
+            return;
+        }
         if self.shift == 0 {
             self.send(logic, codes, 1, packets);
             return;
@@ -341,22 +344,31 @@ impl Stream {
             return;
         };
         let (shift, groups) = (self.shift, self.block_codes / BLOCK);
-        let shifted: Vec<u8> = held_logic
-            .as_chunks::<8>()
+        if self.output.len() + self.block_bytes > MAX_PACKET
+            || (self.codes.len() + self.block_codes) * size_of::<u16>() > MAX_PACKET
+        {
+            self.flush(packets);
+        }
+        // Append shifted words directly to the packet and retain the next block in
+        // the same buffers, without temporary vectors for each group of 64 samples.
+        for (held, &next) in held_logic
+            .as_chunks_mut::<8>()
             .0
-            .iter()
+            .iter_mut()
             .zip(logic.as_chunks::<8>().0)
-            .flat_map(|(&held, &next)| {
-                (u64::from_le_bytes(held) >> shift | u64::from_le_bytes(next) << (BLOCK - shift))
-                    .to_le_bytes()
-            })
-            .collect();
-        let mut shifted_codes = held_codes[shift * groups..].to_vec();
-        shifted_codes.extend_from_slice(&codes[..shift * groups]);
-        self.send(&shifted, &shifted_codes, 1, packets);
-        held_logic.copy_from_slice(logic);
+        {
+            let word =
+                u64::from_le_bytes(*held) >> shift | u64::from_le_bytes(next) << (BLOCK - shift);
+            self.output.extend_from_slice(&word.to_le_bytes());
+            *held = next;
+        }
+        self.codes.extend_from_slice(&held_codes[shift * groups..]);
+        self.codes.extend_from_slice(&codes[..shift * groups]);
         held_codes.copy_from_slice(codes);
         self.held = Some((held_logic, held_codes));
+        if let Some(remaining) = &mut self.remaining {
+            *remaining -= BLOCK as u64;
+        }
     }
 
     /// Sends `blocks` whole blocks, as far as the limit allows, in packets of at most
