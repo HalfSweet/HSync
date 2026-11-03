@@ -7,6 +7,7 @@
 //! and hands their bytes through a bounded queue to another, which unpacks, triggers and
 //! packs them. Reads use nusb's ordered transfer queue; all waits and teardown are bounded.
 
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::JoinHandle;
@@ -28,8 +29,10 @@ const CANCEL_GRACE: Duration = Duration::from_secs(2);
 /// Transfers' bytes the converter may fall behind by before the capture fails, rather than
 /// the analyzer's FIFO overflowing unnoticed (`max_queue_bytes`).
 const BACKLOG_BYTES: usize = 256 * 1024 * 1024;
-/// How long the stream must have run before its rate tells data loss.
+/// How much recent streaming time a rate measurement covers at minimum.
 const RATE_WINDOW: Duration = Duration::from_millis(250);
+/// Keep rate checkpoints at most this often, independently of the USB transfer count.
+const RATE_CHECKPOINT: Duration = Duration::from_millis(25);
 /// The share of the expected rate below which the analyzer cannot have kept all its samples.
 const RATE_FLOOR: f64 = 0.9;
 
@@ -210,6 +213,39 @@ fn send(sink: &Sender<Packet>, stop: &AtomicBool, mut packet: Packet) -> Result<
     }
 }
 
+/// Recent cumulative byte counts, sampled at most every 25 ms. Retain the newest
+/// checkpoint at least 250 ms old and those after it: at most twelve checkpoints,
+/// even with tiny transfers. A normal stream is measured over 250–275 ms.
+#[derive(Default)]
+struct RateWindow {
+    checkpoints: VecDeque<(Instant, u64)>,
+}
+
+impl RateWindow {
+    fn record(&mut self, now: Instant, bytes: u64) {
+        while self
+            .checkpoints
+            .get(1)
+            .is_some_and(|&(at, _)| now.duration_since(at) >= RATE_WINDOW)
+        {
+            self.checkpoints.pop_front();
+        }
+        if self
+            .checkpoints
+            .back()
+            .is_none_or(|&(at, _)| now.duration_since(at) >= RATE_CHECKPOINT)
+        {
+            self.checkpoints.push_back((now, bytes));
+        }
+    }
+
+    fn rate(&self, now: Instant, bytes: u64) -> Option<f64> {
+        let &(at, before) = self.checkpoints.front()?;
+        let span = now.duration_since(at);
+        (span >= RATE_WINDOW).then(|| (bytes - before) as f64 / span.as_secs_f64())
+    }
+}
+
 /// What a capture moved, logged once it ends, after the `slogic-report` line of Sipeed's
 /// applications: whether the USB stream kept pace, and how far the conversion fell behind.
 struct Report {
@@ -221,6 +257,8 @@ struct Report {
     first: Option<Instant>,
     last: Instant,
     bytes: u64,
+    /// Recent throughput for loss detection; totals above still describe the whole capture.
+    recent: RateWindow,
     transfers: u64,
     refused: u64,
     /// The most transfers waiting for the converter at once.
@@ -244,6 +282,7 @@ impl Report {
             first: None,
             last: now,
             bytes: 0,
+            recent: RateWindow::default(),
             transfers: 0,
             refused: 0,
             backlog_peak: 0,
@@ -253,18 +292,17 @@ impl Report {
         }
     }
 
-    fn data(&mut self, bytes: usize) {
-        let now = Instant::now();
+    fn data(&mut self, bytes: usize, now: Instant) {
         self.first.get_or_insert(now);
         self.last = now;
         self.bytes += bytes as u64;
         self.transfers += 1;
+        self.recent.record(now, self.bytes);
     }
 
-    /// The rate since the first transfer, in bytes per second, once it has run long enough.
+    /// Recent bytes per second, excluding the first transfer's unknown sampling interval.
     fn rate(&self) -> Option<f64> {
-        let span = self.last - self.first?;
-        (span >= RATE_WINDOW).then(|| self.bytes as f64 / span.as_secs_f64())
+        self.recent.rate(self.last, self.bytes)
     }
 
     /// Bytes per second the analyzer sends.
@@ -456,7 +494,7 @@ impl Worker {
                 Some(Ok(bytes)) if !bytes.is_empty() => {
                     last_data = Instant::now();
                     received = true;
-                    self.report.data(bytes.len());
+                    self.report.data(bytes.len(), last_data);
                     self.forwarded += bytes.len() as u64;
                     // Requeue before anything else so USB can keep filling the ring.
                     let started = Instant::now();
