@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.9 (2026-11-07)
+
+### Features
+
+- **uiharu:** Add a public facade for embedding the engine ([dcc8750](https://github.com/HalfSweet/HSync/commit/dcc87504202e23d32e57c4bc263576a0e343dc14))
+- **uiharu:** Enable independent crate releases ([514deee](https://github.com/HalfSweet/HSync/commit/514deeec62de7dbf3e56fd9dc5bd1dea660e98fd))
+
+### Bug Fixes
+
+- **dslogic:** Align instant logic captures with DSView ([996e4f7](https://github.com/HalfSweet/HSync/commit/996e4f79cd78ae33f5d01dba5dcfc4c7845c5e73))
+- **dslogic:** Allow cancelling partial buffer uploads ([285c7b9](https://github.com/HalfSweet/HSync/commit/285c7b96362592493fbf054496079c685399c3ed))
+- **dslogic:** Keep stop requests compatible with Rust 1.99 ([8d7f41b](https://github.com/HalfSweet/HSync/commit/8d7f41b2a692bb31660ab78a828086856c5e65ab))
+- **uiharu:** Correct the ADIv5 address documentation link ([9a722e6](https://github.com/HalfSweet/HSync/commit/9a722e644c49cda5a3bea3d22bf2e00813d24414))
+- **uiharu:** Stop facade consumers at end of stream ([ae92c42](https://github.com/HalfSweet/HSync/commit/ae92c420e7fedce58deff0513f941056722f415e))
+- **uiharu:** Allow generated sources after checking authored changes ([ba75561](https://github.com/HalfSweet/HSync/commit/ba755611bbbbd5c81ab06b428e0355cb6e96eec1))
+- **driver:** Prevent SLogic high-rate sample loss (#78) ([2593a6c](https://github.com/HalfSweet/HSync/commit/2593a6ceb5bd11ee738fe1b064d4f4d06dcd539d))
+- **driver:** Harden SLogic capture completion and throughput (#79) ([06c20b5](https://github.com/HalfSweet/HSync/commit/06c20b5db9f3df5076899985b562b0bced1c2256))
+
 ## 0.2.8 (2026-11-02)
 
 ### Performance
